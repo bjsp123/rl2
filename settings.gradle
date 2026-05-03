@@ -1,0 +1,2 @@
+rootProject.name = "rl2"
+include 'rlib', 'rgame', 'desktop', 'android'

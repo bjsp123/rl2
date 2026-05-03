@@ -1,0 +1,63 @@
+package com.bjsp123.rl2.world.render;
+
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.bjsp123.rl2.model.Mob.CharacterClass;
+
+import java.util.EnumMap;
+import java.util.Map;
+
+/**
+ * Lazy-loaded sprite source for the HUD's character portrait. Pulls the head + upper
+ * body (top 32×32 cell) of each PLAYER class pose from the same {@code sprites/mobs.png}
+ * atlas {@link MobSprites} owns. The atlas Texture itself is borrowed via
+ * {@link MobSprites#sheetTexture()} so the file is only ever loaded once.
+ *
+ * <p>Source layout (row 0 of mobs.png at 32 px per cell):
+ * <ul>
+ *   <li>col 2 — Rogue</li>
+ *   <li>col 3 — Mage</li>
+ *   <li>col 4 — Warrior</li>
+ * </ul>
+ * Each class occupies a 1×2 cell block; the upper cell ({@code y = 0..31}) is the
+ * head + shoulders, which is what we extract for the portrait.
+ */
+public final class PortraitSprites {
+
+    // Source columns per class on row 0 — mirrors MOB_CELL_* in DefaultLevelRenderer.
+    private static final int COL_ROGUE   = 2;
+    private static final int COL_MAGE    = 3;
+    private static final int COL_WARRIOR = 4;
+
+    private static Map<CharacterClass, TextureRegion> regions;
+
+    private PortraitSprites() {}
+
+    /** Region for the given class, or {@code null} if the underlying atlas didn't
+     *  load (missing asset, headless boot, etc.). */
+    public static TextureRegion regionFor(CharacterClass cls) {
+        if (cls == null) return null;
+        if (regions == null) load();
+        return regions == null ? null : regions.get(cls);
+    }
+
+    private static void load() {
+        Texture mobsTex = MobSprites.sheetTexture();
+        if (mobsTex == null) return;
+        int cell = MobSprites.cellSize();
+        regions = new EnumMap<>(CharacterClass.class);
+        regions.put(CharacterClass.WARRIOR, head(mobsTex, cell, COL_WARRIOR));
+        regions.put(CharacterClass.MAGE,    head(mobsTex, cell, COL_MAGE));
+        regions.put(CharacterClass.ROGUE,   head(mobsTex, cell, COL_ROGUE));
+    }
+
+    private static TextureRegion head(Texture mobsTex, int cell, int col) {
+        return new TextureRegion(mobsTex, col * cell, 0, cell, cell);
+    }
+
+    /** No-op tear-down — the underlying texture is owned by {@link MobSprites};
+     *  call {@link MobSprites#disposeShared()} on shutdown if you want to release it. */
+    public static void disposeShared() {
+        regions = null;
+    }
+}

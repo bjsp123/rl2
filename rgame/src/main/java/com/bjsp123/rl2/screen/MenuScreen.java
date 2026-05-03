@@ -1,0 +1,186 @@
+package com.bjsp123.rl2.screen;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Container;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.bjsp123.rl2.ui.skin.StoneUi;
+import com.bjsp123.rl2.ui.skin.UiPixelScale;
+import com.bjsp123.rl2.ui.skin.UiScale;
+
+/**
+ * Base for full-screen menu screens, built on scene2d.ui. Subclasses populate the {@link #root}
+ * table inside {@link #build(Table)}; the base handles the {@link Stage}, {@link Skin}, viewport
+ * (which scales with {@link UiScale}), keyboard escape routing, and disposal.
+ *
+ * <p>The {@link Skin} comes from {@link StoneUi#newSkin()} so widgets render with the same stone
+ * 9-patches used by the HUD.
+ */
+public abstract class MenuScreen implements Screen {
+
+    protected Stage    stage;
+    protected StoneUi  ui;
+    protected Skin     skin;
+    /** Root table — fills the viewport. Subclasses add their content here. */
+    protected Table    root;
+
+    @Override
+    public void show() {
+        ui = new StoneUi();
+        ui.create();
+        skin = ui.newSkin();
+
+        ScreenViewport vp = new ScreenViewport();
+        vp.setUnitsPerPixel(1f / effectiveScale(
+                com.badlogic.gdx.Gdx.graphics.getWidth(),
+                com.badlogic.gdx.Gdx.graphics.getHeight()));
+        stage = new Stage(vp);
+
+        root = new Table();
+        root.setFillParent(true);
+        stage.addActor(root);
+
+        InputMultiplexer mux = new InputMultiplexer();
+        mux.addProcessor(stage);
+        mux.addProcessor(new InputAdapter() {
+            @Override public boolean keyDown(int keycode) {
+                if (keycode == Input.Keys.ESCAPE) { onEscape(); return true; }
+                return false;
+            }
+        });
+        Gdx.input.setInputProcessor(mux);
+
+        build(root);
+    }
+
+    /**
+     * Subclasses populate {@link #root} here. Called once on {@link #show()}; for layouts that
+     * change with state (selection, etc.) call {@link #rebuild()} to clear and rerun.
+     */
+    protected abstract void build(Table root);
+
+    /** Default escape handler — subclasses override to navigate "back". */
+    protected void onEscape() {}
+
+    /** Tear down and rerun {@link #build(Table)} — used after state changes. */
+    protected void rebuild() {
+        root.clear();
+        build(root);
+    }
+
+    @Override
+    public void render(float delta) {
+        Gdx.gl.glClearColor(0.06f, 0.06f, 0.08f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        stage.act(delta);
+        stage.draw();
+    }
+
+    @Override
+    public void resize(int w, int h) {
+        ScreenViewport vp = (ScreenViewport) stage.getViewport();
+        vp.setUnitsPerPixel(1f / effectiveScale(w, h));
+        vp.update(w, h, true);
+        // The new viewport size may invalidate cached layout — rerun the build so cells whose
+        // sizes were keyed off the previous viewport (column counts, wraps) reflow.
+        rebuild();
+    }
+
+    /**
+     * Subclasses override to declare the smallest virtual canvas their content needs to fit.
+     * If the window is smaller than {@code minVirtualWidth × minVirtualHeight} at the current
+     * {@link UiScale}, {@link #effectiveScale(int, int)} shrinks below the user's UI scale so
+     * the canvas still fits — that's the reactive part.
+     */
+    protected float minVirtualWidth()  { return 480; }
+    protected float minVirtualHeight() { return 360; }
+
+    /**
+     * The UI-scale we'll actually apply: the user's preferred {@link UiScale} unless the screen
+     * is too small to fit our minimum virtual canvas at that scale, in which case we scale
+     * down so it does fit.
+     */
+    protected float effectiveScale(int screenW, int screenH) {
+        float fitW = screenW / minVirtualWidth();
+        float fitH = screenH / minVirtualHeight();
+        // UiScale is clamped to what the window can fit — a large UiScale on a tiny window
+        // shrinks so the minimum virtual canvas still displays. UiPixelScale is applied on
+        // top UNCLAMPED: pixel chunkiness is the user's explicit choice and must show up on
+        // title / character-select / settings screens the same way it does in-game, even if
+        // that means the UI overflows the window a bit.
+        float uiScaleClamped = Math.min(UiScale.scale(), Math.min(fitW, fitH));
+        return uiScaleClamped * UiPixelScale.scale();
+    }
+
+    @Override public void pause()  {}
+    @Override public void resume() {}
+    @Override public void hide()   { dispose(); }
+
+    @Override
+    public void dispose() {
+        if (stage != null) { stage.dispose(); stage = null; }
+        if (skin  != null) { skin.dispose();  skin  = null; }
+        if (ui    != null) { ui.dispose();    ui    = null; }
+    }
+
+    // ── widget helpers ──────────────────────────────────────────────────────
+
+    /** Build a stone {@link TextButton} that runs {@code onClick} when pressed. */
+    protected TextButton button(String label, Runnable onClick) {
+        TextButton b = new TextButton(label, skin);
+        b.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent event, float x, float y) {
+                onClick.run();
+            }
+        });
+        return b;
+    }
+
+    /** {@link Label} with optional font scale and the named style ({@code default}, {@code title}, {@code dim}). */
+    protected Label label(String text, String style, float fontScale) {
+        Label l = new Label(text, skin, style);
+        l.setFontScale(fontScale);
+        return l;
+    }
+
+    /**
+     * Wrap content in an ornate stone panel. The container clamps to {@code maxW × maxH} but
+     * shrinks to fit when the viewport is smaller — that's the responsive part: when the
+     * screen can't accommodate the preferred size, scene2d trims the cell to what's available.
+     */
+    protected Container<Table> panel(Table content, float maxW, float maxH) {
+        content.setBackground(skin.getDrawable("panel"));
+        Container<Table> c = new Container<>(content);
+        c.maxSize(maxW, maxH);
+        c.fill();
+        return c;
+    }
+
+    /**
+     * Wrap content in a panel with a FIXED preferred size — the container doesn't pack
+     * down to its content nor grow with it. Use this for menus where the layout should
+     * be deterministic regardless of which tab is active or how much dynamic content
+     * is currently inside (saved-game slot cards, settings tab content, etc.). Combined
+     * with {@link MenuScreen#effectiveScale}, the screen still scales down on tiny
+     * viewports so a {@code fixedPanel(380, 600)} never bleeds off-edge.
+     */
+    protected Container<Table> fixedPanel(Table content, float fixedW, float fixedH) {
+        content.setBackground(skin.getDrawable("panel"));
+        Container<Table> c = new Container<>(content);
+        c.size(fixedW, fixedH);
+        c.fill();
+        return c;
+    }
+
+}

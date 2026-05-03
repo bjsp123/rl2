@@ -1,0 +1,17 @@
+
+.gradle/
+build/
+libs/
+bin/
+
+.vscode/
+
+stonebase/
+
+
+tools/
+
+assets/scratch/
+
+problems-report.html
+proguard-rules.pro

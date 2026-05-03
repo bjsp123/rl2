@@ -1,0 +1,66 @@
+apply plugin: 'application'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+application {
+    mainClass = 'com.bjsp123.rl2.desktop.DesktopLauncher'
+    applicationDefaultJvmArgs = [
+        '--enable-native-access=ALL-UNNAMED',
+        '-XX:+EnableDynamicAgentLoading'
+    ]
+}
+
+// Run from the project's /assets directory so Gdx.files.internal("...") falls back to the
+// real source PNGs on the filesystem. Edits to assets are picked up on next run with no
+// rebuild, because the runtime sees the actual files (not a build-dir copy).
+tasks.named('run') {
+    workingDir = rootProject.file('assets')
+}
+
+// IMPORTANT: do NOT add /assets to sourceSets.main.resources.srcDirs. Doing so makes
+// processResources copy every PNG into build/resources/main/, which then takes precedence
+// over the working-dir filesystem copy (libgdx's Internal handle checks the classpath
+// first). The result is that artist edits are silently ignored until processResources
+// runs again. Asset distribution for the fat jar happens in the `jar` task below
+// (see the explicit `from(rootProject.file('assets'))` line) so the live-edit and
+// shipping paths can be configured independently.
+
+// Force LWJGL 3.4.1 — required for Java 25 JNI compatibility
+configurations.all {
+    resolutionStrategy {
+        force "org.lwjgl:lwjgl:$lwjglVersion"
+        force "org.lwjgl:lwjgl-glfw:$lwjglVersion"
+        force "org.lwjgl:lwjgl-opengl:$lwjglVersion"
+        force "org.lwjgl:lwjgl-openal:$lwjglVersion"
+        force "org.lwjgl:lwjgl-stb:$lwjglVersion"
+    }
+}
+
+dependencies {
+    implementation project(':rgame')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    // Explicit LWJGL 3.4.1 natives for desktop
+    runtimeOnly "org.lwjgl:lwjgl::natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-opengl::natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-openal::natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-stb::natives-windows"
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.bjsp123.rl2.desktop.DesktopLauncher'
+    }
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    // Explicit asset bundling for the shipping fat jar — done here, NOT via resources, so
+    // dev runs continue to read from the live `assets/` filesystem copy (see workingDir
+    // above). When `gradle :desktop:jar` packages a release, the assets directory contents
+    // are copied into the JAR root so libgdx's Gdx.files.internal("sprites/foo.png")
+    // resolves via the classpath inside the packaged jar.
+    from(rootProject.file('assets'))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

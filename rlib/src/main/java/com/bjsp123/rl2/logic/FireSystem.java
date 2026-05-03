@@ -1,0 +1,275 @@
+package com.bjsp123.rl2.logic;
+
+import com.bjsp123.rl2.model.Level.Cloud;
+import com.bjsp123.rl2.model.Level;
+import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Level.Surface;
+import com.bjsp123.rl2.model.Level.Vegetation;
+
+import java.util.Random;
+
+/**
+ * Fire propagation, burnout, particle emission, and on-fire mob bookkeeping.
+ *
+ * <p>Three time-domain cadences are kept strictly separate. Every {@code tick*} method in
+ * this class belongs to exactly one of them, and each name encodes which:
+ * <ul>
+ *   <li><b>Game ticks</b> — {@link #tickGameTicks}. Called from {@link TurnSystem#tick}'s
+ *       standard-turn pass with the size of the standard-turn beat in game ticks (same
+ *       units as {@link Mob#moveCost}, {@link GameBalance#STARVATION_TICKS_PER_HP}, and
+ *       so on). Drains fire lifetimes and fire-damage counters in lockstep with the rest
+ *       of the time-driven systems (heal, satiety).</li>
+ *   <li><b>Game turns</b> — {@link #tickPerTurn}. Called once per "game advancement" from
+ *       {@code PlayScreen.tick}, alongside {@link VegetationSystem#tickPerTurn}. Runs the
+ *       per-turn random rolls (spread, smoke, mob-vs-tile propagation) at the designed
+ *       compounded rate. A single turn may cover many game ticks.</li>
+ *   <li><b>Real time</b> — {@link #tickRealTime}. Called once per render frame with the
+ *       wall-clock delta in milliseconds. Drives visuals that should keep moving while the
+ *       game is paused on input — currently fire-particle emission. Anything in this domain
+ *       should be safe to skip on a frame without affecting gameplay state.</li>
+ * </ul>
+ *
+ * <p>Constants follow the same convention: tunables that count in game ticks end with
+ * {@code _TICKS}, real-time tunables end with {@code _MS}, anything else has no suffix.
+ *
+ * <p>Tunables collected here so the design surface is one screen to read.
+ */
+public final class FireSystem {
+
+    private static final Random RANDOM = new Random();
+    private static final int[][] DIRS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
+    /** Initial fire lifetime range, in <b>game ticks</b>. ~300 ticks per the spec, with a
+     *  small jitter so adjacent ignited tiles don't burn out in lockstep. */
+    public static final int FIRE_DURATION_MIN_TICKS = 250;
+    public static final int FIRE_DURATION_MAX_TICKS = 350;
+
+    /** Fire lifetime when the cell being ignited holds a {@link Vegetation#TREES} tile —
+     *  large trunks burn for a long time once they catch, so the duration is roughly 4× a
+     *  standard tile fire. Also gives the fire enough time to walk a forest from one tree
+     *  to the next at the standard spread rate. */
+    public static final int FIRE_DURATION_TREE_MIN_TICKS = 1000;
+    public static final int FIRE_DURATION_TREE_MAX_TICKS = 1400;
+
+    /** A fire tile emits one ember every this many milliseconds of <b>real time</b>.
+     *  Particle emission is decoupled from the game-tick clock so embers keep streaming
+     *  while the player is sitting on a tile thinking. */
+    public static final int FIRE_PARTICLE_INTERVAL_MS = 500;
+
+    /** Mobs on fire take {@link #FIRE_DAMAGE_PER_INTERVAL} damage every this many
+     *  <b>game ticks</b>. */
+    public static final int FIRE_DAMAGE_INTERVAL_TICKS = 100;
+    public static final int FIRE_DAMAGE_PER_INTERVAL   = 5;
+
+    /** Per-<b>turn</b> chance that a fire tile emits a smoke cloud onto its own cell. */
+    public static final double SMOKE_EMIT_CHANCE = 0.04;
+
+    /** Per-turn chance that a fire tile spreads to a chosen empty-floor neighbour. Bumped
+     *  from 0.01 — the old rate was so slow fire effectively died out before reaching the
+     *  next tile. 0.05 gives a modest creep across bare floor (~20 turns to traverse a
+     *  cell on average); vegetation and oil paths are much faster. */
+    public static final double SPREAD_CHANCE_BARE       = 0.1;
+    /** Per-turn chance that a fire tile spreads to a grass neighbour, replacing it. Grass
+     *  is the most flammable kind of vegetation — bumped up alongside oil so wildfires
+     *  through a meadow read as fast as wildfires through a slick. */
+    public static final double SPREAD_CHANCE_GRASS      = 1.00;
+    /** Per-turn chance that a fire tile spreads to a non-grass vegetation neighbour
+     *  (mushrooms, trees), replacing it. Slower than grass — trunks and damp fungus take
+     *  longer to catch even though they burn well once lit. */
+    public static final double SPREAD_CHANCE_VEGETATION = 0.70;
+    /** Per-turn chance that a fire tile spreads to an oil neighbour, removing the oil. */
+    public static final double SPREAD_CHANCE_OIL        = 1.00;
+
+    private FireSystem() {}
+
+    // ------------------------------------------------------------------------
+    // Public ignition entry point
+    // ------------------------------------------------------------------------
+
+    /**
+     * Try to set fire to ({@code x}, {@code y}). No-op if the cell isn't flammable —
+     * specifically: out of bounds, not floor-like, or carrying a water/blood surface. Oil
+     * is consumed (cleared) when ignited. Existing vegetation is replaced with FIRE.
+     *
+     * @return {@code true} if the cell is now on fire (newly ignited or already burning).
+     */
+    public static boolean ignite(Level level, int x, int y) {
+        if (!isFlammable(level, x, y)) return false;
+        // Trees burn much longer than other fuel, so check what was on the cell BEFORE we
+        // overwrite vegetation with FIRE.
+        boolean wasTree = level.vegetation[x][y] == Vegetation.TREES;
+        // Oil is consumed by the flame.
+        if (level.surface[x][y] == Surface.OIL) level.surface[x][y] = null;
+        level.vegetation[x][y]  = Vegetation.FIRE;
+        // Re-roll lifetime even if the tile was already on fire — refueling.
+        int durMin = wasTree ? FIRE_DURATION_TREE_MIN_TICKS : FIRE_DURATION_MIN_TICKS;
+        int durMax = wasTree ? FIRE_DURATION_TREE_MAX_TICKS : FIRE_DURATION_MAX_TICKS;
+        int dur = durMin + RANDOM.nextInt(durMax - durMin + 1);
+        level.fireRemaining[x][y]     = dur;
+        level.fireEmitCountdown[x][y] = 1;   // emit on the next tick so the player gets feedback
+        return true;
+    }
+
+    /** A tile is flammable if it's a floor-like cell that isn't covered by water or blood. */
+    public static boolean isFlammable(Level level, int x, int y) {
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        if (!level.tiles[x][y].isFloorLike()) return false;
+        Surface s = level.surface[x][y];
+        return s != Surface.WATER && s != Surface.BLOOD;
+    }
+
+    // ------------------------------------------------------------------------
+    // Game-tick driven updates (lifetimes + on-fire mob damage)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Drain fire lifetimes and on-fire-mob damage timers by {@code gameTicks}. The unit is
+     * <b>game ticks</b> — the same currency as {@link Mob#moveCost}. Called from
+     * {@link TurnSystem#tickStandardTurn} once per standard turn (i.e. always with
+     * {@link TurnSystem#STANDARD_TURN_TICKS}); the parameter is kept for documentation +
+     * test reuse rather than because the cadence still varies.
+     *
+     * <p>Particle emission is NOT in this method; it lives in {@link #tickRealTime} so
+     * embers keep flowing while the player is sitting still.
+     */
+    public static void tickGameTicks(Level level, int gameTicks) {
+        if (gameTicks <= 0) return;
+        if (level.fireRemaining == null) return;
+
+        // Per-tile lifetime decay. Per-mob fire damage now lives in
+        // {@link BuffSystem#tickPerTurn} via the ON_FIRE buff; this method only handles
+        // the environment-side fire countdown.
+        for (int x = 0; x < level.width; x++) {
+            for (int y = 0; y < level.height; y++) {
+                if (level.vegetation[x][y] != Vegetation.FIRE) continue;
+                int rem = level.fireRemaining[x][y] - gameTicks;
+                if (rem <= 0) {
+                    extinguishTile(level, x, y);
+                    continue;
+                }
+                level.fireRemaining[x][y] = rem;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Real-time driven updates (purely visual: particle emission)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Drain per-tile + per-burning-mob particle countdowns by {@code dtMs} <b>milliseconds
+     * of wall-clock</b> time and emit a {@link Effect#fireParticle} each time a counter
+     * rolls over. Called once per render frame from {@code PlayScreen.tick}; runs
+     * independently of the game-tick / per-turn clocks so embers continue streaming while
+     * the player is paused on input.
+     *
+     * <p>Burning mobs emit at half the tile interval — so a burning mob produces twice as
+     * many particles as a stationary fire tile would over the same wall-clock span. The
+     * mob's per-instance countdown lives on {@link Mob#fireParticleCountdownMs}.</p>
+     */
+    /**
+     * Real-time fire-particle path moved entirely to {@code rgame.anim.Animator}.
+     * It polls {@code level.vegetation} for FIRE tiles and {@code BuffSystem.hasBuff}
+     * for burning mobs each render frame, drains the per-tile countdown stored in
+     * {@code Level.fireEmitCountdown}, and spawns {@code Effect.fireParticle} into
+     * its own {@code EffectStage}. Kept as a no-op stub so any leftover caller still
+     * compiles; safe to delete once verified unused.
+     */
+    public static void tickRealTime(Level level, int dtMs) {
+        // No-op — see Javadoc.
+    }
+
+    // ------------------------------------------------------------------------
+    // Per-turn updates (spread, smoke, mob-vs-tile propagation)
+    // ------------------------------------------------------------------------
+
+    /**
+     * Run one fire-spread / smoke roll across the level, plus mob-tile fire propagation.
+     * Called once <b>per game turn</b> from {@code PlayScreen.tick}, alongside
+     * {@link VegetationSystem#tickPerTurn}, so the random spread chances compound at the
+     * designed rate.
+     */
+    public static void tickPerTurn(Level level) {
+        if (level.fireRemaining == null) return;
+
+        // Snapshot the fire grid so a tile lit this turn doesn't seed its own neighbour
+        // again immediately.
+        int w = level.width, h = level.height;
+        boolean[][] wasFire = new boolean[w][h];
+        for (int x = 0; x < w; x++)
+            for (int y = 0; y < h; y++)
+                wasFire[x][y] = level.vegetation[x][y] == Vegetation.FIRE;
+
+        for (int x = 0; x < w; x++) {
+            for (int y = 0; y < h; y++) {
+                if (!wasFire[x][y]) continue;
+                // Smoke roll on the fire tile itself.
+                if (RANDOM.nextDouble() < SMOKE_EMIT_CHANCE) {
+                    level.cloud[x][y] = Cloud.SMOKE;
+                }
+                // Independent spread roll for each of the four cardinal neighbours so a fire
+                // surrounded by oil or grass races outward at the per-cell SPREAD_CHANCE_*
+                // rate, rather than the old one-direction-per-turn lottery (which capped any
+                // tile's effective reach at ~25% even with chance=1.0).
+                for (int[] d : DIRS) {
+                    trySpreadInto(level, x + d[0], y + d[1], wasFire);
+                }
+            }
+        }
+
+        // Mob ↔ tile propagation:
+        //   - on water/blood → extinguish the mob
+        //   - on fire → ignite the mob (unless the same tile is also water/blood: handled by
+        //     the order above, since FIRE can't coexist with water/blood — ignite clears oil
+        //     and refuses water/blood)
+        //   - on-fire mob standing on flammable vegetation/oil → ignite the tile
+        for (Mob m : level.mobs) {
+            if (m.hp <= 0) continue;
+            int mx = m.position.tileX(), my = m.position.tileY();
+            if (mx < 0 || my < 0 || mx >= w || my >= h) continue;
+            Surface surf = level.surface[mx][my];
+            boolean burning = com.bjsp123.rl2.logic.BuffSystem.hasBuff(m,
+                    com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE);
+            if (surf == Surface.WATER || surf == Surface.BLOOD) {
+                if (burning) {
+                    com.bjsp123.rl2.logic.BuffSystem.removeBuff(m,
+                            com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE);
+                }
+                continue;
+            }
+            if (level.vegetation[mx][my] == Vegetation.FIRE && !burning
+                    && !m.effectiveStats().fireImmune) {
+                // Fire on the floor sets the mob alight for ~5 turns. Re-applies extend
+                // the duration via BuffSystem's max-merge contract.
+                com.bjsp123.rl2.logic.BuffSystem.apply(level, m,
+                        com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE, 1, 5, null);
+                burning = true;
+            }
+            if (burning) {
+                Vegetation v = level.vegetation[mx][my];
+                if (v == Vegetation.GRASS || v == Vegetation.MUSHROOMS || v == Vegetation.TREES
+                        || surf == Surface.OIL) {
+                    ignite(level, mx, my);
+                }
+            }
+        }
+    }
+
+    private static void trySpreadInto(Level level, int nx, int ny, boolean[][] wasFire) {
+        if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) return;
+        if (!isFlammable(level, nx, ny)) return;
+        if (wasFire[nx][ny])             return;   // already burning at the start of this turn
+        double chance;
+        if (level.surface[nx][ny] == Surface.OIL) chance = SPREAD_CHANCE_OIL;
+        else if (level.vegetation[nx][ny] == Vegetation.GRASS) chance = SPREAD_CHANCE_GRASS;
+        else if (level.vegetation[nx][ny] != null) chance = SPREAD_CHANCE_VEGETATION;
+        else chance = SPREAD_CHANCE_BARE;
+        if (RANDOM.nextDouble() < chance) ignite(level, nx, ny);
+    }
+
+    private static void extinguishTile(Level level, int x, int y) {
+        if (level.vegetation[x][y] == Vegetation.FIRE) level.vegetation[x][y] = null;
+        level.fireRemaining[x][y]     = 0;
+        level.fireEmitCountdown[x][y] = 0;
+    }
+}
