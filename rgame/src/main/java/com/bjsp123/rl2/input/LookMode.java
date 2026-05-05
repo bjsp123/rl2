@@ -71,6 +71,17 @@ public class LookMode extends InputAdapter {
         if (history != null && cursor != null) history.record(level, cursor);
     }
 
+    /** Activate without a player anchor and without an auto-pick. The reticle
+     *  starts unset; the next tap lands the cursor and reveals the panel.
+     *  Used by the arena (no PLAYER-behaviour mob exists, so {@link #activate}
+     *  bails out of its player-required gate). */
+    public void activateBlank() {
+        if (level == null) return;
+        active = true;
+        hasChosen = false;
+        cursor = null;
+    }
+
     /** Nearest visible mob to {@code around}, excluding the mob itself. Chebyshev
      *  distance, matching the rest of the engine's proximity measure. Visible-only:
      *  the player can't open Look on a mob they can't see. */

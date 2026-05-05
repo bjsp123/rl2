@@ -16,9 +16,16 @@ public final class EffectStage {
         if (e != null) active.add(e);
     }
 
-    /** Per-render-frame: advance every active effect by one frame; remove finished ones. */
+    /** Per-render-frame: advance every active effect by one frame; remove finished ones.
+     *  Effects with {@link Effect#startDelay} &gt; 0 are parked at frame 0 and only their
+     *  delay counts down — useful for staggering several effects spawned on the same
+     *  tick (e.g. attack flashes from multiple attackers). */
     public void tick() {
         active.removeIf(e -> {
+            if (e.startDelay > 0) {
+                e.startDelay--;
+                return false;
+            }
             e.frame++;
             return e.frame >= e.totalFrames();
         });

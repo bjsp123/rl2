@@ -18,11 +18,13 @@ public class TitleScreen extends MenuScreen {
     protected void build(Table root) {
         Table panel = new Table();
         panel.pad(28).defaults().pad(6).width(220).height(44).fillX();
-        panel.add(button("Saved Games",  () -> game.setScreen(new SavesScreen(game)))).row();
-        panel.add(button("Hall of Fame", () -> game.setScreen(new HallOfFameScreen(game)))).row();
-        panel.add(button("Settings",     () -> game.setScreen(new SettingsScreen(game)))).row();
-        panel.add(button("Credits",      () -> game.setScreen(new CreditsScreen(game)))).row();
-        panel.add(button("Quit",         Gdx.app::exit));
+        panel.add(button("Saved Games",         () -> game.setScreen(new SavesScreen(game)))).row();
+        panel.add(button("Hall of Fame",        () -> game.setScreen(new HallOfFameScreen(game)))).row();
+        panel.add(button("Arena",               () -> game.setScreen(new ArenaSetupScreen(game)))).row();
+        panel.add(button("Arena Hall of Fame",  () -> game.setScreen(new ArenaHallOfFameScreen(game)))).row();
+        panel.add(button("Settings",            () -> game.setScreen(new SettingsScreen(game)))).row();
+        panel.add(button("Credits",             () -> game.setScreen(new CreditsScreen(game)))).row();
+        panel.add(button("Quit",                Gdx.app::exit));
 
         Container<Table> framed = fixedPanel(panel, 360, 360);
 

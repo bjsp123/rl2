@@ -6,8 +6,6 @@ import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.Messages;
-import com.bjsp123.rl2.logic.MobFactory;
-import com.bjsp123.rl2.logic.MobProgression;
 import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.HallOfFameEntry;
@@ -228,24 +226,25 @@ final class PlayController {
                 afterMove(level);
             }
             case WAND -> beginWand(level, user, item);
+            case GRANT_PERK -> {
+                ItemSystem.grantPerk(level, user, item);
+                TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+                afterMove(level);
+            }
             case NONE -> { /* unreachable — the popup gates Use on isUsable() */ }
         }
     }
 
-    /** Wand-of-element / dog use entry point. DOG_SPAWN summons immediately (no
-     *  targeting); the element wands open the targeting overlay, then on confirm emit
-     *  the appropriate projectile event. The Animator translates the event into a
-     *  coloured missile / ray and fires the impact callback on the final frame. */
+    /** Wand use entry point. Summon-style wands (non-null
+     *  {@link Item#summonsWhenUsed}) summon immediately with no targeting; tile-
+     *  targeting wands open the targeting overlay and emit the projectile event
+     *  on confirm. The Animator translates the event into a coloured missile /
+     *  ray and fires the impact callback on the final frame. */
     private void beginWand(Level level, Mob user, Item wand) {
-        if (wand.wandElement == Item.WandElement.DOG_SPAWN) {
-            Point spot = MobSystem.freeAdjacentFloorPublic(level, user.position);
-            if (spot != null) {
-                Mob pet = MobFactory.dog(spot);
-                pet.owner = user;
-                int petLevel = 1 + Math.max(0, wand.level);
-                MobProgression.setSpawnLevel(pet, petLevel);
-                level.mobs.add(pet);
-            }
+        if (wand.summonsWhenUsed != null) {
+            // Always burns a turn — the room-check / no-spot fallback inside
+            // castSummonWand silently no-ops the spawn but the user still pays.
+            ItemSystem.castSummonWand(level, user, wand);
             TurnSystem.applyMoveCost(user, user.effectiveStats().attackCost);
             afterMove(level);
             return;

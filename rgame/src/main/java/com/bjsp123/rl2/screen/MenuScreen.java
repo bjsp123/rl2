@@ -14,10 +14,12 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.bjsp123.rl2.ui.skin.StoneUi;
 import com.bjsp123.rl2.ui.skin.UiPixelScale;
 import com.bjsp123.rl2.ui.skin.UiScale;
+import com.bjsp123.rl2.ui.skin.UiTextures;
 
 /**
  * Base for full-screen menu screens, built on scene2d.ui. Subclasses populate the {@link #root}
@@ -154,13 +156,22 @@ public abstract class MenuScreen implements Screen {
         return l;
     }
 
+    /** The outermost-popup background drawable — texture from {@link UiTextures} when
+     *  available, falling back to the skin's "panel" 9-patch when the UI atlas failed
+     *  to load. Centralised so every popup helper picks the same fallback. */
+    private Drawable outerPanelBackground() {
+        return UiTextures.windowBackgroundOr(skin.getDrawable("panel"));
+    }
+
     /**
-     * Wrap content in an ornate stone panel. The container clamps to {@code maxW × maxH} but
-     * shrinks to fit when the viewport is smaller — that's the responsive part: when the
-     * screen can't accommodate the preferred size, scene2d trims the cell to what's available.
+     * Wrap content in the outermost-popup chrome. The container clamps to
+     * {@code maxW × maxH} but shrinks to fit when the viewport is smaller — that's the
+     * responsive part: when the screen can't accommodate the preferred size, scene2d
+     * trims the cell to what's available. Background comes from {@link UiTextures} so
+     * every popup's surrounding window shares the same texture.
      */
     protected Container<Table> panel(Table content, float maxW, float maxH) {
-        content.setBackground(skin.getDrawable("panel"));
+        content.setBackground(outerPanelBackground());
         Container<Table> c = new Container<>(content);
         c.maxSize(maxW, maxH);
         c.fill();
@@ -168,15 +179,13 @@ public abstract class MenuScreen implements Screen {
     }
 
     /**
-     * Wrap content in a panel with a FIXED preferred size — the container doesn't pack
-     * down to its content nor grow with it. Use this for menus where the layout should
-     * be deterministic regardless of which tab is active or how much dynamic content
-     * is currently inside (saved-game slot cards, settings tab content, etc.). Combined
-     * with {@link MenuScreen#effectiveScale}, the screen still scales down on tiny
-     * viewports so a {@code fixedPanel(380, 600)} never bleeds off-edge.
+     * Wrap content in the outermost-popup chrome with a FIXED preferred size — the
+     * container doesn't pack down to its content nor grow with it. Use this for menus
+     * where the layout should be deterministic regardless of which tab is active or how
+     * much dynamic content is currently inside.
      */
     protected Container<Table> fixedPanel(Table content, float fixedW, float fixedH) {
-        content.setBackground(skin.getDrawable("panel"));
+        content.setBackground(outerPanelBackground());
         Container<Table> c = new Container<>(content);
         c.size(fixedW, fixedH);
         c.fill();

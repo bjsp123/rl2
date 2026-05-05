@@ -14,7 +14,6 @@ import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.Behavior;
-import com.bjsp123.rl2.model.Mob.MobType;
 import com.bjsp123.rl2.model.Level.Surface;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.Level.Vegetation;
@@ -27,227 +26,44 @@ import com.bjsp123.rl2.world.anim.MobAnimState;
 import com.bjsp123.rl2.logic.TurnSystem;
 
 /**
- * Tile renderer. Loads three sheets directly:
- *
+ * Tile renderer. Atlas knowledge lives in the per-sheet sprite classes, not here:
  * <ul>
- *   <li>{@code sprites/terrain_<theme>.png} — one per {@link com.bjsp123.rl2.model.Level.VisualTheme},
- *       sharing a 20-col grid (floors, walls, wall caps, internal walls, doors, stairs,
- *       chasm edges, water). Layout reference lives in the block immediately below.</li>
- *   <li>{@code sprites/mobs.png} — packed silhouette atlas for every NPC + the player
- *       class poses; cells indexed via the {@code MOB_CELL_*} constants.</li>
- *   <li>{@code sprites/surfaces.png} — liquid tiles (water / blood / oil), the shore-mask
- *       strip, and the vegetation sprites (grass / mushroom / tree).</li>
+ *   <li>Terrain ({@code sprites/terrain_<theme>.png}) — {@link TileSprites}.</li>
+ *   <li>Mobs ({@code sprites/mobs_simple.png}) — {@link MobSprites}.</li>
+ *   <li>Surfaces / vegetation / fire — {@link SurfaceSprites}.</li>
+ *   <li>Items / staff / gems — {@link ItemSprites}, {@link GemSprites}.</li>
  * </ul>
- * Item, gem, and staff art is owned by {@link ItemSprites} and {@link GemSprites};
- * painted-fire sheets at {@code sprites/fire 1.png} / {@code sprites/fire 2.png} are
- * loaded optionally — if absent, fire tiles draw nothing.
- *
- * <p>Rendering walks the map in three passes:
+ * This class consumes those regions to compose four render passes:
  * <ol>
- *   <li><b>Floors + chasm</b> (any order). Base floor tile, stair glyphs, chasm black fill,
- *       and the "dripping edge" chasm tile pulled from the north neighbor.</li>
- *   <li><b>Per-cell content</b>, north→south, west→east. In each cell the layers compose
- *       in this order: surface (water / blood / oil) → floor-edge shadow → wall / door body
- *       + wall-base shadow + rear-corner shadows → rear vegetation → lamp → items → mobs →
- *       front vegetation (tucks over mob feet) → fx. Fx run even on unexplored tiles so
- *       the player sees their own projectiles.</li>
- *   <li><b>Wall + door tops</b>, north→south. Overhangs and internal-wall caps painted on
- *       the cell to the NORTH of each wall / door so tall scenery clips anything behind
- *       it. Sideways-door overhangs paint on the door cell itself.</li>
+ *   <li><b>Floors + chasm</b> (any order). Base floor tile, stair underlays, chasm
+ *       black fill, and the "dripping edge" chasm tile pulled from the north neighbor.</li>
+ *   <li><b>Surface pass</b> (water / blood / oil / ice). Lifted out of the per-cell
+ *       loop so the mask shader binds exactly once.</li>
+ *   <li><b>Per-cell content</b>, north→south, west→east. Floor-edge shadow → wall /
+ *       door body + wall-base shadow + rear-corner shadows → rear vegetation → lamp →
+ *       items → mobs → front vegetation (tucks over mob feet) → fx. Fx run even on
+ *       unexplored tiles so the player sees their own projectiles.</li>
+ *   <li><b>Wall + door tops</b>, north→south. Overhangs and internal-wall caps painted
+ *       on the cell to the NORTH of each wall / door so tall scenery clips anything
+ *       behind it.</li>
  * </ol>
- * Fog of war then runs once as a single soft-edge overlay with an additive lamp-light layer.
+ * Fog of war then runs once as a soft-edge overlay with an additive lamp-light layer.
  */
 public class DefaultLevelRenderer implements LevelRenderer {
 
-    // ================================================================================
-    // TILE ATLAS LAYOUT REFERENCE
-    // --------------------------------------------------------------------------------
-    // Authoritative map of every texture file this renderer loads and what lives at
-    // each (col,row) inside it. Coordinates are ZERO-INDEXED. Unless stated otherwise,
-    // cells are 16×16 px and "row"/"col" mean cells of that size from the image's
-    // top-left corner (col increases rightward, row increases downward — matches the
-    // raw PNG, NOT the y-up world coordinates the renderer draws into).
-    //
-    // KEEP THIS IN SYNC whenever a new tile, sprite, row, or file is added.
-    // ================================================================================
-    //
-    // ─── sprites/terrain_default.png, terrain_blue.png, terrain_organic.png,
-    //     terrain_neutral.png ────────────────────────────────────────────────────────
-    //   All four per-theme sheets share the same 20-col grid. Default and neutral are
-    //   currently exported at 32 px/cell (640×512); blue and organic are still 16 px/cell
-    //   (320×256). Source cell size is auto-detected per atlas at load time
-    //   (tex.width / TERRAIN_COLS); regardless of source size, every tile is drawn into
-    //   a 16-px world cell, so 32-px source art is scaled 2:1 down. Rows not listed are
-    //   reserved/blank for future additions. For rows that carry multiple variants, the
-    //   variant index is a bitfield added to the base col (see constants at FLOOR..WATER
-    //   below).
-    //     (cols 0..2, row 1) — stone FLOOR variants, picked randomly per tile. Col 0 is
-    //                       the canonical slot; cols 1 and 2 are alternates.
-    //     (cols 0..2, row 2) — FLOOR_WOOD variants, picked randomly per tile. Col 0 is
-    //                       the canonical slot; cols 1 and 2 are alternates.
-    //     (col 0, row  3) — WALLS_OVERHANG (top cap of a raised wall, drawn one cell
-    //                       NORTH of the wall so it overhangs entities behind it).
-    //     (col 1, row  3) — WALLS_OVERHANG, right-south-open variant   (+1)
-    //     (col 2, row  3) — WALLS_OVERHANG, left-south-open variant    (+2)
-    //     (col 3, row  3) — WALLS_OVERHANG, both-open                  (+1+2)
-    //     (col 0, row  4) — RAISED_WALL (solid wall body, stitch-0) — random pick per
-    //                       tile with the alternates at cols 5, 6, 7 of row 4.
-    //     (col 1, row  4) — RAISED_WALL, right-open variant            (+1)
-    //     (col 2, row  4) — RAISED_WALL, left-open variant             (+2)
-    //     (col 3, row  4) — RAISED_WALL, both-open                     (+1+2)
-    //     (cols 5..7, row 4) — extra solid-wall art chosen randomly alongside (col 0).
-    //     (cols 0..15, row 6) — WALLS_INTERNAL autotile variants. Bitfield:
-    //                           +1 right, +2 right-south, +4 left-south, +8 left.
-    //     (col 2, row  7) — alternate WALLS_INTERNAL for bitfield 2 (right-south
-    //                       open) — picked randomly per tile alongside (col 2, row 6).
-    //     (col 4, row  7) — alternate WALLS_INTERNAL for bitfield 4 (left-south
-    //                       open) — picked randomly per tile alongside (col 4, row 6).
-    //     (col 0, row  8) — RAISED_DOOR (north/south-facing CLOSED door body).
-    //     (col 1, row  8) — DOOR_OVERHANG (arched top of a N/S-facing door, drawn in the
-    //                       cell ABOVE the door body — appears for both open and closed).
-    //     (col 2, row  8) — RAISED_DOOR_SIDEWAYS (E/W-facing door body — same sprite for
-    //                       both open and closed; the open variant just drops its overlays).
-    //     (cols 3..6, row 8) — DOOR_SIDEWAYS_OVERHANG_CLOSED variants (closed-only). Bitfield:
-    //                          +1 right-south, +2 left-south (4 variants).
-    //     (col 7, row  8) — DOOR_SIDEWAYS (wall-over-sideways-door cutout — closed only;
-    //                       dropped when the door is open so the wall above renders normally).
-    //     (col 0, row  9) — RAISED_DOOR_OPEN (N/S-facing door body when open — one row below
-    //                       the closed body sprite).
-    //     (col 17, row 0) — STATUE_SMALL (small statue, 1 cell, west-facing source —
-    //                       east-facing variant produced by horizontal flip at draw time).
-    //     (col 18, rows 0..1) — LAMP ornament (1×2 cells, 32×64 source); drawn anchored at
-    //                       the floor cell so the upper half overhangs into the cell above.
-    //     (col 19, rows 0..1) — STATUE_LARGE (tall statue, 1×2 cells, 32×64 source); same
-    //                       overhang anchoring as the lamp, plus L/R facing flip at draw.
-    //     (cols 0..1, rows 10..11) — STAIRS_UP ladder, 2×2 cells (64×64 source). Drawn
-    //                       on top of a regular floor underlay, anchored at the bottom of
-    //                       the stair cell, displayed at 2×2 world cells (32×32 px).
-    //     (cols 2..3, rows 10..11) — STAIRS_DOWN ladder, 2×2 cells, same conventions as
-    //                       STAIRS_UP.
-    //     (col 0, row 12) — CHASM_FLOOR (floor dripping into chasm, N edge).
-    //     (col 1, row 12) — CHASM_WALL  (wall dripping into chasm, N edge).
-    //     (col 2, row 12) — CHASM_WATER (water dripping into chasm, N edge).
-    //     (col 3, row 12) — CHASM_WOOD  (wood floor dripping into chasm, N edge).
-    //     (cols 0..15, row 14) — WATER autotile variants. Bitfield:
-    //                            +1 north, +2 east, +4 south, +8 west.
-    //
-    // ─── sprites/items.png ─────────────────────────────────────────────────────────
-    //   32×32 cell grid loaded by ItemSprites (not this renderer directly). Rows:
-    //     row 0 — wands; row 1 — food; row 2 — potions; row 3 — bombs.
-    //     row 4 col 0 — armor; row 5 col 0 — shield; row 6 col 0 — amulet;
-    //     row 7 col 0 — sword; row 7 col 1 — dagger.
-    //
-    // ─── sprites/spd/staff.png ─────────────────────────────────────────────────────
-    //     (col 0, row 0) — staff "\\"  (whole file is one 16×16 tile, loaded by
-    //                       ItemSprites).
-    //
-    // ─── sprites/surfaces.png (512×224) ────────────────────────────────────────
-    //   Three zones. The top 192 px hold three seamless 64×64 liquid tiles stacked
-    //   vertically (water, blood, oil); each is lifted into its own wrappable Texture
-    //   so TextureWrap.Repeat stays within that one liquid. The bottom 32 px is a strip
-    //   of 32×32 alpha masks sampled by the surface shader to cut the scrolling liquid
-    //   to shape. The right side of the upper rows additionally holds vegetation
-    //   sprites at 32-px cells, indexed (col, row).
-    //     (col 0, y=0..63,    64×64) — water liquid tile
-    //     (col 0, y=64..127,  64×64) — blood liquid tile (concentric rings)
-    //     (col 0, y=128..191, 64×64) — oil   liquid tile (iridescent gooey)
-    //     (cols 4..5, row 0, 32×32 each) — grass A / B variants
-    //     (cols 4..5, row 1, 32×32 each) — mushroom A / B variants
-    //     (cols 6..7, rows 0–1, 32×64 each) — tree A / B variants (double-height: the
-    //         sprite is anchored at row 1 — its trunk — and extends upward into row 0
-    //         for the canopy. Renderer splits the texture: lower half draws in the
-    //         tree's own tile, upper half draws into the cell directly above.)
-    //     (cols 0..15, y=192..223, 32×32 each) — 16 shore-variant alpha masks indexed
-    //         by a 4-bit N/E/S/W neighbor bitfield. Convention: opaque white = "no water
-    //         here" (shore cutout), transparent = "water here". The shader does the
-    //         alpha inversion. Variant 0 (no shores) is synthesised at load time as a
-    //         fully transparent tile so the cell reads as fully water-covered.
-    //   Regenerate with: java tools/GenerateSurfaces.java assets/sprites/surfaces.png
-    //
-    // ================================================================================
-
-    // Per-theme terrain atlas paths and texture loading live in TileSprites — single
-    // source of truth so the look-screen tile portrait and this in-world renderer
-    // never disagree on which file backs each VisualTheme.
-    // surfaces.png layout, paths, and tile dimensions live in SurfaceSprites.
-    // See SurfaceSprites.LIQUID_TILE / VEG_CELL / MASK_TILE / MASK_VARIANTS.
-    /** On-screen size of a shore-mask tile when drawn — kept here because the
-     *  shader-batch draw call uses it directly. Mirrors {@link SurfaceSprites#MASK_TILE}. */
+    /** On-screen size of a shore-mask tile when drawn — the shader-batch draw call
+     *  uses it directly. Mirrors {@link SurfaceSprites#MASK_TILE}. */
     private static final int    SURFACE_MASK_TILE      = SurfaceSprites.MASK_TILE;
 
-
-    // ─── mobs.png sprite sheet ────────────────────────────────────────────────────
-    // Single packed sheet on a 32-px grid (see tools/PackMobsSheet.java). Each mob slot
-    // below gives the (col, row) of the bottom-left cell of the sprite block plus the
-    // block's width and height in cells. Sprites are bottom-aligned within their block
-    // by the packer, so the visible silhouette stands on the cell-block's bottom edge —
-    // no per-sprite yAdjust math needed at render time.
-    // mobs.png path lives in MobSprites — single source of truth.
-    private static final int    MOBS_CELL_PX   = 32;
-
-    // (col, row, wCells, hCells) packed into one int per mob: ((col<<24)|(row<<16)|(w<<8)|h).
-    // {@code row} is the TOP-LEFT cell of the source block (matching the packer's output
-    // convention). For a 1×2 tall sprite that the player sees standing on row N, the
-    // constant uses {@code row = N - 1} so the read covers the head + base together.
-    // Player class sprites — row 0, cols 2..4. These are read by playerSprite() based on
-    // Mob.characterClass.
-    private static final int MOB_CELL_ROGUE              = mobCell(2, 0, 1, 2);
-    private static final int MOB_CELL_MAGE               = mobCell(3, 0, 1, 2);
-    private static final int MOB_CELL_WARRIOR            = mobCell(4, 0, 1, 2);
-    // Apex — ghost stands on row 1 (top at 0); horror stands on row 7 (top at 6).
-    private static final int MOB_CELL_GHOST              = mobCell(7, 0, 1, 2);
-    private static final int MOB_CELL_HORROR             = mobCell(4, 6, 1, 2);
-    // Insect line — row 2 across the full width (1×1 each).
-    private static final int MOB_CELL_SPIDER             = mobCell(0, 2, 1, 1);
-    private static final int MOB_CELL_LOATHESOME_BUG     = mobCell(1, 2, 1, 1);
-    private static final int MOB_CELL_BAT                = mobCell(2, 2, 1, 1);
-    private static final int MOB_CELL_MOUSE              = mobCell(3, 2, 1, 1);
-    private static final int MOB_CELL_SOLDIER_BUG        = mobCell(4, 2, 1, 1);
-    private static final int MOB_CELL_BUG_PRODIGY        = mobCell(5, 2, 1, 1);
-    // Critters — dog at (7, 2) and cat at (6, 2), both 1×1.
-    private static final int MOB_CELL_DOG                = mobCell(7, 2, 1, 1);
-    private static final int MOB_CELL_CAT                = mobCell(6, 2, 1, 1);
-    /** Kitten — dedicated 1×1 sprite at (col 1, row 3). */
-    private static final int MOB_CELL_KITTEN             = mobCell(1, 3, 1, 1);
-    private static final int MOB_CELL_KOBOLD_FIGHTER     = mobCell(0, 3, 1, 1);
-    // Ants — 1×1, on row 3 next to the kitten.
-    private static final int MOB_CELL_BLACK_ANT          = mobCell(2, 3, 1, 1);
-    private static final int MOB_CELL_RED_ANT            = mobCell(3, 3, 1, 1);
-    // Blobs — 2×2 grid each, rows 4..5.
-    private static final int MOB_CELL_KISSYBLOB          = mobCell(0, 4, 2, 2);
-    private static final int MOB_CELL_BLOB               = mobCell(2, 4, 2, 2);
-    // Ant hills — 2×2 each, immediately right of the blob on rows 4..5.
-    private static final int MOB_CELL_BLACK_ANT_HILL     = mobCell(4, 4, 2, 2);
-    private static final int MOB_CELL_RED_ANT_HILL       = mobCell(6, 4, 2, 2);
-    // Mask imps stand on row 7. Small ones are 1×1 at row 7; the tall variants stand on
-    // row 7 with their head extending up to row 6.
-    private static final int MOB_CELL_MASK_IMP           = mobCell(0, 7, 1, 1);
-    private static final int MOB_CELL_LARGE_MASK_IMP     = mobCell(1, 7, 1, 1);
-    private static final int MOB_CELL_DEVELOPED_MASK_IMP = mobCell(2, 6, 1, 2);
-    private static final int MOB_CELL_HORRIBLE_MASK_IMP  = mobCell(3, 6, 1, 2);
-    // Barbarian princess — stands on row 9, head at row 8.
-    private static final int MOB_CELL_BARBARIAN_PRINCESS = mobCell(1, 8, 1, 2);
-
-    /** Pack (col, row, wCells, hCells) into a single int for compact constants. */
-    private static int mobCell(int col, int row, int wCells, int hCells) {
-        return (col << 24) | (row << 16) | (wCells << 8) | hCells;
-    }
-    
-    
-    /** Liquid tile size in source pixels — matches {@link SurfaceSprites#LIQUID_TILE}. The shader's
-     *  per-cell UV math divides world coordinates by this to get a UV that wraps once per
-     *  tile. Bumped 32→64 when surfaces.png was doubled; without this update the shader
-     *  would only sample the upper-left half of the new 64-px liquid art. */
+    /** Liquid tile size in source pixels — matches {@link SurfaceSprites#LIQUID_TILE}.
+     *  The shader's per-cell UV math divides world coordinates by this to get a UV
+     *  that wraps once per tile. */
     private static final float WATER_TEX_SIZE = SurfaceSprites.LIQUID_TILE;
-    /** Speed of liquid texture drift. Slow on purpose — water/blood/oil should look like a
-     *  gentle current, not a river. */
+    /** Speed of liquid texture drift. Slow on purpose — water/blood/oil should look
+     *  like a gentle current, not a river. */
     private static final float WATER_SCROLL_PX_PER_SEC = 1.2f;
 
     private static final int CELL = 16;
-    /** Alias for {@link TileSprites#TERRAIN_COLS}. Re-declared as a local constant so
-     *  the many compile-time {@code N * TERRAIN_COLS + col} flat-cell expressions in
-     *  this file stay readable. */
-    private static final int TERRAIN_COLS = TileSprites.TERRAIN_COLS;
     /** Pixels above the cell's bottom edge where a mob's baseline sits — its feet end here
      *  and the sprite extends upward from this line. */
     private static final int ENTITY_Y_OFFSET = 2;
@@ -260,12 +76,42 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  floor rather than embedded in it. NPCs keep the default baseline. */
     private static final float PLAYER_Y_LIFT = 4f;
 
-    /** Alpha of the 1-px black outline drawn around every mob silhouette. 0.4 = "60%
-     *  transparent" per the user-spec; 0 disables the outline pass. Each cardinal offset
-     *  contributes its own draw, so straight edges read as the configured alpha while
-     *  corners (where two offsets overlap) are slightly darker — typical for a four-pass
-     *  pixel outline. */
-    private static final float MOB_OUTLINE_ALPHA = 0.4f;
+    /** Minimum radial taps for the silhouette outline at small widths — 8 hits the
+     *  cardinals + diagonals every 45°. At thicker widths we add taps proportional
+     *  to the perimeter so the outline's outer edge reads as a smooth curve instead
+     *  of a chunky 8-pointed star. {@link #ensureOutlineTaps} keeps the cached arrays
+     *  in sync with {@link com.bjsp123.rl2.ui.skin.MobOutline#width()}. */
+    private static final int OUTLINE_MIN_TAPS = 8;
+    private static int     outlineTaps     = OUTLINE_MIN_TAPS;
+    private static float[] outlineDx       = new float[OUTLINE_MIN_TAPS];
+    private static float[] outlineDy       = new float[OUTLINE_MIN_TAPS];
+    /** Last width the cached arrays were built for. {@code NaN} forces a rebuild on
+     *  the first call so {@link #outlineDx} / {@link #outlineDy} hold valid values. */
+    private static float   outlineCachedW  = Float.NaN;
+    static {
+        ensureOutlineTaps(0f); // populate the min-tap arrays
+    }
+
+    /** Refresh the cached unit-circle offset arrays for {@code outlineW} (in world
+     *  pixels). Tap count is {@code max(MIN, ceil(2π * outlineW))} so adjacent taps
+     *  sit ≈1 world pixel apart on the dilation circle — at width 0.6 we keep 8 taps
+     *  (the original 45° spread); at width 2 we use 13; at width 3 we use 19. */
+    private static void ensureOutlineTaps(float outlineW) {
+        if (outlineW == outlineCachedW) return;
+        int taps = Math.max(OUTLINE_MIN_TAPS,
+                            (int) Math.ceil(2.0 * Math.PI * Math.max(0f, outlineW)));
+        if (taps != outlineTaps || outlineDx.length != taps) {
+            outlineTaps = taps;
+            outlineDx = new float[taps];
+            outlineDy = new float[taps];
+        }
+        for (int i = 0; i < taps; i++) {
+            double a = i * Math.PI * 2.0 / taps;
+            outlineDx[i] = (float) Math.cos(a);
+            outlineDy[i] = (float) Math.sin(a);
+        }
+        outlineCachedW = outlineW;
+    }
     /** Width of the thin shadow strip painted along the wall-facing edges of floor tiles. The
      *  strip uses a 4-pixel alpha gradient texture (opaque at the wall, fading into the floor). */
     private static final float FLOOR_SHADOW_PX    = 3f;
@@ -284,6 +130,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  sit in dim sodium-amber light, so shadows lean warm rather than neutral.
      *  Used for the CONCRETE theme. */
     private static final Color SHADOW_CONCRETE = new Color(0.06f, 0.04f, 0.02f, 0.65f);
+    /** Black with a hint of cyan — paired with the STRAIGHTFORWARD theme so its
+     *  cool-lit terrain reads with shadows that bias toward the same hue rather
+     *  than neutral grey. */
+    private static final Color SHADOW_STRAIGHTFORWARD = new Color(0f, 0.05f, 0.08f, 0.65f);
 
     /**
      * Tint for every shadow pass (floor-edge, wall-base, rear-corner) on this level. One
@@ -291,8 +141,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
      */
     private static Color getShadowColor(Level level) {
         return switch (level.theme) {
-            case CRYSTAL  -> SHADOW_BLACK;
-            case CONCRETE -> SHADOW_CONCRETE;
+            case CRYSTAL         -> SHADOW_BLACK;
+            case CONCRETE        -> SHADOW_CONCRETE;
+            case STRAIGHTFORWARD -> SHADOW_STRAIGHTFORWARD;
         };
     }
 
@@ -322,121 +173,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static final int   LAMP_SHADOW_H         = 7;
     private static final float LAMP_SHADOW_MAX_ALPHA = 0.80f;
 
-    // terrain1.png rows (see layout in the build script). Flat index = col + row*TERRAIN_COLS.
-    // Variants ("+ bits") live in subsequent cols of the same row.
-    /** Alternate stone-floor art. Each FLOOR cell picks one of these at random (deterministic
-     *  per-tile hash) so adjacent floors don't look stamped from the same tile. All three
-     *  variants live on row 1 across cols 0, 1, 2. */
-    private static final int[] FLOOR_VARIANTS = {
-            1 * TERRAIN_COLS + 0,   // (col 0, row 1) — the original FLOOR
-            1 * TERRAIN_COLS + 1,   // (col 1, row 1)
-            1 * TERRAIN_COLS + 2    // (col 2, row 1)
-    };
-    /** Alternate wood-floor art — row 2 across cols 0, 1, 2. */
-    private static final int[] FLOOR_WOOD_VARIANTS = {
-            2 * TERRAIN_COLS + 0,   // (col 0, row 2) — the original FLOOR_WOOD slot
-            2 * TERRAIN_COLS + 1,   // (col 1, row 2)
-            2 * TERRAIN_COLS + 2    // (col 2, row 2)
-    };
-    /** Alternate solid-wall art, used only for the stitch-0 (no neighbours open) variant —
-     *  stitch variants 1..3 keep their unique tiles so the wall still reads as opening up at
-     *  doorways. Picked randomly per tile. */
-    private static final int[] RAISED_WALL_VARIANTS = {
-            4 * TERRAIN_COLS + 0,   // (col 0, row 4) — the original RAISED_WALL stitch-0
-            4 * TERRAIN_COLS + 5,   // (col 5, row 4)
-            4 * TERRAIN_COLS + 6,   // (col 6, row 4)
-            4 * TERRAIN_COLS + 7    // (col 7, row 4)
-    };
-
-    /**
-     * WALLS_INTERNAL bitfield slots that ship a row-7 alternate the renderer rolls
-     * against the row-6 original. 0-indexed cell columns; the user-facing terrain-sheet
-     * convention is 1-indexed, so these are "columns 3 and 5" in the textured-sheet
-     * sense. Bit values are the autotile bitfields they happen to map to (2 = right-
-     * south open, 4 = left-south open) — the two single-south-corner variants. The
-     * renderer hashes (x, y) deterministically so a tile's chosen variant stays stable
-     * across frames.
-     */
-    private static final boolean[] WALLS_INTERNAL_HAS_ROW7_ALT = new boolean[16];
-    static {
-        WALLS_INTERNAL_HAS_ROW7_ALT[2] = true; // 0-idx col 2 = "col 3" in 1-idx
-        WALLS_INTERNAL_HAS_ROW7_ALT[4] = true; // 0-idx col 4 = "col 5" in 1-idx
-    }
-    /** Two-element lookup that turns {@link #pickVariant} into a deterministic 50/50
-     *  coin toss (returns 0 or 1 stably for a given tile). Used to decide whether a
-     *  WALLS_INTERNAL cell with a row-7 alternate uses the row-6 original or the row-7
-     *  alt. */
-    private static final int[] ROW7_ALT_TOSS = { 0, 1 };
-    private static final int WALLS_OVERHANG                =  3 * TERRAIN_COLS + 0; // +1 r-s open, +2 l-s open
-    private static final int RAISED_WALL                   =  4 * TERRAIN_COLS + 0; // +1 r open, +2 l open
-    private static final int WALLS_INTERNAL                =  6 * TERRAIN_COLS + 0; // +1 r, +2 r-s, +4 l-s, +8 l
-    private static final int RAISED_DOOR                   =  8 * TERRAIN_COLS + 0;
-    private static final int DOOR_OVERHANG                 =  8 * TERRAIN_COLS + 1;
-    private static final int RAISED_DOOR_SIDEWAYS          =  8 * TERRAIN_COLS + 2;
-    private static final int DOOR_SIDEWAYS_OVERHANG_CLOSED =  8 * TERRAIN_COLS + 3; // +1 r-s, +2 l-s
-    private static final int DOOR_SIDEWAYS                 =  8 * TERRAIN_COLS + 7; // wall-over-sideways-door cutout
-    /** Open-door body for the front-facing variant — one row below {@link #RAISED_DOOR}. The
-     *  sideways open-door body re-uses {@link #RAISED_DOOR_SIDEWAYS}; only its wall-cap and
-     *  closed-overhang overlays are dropped. */
-    private static final int RAISED_DOOR_OPEN              =  9 * TERRAIN_COLS + 0;
-
-    // ─── Top-right ornaments (statues + lamp) ─────────────────────────────────
-    // These three sprites live above the regular floor/wall grid and are pulled as
-    // dedicated TextureRegions per theme — see smallStatueByTheme / lampByTheme /
-    // largeStatueByTheme. The lamp and large statue are 1-cell wide × 2-cells tall, so
-    // they're drawn anchored at the floor cell with the upper half overhanging into the
-    // cell above (same convention as the legacy mob.png lamp). Source faces west;
-    // {@code _R} mob/tile facing produces the east variant by drawing with negative width.
-
-    /** Source column of the small-statue sprite (1 cell, 32×32 source). */
-    private static final int STATUE_SMALL_COL = 17;
-    /** Source column of the lamp sprite (1 cell wide × 2 cells tall, 32×64 source). */
-    private static final int LAMP_COL         = 18;
-    /** Source column of the tall (large) statue sprite (1 cell wide × 2 cells tall). */
-    private static final int STATUE_LARGE_COL = 19;
-    /** Source row offsets (in cells) for the small-statue, lamp, and tall-statue top edges.
-     *  The small statue lives one row south of the lamp + tall statue (col 17 row 1) — the
-     *  lamp + tall statue still occupy 1×2 starting at row 0. Tweak if the texture moves them. */
-    private static final int STATUE_SMALL_ROW = 1;
-    private static final int LAMP_ROW         = 0;
-    private static final int STATUE_LARGE_ROW = 0;
-    /** Up-ladder source rect — 2×2 atlas cells starting at (col 0, row 10). */
-    private static final int STAIRS_UP_COL    = 0;
-    private static final int STAIRS_UP_ROW    = 10;
-    /** Down-ladder source rect — sits at col 2, immediately to the right of the up
-     *  ladder per your literal spec ("2 columns to the right of [col 0]"). If the
-     *  texture has the down-ladder art elsewhere, edit this constant. */
-    private static final int STAIRS_DOWN_COL  = 2;
-    private static final int STAIRS_DOWN_ROW  = 10;
-    private static final int STAIRS_W_CELLS   = 2;
-    private static final int STAIRS_H_CELLS   = 2;
-    private static final int CHASM_FLOOR                   = 12 * TERRAIN_COLS + 0;
-    private static final int CHASM_WALL                    = 12 * TERRAIN_COLS + 1;
-    private static final int CHASM_WATER                   = 12 * TERRAIN_COLS + 2; // chasm with water dripping from above
-    private static final int CHASM_WOOD                    = 12 * TERRAIN_COLS + 3; // chasm under a wood floor to the north
-    private static final int WATER                         = 14 * TERRAIN_COLS + 0; // +1 n, +2 e, +4 s, +8 w
-
     private SpriteBatch     batch;
     private BitmapFont      font;
-    /** Per-theme extracted tile regions, one TextureRegion per (col, row) cell of the
-     *  theme's atlas. {@link #tiles} is re-pointed at the current level's theme at the
-     *  top of every {@link #render}. The backing textures themselves are owned by
-     *  {@link TileSprites}. */
-    private final java.util.EnumMap<com.bjsp123.rl2.model.Level.VisualTheme, TextureRegion[]>
-            terrainTilesByTheme = new java.util.EnumMap<>(com.bjsp123.rl2.model.Level.VisualTheme.class);
-    /** Per-theme dedicated regions for the three top-right ornaments. {@code current*}
-     *  fields below are repointed at the start of {@link #render} to the active theme so
-     *  draw helpers don't have to look the level up. */
-    private final java.util.EnumMap<com.bjsp123.rl2.model.Level.VisualTheme, TextureRegion>
-            smallStatueByTheme = new java.util.EnumMap<>(com.bjsp123.rl2.model.Level.VisualTheme.class);
-    private final java.util.EnumMap<com.bjsp123.rl2.model.Level.VisualTheme, TextureRegion>
-            largeStatueByTheme = new java.util.EnumMap<>(com.bjsp123.rl2.model.Level.VisualTheme.class);
-    private final java.util.EnumMap<com.bjsp123.rl2.model.Level.VisualTheme, TextureRegion>
-            lampOrnamentByTheme = new java.util.EnumMap<>(com.bjsp123.rl2.model.Level.VisualTheme.class);
-    private final java.util.EnumMap<com.bjsp123.rl2.model.Level.VisualTheme, TextureRegion>
-            stairsUpByTheme = new java.util.EnumMap<>(com.bjsp123.rl2.model.Level.VisualTheme.class);
-    private final java.util.EnumMap<com.bjsp123.rl2.model.Level.VisualTheme, TextureRegion>
-            stairsDownByTheme = new java.util.EnumMap<>(com.bjsp123.rl2.model.Level.VisualTheme.class);
+    /** Per-cell terrain regions for the active level's theme — borrowed from
+     *  {@link TileSprites#regionsFor} at the top of every {@link #render}. */
+    private TextureRegion[] tiles;
+    /** Per-frame ornament regions for the active theme, borrowed from {@link TileSprites}
+     *  at the top of {@link #render} so draw helpers don't have to look the level up. */
     private TextureRegion currentSmallStatue;
     private TextureRegion currentLargeStatue;
     private TextureRegion currentLampOrnament;
@@ -460,30 +203,18 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private Texture         grassTexA, grassTexB;
     private Texture         mushroomTexA, mushroomTexB;
     private Texture         treeTexA, treeTexB;
-    /** Packed sprite sheet — every NPC + the player class poses. Borrowed from
-     *  {@link MobSprites#sheetTexture()} so the atlas is only loaded once across the
-     *  whole game. NOT disposed here — {@link MobSprites#disposeShared()} owns it. */
-    private Texture mobsTex;
     /** Two painted 8-frame fire animation sheets — each 256×48 (8 frames of 32×48). Held
      *  here only for {@link #dispose()}; the per-frame draw machinery lives in
      *  {@link FxRenderer}, which receives both as constructor args. Optional: a missing
      *  file is loaded as null and FxRenderer draws nothing for that variant. */
     private Texture         fire1Tex, fire2Tex;
     /** West-facing + east-facing (mirrored) pairs for the three small critters + the player. */
-    private Sprite[]        mouseFacing, catFacing, kittenFacing, dogFacing,
-                            warriorFacing, mageFacing, rogueFacing;
-    /** Insect-line facing pairs (all from mobs.png). */
-    private Sprite[]        spiderFacing, loathesomeBugFacing, batFacing,
-                            soldierBugFacing, bugProdigyFacing,
-                            blackAntFacing, redAntFacing;
-    /** Humanoids and the apex line. */
-    private Sprite[]        koboldFighterFacing, princessFacing, ghostFacing, horrorFacing;
-    /** Mask-imp facing pairs. */
-    private Sprite[]        maskImpFacing, largeMaskImpFacing,
-                            developedMaskImpFacing, horribleMaskImpFacing;
-    /** Large-mob facing pairs — rendered at natural pixel size. */
-    private Sprite[]        blobFacing, kissyblobFacing,
-                            blackAntHillFacing, redAntHillFacing;
+    /** Player class poses, keyed by {@link CharacterClass}. */
+    private Sprite[]        warriorFacing, mageFacing, rogueFacing;
+    /** Per-species facing-pair sprites, keyed by mob-type string. Populated in
+     *  {@link #create()} from every row in {@link com.bjsp123.rl2.logic.MobRegistry}.
+     *  Replaces the legacy 25 hand-named per-species fields. */
+    private final java.util.Map<String, Sprite[]> speciesFacing = new java.util.HashMap<>();
     private Texture         whiteTex;
     private Texture         shadowTex;
     /** Dedicated soft-oval shadow for lamp tiles — bigger and darker than the mob shadow. */
@@ -510,7 +241,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  frame from {@link com.badlogic.gdx.Gdx#graphics}. */
     private float           stairLabelTime;
     private TextureRegion   whiteRegion;
-    private TextureRegion[] tiles;
     private final FogOverlay fog = new FogOverlay();
 
     /** All effect/particle/fire/sleep-Z rendering lives here. Constructed lazily in
@@ -575,119 +305,23 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch = new SpriteBatch();
         font  = new BitmapFont();
 
-        // Pre-build per-cell TextureRegions for every theme so level.render() can pick a
-        // pre-built tiles[] by theme without any per-frame texture lookup. Textures and
-        // cell sizes come from TileSprites — the shared atlas registry — rather than
-        // being loaded again here.
-        for (com.bjsp123.rl2.model.Level.VisualTheme themeKey
-                : com.bjsp123.rl2.model.Level.VisualTheme.values()) {
-            Texture tex = TileSprites.textureFor(themeKey);
-            if (tex == null) continue;
-            // Source cell size is detected per-atlas from its width — default and neutral
-            // are exported at 32 px/cell (640×512) while older blue/organic atlases stay
-            // at 16 px/cell (320×256). The grid layout (20 cols × N rows) is the same in
-            // either case, so flat indices into FLOOR/WALL/etc. constants are stable; only
-            // the source pixel stride changes. The TextureRegion is drawn into a 16-px
-            // world cell either way, so 32-px source art is downscaled 2:1 by libgdx.
-            int srcCell = Math.max(1, TileSprites.cellSizeFor(themeKey));
-            int rows = tex.getHeight() / srcCell;
-            TextureRegion[] arr = new TextureRegion[rows * TERRAIN_COLS];
-            for (int r = 0; r < rows; r++) {
-                for (int c = 0; c < TERRAIN_COLS; c++) {
-                    arr[r * TERRAIN_COLS + c] =
-                            new TextureRegion(tex, c * srcCell, r * srcCell, srcCell, srcCell);
-                }
-            }
-            terrainTilesByTheme.put(themeKey, arr);
-
-            // Top-right ornaments. Small statue is one source cell; lamp + large statue
-            // span two cells vertically (1×2) and are drawn anchored at the floor cell so
-            // the upper half overhangs into the cell above. Out-of-bounds rows (e.g. an
-            // older atlas without these slots) just yield a no-op draw later.
-            int statueX = STATUE_SMALL_COL * srcCell;
-            int statueY = STATUE_SMALL_ROW * srcCell;
-            int lampX   = LAMP_COL         * srcCell;
-            int largeX  = STATUE_LARGE_COL * srcCell;
-            int largeY  = STATUE_LARGE_ROW * srcCell;
-            if (statueX + srcCell <= tex.getWidth() && statueY + srcCell <= tex.getHeight()) {
-                smallStatueByTheme.put(themeKey,
-                        new TextureRegion(tex, statueX, statueY,
-                                          srcCell, srcCell));
-            }
-            if (lampX + srcCell <= tex.getWidth() && 2 * srcCell <= tex.getHeight()) {
-                lampOrnamentByTheme.put(themeKey,
-                        new TextureRegion(tex, lampX, LAMP_ROW * srcCell,
-                                          srcCell, 2 * srcCell));
-            }
-            if (largeX + srcCell <= tex.getWidth() && largeY + 2 * srcCell <= tex.getHeight()) {
-                largeStatueByTheme.put(themeKey,
-                        new TextureRegion(tex, largeX, largeY,
-                                          srcCell, 2 * srcCell));
-            }
-            // Stair ladders — 2×2 source cells each.
-            int stairsUpX   = STAIRS_UP_COL   * srcCell;
-            int stairsUpY   = STAIRS_UP_ROW   * srcCell;
-            int stairsDownX = STAIRS_DOWN_COL * srcCell;
-            int stairsDownY = STAIRS_DOWN_ROW * srcCell;
-            int stairsWPx   = STAIRS_W_CELLS  * srcCell;
-            int stairsHPx   = STAIRS_H_CELLS  * srcCell;
-            if (stairsUpX + stairsWPx <= tex.getWidth()
-                    && stairsUpY + stairsHPx <= tex.getHeight()) {
-                stairsUpByTheme.put(themeKey,
-                        new TextureRegion(tex, stairsUpX, stairsUpY, stairsWPx, stairsHPx));
-            }
-            if (stairsDownX + stairsWPx <= tex.getWidth()
-                    && stairsDownY + stairsHPx <= tex.getHeight()) {
-                stairsDownByTheme.put(themeKey,
-                        new TextureRegion(tex, stairsDownX, stairsDownY, stairsWPx, stairsHPx));
-            }
+        // Player class poses.
+        warriorFacing          = mobsFacingPair(CharacterClass.WARRIOR);
+        mageFacing             = mobsFacingPair(CharacterClass.MAGE);
+        rogueFacing            = mobsFacingPair(CharacterClass.ROGUE);
+        // Every NPC species — driven entirely by the registry. Flying species
+        // (bat, ghost, …) get the floating y-lift; everyone else stands flat
+        // on their tile. The registry is populated from {@code mobs.csv} at
+        // bootstrap, so this loop picks up new species without code edits.
+        for (String type : com.bjsp123.rl2.logic.MobRegistry.knownTypes()) {
+            com.bjsp123.rl2.logic.MobDefinition def =
+                    com.bjsp123.rl2.logic.MobRegistry.get(type);
+            Sprite[] pair = (def != null && def.flying)
+                    ? mobsFloatingFacingPair(type)
+                    : mobsFacingPair(type);
+            speciesFacing.put(type, pair);
         }
-        // Default binding before a level renders; render() re-points at the per-level theme.
-        tiles = terrainTilesByTheme.get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL);
-        currentSmallStatue  = smallStatueByTheme .get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL);
-        currentLargeStatue  = largeStatueByTheme .get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL);
-        currentLampOrnament = lampOrnamentByTheme.get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL);
-        currentStairsUp     = stairsUpByTheme    .get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL);
-        currentStairsDown   = stairsDownByTheme  .get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL);
 
-        // ─── mobs.png — borrowed from MobSprites (single load across the whole game) ─
-        mobsTex = MobSprites.sheetTexture();
-        // Player class poses (row 0).
-        warriorFacing          = mobsFacingPair(MOB_CELL_WARRIOR);
-        mageFacing             = mobsFacingPair(MOB_CELL_MAGE);
-        rogueFacing            = mobsFacingPair(MOB_CELL_ROGUE);
-        // Insects (row 2).
-        spiderFacing           = mobsFacingPair(MOB_CELL_SPIDER);
-        loathesomeBugFacing    = mobsFacingPair(MOB_CELL_LOATHESOME_BUG);
-        // Bat is flying — gets the floating y-lift.
-        batFacing              = mobsFloatingFacingPair(MOB_CELL_BAT);
-        soldierBugFacing       = mobsFacingPair(MOB_CELL_SOLDIER_BUG);
-        bugProdigyFacing       = mobsFacingPair(MOB_CELL_BUG_PRODIGY);
-        blackAntFacing         = mobsFacingPair(MOB_CELL_BLACK_ANT);
-        redAntFacing           = mobsFacingPair(MOB_CELL_RED_ANT);
-        // Critters.
-        mouseFacing            = mobsFacingPair(MOB_CELL_MOUSE);
-        catFacing              = mobsFacingPair(MOB_CELL_CAT);
-        kittenFacing           = mobsFacingPair(MOB_CELL_KITTEN);
-        dogFacing              = mobsFacingPair(MOB_CELL_DOG);
-        // Humanoids.
-        koboldFighterFacing    = mobsFacingPair(MOB_CELL_KOBOLD_FIGHTER);
-        princessFacing         = mobsFacingPair(MOB_CELL_BARBARIAN_PRINCESS);
-        // Blobs (2×2 each).
-        blobFacing             = mobsFacingPair(MOB_CELL_BLOB);
-        kissyblobFacing        = mobsFacingPair(MOB_CELL_KISSYBLOB);
-        blackAntHillFacing     = mobsFacingPair(MOB_CELL_BLACK_ANT_HILL);
-        redAntHillFacing       = mobsFacingPair(MOB_CELL_RED_ANT_HILL);
-        // Mask imps.
-        maskImpFacing          = mobsFacingPair(MOB_CELL_MASK_IMP);
-        largeMaskImpFacing     = mobsFacingPair(MOB_CELL_LARGE_MASK_IMP);
-        developedMaskImpFacing = mobsFacingPair(MOB_CELL_DEVELOPED_MASK_IMP);
-        horribleMaskImpFacing  = mobsFacingPair(MOB_CELL_HORRIBLE_MASK_IMP);
-        // Apex.
-        ghostFacing            = mobsFloatingFacingPair(MOB_CELL_GHOST);
-        horrorFacing           = mobsFacingPair(MOB_CELL_HORROR);
-
-       
         Pixmap wp = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
         wp.setColor(Color.WHITE);
         wp.fill();
@@ -738,42 +372,35 @@ public class DefaultLevelRenderer implements LevelRenderer {
     }
 
 
-    /** Cut a single mob silhouette out of {@link #mobsTex} at the (col, row, w, h) cell
-     *  block packed into {@code cellSpec}. Render half source pixel size — the sheet is
-     *  authored at 2× display resolution so a 32-px source cell becomes a 16-px on-screen
-     *  cell. Sprites are bottom-aligned within their cell block by the packer
-     *  ({@code tools/PackMobsSheet.java}), so the silhouette's visible base lands at the
-     *  cell-block's bottom edge automatically. */
-    private Sprite mobsSingleSprite(int cellSpec) {
-        return mobsSingleSprite(cellSpec, /*yAdjust*/ 0);
-    }
-
-    /** Same as {@link #mobsSingleSprite(int)} but with an extra y lift — used for flying
-     *  mobs (FLYING_HOVER_PX). */
-    private Sprite mobsSingleSprite(int cellSpec, int yAdjust) {
-        int col   = (cellSpec >>> 24) & 0xFF;
-        int row   = (cellSpec >>> 16) & 0xFF;
-        int wCell = (cellSpec >>>  8) & 0xFF;
-        int hCell =  cellSpec         & 0xFF;
-        int srcX  = col   * MOBS_CELL_PX;
-        int srcY  = row   * MOBS_CELL_PX;
-        int srcW  = wCell * MOBS_CELL_PX;
-        int srcH  = hCell * MOBS_CELL_PX;
+    /** Wrap a {@link MobSprites} region in a {@link Sprite} at half source-pixel size —
+     *  the sheet is authored at 2× display resolution so a 32-px source cell becomes a
+     *  16-px on-screen cell. Sprites are bottom-aligned within their cell block by the
+     *  packer ({@code tools/PackMobsSheet.java}), so the silhouette's visible base lands
+     *  at the cell-block's bottom edge automatically. {@code yAdjust} adds an extra lift
+     *  for flying mobs. Returns {@code null} if {@code region} didn't load. */
+    private static Sprite spriteFromRegion(TextureRegion region, int yAdjust) {
+        if (region == null) return null;
+        int srcW = region.getRegionWidth();
+        int srcH = region.getRegionHeight();
         int dispW = srcW / 2, dispH = srcH / 2;
-        return new Sprite(new TextureRegion(mobsTex, srcX, srcY, srcW, srcH),
-                          dispW, dispH, dispW, dispH, 0, yAdjust, /*natural*/ true);
+        return new Sprite(region, dispW, dispH, dispW, dispH, 0, yAdjust, /*natural*/ true);
     }
 
-    private Sprite[] mobsFacingPair(int cellSpec) {
-        Sprite left  = mobsSingleSprite(cellSpec);
-        Sprite right = flipHorizontal(left);
-        return new Sprite[]{ left, right };
+    private Sprite[] mobsFacingPair(String type) {
+        return facingPair(spriteFromRegion(MobSprites.regionFor(type), 0));
     }
 
-    private Sprite[] mobsFloatingFacingPair(int cellSpec) {
-        Sprite left  = mobsSingleSprite(cellSpec, FLYING_HOVER_PX);
-        Sprite right = flipHorizontal(left);
-        return new Sprite[]{ left, right };
+    private Sprite[] mobsFacingPair(CharacterClass cls) {
+        return facingPair(spriteFromRegion(MobSprites.regionFor(cls), 0));
+    }
+
+    private Sprite[] mobsFloatingFacingPair(String type) {
+        return facingPair(spriteFromRegion(MobSprites.regionFor(type), FLYING_HOVER_PX));
+    }
+
+    private static Sprite[] facingPair(Sprite left) {
+        if (left == null) return new Sprite[]{ null, null };
+        return new Sprite[]{ left, flipHorizontal(left) };
     }
 
 
@@ -816,21 +443,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
         waterTime      += dt;
         stairLabelTime += dt;
 
-        // Bind the tile atlas matching this level's theme. Falls back to CRYSTAL if a theme
-        // slipped through without a registered atlas (e.g. an older save on a dev build).
-        TextureRegion[] themed = terrainTilesByTheme.get(level.theme);
-        tiles = themed != null ? themed
-                               : terrainTilesByTheme.get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL);
-        currentSmallStatue  = smallStatueByTheme .getOrDefault(level.theme,
-                smallStatueByTheme .get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL));
-        currentLargeStatue  = largeStatueByTheme .getOrDefault(level.theme,
-                largeStatueByTheme .get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL));
-        currentLampOrnament = lampOrnamentByTheme.getOrDefault(level.theme,
-                lampOrnamentByTheme.get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL));
-        currentStairsUp     = stairsUpByTheme.getOrDefault(level.theme,
-                stairsUpByTheme.get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL));
-        currentStairsDown   = stairsDownByTheme.getOrDefault(level.theme,
-                stairsDownByTheme.get(com.bjsp123.rl2.model.Level.VisualTheme.CRYSTAL));
+        // Bind the tile atlas matching this level's theme. TileSprites falls back to
+        // CRYSTAL internally if a theme slipped through without a registered atlas.
+        tiles               = TileSprites.regionsFor(level.theme);
+        currentSmallStatue  = TileSprites.smallStatue(level.theme);
+        currentLargeStatue  = TileSprites.largeStatue(level.theme);
+        currentLampOrnament = TileSprites.lampOrnament(level.theme);
+        currentStairsUp     = TileSprites.stairsUp(level.theme);
+        currentStairsDown   = TileSprites.stairsDown(level.theme);
 
         // Bucket every item / mob / effect into the cell it will draw in. Items and mobs
         // only shift on ticks (pickup / drop / throw / step), so their indexes are cached
@@ -1047,7 +667,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (t == Tile.DOOR || t == Tile.DOOR_OPEN) {
             int variant = floorVisualAt(level, x, y + 1);   // N (y-up)
             if (variant < 0) variant = floorVisualAt(level, x - 1, y);
-            if (variant < 0) variant = FLOOR_VARIANTS[0];
+            if (variant < 0) variant = TileSprites.floorVariant(TileSprites.variantHash(x, y));
             drawTile(variant, x, y);
             return;
         }
@@ -1057,7 +677,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (t == Tile.STAIRS_UP || t == Tile.STAIRS_DOWN) {
             // Stair underlay uses the same floor-variant picker as neighboring floors so
             // it doesn't stand out from the surrounding random-variant pattern.
-            drawTile(pickVariant(x, y, FLOOR_VARIANTS), x, y);
+            drawTile(TileSprites.floorVariant(TileSprites.variantHash(x, y)), x, y);
         }
         int visual = terrainVisual(level, x, y);
         if (visual < 0) return;
@@ -1070,8 +690,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private int floorVisualAt(Level level, int x, int y) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return -1;
         Tile t = level.tiles[x][y];
-        if (t == Tile.FLOOR)      return pickVariant(x, y, FLOOR_VARIANTS);
-        if (t == Tile.FLOOR_WOOD) return pickVariant(x, y, FLOOR_WOOD_VARIANTS);
+        int hash = TileSprites.variantHash(x, y);
+        if (t == Tile.FLOOR)      return TileSprites.floorVariant(hash);
+        if (t == Tile.FLOOR_WOOD) return TileSprites.floorWoodVariant(hash);
         return -1;
     }
 
@@ -1102,13 +723,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
     /**
      * Chasm-edge tile for one cell — picks the "dripping edge" glyph for a CHASM cell based
-     * on what's in the cell to the north:
-     * <ul>
-     *   <li>Water surface → {@link #CHASM_WATER}</li>
-     *   <li>Wall or door → {@link #CHASM_WALL}</li>
-     *   <li>Wood floor → {@link #CHASM_WOOD} (wood planks overhanging the pit)</li>
-     *   <li>Anything else → {@link #CHASM_FLOOR}</li>
-     * </ul>
+     * on what's in the cell to the north (water/wall/wood floor/anything else).
      * No-op for non-chasm cells; no-op for chasm cells whose north neighbor is also chasm
      * (there's nothing for the edge to "drip" from).
      */
@@ -1117,11 +732,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
         Tile north = tileAt(level, x, y + 1);
         if (north == null || north == Tile.CHASM) return;
         int edge;
-        if      (surfaceAt(level, x, y + 1) == Surface.WATER) edge = CHASM_WATER;
+        if      (surfaceAt(level, x, y + 1) == Surface.WATER) edge = TileSprites.CHASM_WATER;
         else if (north == Tile.WALL || north == Tile.DOOR
-              || north == Tile.DOOR_OPEN)                    edge = CHASM_WALL;
-        else if (north == Tile.FLOOR_WOOD)                   edge = CHASM_WOOD;
-        else                                                 edge = CHASM_FLOOR;
+              || north == Tile.DOOR_OPEN)                    edge = TileSprites.CHASM_WALL;
+        else if (north == Tile.FLOOR_WOOD)                   edge = TileSprites.CHASM_WOOD;
+        else                                                 edge = TileSprites.CHASM_FLOOR;
         drawTile(edge, x, y);
     }
 
@@ -1356,7 +971,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     }
 
     private void drawMaskedSurfaceCell(Level level, Surface s, int gx, int gy) {
-        int variant = stitchSurface(level, gx, gy, s) - WATER;
+        int variant = stitchSurface(level, gx, gy, s) - TileSprites.WATER;
         float scroll = waterTime * WATER_SCROLL_PX_PER_SEC;
         // Sampling the texture at higher u shifts the visible pattern LEFT on screen; sampling
         // at lower v shifts it DOWN. Use that to drift the liquid south-west over time.
@@ -1410,13 +1025,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         Texture tex = rearVegTexture(v, x, y);
         if (tex == null) return;
-        batch.setColor(Color.WHITE);
         int jx = vegJitterX(x, y);
         int lift = vegRearLiftPx(x, y);
         // Rear vegetation rides 3–6 px above the tile floor so the front sprite (drawn at
         // the base) reads as the foreground blades and the rear sprite reads as the body
         // poking up behind it.
-        batch.draw(tex, x * (float) CELL + jx, y * (float) CELL + lift, CELL, CELL);
+        float dx = x * (float) CELL + jx;
+        float dy = y * (float) CELL + lift;
+        drawTextureOutline(tex, dx, dy, CELL, CELL);
+        batch.setColor(Color.WHITE);
+        batch.draw(tex, dx, dy, CELL, CELL);
     }
 
     /** Paint the upper (canopy) half of the tree-at-({@code treeX}, {@code treeY}) sprite
@@ -1430,9 +1048,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
         int jx = vegJitterX(treeX, treeY);
         int lift = vegRearLiftPx(treeX, treeY);
         int half = tex.getHeight() / 2;
+        float dx = treeX * (float) CELL + jx;
+        float dy = (treeY + 1) * (float) CELL + lift;
+        drawTextureOutlineSrc(tex, dx, dy, CELL, CELL,
+                0, 0, tex.getWidth(), half);
         batch.setColor(Color.WHITE);
         batch.draw(tex,
-                treeX * (float) CELL + jx, (treeY + 1) * (float) CELL + lift,
+                dx, dy,
                 CELL, CELL,
                 0, 0,                           // src origin: top of texture = canopy
                 tex.getWidth(), half,
@@ -1447,9 +1069,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
         int jx = vegJitterX(x, y);
         int lift = vegRearLiftPx(x, y);
         int half = tex.getHeight() / 2;
+        float dx = x * (float) CELL + jx;
+        float dy = y * (float) CELL + lift;
+        drawTextureOutlineSrc(tex, dx, dy, CELL, CELL,
+                0, half, tex.getWidth(), half);
         batch.setColor(Color.WHITE);
         batch.draw(tex,
-                x * (float) CELL + jx, y * (float) CELL + lift,
+                dx, dy,
                 CELL, CELL,
                 0, half,                        // src origin: middle of texture = top of trunk
                 tex.getWidth(), half,
@@ -1479,7 +1105,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (v == Vegetation.FIRE) return;
         Texture tex = frontVegTexture(v, x, y);
         if (tex == null) return;
-        batch.setColor(Color.WHITE);
         // Front vegetation always sits at the tile's base (no Y lift, unlike the rear
         // pass) and renders the full sprite. The art for the front variants is authored
         // with mostly-transparent upper rows + foreground blades near the bottom, so a
@@ -1487,7 +1112,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // tile's occupant. X jitter matches the rear sprite so the two layers line up
         // horizontally.
         int jx = vegJitterX(x, y);
-        batch.draw(tex, x * (float) CELL + jx, y * (float) CELL, CELL, CELL);
+        float dx = x * (float) CELL + jx;
+        float dy = y * (float) CELL;
+        drawTextureOutline(tex, dx, dy, CELL, CELL);
+        batch.setColor(Color.WHITE);
+        batch.draw(tex, dx, dy, CELL, CELL);
     }
 
     /** Rear-pass texture pick: each veg type has two source variants in surfaces.png; the
@@ -1564,6 +1193,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // overhangs into the cell above (matching the source 32×64 art).
         float dx = x * (float) CELL;
         float dy = y * (float) CELL;
+        drawRegionOutline(currentLampOrnament, dx, dy, CELL, 2f * CELL);
+        batch.setColor(Color.WHITE);
         batch.draw(currentLampOrnament, dx, dy, CELL, 2f * CELL);
     }
 
@@ -1688,8 +1319,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float dw = CELL;
         float dh = small ? CELL : 2f * CELL;
         if (flip) {
+            drawRegionOutline(r, dx + dw, dy, -dw, dh);
+            batch.setColor(Color.WHITE);
             batch.draw(r, dx + dw, dy, -dw, dh);
         } else {
+            drawRegionOutline(r, dx, dy, dw, dh);
+            batch.setColor(Color.WHITE);
             batch.draw(r, dx, dy, dw, dh);
         }
     }
@@ -1751,27 +1386,19 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 if (!stitchBarrier(level, x + 1, y - 1)) bits += 2;
                 if (!stitchBarrier(level, x - 1, y - 1)) bits += 4;
                 if (!stitchBarrier(level, x - 1, y    )) bits += 8;
-                int result = WALLS_INTERNAL + bits;
-                // Bitfields 2 and 4 (the single-south-corner-open variants — 0-indexed
-                // cols 2 and 4 of row 6, "cols 3 and 5" in the user-facing 1-indexed
-                // convention) ship a row-7 alternate. Pick deterministically per tile so
-                // a wall's chosen variant stays stable across frames.
-                if (WALLS_INTERNAL_HAS_ROW7_ALT[bits]
-                        && pickVariant(x, y, ROW7_ALT_TOSS) == 1) {
-                    result += TERRAIN_COLS;
-                }
+                int result = TileSprites.internalWallVariant(TileSprites.variantHash(x, y), bits);
                 drawTile(result, x, y);
             } else if (level.tiles[x][y - 1] == Tile.DOOR) {
                 // Wall-over-sideways-door cutout: only painted when the door is CLOSED. When
                 // the sideways door opens, the cutout sprite is dropped — the wall above
                 // renders normally without a special "door top" overlay.
-                drawTile(DOOR_SIDEWAYS, x, y);
+                drawTile(TileSprites.DOOR_SIDEWAYS, x, y);
             }
             return;
         }
 
         if (t == Tile.DOOR && isWallish(level, x, y - 1)) {
-            int result = DOOR_SIDEWAYS_OVERHANG_CLOSED;
+            int result = TileSprites.DOOR_SIDEWAYS_OVERHANG_CLOSED;
             if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
             if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
             drawTile(result, x, y);
@@ -1779,7 +1406,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
 
         if (isWallish(level, x, y - 1)) {
-            int result = WALLS_OVERHANG;
+            int result = TileSprites.WALLS_OVERHANG;
             if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
             if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
             drawTile(result, x, y);
@@ -1789,16 +1416,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // as wall overhangs use. The SPD convention: the door body occupies its own cell and
         // the arched top visually sits in the tile above on screen.
         if (isDoorAt(level, x, y - 1)) {
-            drawTile(DOOR_OVERHANG, x, y);
+            drawTile(TileSprites.DOOR_OVERHANG, x, y);
         }
     }
 
     private int terrainVisual(Level level, int x, int y) {
         Tile t = level.tiles[x][y];
+        int hash = TileSprites.variantHash(x, y);
         return switch (t) {
-            case FLOOR       -> pickVariant(x, y, FLOOR_VARIANTS);
-            case FLOOR_WOOD  -> pickVariant(x, y, FLOOR_WOOD_VARIANTS);
-            case LAMP        -> pickVariant(x, y, FLOOR_VARIANTS); // base; lamp sprite drawn in drawLampAt
+            case FLOOR       -> TileSprites.floorVariant(hash);
+            case FLOOR_WOOD  -> TileSprites.floorWoodVariant(hash);
+            case LAMP        -> TileSprites.floorVariant(hash); // base; lamp sprite drawn in drawLampAt
             // Stairs render their floor underlay in drawFloorAt and the 2×2 ladder sprite
             // in the per-cell content pass (drawStairsAt). Returning -1 here skips the
             // legacy 1×1 glyph draw.
@@ -1809,19 +1437,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
             // Statues sit on a regular floor base; the statue sprite itself is layered on
             // top in drawStatueAt so the L/R facing flip can be applied at draw time.
             case STATUE_SMALL_L, STATUE_SMALL_R,
-                 STATUE_LARGE_L, STATUE_LARGE_R -> pickVariant(x, y, FLOOR_VARIANTS);
+                 STATUE_LARGE_L, STATUE_LARGE_R -> TileSprites.floorVariant(hash);
         };
-    }
-
-    /**
-     * Deterministic per-tile pick from a variant list. Same (x, y) always returns the same
-     * entry, so a floor tile keeps its look across frames instead of flickering between
-     * variants. Different constants from {@code vegJitterX}/{@code vegJitterY} so terrain
-     * variants aren't correlated with grass-offset jitter.
-     */
-    private static int pickVariant(int x, int y, int[] variants) {
-        int h = x * 92613371 ^ y * 17391317;
-        return variants[Math.floorMod(h, variants.length)];
     }
 
     /**
@@ -1831,7 +1448,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * +4 south, +8 west.
      */
     private int stitchSurface(Level level, int x, int y, Surface self) {
-        int result = WATER;
+        int result = TileSprites.WATER;
         if (isSurfaceShore(level, x,     y + 1, self)) result += 1;
         if (isSurfaceShore(level, x + 1, y,     self)) result += 2;
         if (isSurfaceShore(level, x,     y - 1, self)) result += 4;
@@ -1868,13 +1485,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         int bits = 0;
         if (!stitchBarrier(level, x + 1, y)) bits += 1;
         if (!stitchBarrier(level, x - 1, y)) bits += 2;
-        // Stitch variants 1..3 (at least one neighbour open) stay at their unique cells so
-        // the wall still reads as opening up at doorways / corners. Only the stitch-0
-        // "solid block" variant picks from the multiple art alternatives at row 4.
-        if (bits == 0) {
-            return pickVariant(x, y, RAISED_WALL_VARIANTS);
-        }
-        return RAISED_WALL + bits;
+        return TileSprites.raisedWallVariant(TileSprites.variantHash(x, y), bits);
     }
 
     private int raisedDoor(Level level, int x, int y) {
@@ -1882,8 +1493,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Sideways door (wall-flanked along the N/S axis): same body sprite for open and
         // closed; the difference shows in the dropped overlays handled by drawWallOverlayAt.
         // Front-facing door swaps the body sprite for the row-9 "open" variant when open.
-        if (isWallish(level, x, y - 1)) return RAISED_DOOR_SIDEWAYS;
-        return t == Tile.DOOR_OPEN ? RAISED_DOOR_OPEN : RAISED_DOOR;
+        if (isWallish(level, x, y - 1)) return TileSprites.RAISED_DOOR_SIDEWAYS;
+        return t == Tile.DOOR_OPEN ? TileSprites.RAISED_DOOR_OPEN : TileSprites.RAISED_DOOR;
     }
 
     private static boolean isWallish(Level level, int x, int y) {
@@ -1959,6 +1570,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // inventory + action-bar art. Falls back to the glyph if no sprite is registered.
         com.badlogic.gdx.graphics.g2d.TextureRegion region = ItemSprites.regionFor(it);
         if (region != null) {
+            // Same silhouette outline mobs/statues/lamps get — items on the floor
+            // were the lone holdout. Helps loot pop visually against busy terrain.
+            drawRegionOutline(region, x * (float) CELL, y * (float) CELL,
+                    (float) CELL, (float) CELL);
             batch.setColor(Color.WHITE);
             // Source art is 32×32, world cell is 16×16 — libGDX scales 2:1 down with
             // nearest-neighbour filtering for crisp pixels.
@@ -2080,13 +1695,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // (the centre orbit position when 3 gems are equipped) sits over the player's
         // chest rather than above their head. Horizontal centre is the tile centre.
         float cx     = mx * CELL + CELL * 0.5f + ox;
-        float midY   = my * CELL + CELL * 0.5f + oy + PLAYER_Y_LIFT;
+        float midY   = my * CELL + CELL * 1.55f + oy + PLAYER_Y_LIFT;
         float t      = (float) ((System.nanoTime() / 1_000_000L) % 1_000_000L) / 1000f;
         float iconSize = CELL * 0.6f;
         // Wider spread + larger bob amplitude so the gems are clearly orbiting around
         // the player rather than huddled overhead.
-        float spread    = CELL * 0.85f;
-        float bobAmp    = 4.0f;
+        float spread    = CELL * 0.45f;
+        float bobAmp    = 2.0f;
         for (int i = 0; i < n; i++) {
             // Spread n gems evenly over [-spread, +spread]; for a single gem (n==1),
             // u = 0 (centered).
@@ -2096,6 +1711,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
             float by = (float) Math.sin(bobPhase) * bobAmp;
             float drawX = cx + bx - iconSize * 0.5f;
             float drawY = midY - iconSize * 0.5f + by;
+            if(i==0 || i==n-1) drawY -= CELL * 0.25f; //lower the ones at the edge
             com.badlogic.gdx.graphics.g2d.TextureRegion r = GemSprites.regionFor(gems.get(i));
             if (r == null) continue;
             batch.setColor(1f, 1f, 1f, alpha);
@@ -2162,23 +1778,112 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float shadowW = s.visibleW * scaleX + SHADOW_EXTRA_W;
         batch.draw(shadowTex, tileCenterX - shadowW / 2f, baselineY - SHADOW_H / 2f,
                 shadowW, SHADOW_H);
-        // 1-px black outline — render the sprite four times at ±1 px cardinal offsets in
-        // pure black at MOB_OUTLINE_ALPHA. SpriteBatch multiplies the sprite's RGB by the
-        // batch colour, so RGB=0 zeroes out the original colour while preserving the alpha
-        // mask shape; alpha is multiplied by the batch alpha. Where the original sprite is
-        // transparent, the offset draw is also transparent — so the outline only "shows"
-        // around the silhouette's edge. Death-fade alpha modulates the outline too.
-        float outlineA = MOB_OUTLINE_ALPHA * alpha;
-        if (outlineA > 0f)
-        {
+        // Black silhouette outline — 8 radial taps at user-configurable width and
+        // darkness (see MobOutline). World-pixel offsets are floats so the rim can
+        // be thinner than the game's integer pixel grid; at the default zoom
+        // (~0.35) one world pixel covers ~3 screen pixels, so a 0.6 wp outline
+        // reads as ~2 screen pixels regardless of source-texel snapping.
+        // SpriteBatch multiplies the sprite's RGB by the batch colour, so RGB=0
+        // zeroes out the original colour while preserving the alpha mask shape;
+        // where the original sprite is transparent, the offset draws are also
+        // transparent — so the rim only "shows" around the silhouette's edge.
+        // Death-fade alpha modulates it too.
+        float outlineW = com.bjsp123.rl2.ui.skin.MobOutline.width();
+        float outlineA = com.bjsp123.rl2.ui.skin.MobOutline.darkness() * alpha;
+        if (outlineA > 0f && outlineW > 0f) {
+            ensureOutlineTaps(outlineW);
+            Texture mobTex = s.region.getTexture();
+            setOutlineFilter(mobTex, true);
             batch.setColor(0f, 0f, 0f, outlineA);
-            batch.draw(s.region, drawX - 1, drawY,     dw, dh);
-            batch.draw(s.region, drawX + 1, drawY,     dw, dh);
-            batch.draw(s.region, drawX,     drawY - 1, dw, dh);
-            batch.draw(s.region, drawX,     drawY + 1, dw, dh);
+            for (int i = 0; i < outlineTaps; i++) {
+                batch.draw(s.region,
+                        drawX + outlineDx[i] * outlineW,
+                        drawY + outlineDy[i] * outlineW,
+                        dw, dh);
+            }
+            setOutlineFilter(mobTex, false);
         }
         batch.setColor(1f, 1f, 1f, alpha);
         batch.draw(s.region, drawX, drawY, dw, dh);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Swap a sprite-sheet texture's filter to Linear (smooth) or back to Nearest
+     *  (crisp), flushing the batch on either side so the change actually takes
+     *  effect for the outline pass without affecting the main sprite draw. Linear
+     *  filtering on the offset stamps gives the silhouette boundary a sub-texel
+     *  smoothing band — visually higher-res than the source pixel grid — which is
+     *  what makes thick outlines read as smooth curves instead of chunky pixel
+     *  staircases. The main sprite is drawn AFTER (on top), so the inside of the
+     *  silhouette stays at the crisp Nearest-filtered look.
+     *
+     *  <p>When the user has disabled outline smoothing
+     *  ({@link com.bjsp123.rl2.ui.skin.MobOutline#smooth()} == false), this is a
+     *  no-op — the outline taps draw with whatever filter the texture already had
+     *  (Nearest in normal use), keeping the original pixel-aligned look. */
+    private void setOutlineFilter(Texture tex, boolean enterOutlinePass) {
+        if (tex == null) return;
+        if (!com.bjsp123.rl2.ui.skin.MobOutline.smooth()) return;
+        batch.flush();
+        Texture.TextureFilter f = enterOutlinePass ? Texture.TextureFilter.Linear
+                                                   : Texture.TextureFilter.Nearest;
+        tex.setFilter(f, f);
+    }
+
+    /** Generic radial-tap silhouette outline for any TextureRegion-based sprite
+     *  (statues, the lamp ornament, items, etc). The destination rect should be
+     *  the same one the actual draw uses — for flipped sprites the negative
+     *  width/height is preserved so the outline mirrors the silhouette. The
+     *  source texture's filter is briefly swapped to Linear so the outline edge
+     *  reads at sub-texel resolution; see {@link #setOutlineFilter}. */
+    private void drawRegionOutline(TextureRegion r, float x, float y, float w, float h) {
+        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
+        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        if (ow <= 0f || oa <= 0f || r == null) return;
+        ensureOutlineTaps(ow);
+        Texture tex = r.getTexture();
+        setOutlineFilter(tex, true);
+        batch.setColor(0f, 0f, 0f, oa);
+        for (int i = 0; i < outlineTaps; i++) {
+            batch.draw(r, x + outlineDx[i] * ow, y + outlineDy[i] * ow, w, h);
+        }
+        setOutlineFilter(tex, false);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Texture-based variant of {@link #drawRegionOutline} — used for the
+     *  vegetation extracted Textures (grass / mushroom / fire-skipped) which the
+     *  draw loop hands out as raw {@link Texture} not {@link TextureRegion}. */
+    private void drawTextureOutline(Texture tex, float x, float y, float w, float h) {
+        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
+        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        if (ow <= 0f || oa <= 0f || tex == null) return;
+        ensureOutlineTaps(ow);
+        setOutlineFilter(tex, true);
+        batch.setColor(0f, 0f, 0f, oa);
+        for (int i = 0; i < outlineTaps; i++) {
+            batch.draw(tex, x + outlineDx[i] * ow, y + outlineDy[i] * ow, w, h);
+        }
+        setOutlineFilter(tex, false);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Texture-with-source-rect variant — used by the tree canopy / trunk halves
+     *  which slice the 32×64 tree texture into upper and lower 32×32 sub-rects. */
+    private void drawTextureOutlineSrc(Texture tex, float x, float y, float w, float h,
+                                       int srcX, int srcY, int srcW, int srcH) {
+        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
+        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        if (ow <= 0f || oa <= 0f || tex == null) return;
+        ensureOutlineTaps(ow);
+        setOutlineFilter(tex, true);
+        batch.setColor(0f, 0f, 0f, oa);
+        for (int i = 0; i < outlineTaps; i++) {
+            batch.draw(tex,
+                    x + outlineDx[i] * ow, y + outlineDy[i] * ow,
+                    w, h, srcX, srcY, srcW, srcH, false, false);
+        }
+        setOutlineFilter(tex, false);
         batch.setColor(Color.WHITE);
     }
 
@@ -2222,41 +1927,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private Sprite spriteForMob(Mob mob) {
         int f = mob.facingEast ? 1 : 0;
         if (mob.mobType == null) return null;
-        return switch (mob.mobType) {
-            case PLAYER             -> playerSprite(mob, f);
-            // Insects.
-            case SPIDER             -> spiderFacing[f];
-            case LOATHESOME_BUG     -> loathesomeBugFacing[f];
-            case BAT                -> batFacing[f];
-            case SOLDIER_BUG        -> soldierBugFacing[f];
-            case BUG_PRODIGY        -> bugProdigyFacing[f];
-            case BLACK_ANT          -> blackAntFacing[f];
-            case RED_ANT            -> redAntFacing[f];
-            case BLACK_ANT_HILL     -> blackAntHillFacing[f];
-            case RED_ANT_HILL       -> redAntHillFacing[f];
-            // Critters.
-            case MOUSE              -> mouseFacing[f];
-            // Blazing firemouse rides the mouse sprite for now — same silhouette, with the
-            // game's fire VFX picking up the slack visually whenever the mouse is engulfed.
-            case BLAZING_FIREMOUSE  -> mouseFacing[f];
-            case CAT                -> catFacing[f];
-            case KITTEN             -> kittenFacing[f];
-            case DOG                -> dogFacing[f];
-            // Humanoids.
-            case KOBOLD_FIGHTER     -> koboldFighterFacing[f];
-            case BARBARIAN_PRINCESS -> princessFacing[f];
-            // Blobs.
-            case BLOB               -> blobFacing[f];
-            case KISSYBLOB          -> kissyblobFacing[f];
-            // Mask imp line.
-            case MASK_IMP           -> maskImpFacing[f];
-            case LARGE_MASK_IMP     -> largeMaskImpFacing[f];
-            case DEVELOPED_MASK_IMP -> developedMaskImpFacing[f];
-            case HORRIBLE_MASK_IMP  -> horribleMaskImpFacing[f];
-            // Apex.
-            case GHOST              -> ghostFacing[f];
-            case HORROR             -> horrorFacing[f];
-        };
+        if (Mob.TYPE_PLAYER.equals(mob.mobType)) return playerSprite(mob, f);
+        Sprite[] pair = speciesFacing.get(mob.mobType);
+        return pair == null ? null : pair[f];
     }
 
     private Sprite playerSprite(Mob mob, int f) {

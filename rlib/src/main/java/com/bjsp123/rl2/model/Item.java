@@ -14,21 +14,28 @@ public class Item {
         HEALING_POTION, POTION_SORCERY, POTION_GHOSTLINESS, POTION_INVISIBILITY, POTION_POISON,
         // Wands
         WAND_WATER, WAND_OIL, WAND_GRASS, WAND_FUNGUS, WAND_FIRE, WAND_DOG, WAND_DETONATION,
-        WAND_MAGIC_MISSILE, WAND_BANISHMENT,
+        WAND_MAGIC_MISSILE, WAND_BANISHMENT, WAND_LIGHTNING,
+        // Magical consumables
+        POWER_ORB,
         // Gems — single ItemType, with species + size carried on the Item instance.
         GEM
     }
 
-    /** Element a wand applies on use. The {@link #DOG_SPAWN} variant is special — instead
-     *  of targeting a tile it summons a dog on a free cell next to the user. */
+    /** Element a wand applies on impact. Summon-style wands (wand of dog) carry a
+     *  null {@code wandElement} and instead set {@link Item#summonsWhenUsed} — they
+     *  bypass the targeting overlay and never emit a missile / impact event. */
     public enum WandElement {
-        WATER, OIL, GRASS, FUNGUS, FIRE, DOG_SPAWN,
+        WATER, OIL, GRASS, FUNGUS, FIRE,
         /** Wand of detonation — ignites a Euclidean disc around the impact tile and
          *  spawns a radial particle burst for the visual. Radius scales with item level. */
         DETONATION,
         /** Wand of banishment — fires a ray (new effect type) along the line of sight;
          *  any ghost the ray touches is instantly destroyed. */
-        BANISHMENT
+        BANISHMENT,
+        /** Wand of lightning — direct-damage strike on the target tile. Damage doubles
+         *  if the target carries the {@link Buff.BuffType#WET} buff or is standing on
+         *  a {@link Level.Surface#WATER} or {@link Level.Surface#ICE} surface. */
+        LIGHTNING
     }
 
     /**
@@ -90,13 +97,16 @@ public class Item {
         /** Restore HP to the user (up to {@link #healAmount}) and consume the item. */
         HEAL,
         /** Element wand: fires a magic-missile-style projectile that, on impact,
-         *  applies {@link Item#wandElement} to the target tile (or, for
-         *  {@link WandElement#DOG_SPAWN}, summons a dog adjacent to the user). */
+         *  applies {@link Item#wandElement} to the target tile. Summon-style wands
+         *  (non-null {@link Item#summonsWhenUsed}) bypass targeting and spawn the
+         *  named mob on a free adjacent tile. */
         WAND,
         /** Drink a buff-bestowing potion. The potion's effect is dispatched on
          *  {@link Item#type} and applied via {@code BuffSystem}; level and duration
          *  default to the item's level. */
-        DRINK
+        DRINK,
+        /** Consume the item to grant the user a perk point. Used by power orbs. */
+        GRANT_PERK
     }
 
     public ItemType type;
@@ -105,7 +115,6 @@ public class Item {
     public String name;
     /** Free-form flavor text / description shown in the item detail dialog. */
     public String description = "";
-    public String glyph;
     public int damageMin, damageMax;
     public int armorMin, armorMax;
     public double lightRadius;
@@ -131,13 +140,44 @@ public class Item {
      *  the top-right of the floor sprite. */
     public int level = 0;
 
-    /** When true, throwing this item at a {@code CAT} or {@code DOG} converts that mob
-     *  into a tame ally of the thrower (sets {@link Mob#owner} to the thrower). Used by
-     *  the delicious fish — feed it to a stray and it joins the party. */
-    public boolean tameOnThrow;
+    /** Mob types this item tames when thrown at one — sets {@link Mob#owner} to the
+     *  thrower. Empty for items that don't tame. The delicious fish lists
+     *  {@code CAT|DOG}; future taming items just declare their own list. */
+    public java.util.List<String> tameOnThrow = new java.util.ArrayList<>();
 
-    /** Gem species — non-null iff {@code type == ItemType.GEM}. Drives icon colour, theme
-     *  shape (triangle for crystal, square for concrete), and same-kind recipe matching. */
+    /** Mob type to summon when this item is used. Non-null for the wand of dog
+     *  (summons {@code DOG}); null for items that don't summon. The summon is
+     *  scaled to the item's level via {@code MobProgression.setSpawnLevel}. */
+    public String summonsWhenUsed;
+
+    /** Buff to apply to the user when this item is eaten or drunk. Null for items
+     *  with no buff effect. Generalises the legacy per-pear / per-potion switches
+     *  in {@code ItemSystem.eat} and {@code ItemSystem.drinkPotion}. */
+    public Buff.BuffType appliesBuff;
+
+    /** Base buff duration in turns at item-level 0. Effective duration scales with
+     *  item level via {@code (1 + item.level) * buffDuration}. Ignored when
+     *  {@link #appliesBuff} is null. */
+    public int buffDuration;
+
+    /** Base self-damage dealt to the user when this item is consumed (poison potion).
+     *  Effective damage = {@code selfDamageBase + item.level}. Zero for items that
+     *  don't hurt the user on use. */
+    public int selfDamageBase;
+
+    /** When true, an item lying on the floor emits an attention-catching twinkle
+     *  particle stream so the player notices it. Power orbs use it; future
+     *  glowing items just set the flag. */
+    public boolean glows;
+
+    /** Slot for which this item is the "empty-slot silhouette" art shown in the
+     *  inventory. Null for everything except the few designated silhouette items
+     *  (sword for WEAPON, shield for OFFHAND, …). */
+    public ItemSlot silhouetteForSlot;
+
+    /** Gem species — non-null iff this item is a gem. Drives icon colour, theme
+     *  shape (triangle for crystal, square for concrete), and same-kind recipe matching.
+     *  {@link #isGem()} reads off this field. */
     public GemSpecies gemSpecies;
     /** Gem size 1–9 (tiny, small, medium, large, fine, impressive, mighty, sublime,
      *  exquisite). Combining two gems of the same {@link #gemSpecies} and matching size
@@ -151,7 +191,7 @@ public class Item {
      *  count 1 — equipping pulls one out of a bag stack. */
     public int count = 1;
 
-    public boolean isGem() { return type == ItemType.GEM; }
+    public boolean isGem() { return gemSpecies != null; }
     public boolean isEquippable() { return slot != null; }
     public boolean isUsable()     { return useBehavior != null && useBehavior != UseBehavior.NONE; }
 

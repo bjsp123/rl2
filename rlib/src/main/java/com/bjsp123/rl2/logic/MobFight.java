@@ -140,11 +140,6 @@ public final class MobFight {
         d.intrinsic.attackCost = 100;
         return d;
     }
-
-    // Average-based helpers (meleeExpectedDamage, rangedExpectedDamage, attackRate)
-    // were retired when {@link #simulate} switched to hit-by-hit rolls. The hit-roll
-    // primitives below are now the only damage path.
-
     // ════════════════════════════════════════════════════════════════════════
     // THREAT SCORING — the player-facing measure used by pickMob
     // ════════════════════════════════════════════════════════════════════════
@@ -231,6 +226,350 @@ public final class MobFight {
         return rng.nextInt(max - min + 1) + min;
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // CHALLENGE RATING — wins per mob across the three player classes at three
+    // character levels. Designed so a single number per species summarises how
+    // dangerous it is for a typical campaign run.
+    // ════════════════════════════════════════════════════════════════════════
+
+    /** Trials per (class, level) pairing in the challenge-rating sim. */
+    public static final int CHALLENGE_TRIALS_PER_LEVEL = 5;
+    /** Player character levels probed by the challenge sim — early / mid / late. */
+    public static final int[] CHALLENGE_LEVELS = {1, 5, 10};
+    /** Free ranged volleys the mob fires at the closing player before melee. */
+    public static final int CHALLENGE_RANGED_VOLLEYS = 3;
+    /** Magic missile casts the mage benchmark fires before stepping into melee. */
+    public static final int MAGE_OPENING_MISSILES = 2;
+    /** Probability the rogue benchmark opens with a fire-bomb throw. */
+    public static final double ROGUE_BOMB_CHANCE = 0.5;
+
+    /** Maximum challenge rating: classes × levels × trials. With current
+     *  constants that's {@code 3 × 3 × 5 = 45}. */
+    public static int maxChallengeRating() {
+        return Mob.CharacterClass.values().length
+             * CHALLENGE_LEVELS.length
+             * CHALLENGE_TRIALS_PER_LEVEL;
+    }
+
+    /**
+     * Number of duels {@code mob} wins out of {@link #maxChallengeRating()} fights
+     * against each player class (warrior / rogue / mage) at each of
+     * {@link #CHALLENGE_LEVELS}, with {@link #CHALLENGE_TRIALS_PER_LEVEL} trials
+     * per pairing.
+     *
+     * <p>The fight model is asymmetric and reflects how a real player-vs-mob
+     * encounter goes:
+     * <ul>
+     *   <li>Mob with a ranged attack fires {@link #CHALLENGE_RANGED_VOLLEYS}
+     *       times while the player closes (no return fire from the player —
+     *       class-specific opening abilities are handled separately).</li>
+     *   <li>Mage opens with {@link #MAGE_OPENING_MISSILES} magic missiles, damage
+     *       scaled by the mage's character level.</li>
+     *   <li>Rogue has a {@link #ROGUE_BOMB_CHANCE} chance to lob a fire bomb
+     *       (level-scaled by the rogue's character level).</li>
+     *   <li>Then both sides melee at their natural cadence until one drops.</li>
+     * </ul>
+     * Uses a fresh seeded RNG so the result is reproducible across calls.
+     */
+    public static int challengeRating(Mob mob) {
+        if (mob == null) return 0;
+        MobProgression.setSpawnLevel(mob, CHALLENGE_MOB_LEVEL);
+        Random rng = new Random(THREAT_RNG_SEED);
+        int wins = 0;
+        for (int charLevel : CHALLENGE_LEVELS) {
+            for (Mob.CharacterClass cls : Mob.CharacterClass.values()) {
+                for (int trial = 0; trial < CHALLENGE_TRIALS_PER_LEVEL; trial++) {
+                    if (simulateChallenge(mob, cls, charLevel, rng).attackerWon) wins++;
+                }
+            }
+        }
+        return wins;
+    }
+
+    /**
+     * One challenge-rating duel — {@code mob} fights a freshly-built benchmark
+     * fighter of {@code playerClass} at {@code charLevel}. Returns the
+     * {@link Result} with {@code attackerWon == true} iff the mob killed the
+     * fighter first.
+     */
+    public static Result simulateChallenge(Mob mob, Mob.CharacterClass playerClass,
+                                           int charLevel, Random rng) {
+        Mob fighter = switch (playerClass) {
+            case WARRIOR -> benchmarkWarrior(charLevel);
+            case ROGUE   -> benchmarkRogue(charLevel);
+            case MAGE    -> benchmarkMage(charLevel);
+        };
+        if (mob == null || fighter == null) return new Result(false, 0, 0);
+
+        double mobHp    = mob.effectiveStats().maxHp;
+        double playerHp = fighter.effectiveStats().maxHp;
+
+        // Phase 1 — mob's free ranged volleys (one-way; player is closing the gap).
+        if (mob.effectiveStats().rangedDamage.max() > 0) {
+            for (int v = 0; v < CHALLENGE_RANGED_VOLLEYS && mobHp > 0 && playerHp > 0; v++) {
+                playerHp -= rangedRoll(mob, fighter, rng);
+            }
+        }
+        if (playerHp <= 0) return new Result(true, mobHp, 0);
+
+        // Phase 2 — class-specific pre-melee openers.
+        switch (playerClass) {
+            case WARRIOR -> { /* charges in — no opener */ }
+            case ROGUE -> {
+                if (rng.nextDouble() < ROGUE_BOMB_CHANCE) {
+                    int bombLevel = Math.max(0, charLevel - 1);
+                    mobHp -= bombDamageRoll(mob, bombLevel, rng);
+                }
+            }
+            case MAGE -> {
+                for (int i = 0; i < MAGE_OPENING_MISSILES && mobHp > 0; i++) {
+                    mobHp -= magicMissileDamageRoll(mob, charLevel, rng);
+                }
+            }
+        }
+        if (mobHp <= 0) return new Result(false, 0, playerHp);
+
+        // Phase 3 — melee. Tick-resolved at each side's natural moveCost cadence.
+        int aMc = mob.effectiveStats().moveCost > 0 ? mob.effectiveStats().moveCost : 100;
+        int dMc = fighter.effectiveStats().moveCost > 0 ? fighter.effectiveStats().moveCost : 100;
+        int aSwingAt = aMc;
+        int dSwingAt = dMc;
+        final int MAX_TICKS = 20000;
+        for (int t = 1; t <= MAX_TICKS && mobHp > 0 && playerHp > 0; t++) {
+            if (t == aSwingAt) {
+                playerHp -= meleeRoll(mob, fighter, rng);
+                aSwingAt += aMc;
+                if (playerHp <= 0) break;
+            }
+            if (t == dSwingAt) {
+                mobHp -= meleeRoll(fighter, mob, rng);
+                dSwingAt += dMc;
+                if (mobHp <= 0) break;
+            }
+        }
+        boolean mobWon = playerHp <= 0 && mobHp > 0;
+        return new Result(mobWon, Math.max(0, mobHp), Math.max(0, playerHp));
+    }
+
+    /** Number of identical mobs the {@link #challengeRating3v1} sim places against
+     *  the lone player benchmark. Tests the "swarm" threat — anthill spawnings,
+     *  packs of kobolds, etc. */
+    public static final int CHALLENGE_PACK_SIZE = 3;
+
+    /** Mob character level applied by the challenge sim before each fight. The
+     *  benchmark fighter scales with {@link #CHALLENGE_LEVELS} (1 / 5 / 10);
+     *  this is the parallel knob for the mob side. Set to 1 to fight raw
+     *  un-leveled spawns. */
+    public static final int CHALLENGE_MOB_LEVEL = 5;
+
+    /**
+     * Number of duels {@code mob} wins out of {@link #maxChallengeRating()} fights
+     * when {@link #CHALLENGE_PACK_SIZE} copies of the mob fight a single player
+     * benchmark. Same trial count as {@link #challengeRating} so the two columns
+     * are directly comparable; same RNG seed so the result is reproducible.
+     */
+    public static int challengeRating3v1(Mob mob) {
+        if (mob == null) return 0;
+        MobProgression.setSpawnLevel(mob, CHALLENGE_MOB_LEVEL);
+        Random rng = new Random(THREAT_RNG_SEED);
+        int wins = 0;
+        for (int charLevel : CHALLENGE_LEVELS) {
+            for (Mob.CharacterClass cls : Mob.CharacterClass.values()) {
+                for (int trial = 0; trial < CHALLENGE_TRIALS_PER_LEVEL; trial++) {
+                    if (simulateChallenge3v1(mob, cls, charLevel, rng).attackerWon) wins++;
+                }
+            }
+        }
+        return wins;
+    }
+
+    /**
+     * One challenge-rating duel where {@code CHALLENGE_PACK_SIZE} copies of
+     * {@code template} fight a freshly-built benchmark fighter of
+     * {@code playerClass} at {@code charLevel}. Player focuses fire on the
+     * lowest-HP mob each swing; mobs each attack at their natural cadence.
+     * Mage's magic missiles single-target the lowest-HP mob; rogue's fire bomb
+     * is AOE and hits every alive mob. Mob-on-mob support abilities (kobold
+     * general's haste/heal etc.) are NOT simulated.
+     */
+    public static Result simulateChallenge3v1(Mob template, Mob.CharacterClass playerClass,
+                                              int charLevel, Random rng) {
+        Mob fighter = switch (playerClass) {
+            case WARRIOR -> benchmarkWarrior(charLevel);
+            case ROGUE   -> benchmarkRogue(charLevel);
+            case MAGE    -> benchmarkMage(charLevel);
+        };
+        if (template == null || fighter == null) return new Result(false, 0, 0);
+
+        final int N = CHALLENGE_PACK_SIZE;
+        double[] mobHp = new double[N];
+        double templateMaxHp = template.effectiveStats().maxHp;
+        for (int i = 0; i < N; i++) mobHp[i] = templateMaxHp;
+        double playerHp = fighter.effectiveStats().maxHp;
+
+        // Phase 1 — each ranged mob fires its volleys at the closing player. With
+        // every mob ranged and N=3, that's up to 9 hits before the player can
+        // engage anyone in melee.
+        if (template.effectiveStats().rangedDamage.max() > 0) {
+            for (int i = 0; i < N && playerHp > 0; i++) {
+                for (int v = 0; v < CHALLENGE_RANGED_VOLLEYS && playerHp > 0; v++) {
+                    playerHp -= rangedRoll(template, fighter, rng);
+                }
+            }
+        }
+        if (playerHp <= 0) return new Result(true, sumAlive(mobHp), 0);
+
+        // Phase 2 — class openers.
+        switch (playerClass) {
+            case WARRIOR -> { /* charges in */ }
+            case ROGUE -> {
+                if (rng.nextDouble() < ROGUE_BOMB_CHANCE) {
+                    int bombLevel = Math.max(0, charLevel - 1);
+                    // Fire bomb is AOE — hits every alive mob with an
+                    // independent armour roll.
+                    for (int i = 0; i < N; i++) {
+                        if (mobHp[i] > 0) {
+                            mobHp[i] -= bombDamageRoll(template, bombLevel, rng);
+                        }
+                    }
+                }
+            }
+            case MAGE -> {
+                // Magic missile is single-target — pick lowest-HP alive each cast
+                // so a follow-up doesn't overkill an already-dead mob.
+                for (int cast = 0; cast < MAGE_OPENING_MISSILES; cast++) {
+                    int target = lowestHpAlive(mobHp);
+                    if (target < 0) break;
+                    mobHp[target] -= magicMissileDamageRoll(template, charLevel, rng);
+                }
+            }
+        }
+        if (allDead(mobHp)) return new Result(false, 0, playerHp);
+
+        // Phase 3 — melee. Each mob swings at its own cadence; player focuses
+        // fire on the lowest-HP alive mob. Dead mobs stop swinging.
+        int aMc = template.effectiveStats().moveCost > 0 ? template.effectiveStats().moveCost : 100;
+        int dMc = fighter.effectiveStats().moveCost > 0 ? fighter.effectiveStats().moveCost : 100;
+        int[] mobSwingAt = new int[N];
+        for (int i = 0; i < N; i++) mobSwingAt[i] = aMc;
+        int playerSwingAt = dMc;
+        final int MAX_TICKS = 20000;
+        for (int t = 1; t <= MAX_TICKS && playerHp > 0 && !allDead(mobHp); t++) {
+            for (int i = 0; i < N; i++) {
+                if (mobHp[i] > 0 && t == mobSwingAt[i]) {
+                    playerHp -= meleeRoll(template, fighter, rng);
+                    mobSwingAt[i] += aMc;
+                    if (playerHp <= 0) break;
+                }
+            }
+            if (playerHp <= 0) break;
+            if (t == playerSwingAt) {
+                int target = lowestHpAlive(mobHp);
+                if (target >= 0) {
+                    mobHp[target] -= meleeRoll(fighter, template, rng);
+                }
+                playerSwingAt += dMc;
+            }
+        }
+        boolean mobsWon = playerHp <= 0 && !allDead(mobHp);
+        return new Result(mobsWon, Math.max(0, sumAlive(mobHp)), Math.max(0, playerHp));
+    }
+
+    private static double sumAlive(double[] hp) {
+        double s = 0;
+        for (double d : hp) if (d > 0) s += d;
+        return s;
+    }
+
+    private static boolean allDead(double[] hp) {
+        for (double d : hp) if (d > 0) return false;
+        return true;
+    }
+
+    /** Index of the lowest-HP alive entry in {@code hp}, or {@code -1} if all dead. */
+    private static int lowestHpAlive(double[] hp) {
+        int best = -1;
+        double lo = Double.MAX_VALUE;
+        for (int i = 0; i < hp.length; i++) {
+            if (hp[i] > 0 && hp[i] < lo) { lo = hp[i]; best = i; }
+        }
+        return best;
+    }
+
+    /** Damage a single fire-bomb throw deals to {@code target}. Mirrors the in-
+     *  game wand/bomb damage formula: base + level × increment, mitigated by the
+     *  target's armour roll. */
+    private static int bombDamageRoll(Mob target, int bombLevel, Random rng) {
+        int dmg = GameBalance.BOMB_DAMAGE_BASE
+                + Math.max(0, bombLevel) * GameBalance.BOMB_DAMAGE_INCREMENT;
+        com.bjsp123.rl2.model.MinMax arm = MobSystem.resistRange(target);
+        int rolledArm = rollInRange(arm.min(), arm.max(), rng);
+        return Math.max(0, dmg - rolledArm);
+    }
+
+    /** Damage a single magic-missile cast deals to {@code target}, with damage
+     *  rolled from the wand-of-magic-missile range scaled by the caster's
+     *  character level, then mitigated by the target's magic resistance. */
+    private static int magicMissileDamageRoll(Mob target, int casterLevel, Random rng) {
+        int min = GameBalance.BASIC_WAND_DAMAGE_MIN
+                + casterLevel * GameBalance.WAND_DAMAGE_INCREMENT_MIN;
+        int max = GameBalance.BASIC_WAND_DAMAGE_MAX
+                + casterLevel * GameBalance.WAND_DAMAGE_INCREMENT_MAX;
+        int rolledDmg = rollInRange(min, max, rng);
+        com.bjsp123.rl2.model.MinMax mres = target.effectiveStats().magicResist;
+        int rolledRes = rollInRange(mres.min(), mres.max(), rng);
+        return Math.max(0, rolledDmg - rolledRes);
+    }
+
+    /** Build a sorted challenge-rating table for every non-PLAYER mob type. Two
+     *  columns: 1v1 (a single mob vs the player benchmark) and 3v1
+     *  ({@link #CHALLENGE_PACK_SIZE} identical mobs vs the player). Sorted
+     *  descending by 3v1 — the swarm rating is more interesting since it's
+     *  where weak-but-numerous species can outshine a tough loner. */
+    public static String formatChallengeRatings() {
+        com.bjsp123.rl2.model.Point origin = new com.bjsp123.rl2.model.Point(0, 0);
+        int max = maxChallengeRating();
+        StringBuilder out = new StringBuilder();
+        out.append(String.format(
+                "Challenge ratings — wins out of %d (%d classes × %d levels × %d trials)%n",
+                max, Mob.CharacterClass.values().length,
+                CHALLENGE_LEVELS.length, CHALLENGE_TRIALS_PER_LEVEL));
+        out.append(String.format(
+                "Levels: %s; mob fires %d ranged volleys before melee; "
+                        + "mage opens with %d magic missiles; "
+                        + "rogue throws a fire bomb %d%% of fights.%n",
+                java.util.Arrays.toString(CHALLENGE_LEVELS), CHALLENGE_RANGED_VOLLEYS,
+                MAGE_OPENING_MISSILES, (int) (ROGUE_BOMB_CHANCE * 100)));
+        out.append(String.format(
+                "Mobs are scaled to character level %d before each fight.%n",
+                CHALLENGE_MOB_LEVEL));
+        out.append(String.format(
+                "1v1: one mob vs one player.  3v1: %d copies vs one player%n%n",
+                CHALLENGE_PACK_SIZE));
+        out.append(String.format("%-24s  %4s  %4s%n", "Species", "1v1", "3v1"));
+        out.append("-".repeat(38)).append('\n');
+        // Collect (name, cr1, cr3) and sort by cr3 descending, cr1 as tiebreaker.
+        java.util.List<int[]> ratings = new java.util.ArrayList<>();
+        java.util.List<String> names  = new java.util.ArrayList<>();
+        for (String t : MobRegistry.knownTypes()) {
+            Mob mob1 = MobFactory.spawn(t, origin);
+            Mob mob3 = MobFactory.spawn(t, origin); // separate instance — challengeRating mutates RNG state
+            if (mob1 == null) continue;
+            int cr1 = challengeRating(mob1);
+            int cr3 = challengeRating3v1(mob3);
+            ratings.add(new int[]{ratings.size(), cr1, cr3});
+            names.add(mob1.name != null ? mob1.name : t);
+        }
+        ratings.sort((a, b) -> {
+            int byThree = Integer.compare(b[2], a[2]);
+            return byThree != 0 ? byThree : Integer.compare(b[1], a[1]);
+        });
+        for (int[] r : ratings) {
+            out.append(String.format("%-24s  %4d  %4d%n", names.get(r[0]), r[1], r[2]));
+        }
+        return out.toString();
+    }
+
     /**
      * Combined threat score for {@code mob}: a {@link #winsVsFighters} component (heavy
      * weight per win) plus a speed bonus (faster mobs are deadlier in melee) plus a
@@ -261,65 +600,49 @@ public final class MobFight {
         return ThreatLevel.NEGLIGIBLE;
     }
 
-    /** Build a warrior {@link Mob} at character level {@code level}, equipped with the
-     *  starter sword but <em>no armour</em>. The unarmoured benchmark gives MobFight's
-     *  expected-damage model enough penetration that mobs with reasonable damage values
-     *  (4–6) can actually score wins, so {@link #threatScore} responds to melee weight,
-     *  not just specials + speed. Doesn't run through MobProgression — it just
-     *  hand-applies the per-level deltas (acc/eva/maxHp), which is enough for the sim. */
-    private static Mob benchmarkWarrior(int charLevel) {
-        Mob m = baseFighter(charLevel,
-                GameBalance.WARRIOR_START_HP,
-                GameBalance.WARRIOR_BASE_ATTACK,
-                GameBalance.WARRIOR_BASE_DEFENSE,
-                GameBalance.WARRIOR_BASE_DAMAGE);
-        com.bjsp123.rl2.model.Item sword = ItemFactory.sword();
-        m.inventory.bag.add(sword); m.inventory.equip(sword);
-        return m;
-    }
+    /** Build a benchmark fighter at character level {@code charLevel}, equipped with
+     *  the starter weapon but <em>no armour</em>. The unarmoured benchmark gives
+     *  MobFight's expected-damage model enough penetration that mobs with reasonable
+     *  damage values (4–6) can actually score wins, so {@link #threatScore} responds
+     *  to melee weight, not just specials + speed. Reads the per-class kit and
+     *  per-level deltas from the registry's {@code PLAYER_*} row. */
+    private static Mob benchmarkWarrior(int charLevel) { return benchmarkFighter(Mob.CharacterClass.WARRIOR, charLevel); }
+    private static Mob benchmarkRogue  (int charLevel) { return benchmarkFighter(Mob.CharacterClass.ROGUE,   charLevel); }
+    private static Mob benchmarkMage   (int charLevel) { return benchmarkFighter(Mob.CharacterClass.MAGE,    charLevel); }
 
-    /** Benchmark rogue at character level {@code charLevel} — sword equipped, no armour,
-     *  half HP. Stats track {@link GameBalance}'s ROGUE_* constants the same way the
-     *  in-game starter kit does. */
-    private static Mob benchmarkRogue(int charLevel) {
-        Mob m = baseFighter(charLevel,
-                GameBalance.ROGUE_START_HP,
-                GameBalance.ROGUE_BASE_ATTACK,
-                GameBalance.ROGUE_BASE_DEFENSE,
-                GameBalance.ROGUE_BASE_DAMAGE);
-        com.bjsp123.rl2.model.Item sword = ItemFactory.sword();
-        m.inventory.bag.add(sword); m.inventory.equip(sword);
-        return m;
-    }
-
-    /** Benchmark mage at character level {@code charLevel} — dagger equipped (lower
-     *  damage range than the sword), no armour, half HP. */
-    private static Mob benchmarkMage(int charLevel) {
-        Mob m = baseFighter(charLevel,
-                GameBalance.MAGE_START_HP,
-                GameBalance.MAGE_BASE_ATTACK,
-                GameBalance.MAGE_BASE_DEFENSE,
-                GameBalance.MAGE_BASE_DAMAGE);
-        com.bjsp123.rl2.model.Item dagger = ItemFactory.dagger();
-        m.inventory.bag.add(dagger); m.inventory.equip(dagger);
-        return m;
-    }
-
-    /** Shared scaffolding for the per-class benchmark fighters. Builds a Mob at half
-     *  the class's start HP plus per-level deltas for accuracy / evasion / maxHp.
-     *  Caller is responsible for equipping the weapon. */
-    private static Mob baseFighter(int charLevel,
-                                   int startHp, int baseAtk, int baseDef, int baseDmg) {
+    /** Shared per-class benchmark builder. Reads stats from the {@code PLAYER_*}
+     *  registry row, scales per-level deltas up to {@code charLevel}, halves max HP,
+     *  and equips just the row's first equippable item (sword for warrior/rogue,
+     *  dagger for mage). */
+    private static Mob benchmarkFighter(Mob.CharacterClass cls, int charLevel) {
+        String key = "PLAYER_" + cls.name();
+        MobDefinition def = MobRegistry.get(key);
+        if (def == null) {
+            throw new IllegalStateException("missing mobs.csv row: " + key);
+        }
         Mob m = new Mob();
-        // Benchmark fighters run at HALF the regular start HP — the threat-score sim is
-        // meant to surface mid-tier mobs as a real threat, and full HP at typical mob
-        // damage ranges outlasts almost everyone.
-        m.intrinsic.maxHp      = (startHp + GameBalance.HP_PER_LEVEL * (charLevel - 1)) * 0.5;
-        m.intrinsic.accuracy   = baseAtk  + GameBalance.ATTACK_PER_LEVEL  * (charLevel - 1);
-        m.intrinsic.evasion    = baseDef  + GameBalance.DEFENSE_PER_LEVEL * (charLevel - 1);
-        m.intrinsic.damage     = com.bjsp123.rl2.model.MinMax.of(baseDmg);
-        m.intrinsic.moveCost   = GameBalance.PLAYER_MOVE_COST;
-        m.intrinsic.attackCost = GameBalance.PLAYER_ATTACK_COST;
+        int levelsAbove = Math.max(0, charLevel - 1);
+        // Benchmark fighters run at HALF the regular start HP — the threat-score
+        // sim is meant to surface mid-tier mobs as a real threat, and full HP at
+        // typical mob damage ranges outlasts almost everyone.
+        m.intrinsic.maxHp      = (def.maxHp + def.hpPerLevel * levelsAbove) * 0.5;
+        m.intrinsic.accuracy   = def.accuracy + def.accuracyPerLevel * levelsAbove;
+        m.intrinsic.evasion    = def.evasion  + def.evasionPerLevel  * levelsAbove;
+        m.intrinsic.damage     = def.damage.plus(new com.bjsp123.rl2.model.MinMax(
+                def.damagePerLevel.min() * levelsAbove,
+                def.damagePerLevel.max() * levelsAbove));
+        m.intrinsic.moveCost   = def.moveCost   == 0 ? 100 : def.moveCost;
+        m.intrinsic.attackCost = def.attackCost == 0 ? 100 : def.attackCost;
+        // Equip the first weapon in the row's startingInventory (no armour, no
+        // ammo, no consumables — the benchmark is melee-only by design).
+        for (MobDefinition.StartItem s : def.startingInventory) {
+            com.bjsp123.rl2.model.Item it = ItemFactory.build(s.type);
+            if (it.slot == com.bjsp123.rl2.model.Item.ItemSlot.WEAPON) {
+                m.inventory.bag.add(it);
+                m.inventory.equip(it);
+                break;
+            }
+        }
         return m;
     }
 
@@ -362,13 +685,12 @@ public final class MobFight {
         // friendlies (MOUSE, DOG, CAT, etc.). We probe each by spawning the template,
         // checking whether it intends to attack the player.
         com.bjsp123.rl2.model.Point origin = new com.bjsp123.rl2.model.Point(0, 0);
-        java.util.List<Mob.MobType> hostiles = new java.util.ArrayList<>();
-        for (Mob.MobType t : Mob.MobType.values()) {
-            if (t == Mob.MobType.PLAYER) continue;
+        java.util.List<String> hostiles = new java.util.ArrayList<>();
+        for (String t : MobRegistry.knownTypes()) {
             Mob template = MobFactory.spawn(t, origin);
             if (template == null) continue;
             if (template.attackTypes != null
-                    && template.attackTypes.contains(Mob.MobType.PLAYER)) {
+                    && template.attackTypes.contains(Mob.TYPE_PLAYER)) {
                 hostiles.add(t);
             }
         }
@@ -390,9 +712,9 @@ public final class MobFight {
         out.append("-".repeat(22 + (charLevels.length * classNames.length) * 10)).append('\n');
 
         Random rng = new Random(THREAT_RNG_SEED);
-        for (Mob.MobType t : hostiles) {
+        for (String t : hostiles) {
             Mob proto = MobFactory.spawn(t, origin);
-            String name = proto.name != null ? proto.name : t.name();
+            String name = proto.name != null ? proto.name : t;
             out.append(String.format("%-22s", name));
             for (int lvl : charLevels) {
                 for (int c = 0; c < builds.length; c++) {
@@ -410,11 +732,11 @@ public final class MobFight {
         return out.toString();
     }
 
-    /** Convenience entry point — build + dump the default 5-trial × {1,2,3}-level
-     *  table to stdout. Run via:
+    /** Convenience entry point — print the challenge-rating table for every
+     *  non-PLAYER mob type. Run via:
      *  {@code java -cp rlib/build/classes/java/main com.bjsp123.rl2.logic.MobFight}.
      */
     public static void main(String[] args) {
-        System.out.print(formatLeagueTable(5, new int[]{1, 2, 3}));
+        System.out.print(formatChallengeRatings());
     }
 }

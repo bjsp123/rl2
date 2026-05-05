@@ -156,7 +156,8 @@ public class CharacterStatsRenderer extends Group {
         frame.add(closeBtn).padTop(6);
 
         framed = new Container<>(frame);
-        framed.setBackground(skin.getDrawable("panel"));
+        framed.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("panel")));
         // The container fills its child (the {@code frame} Table) to whatever explicit
         // size we set in {@link #layoutForStage} — that's what makes the panel reactive
         // to viewport size. Without {@code fill()}, setSize on the container would

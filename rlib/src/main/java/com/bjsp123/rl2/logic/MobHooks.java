@@ -40,6 +40,9 @@ public final class MobHooks {
         if (killer.effectiveStats().eatSpawnChance > 0 && killer.eatSpawnType != null
                 && victim.material == Material.FLESH
                 && RANDOM.nextDouble() < killer.effectiveStats().eatSpawnChance) {
+            // Cap the level's total mob count — the dice roll is consumed first so
+            // RNG state stays deterministic, but the spawn fizzles if we're full.
+            if (!MobSystem.levelHasRoomForSpawn(level)) return;
             Point spawnPos = freeAdjacentFloor(level, killer.position);
             if (spawnPos == null) spawnPos = victim.position;
             Mob bud = MobFactory.spawn(killer.eatSpawnType, spawnPos);

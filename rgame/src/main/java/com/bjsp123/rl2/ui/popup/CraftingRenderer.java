@@ -172,7 +172,8 @@ public class CraftingRenderer extends Group {
         tabSection.add(tabSectionContent);
 
         content.add(tabSection).expand().fill().row();
-        content.setBackground(skin.getDrawable("simple-panel"));
+        content.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("simple-panel")));
 
         framed = new Container<>(content);
         framed.fill();
@@ -180,7 +181,8 @@ public class CraftingRenderer extends Group {
 
         // Inline picker overlay — built once, reattached as needed.
         pickerOverlay = new Table();
-        pickerOverlay.setBackground(skin.getDrawable("simple-panel"));
+        pickerOverlay.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("simple-panel")));
         pickerOverlay.setVisible(false);
         addActor(pickerOverlay);
 

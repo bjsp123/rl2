@@ -2,7 +2,6 @@ package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemType;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob;
@@ -94,20 +93,33 @@ public final class ItemSystem {
         return 1 + Math.max(0, item.level);
     }
 
-    /** Effective buff duration in turns. Same {@code 1 + level} default; specialised
-     *  potions (invisibility, poison) override. */
+    /** Effective buff duration in turns: {@code (1 + item.level) * item.buffDuration}.
+     *  Items that don't carry a base duration (data column blank) fall back to
+     *  {@link #effectiveBuffLevel} so a level-N consumable still applies its buff
+     *  for at least one tick per level. */
     public static int effectiveBuffDuration(Item item) {
-        if (item.type == ItemType.POTION_POISON)
-            return effectiveBuffLevel(item) * 3;
-        if (item.type == ItemType.POTION_INVISIBILITY)
-            return effectiveBuffLevel(item) * 2;
-        return effectiveBuffLevel(item);
+        if (item == null) return 1;
+        int base = item.buffDuration > 0 ? item.buffDuration : 1;
+        return effectiveBuffLevel(item) * base;
+    }
+
+    /** Effective self-damage on use (poison potion). Returns 0 for items that
+     *  don't carry a self-damage base. */
+    public static int effectiveSelfDamage(Item item) {
+        if (item == null || item.selfDamageBase <= 0) return 0;
+        return item.selfDamageBase + Math.max(0, item.level);
     }
 
     /** Effective wand impact damage range. Used by the wand of magic missile and any
      *  future damage-on-impact wand. */
     public static MinMax effectiveWandDamageRange(Item item) {
-        int lvl = item == null ? 0 : Math.max(0, item.level);
+        return effectiveWandDamageRange(item == null ? 0 : item.level);
+    }
+
+    /** Int-level overload — used by impact callbacks (wand of lightning) that
+     *  carry the wand level forward without a reference to the source item. */
+    public static MinMax effectiveWandDamageRange(int wandLevel) {
+        int lvl = Math.max(0, wandLevel);
         int min = GameBalance.BASIC_WAND_DAMAGE_MIN + lvl * GameBalance.WAND_DAMAGE_INCREMENT_MIN;
         int max = GameBalance.BASIC_WAND_DAMAGE_MAX + lvl * GameBalance.WAND_DAMAGE_INCREMENT_MAX;
         return new MinMax(min, Math.max(min, max));
@@ -143,20 +155,15 @@ public final class ItemSystem {
 
     /**
      * Consume a food item: raise {@code eater}'s satiety by {@code item.foodValue}
-     * (capped at {@link GameBalance#STARTING_SATIETY}) and remove the item from their
-     * inventory. Special pears apply a buff side-effect (silvery → HOPE,
-     * conference → ESP). No-op for items without food value.
+     * (capped at {@link GameBalance#STARTING_SATIETY}), apply any buff carried by
+     * the item ({@link Item#appliesBuff} — silvery pear's HOPE, conference pear's
+     * ESP, etc.), then remove the item from their inventory. No-op for items
+     * without food value.
      */
     public static void eat(Level level, Mob eater, Item item) {
         if (eater == null || item == null || item.foodValue <= 0) return;
         eater.satiety = Math.min(GameBalance.STARTING_SATIETY, eater.satiety + item.foodValue);
-        int buffLvl = effectiveBuffLevel(item);
-        int buffDur = effectiveBuffDuration(item);
-        switch (item.type) {
-            case PEAR_SILVERY    -> BuffSystem.apply(level, eater, Buff.BuffType.HOPE, buffLvl, buffDur, eater);
-            case PEAR_CONFERENCE -> BuffSystem.apply(level, eater, Buff.BuffType.ESP,  buffLvl, buffDur, eater);
-            default -> { /* plain pears / fish / scrumptious — pure satiety. */ }
-        }
+        applyConsumableBuff(level, eater, item);
         MobSystem.removeFromInventory(eater, item);
         if (eater.behavior == Behavior.PLAYER) {
             String name = eater.name != null ? eater.name : "Adventurer";
@@ -169,30 +176,48 @@ public final class ItemSystem {
     public static void eat(Mob eater, Item item) { eat(null, eater, item); }
 
     /**
-     * Drink a potion. Dispatches on {@link Item#type} to the matching {@link Buff}
-     * via {@link BuffSystem#apply}. Buff level / duration come from the item-level
-     * helpers; poison drinkers also take immediate damage on top of the POISONED
-     * buff. Item is consumed.
+     * Drink a potion. Applies the item's {@link Item#appliesBuff} (level and
+     * duration from the item-level helpers) and any {@link Item#selfDamageBase}
+     * self-damage (poison potion). Item is consumed.
      */
     public static void drinkPotion(Level level, Mob drinker, Item item) {
         if (drinker == null || item == null) return;
-        int lvl = effectiveBuffLevel(item);
-        int dur = effectiveBuffDuration(item);
-        switch (item.type) {
-            case POTION_SORCERY      -> BuffSystem.apply(level, drinker, Buff.BuffType.SORCERY,   lvl, dur, drinker);
-            case POTION_GHOSTLINESS  -> BuffSystem.apply(level, drinker, Buff.BuffType.GHOSTLY,   lvl, dur, drinker);
-            case POTION_INVISIBILITY -> BuffSystem.apply(level, drinker, Buff.BuffType.INVISIBLE, lvl, dur, drinker);
-            case POTION_POISON -> {
-                BuffSystem.apply(level, drinker, Buff.BuffType.POISONED, lvl, dur, drinker);
-                MobSystem.processAttack(level, null, drinker, 4 + lvl, MobSystem.AttackType.ENVIRONMENTAL);
-            }
-            default -> { /* unrecognised potion type — drinking just consumes it. */ }
+        applyConsumableBuff(level, drinker, item);
+        int selfDmg = effectiveSelfDamage(item);
+        if (selfDmg > 0) {
+            MobSystem.processAttack(level, null, drinker, selfDmg,
+                    MobSystem.AttackType.ENVIRONMENTAL);
         }
         MobSystem.removeFromInventory(drinker, item);
         if (drinker.behavior == Behavior.PLAYER) {
             String name = drinker.name != null ? drinker.name : "Adventurer";
             EventLog.add(Messages.playerUses(name,
                     item.useVerb != null ? item.useVerb : "drink", item.name));
+        }
+    }
+
+    /** Apply the item's CSV-declared {@link Item#appliesBuff} to the user, with
+     *  level / duration scaled by the standard item-level helpers. No-op when the
+     *  item carries no buff. */
+    private static void applyConsumableBuff(Level level, Mob user, Item item) {
+        if (item == null || item.appliesBuff == null) return;
+        BuffSystem.apply(level, user, item.appliesBuff,
+                effectiveBuffLevel(item), effectiveBuffDuration(item), user);
+    }
+
+    /**
+     * Consume a perk-granting item — currently just power orbs. Awards one perk
+     * point to the user, removes the item from inventory, and logs the action.
+     * Caller is responsible for the move-cost accounting.
+     */
+    public static void grantPerk(Level level, Mob user, Item item) {
+        if (user == null || item == null) return;
+        user.perkPoints++;
+        MobSystem.removeFromInventory(user, item);
+        if (user.behavior == Behavior.PLAYER) {
+            String name = user.name != null ? user.name : "Adventurer";
+            EventLog.add(Messages.playerUses(name,
+                    item.useVerb != null ? item.useVerb : "use", item.name));
         }
     }
 
@@ -230,17 +255,53 @@ public final class ItemSystem {
             }
             case BANISHMENT -> {
                 Mob victim = MobSystem.mobAt(level, target);
-                if (victim != null && victim.mobType == Mob.MobType.GHOST) {
+                if (victim != null && victim.banishable) {
                     MobSystem.killMob(level, victim, caster);
                 }
             }
-            case DOG_SPAWN -> { /* handled by the caller */ }
+            case LIGHTNING -> {
+                Mob victim = MobSystem.mobAt(level, target);
+                if (victim != null) {
+                    int dmg = MobSystem.rollRange(effectiveWandDamageRange(wandLevel));
+                    Level.Surface here = level.surface[tx][ty];
+                    boolean conductive = BuffSystem.hasBuff(victim, Buff.BuffType.WET)
+                            || here == Level.Surface.WATER
+                            || here == Level.Surface.ICE;
+                    if (conductive) dmg *= 2;
+                    MobSystem.processAttack(level, caster, victim, dmg,
+                            MobSystem.AttackType.MAGIC);
+                }
+            }
         }
         if (element != Item.WandElement.DETONATION
                 && element != Item.WandElement.BANISHMENT
                 && level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(target, element));
         }
+    }
+
+    /**
+     * Generic summon-wand path. If the wand-of-X has a non-null
+     * {@link Item#summonsWhenUsed}, this spawns one of that mob type on a free
+     * floor tile adjacent to {@code caster}, sets ownership, and scales the
+     * summon to the wand's level. Returns {@code true} if a summon happened —
+     * callers always pay the move cost regardless, so the wand burns a turn
+     * even when the spawn is gated out by population caps or no-room.
+     */
+    public static boolean castSummonWand(Level level, Mob caster, Item wand) {
+        if (level == null || caster == null || wand == null) return false;
+        if (wand.summonsWhenUsed == null) return false;
+        if (!MobSystem.levelHasRoomForSpawn(level)) return false;
+        com.bjsp123.rl2.model.Point spot =
+                MobHooks.freeAdjacentFloor(level, caster.position);
+        if (spot == null) return false;
+        Mob pet = MobFactory.spawn(wand.summonsWhenUsed, spot);
+        if (pet == null) return false;
+        pet.owner = caster;
+        int petLevel = 1 + Math.max(0, wand.level);
+        MobProgression.setSpawnLevel(pet, petLevel);
+        level.mobs.add(pet);
+        return true;
     }
 
     /** Convert a target tile-count into the smallest Euclidean disc radius whose disc

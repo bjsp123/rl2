@@ -243,7 +243,8 @@ public class InventoryRenderer extends Group {
         // below "Equipment", and below the equipment panel before the backpack
         // section starts.
         Table outerFrame = new Table();
-        outerFrame.setBackground(skin.getDrawable("panel"));
+        outerFrame.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("panel")));
         outerFrame.pad(10);
         outerFrame.defaults().fillX();
         outerFrame.add(new Label("Equipped Gems", skin, "title"))
@@ -778,20 +779,16 @@ public class InventoryRenderer extends Group {
     }
 
     /** Empty-equipment-slot silhouette: a faded archetype sprite for the slot type.
-     *  Rings get the procedural ring outline; everything else uses the same canonical
-     *  sprite as a representative item of that slot. */
+     *  Rings get the procedural ring outline; gem slots show no silhouette; every
+     *  other slot uses whichever item carries {@code silhouetteForSlot} on its
+     *  items.csv row. */
     private TextureRegion silhouetteRegionFor(ItemSlot slot) {
-        return switch (slot) {
-            case WEAPON  -> ItemSprites.regionFor(Item.ItemType.SWORD);
-            case OFFHAND -> ItemSprites.regionFor(Item.ItemType.SHIELD);
-            case ARMOR   -> ItemSprites.regionFor(Item.ItemType.SCALE_MAIL);
-            case RING1, RING2 -> new TextureRegion(ringSilhouetteTex);
-            case AMULET  -> ItemSprites.regionFor(Item.ItemType.AMULET_OF_LIGHT);
-            // Empty gem slots show no silhouette — the cell background alone signals
-            // "drop a gem here." A procedural placeholder could be added later if the
-            // empty state reads ambiguously.
-            case GEM1, GEM2, GEM3 -> null;
-        };
+        if (slot == ItemSlot.RING1 || slot == ItemSlot.RING2) {
+            return new TextureRegion(ringSilhouetteTex);
+        }
+        com.bjsp123.rl2.logic.ItemDefinition def =
+                com.bjsp123.rl2.logic.ItemRegistry.silhouetteFor(slot);
+        return def == null ? null : ItemSprites.regionFor(def.type);
     }
 
     private static java.util.List<String> statLines(Item it) {

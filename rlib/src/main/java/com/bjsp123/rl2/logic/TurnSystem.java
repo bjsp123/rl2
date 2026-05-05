@@ -80,6 +80,12 @@ public class TurnSystem {
             double chance = mob.effectiveStats().turnSpawnChance;
             if (chance <= 0 || mob.turnSpawnType == null) continue;
             if (TURN_SPAWN_RNG.nextDouble() >= chance) continue;
+            // Per-type cap (so an anthill stops budding when its species fills the
+            // level) AND the global cap (a level full of other mobs blocks spawn
+            // too). Both must pass before we even look for a free tile.
+            if (MobSystem.countMobsOfType(level, mob.turnSpawnType)
+                    >= GameBalance.MAX_MOBS_FROM_SPAWNER) continue;
+            if (!MobSystem.levelHasRoomForSpawn(level)) continue;
             Point spawnPos = MobHooks.freeAdjacentFloor(level, mob.position);
             if (spawnPos == null) continue;
             Mob bud = MobFactory.spawn(mob.turnSpawnType, spawnPos);

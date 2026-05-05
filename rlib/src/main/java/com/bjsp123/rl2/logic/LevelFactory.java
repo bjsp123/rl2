@@ -110,9 +110,10 @@ public final class LevelFactory {
         level.flags.addAll(flags);
 
         level.layout = Layout.values()[rng.nextInt(Layout.values().length)];
-        // 50/50 concrete vs crystal — gem species spawn from the matching theme's pool
-        // (see GemSystem.rollSpeciesForTheme), so this also drives gem distribution.
-        level.theme = rng.nextBoolean() ? VisualTheme.CONCRETE : VisualTheme.CRYSTAL;
+        // Equal 1/3 chance per registered theme — VisualTheme.values() drives the
+        // distribution so adding a fourth theme will rebalance automatically.
+        VisualTheme[] themes = VisualTheme.values();
+        level.theme = themes[rng.nextInt(themes.length)];
         System.out.println("[rl2] generated level seed=" + seed
                 + " size=" + w + "x" + h
                 + " theme=" + level.theme + " layout=" + level.layout
@@ -189,13 +190,13 @@ public final class LevelFactory {
      */
     private static List<int[]> buildBsp(Level level, Random rng) {
         int w = level.width, h = level.height;
-        boolean big = level.flags.contains(LevelFlag.BIGROOMS);
-        // Room dimensions match SPD's NORMAL category (4..10) by default, LARGE (10..14)
-        // when BIGROOMS is set. Leaf size is 2 larger than the room max to leave a 1-tile
-        // margin all round.
-        int minRoom = big ? 10 : 4;
-        int maxRoom = big ? 14 : 10;
-        int minLeaf = maxRoom + 2;
+        // Room size driven by the global ROOM_MIN/MAX_SIZE pair; leaf size is the
+        // larger of (a) one room + 1-tile margin all round, (b) a value derived
+        // from area / target so the partition splits roughly LEVEL_TARGET_ROOMS
+        // ways regardless of level size.
+        int minRoom = GameBalance.ROOM_MIN_SIZE;
+        int maxRoom = GameBalance.ROOM_MAX_SIZE;
+        int minLeaf = leafSizeForTarget(w, h, maxRoom, GameBalance.LEVEL_TARGET_ROOMS);
         List<int[]> leaves = LevelFactoryUtils.bspPartition(1, 1, w - 2, h - 2, minLeaf, rng);
         List<int[]> rooms = new ArrayList<>();
         for (int[] leaf : leaves) {
@@ -222,14 +223,14 @@ public final class LevelFactory {
      */
     private static List<int[]> buildPoisson(Level level, Random rng) {
         int w = level.width, h = level.height;
-        boolean big = level.flags.contains(LevelFlag.BIGROOMS);
         // minDist is the Poisson-disc spacing between room centres — directly determines
         // how far apart rooms sit, and therefore how long the MST corridors between them
-        // are. Was 12/20; pulled in to 8/14 so rooms cluster closer and corridors read
-        // as short hops between neighbours instead of long marching strips.
-        double minDist = big ? 14 : 8;
-        int minSize = big ? 10 : 4;
-        int maxSize = big ? 14 : 10;
+        // are. Derived from area / target (with a 2.0 fudge factor for centres-per-room
+        // empirically — many candidate centres fail the overlap check) so room count
+        // stays near LEVEL_TARGET_ROOMS regardless of level dimensions.
+        double minDist = poissonSpacingForTarget(w, h, GameBalance.LEVEL_TARGET_ROOMS);
+        int minSize = GameBalance.ROOM_MIN_SIZE;
+        int maxSize = GameBalance.ROOM_MAX_SIZE;
         List<Point> centres = LevelFactoryUtils.poissonDiskPoints(w, h, minDist, rng);
         List<int[]> rooms = new ArrayList<>();
         for (Point c : centres) {
@@ -258,14 +259,15 @@ public final class LevelFactory {
      */
     private static List<int[]> buildLoop(Level level, Random rng) {
         int w = level.width, h = level.height;
-        boolean big = level.flags.contains(LevelFlag.BIGROOMS);
-        int minSize = big ? 10 : 4, maxSize = big ? 14 : 9;
-        int n      = big ? 5 + rng.nextInt(2) : 7 + rng.nextInt(3);   // 7..9 normal, 5..6 big
-        // Pull the loop radius further inward so rooms cluster nearer the centre — was
-        // -6/-9 which left the rooms hugging the level perimeter. With -10/-13 the chord
-        // between adjacent rooms shrinks meaningfully and the corridors connecting them
-        // are short hops rather than long arcs.
-        int radius = Math.min(w, h) / 2 - (big ? 13 : 10);
+        int minSize = GameBalance.ROOM_MIN_SIZE;
+        int maxSize = GameBalance.ROOM_MAX_SIZE;
+        // n centred on LEVEL_TARGET_ROOMS with ±1 jitter so two LOOP levels feel
+        // similar in density without being mechanically identical.
+        int n = Math.max(3, GameBalance.LEVEL_TARGET_ROOMS + rng.nextInt(3) - 1);
+        // Pull the loop radius inward so rooms cluster nearer the centre — was -6
+        // (rooms hugging the level perimeter), -10 brings the chord between
+        // adjacent rooms down so corridors are short hops rather than long arcs.
+        int radius = Math.min(w, h) / 2 - 10;
         if (radius < 4) radius = Math.min(w, h) / 2 - 3;
         int cx = w / 2, cy = h / 2;
         double phase = rng.nextDouble() * Math.PI * 2;
@@ -301,12 +303,12 @@ public final class LevelFactory {
         int w = level.width, h = level.height;
         int cy = h / 2;
         int aCx = w / 4 + 1, bCx = 3 * w / 4 - 1;
-        boolean big = level.flags.contains(LevelFlag.BIGROOMS);
-        int minSize = big ? 9 : 4, maxSize = big ? 13 : 8;
+        int minSize = GameBalance.ROOM_MIN_SIZE;
+        int maxSize = GameBalance.ROOM_MAX_SIZE;
         // Tighter than before (-5/-7) so the two lobes of the figure-eight don't sprawl
         // out to the level edges. Each lobe sits closer to the central pivot, halving the
         // arc length between adjacent rooms.
-        int radius  = Math.min((bCx - aCx) / 2 - 2, h / 2 - (big ? 11 : 9));
+        int radius  = Math.min((bCx - aCx) / 2 - 2, h / 2 - 9);
         if (radius < 4) radius = Math.max(3, h / 2 - 3);
 
         List<int[]> rooms = new ArrayList<>();
@@ -322,8 +324,9 @@ public final class LevelFactory {
         final int pivot = 0;
 
         // Left and right loops — each places n rooms on a half-circle, then connects in a
-        // cycle that goes pivot → first → … → last → pivot.
-        int n = big ? 3 : 4 + rng.nextInt(2);   // 4..5 normal, 3 big
+        // cycle that goes pivot → first → … → last → pivot. Total rooms = 2n + 1 (pivot),
+        // so target = 8 → n = 3 (7 rooms total), target = 9 → n = 4 (9 rooms total).
+        int n = Math.max(2, (GameBalance.LEVEL_TARGET_ROOMS - 1) / 2);
         List<Integer> leftIdx  = placeArc(level, rooms, rng, aCx, cy, radius,
                                           Math.PI / 2, 3 * Math.PI / 2, n,
                                           minSize, maxSize);
@@ -408,10 +411,13 @@ public final class LevelFactory {
         // try to door, and pruneOrphanDoors cleans whatever leaks through.
         rooms.add(new int[]{gx0, gy0, gx1 - gx0 + 1, gy1 - gy0 + 1});
 
-        // Place 3..6 buildings, retrying overlaps. Each is a fully-walled rectangle that
-        // sits entirely on FLOOR (so no building wall floats over the irregular boundary),
-        // with one door on a non-corner perimeter cell.
-        int target = 3 + rng.nextInt(4);
+        // Place LEVEL_TARGET_ROOMS - 1 buildings (one room is the central green
+        // itself), with ±1 jitter, retrying overlaps. Each is a fully-walled
+        // rectangle that sits entirely on FLOOR (so no building wall floats over
+        // the irregular boundary), with one door on a non-corner perimeter cell.
+        // Building sizes stay at 4..6 — VILLAGE houses are intentionally smaller
+        // than the global ROOM_MAX_SIZE.
+        int target = Math.max(2, GameBalance.LEVEL_TARGET_ROOMS - 1 + rng.nextInt(3) - 1);
         int tries  = target * 8;
         while (tries-- > 0 && rooms.size() < target + 1) {
             int bw = 4 + rng.nextInt(3);   // 4..6
@@ -528,10 +534,11 @@ public final class LevelFactory {
      *  sub-rect so the {@link Layout#TWO_SIDES} builder can re-use it for each half. */
     private static void placeBspRooms(Level level, List<int[]> rooms, Random rng,
                                       int x0, int y0, int rw, int rh) {
-        boolean big = level.flags.contains(LevelFlag.BIGROOMS);
-        int minRoom = big ? 10 : 4;
-        int maxRoom = big ? 14 : 10;
-        int minLeaf = maxRoom + 2;
+        int minRoom = GameBalance.ROOM_MIN_SIZE;
+        int maxRoom = GameBalance.ROOM_MAX_SIZE;
+        // Target is half the level's rooms per side (TWO_SIDES is two BSP clusters).
+        int sideTarget = Math.max(2, GameBalance.LEVEL_TARGET_ROOMS / 2);
+        int minLeaf = leafSizeForTarget(rw, rh, maxRoom, sideTarget);
         if (rw < minLeaf || rh < minLeaf) return;
         List<int[]> leaves = LevelFactoryUtils.bspPartition(x0, y0, rw, rh, minLeaf, rng);
         for (int[] leaf : leaves) {
@@ -553,6 +560,27 @@ public final class LevelFactory {
                r[1] - pad < y + h && r[1] + r[3] + pad > y;
     }
 
+    /** BSP leaf side length that yields roughly {@code target} leaves in a
+     *  {@code (w-2) × (h-2)} interior. Floored at {@code maxRoom + 2} so a max-
+     *  sized room plus its 1-tile margin always fits in any leaf the partition
+     *  produces. Larger levels get larger leaves, keeping room count near target. */
+    private static int leafSizeForTarget(int w, int h, int maxRoom, int target) {
+        if (target <= 0) target = 1;
+        int derived = (int) Math.ceil(Math.sqrt((double)(w - 2) * (h - 2) / target));
+        return Math.max(maxRoom + 2, derived);
+    }
+
+    /** Poisson-disc minimum spacing that yields roughly {@code target} accepted
+     *  rooms on a {@code (w-2) × (h-2)} interior. The 2.0 fudge factor accounts
+     *  for centres that fail the post-placement overlap / bounds checks
+     *  (empirically ~half of candidate centres survive into a placed room).
+     *  Floored at {@code ROOM_MAX_SIZE} so adjacent rooms never overlap. */
+    private static double poissonSpacingForTarget(int w, int h, int target) {
+        if (target <= 0) target = 1;
+        double derived = Math.sqrt((double)(w - 2) * (h - 2) / (target * 2.0));
+        return Math.max(GameBalance.ROOM_MAX_SIZE, derived);
+    }
+
     /**
      * PACKED layout: rooms grow off each other with exactly one wall tile between them
      * so the level tiles up like a brick wall. After greedy growth saturates, every pair
@@ -563,9 +591,11 @@ public final class LevelFactory {
      */
     private static List<int[]> buildPacked(Level level, Random rng) {
         int w = level.width, h = level.height;
-        boolean big = level.flags.contains(LevelFlag.BIGROOMS);
-        int minSize = big ? 6 : 4;
-        int maxSize = big ? 12 : 8;
+        int minSize = GameBalance.ROOM_MIN_SIZE;
+        int maxSize = GameBalance.ROOM_MAX_SIZE;
+        // Cap greedy growth at target + tolerance so a busy 48×48 doesn't end up
+        // with 14 rooms when every other layout is producing ~8.
+        int roomCap = GameBalance.LEVEL_TARGET_ROOMS + GameBalance.LEVEL_ROOM_TOLERANCE;
 
         List<int[]> rooms = new ArrayList<>();
 
@@ -587,7 +617,7 @@ public final class LevelFactory {
         // sized packed dungeon.
         int failuresInARow = 0;
         final int MAX_FAILURES = 150;
-        while (failuresInARow < MAX_FAILURES) {
+        while (failuresInARow < MAX_FAILURES && rooms.size() < roomCap) {
             int[] anchor = rooms.get(rng.nextInt(rooms.size()));
             int side = rng.nextInt(4); // 0=N, 1=E, 2=S, 3=W
             int newW = minSize + rng.nextInt(maxSize - minSize + 1);

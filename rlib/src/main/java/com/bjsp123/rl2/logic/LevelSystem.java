@@ -18,6 +18,9 @@ public class LevelSystem {
      *  ~one mote every couple of seconds — enough to read as "alive" without flooding
      *  rooms with sparkles. Only visible tiles emit; off-screen lamps stay quiet. */
     private static final int LIGHT_MOTE_INTERVAL_MS = 1800;
+    /** Faster cadence for power-orb sparkles — magical loot should glint noticeably
+     *  more than ambient lamps so the player's eye snaps to it across a room. */
+    private static final int POWER_ORB_SPARKLE_INTERVAL_MS = 700;
     private static final java.util.Random LIGHT_MOTE_RNG = new java.util.Random();
 
     public static void computeLighting(Level level) {
@@ -91,6 +94,22 @@ public class LevelSystem {
                 if (level.tiles[x][y] != Tile.LAMP) continue;
                 if (!level.visible[x][y]) continue;
                 if (LIGHT_MOTE_RNG.nextDouble() >= pPerLamp) continue;
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.LightMoteSpawn(
+                        new com.bjsp123.rl2.model.Point(x, y)));
+            }
+        }
+        // Glowing items (power orbs and friends) sparkle on the same channel — same
+        // upward-drifting LIGHT_MOTE visual, just emitted faster so the item catches
+        // the eye as a pickup.
+        if (level.items != null) {
+            double pPerOrb = dtMs / (double) POWER_ORB_SPARKLE_INTERVAL_MS;
+            for (Item it : level.items) {
+                if (it == null || !it.glows) continue;
+                if (it.location == null) continue;
+                int x = it.location.tileX(), y = it.location.tileY();
+                if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                if (!level.visible[x][y]) continue;
+                if (LIGHT_MOTE_RNG.nextDouble() >= pPerOrb) continue;
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.LightMoteSpawn(
                         new com.bjsp123.rl2.model.Point(x, y)));
             }

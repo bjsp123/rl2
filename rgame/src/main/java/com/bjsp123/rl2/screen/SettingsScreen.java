@@ -8,6 +8,8 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.ui.skin.AnimationSpeed;
+import com.bjsp123.rl2.ui.skin.MobOutline;
 import com.bjsp123.rl2.ui.skin.UiPixelScale;
 import com.bjsp123.rl2.ui.skin.UiScale;
 import com.bjsp123.rl2.ui.skin.UiStyleChoice;
@@ -94,7 +96,8 @@ public class SettingsScreen extends MenuScreen {
         tabContent.pad(10).defaults().left();
         switch (currentTab) {
             case GRAPHICS -> graphicsContent(tabContent);
-            case GAMEPLAY, SOUND ->
+            case GAMEPLAY -> gameplayContent(tabContent);
+            case SOUND ->
                 tabContent.add(label("(no settings yet)", "dim", 1f))
                           .left().padTop(24).padBottom(24).row();
         }
@@ -114,6 +117,27 @@ public class SettingsScreen extends MenuScreen {
         addLabeledRow(panel, "UI Scale", buildUiScaleRow());
         addLabeledRow(panel, "UI Pixel Scale", buildUiPixelScaleRow());
         addLabeledRow(panel, "UI Style", buildUiStyleRow());
+        addLabeledRow(panel, "Mob Outline Width", buildOutlineWidthRow());
+        addLabeledRow(panel, "Mob Outline Darkness", buildOutlineDarknessRow());
+        addLabeledRow(panel, "Mob Outline Smoothing", buildOutlineSmoothRow());
+    }
+
+    private void gameplayContent(Table panel) {
+        addLabeledRow(panel, "Animation Speed", buildAnimationSpeedRow());
+    }
+
+    private Table buildAnimationSpeedRow() {
+        Table row = new Table();
+        for (int n : AnimationSpeed.CHOICES) {
+            final int chosen = n;
+            TextButton b = button(n + "x", () -> {
+                AnimationSpeed.setFramesPerRender(chosen);
+                game.setScreen(new SettingsScreen(game, onBack));
+            });
+            if (AnimationSpeed.framesPerRender() == n) b.setChecked(true);
+            row.add(b).width(54).height(28).pad(2);
+        }
+        return row;
     }
 
     /** Stack a section label above its button row so each setting reads top-to-bottom
@@ -162,6 +186,64 @@ public class SettingsScreen extends MenuScreen {
             row.add(b).width(110).height(28).pad(2);
         }
         return row;
+    }
+
+    private Table buildOutlineWidthRow() {
+        Table row = new Table();
+        for (float w : MobOutline.WIDTH_CHOICES) {
+            final float chosen = w;
+            TextButton b = button(formatNumber(w), () -> {
+                MobOutline.setWidth(chosen);
+                game.setScreen(new SettingsScreen(game, onBack));
+            });
+            if (Math.abs(MobOutline.width() - w) < 0.0001f) b.setChecked(true);
+            row.add(b).width(44).height(28).pad(2);
+        }
+        return row;
+    }
+
+    private Table buildOutlineDarknessRow() {
+        Table row = new Table();
+        for (float a : MobOutline.DARKNESS_CHOICES) {
+            final float chosen = a;
+            TextButton b = button(formatNumber(a), () -> {
+                MobOutline.setDarkness(chosen);
+                game.setScreen(new SettingsScreen(game, onBack));
+            });
+            if (Math.abs(MobOutline.darkness() - a) < 0.0001f) b.setChecked(true);
+            row.add(b).width(44).height(28).pad(2);
+        }
+        return row;
+    }
+
+    private Table buildOutlineSmoothRow() {
+        Table row = new Table();
+        // Two-button toggle: "Smooth" (Linear-filter outline taps) vs "Pixel"
+        // (Nearest filter, the original pixel-aligned look).
+        TextButton smooth = button("Smooth", () -> {
+            MobOutline.setSmooth(true);
+            game.setScreen(new SettingsScreen(game, onBack));
+        });
+        TextButton aliased = button("Pixel", () -> {
+            MobOutline.setSmooth(false);
+            game.setScreen(new SettingsScreen(game, onBack));
+        });
+        if (MobOutline.smooth())  smooth.setChecked(true);
+        else                      aliased.setChecked(true);
+        row.add(smooth).width(80).height(28).pad(2);
+        row.add(aliased).width(80).height(28).pad(2);
+        return row;
+    }
+
+    /** Compact label for a float setting choice — drops trailing zeros so 1.0 reads
+     *  as "1" and 0.55 stays as "0.55". */
+    private static String formatNumber(float v) {
+        if (v == (int) v) return Integer.toString((int) v);
+        // Strip trailing zeros from the default %f formatting.
+        String s = String.format(java.util.Locale.ROOT, "%.2f", v);
+        while (s.endsWith("0")) s = s.substring(0, s.length() - 1);
+        if (s.endsWith(".")) s = s.substring(0, s.length() - 1);
+        return s;
     }
 
     private static String label(Tab t) {

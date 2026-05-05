@@ -22,7 +22,13 @@ public enum GemSpecies {
     ARGENTEL     (VisualTheme.CONCRETE, 1, 0x4455aaff),  // dull blue-grey
     AURELIUM  (VisualTheme.CONCRETE, 1, 0x333333ff),  // smoked black
     PETRICHOR   (VisualTheme.CONCRETE, 2, 0x88aa55ff),  // mossy green
-    STEELROCK   (VisualTheme.CONCRETE, 3, 0xaaccffff);  // steel sheen
+    STEELROCK   (VisualTheme.CONCRETE, 3, 0xaaccffff),  // steel sheen
+
+    BLOODGLASS    (VisualTheme.STRAIGHTFORWARD, 1, 0xaa5588ff), // blood red  
+    SLIPGLASS     (VisualTheme.STRAIGHTFORWARD, 1, 0xaa9966ff), // sickly yellow-green
+    JADEGLASS  (VisualTheme.STRAIGHTFORWARD, 1, 0x33bb66ff),  // jade green
+    MILKSPAR   (VisualTheme.STRAIGHTFORWARD, 2, 0xddddddff),  // milky 
+    MALACHOR   (VisualTheme.STRAIGHTFORWARD, 3, 0x66ee88ff); // malachite green
 
     /** Dungeon theme this gem appears in. */
     public final VisualTheme theme;

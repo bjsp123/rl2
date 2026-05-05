@@ -1,53 +1,95 @@
-package com.bjsp123.rl2.world.render;
+ package com.bjsp123.rl2.world.render;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
-import com.bjsp123.rl2.model.Mob.MobType;
+import com.bjsp123.rl2.util.CsvTable;
 
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Lazy-loaded sprite source for the look panel's mob portrait. Mirrors the cell layout
- * of {@link DefaultLevelRenderer}'s in-world mob renderer (see the {@code MOB_CELL_*}
- * constants) but exposes a simple {@link #regionFor(Mob)} lookup so UI screens can
- * paint a mob's full body sprite without reaching into the renderer's private state.
+ * Single source of truth for {@code sprites/mobs_simple.png}. Mob → atlas
+ * region mappings are loaded from the sprite columns of {@code assets/data/mobs.csv}
+ * via {@link #loadFromCsv(String)} (called once at startup from
+ * {@code Rl2Game.create()}). The texture itself is loaded lazily on first
+ * {@link #regionFor} call.
  *
- * <p>Source layout: {@code sprites/mobs.png} on a 32-px grid. Most mobs occupy a 1×1
- * or 1×2 cell block; a handful (blobs, ant hills) are 2×2. The returned region is the
- * full source rect at native pixel size — callers scale to their target footprint.
+ * <p>Source layout: 32-px grid. Most mobs occupy a 1×1 or 1×2 cell block; a handful
+ * (blobs, ant hills) are 2×2. Returned regions are the full source rects at native
+ * pixel size — callers scale to their target footprint.
  */
 public final class MobSprites {
 
-    private static final String MOBS_PATH = "sprites/mobs.png";
+    private static final String MOBS_PATH = "sprites/mobs_simple.png";
     private static final int CELL = 32;
 
     private static Texture mobsTex;
-    private static Map<MobType, TextureRegion> regions;
+    private static final Map<String, int[]> coords = new HashMap<>();
+    private static final Map<String, TextureRegion> regions = new HashMap<>();
     private static Map<CharacterClass, TextureRegion> playerRegions;
 
     private MobSprites() {}
+
+    /** Populate the mob → atlas-coord map from the sprite columns of
+     *  {@code mobs.csv}. Called once at startup, before any {@link #regionFor}
+     *  call. Reads only the {@code type, spriteCol, spriteRow, spriteW,
+     *  spriteH} columns; gameplay columns are ignored. */
+    public static void loadFromCsv(String csv) {
+        coords.clear();
+        regions.clear();
+        if (csv == null || csv.isEmpty()) return;
+        CsvTable table = CsvTable.parse(csv);
+        for (Map<String, String> row : table.rows) {
+            String type = CsvTable.str(row, "type", null);
+            if (type == null) continue;
+            int col = CsvTable.intCell(row, "spriteCol", 0);
+            int rw  = CsvTable.intCell(row, "spriteRow", 0);
+            int w   = CsvTable.intCell(row, "spriteW", 1);
+            int h   = CsvTable.intCell(row, "spriteH", 1);
+            coords.put(type, new int[] {col, rw, w, h});
+        }
+    }
 
     /** Region for the given mob (handles {@code PLAYER} via {@link Mob#characterClass}).
      *  Returns {@code null} if the texture didn't load or the mob's type has no mapping. */
     public static TextureRegion regionFor(Mob mob) {
         if (mob == null || mob.mobType == null) return null;
-        if (regions == null) load();
-        if (regions == null) return null;
-        if (mob.mobType == MobType.PLAYER) {
-            return mob.characterClass != null ? playerRegions.get(mob.characterClass) : null;
-        }
-        return regions.get(mob.mobType);
+        if (Mob.TYPE_PLAYER.equals(mob.mobType)) return regionFor(mob.characterClass);
+        return regionFor(mob.mobType);
+    }
+
+    /** Region for a non-player mob type, or {@code null} if the type has no mapping
+     *  or the texture didn't load. {@link Mob#TYPE_PLAYER} is rejected — use the
+     *  {@link #regionFor(CharacterClass)} overload instead. */
+    public static TextureRegion regionFor(String type) {
+        if (type == null || Mob.TYPE_PLAYER.equals(type)) return null;
+        ensureLoaded();
+        if (mobsTex == null) return null;
+        TextureRegion cached = regions.get(type);
+        if (cached != null) return cached;
+        int[] c = coords.get(type);
+        if (c == null) return null;
+        TextureRegion r = mobRegion(c[0], c[1], c[2], c[3]);
+        regions.put(type, r);
+        return r;
+    }
+
+    /** Region for a player class pose. */
+    public static TextureRegion regionFor(CharacterClass cls) {
+        if (cls == null) return null;
+        ensureLoaded();
+        return playerRegions == null ? null : playerRegions.get(cls);
     }
 
     /** Source-of-truth atlas Texture. {@code DefaultLevelRenderer} and the HUD
      *  portrait helper share this same instance — there's no benefit to loading the
      *  ~150 KB sheet several times. Returns {@code null} if the asset didn't load. */
     public static Texture sheetTexture() {
-        if (mobsTex == null) load();
+        ensureLoaded();
         return mobsTex;
     }
 
@@ -55,51 +97,21 @@ public final class MobSprites {
      *  own regions stay in sync with the layout this class assumes. */
     public static int cellSize() { return CELL; }
 
-    private static void load() {
+    private static void ensureLoaded() {
+        if (mobsTex != null) return;
         try {
             mobsTex = new Texture(Gdx.files.internal(MOBS_PATH));
             mobsTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         } catch (Exception ignored) {
             return;
         }
-        regions = new EnumMap<>(MobType.class);
+        // Player class poses live in the same atlas. Same triple share the
+        // single double-height (1×2) sprite — the simple-style atlas doesn't
+        // ship per-class art today.
         playerRegions = new EnumMap<>(CharacterClass.class);
-
-        // Cell coordinates mirror DefaultLevelRenderer's MOB_CELL_* constants.
-        put(MobType.SPIDER,             0, 2, 1, 1);
-        put(MobType.LOATHESOME_BUG,     1, 2, 1, 1);
-        put(MobType.BAT,                2, 2, 1, 1);
-        put(MobType.MOUSE,              3, 2, 1, 1);
-        put(MobType.SOLDIER_BUG,        4, 2, 1, 1);
-        put(MobType.BUG_PRODIGY,        5, 2, 1, 1);
-        put(MobType.DOG,                7, 2, 1, 1);
-        put(MobType.CAT,                6, 2, 1, 1);
-        put(MobType.KITTEN,             1, 3, 1, 1);
-        put(MobType.KOBOLD_FIGHTER,     0, 3, 1, 1);
-        put(MobType.BLACK_ANT,          2, 3, 1, 1);
-        put(MobType.RED_ANT,            3, 3, 1, 1);
-        put(MobType.BLOB,               2, 4, 2, 2);
-        put(MobType.KISSYBLOB,          0, 4, 2, 2);
-        put(MobType.BLACK_ANT_HILL,     4, 4, 2, 2);
-        put(MobType.RED_ANT_HILL,       6, 4, 2, 2);
-        put(MobType.MASK_IMP,           0, 7, 1, 1);
-        put(MobType.LARGE_MASK_IMP,     1, 7, 1, 1);
-        put(MobType.DEVELOPED_MASK_IMP, 2, 6, 1, 2);
-        put(MobType.HORRIBLE_MASK_IMP,  3, 6, 1, 2);
-        put(MobType.GHOST,              7, 0, 1, 2);
-        put(MobType.HORROR,             4, 6, 1, 2);
-        put(MobType.BARBARIAN_PRINCESS, 1, 8, 1, 2);
-        // Blazing firemouse rides the regular mouse art — same silhouette, fire VFX
-        // in the world distinguishes it. Look panel shows the mouse sprite.
-        put(MobType.BLAZING_FIREMOUSE,  3, 2, 1, 1);
-
-        playerRegions.put(CharacterClass.WARRIOR, mobRegion(4, 0, 1, 2));
-        playerRegions.put(CharacterClass.MAGE,    mobRegion(3, 0, 1, 2));
-        playerRegions.put(CharacterClass.ROGUE,   mobRegion(2, 0, 1, 2));
-    }
-
-    private static void put(MobType type, int col, int row, int w, int h) {
-        regions.put(type, mobRegion(col, row, w, h));
+        playerRegions.put(CharacterClass.WARRIOR, mobRegion(3, 0, 1, 2));
+        playerRegions.put(CharacterClass.MAGE,    mobRegion(4, 0, 1, 2));
+        playerRegions.put(CharacterClass.ROGUE,   mobRegion(0, 0, 1, 2));
     }
 
     private static TextureRegion mobRegion(int col, int row, int w, int h) {
@@ -109,7 +121,7 @@ public final class MobSprites {
     /** Release the shared texture. Subsequent {@link #regionFor} calls will reload. */
     public static void disposeShared() {
         if (mobsTex != null) { mobsTex.dispose(); mobsTex = null; }
-        regions = null;
+        regions.clear();
         playerRegions = null;
     }
 }

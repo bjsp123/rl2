@@ -120,7 +120,8 @@ public class LookRenderer extends Group {
 
         // ── Look popup: outer panel + 3 sub-panels ────────────────────────
         outerPanel = new Table();
-        outerPanel.setBackground(skin.getDrawable("panel"));
+        outerPanel.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("panel")));
         outerPanel.pad(UiTheme.OUTER_PAD);
         outerPanel.defaults().fillX();
 
@@ -240,7 +241,8 @@ public class LookRenderer extends Group {
 
         // ── Mob info popup: history + inventory ──────────────────────────
         mobInfoPanel = new Table();
-        mobInfoPanel.setBackground(skin.getDrawable("panel"));
+        mobInfoPanel.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("panel")));
         mobInfoPanel.pad(UiTheme.OUTER_PAD).defaults().left();
         Label mobInfoTitle = new Label("Mob info", skin, "title");
         Label histHdr = new Label("History", skin, "title");
@@ -268,7 +270,8 @@ public class LookRenderer extends Group {
 
         // ── Buff info popup ──────────────────────────────────────────────
         buffInfoPanel = new Table();
-        buffInfoPanel.setBackground(skin.getDrawable("panel"));
+        buffInfoPanel.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("panel")));
         buffInfoPanel.pad(UiTheme.OUTER_PAD).defaults().left();
         buffInfoIcon = new Image();
         buffInfoIcon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
@@ -633,11 +636,11 @@ public class LookRenderer extends Group {
 
     private static String prettyState(Mob t) {
         StringBuilder sb = new StringBuilder(prettyStateOfMind(t.stateOfMind));
-        if (t.targetPosition != null) {
-            sb.append(", heading to (")
-              .append(t.targetPosition.tileX()).append(", ")
-              .append(t.targetPosition.tileY()).append(")");
-        }
+        // Intent is the per-turn micro-decision underneath stateOfMind. Suppress
+        // it when stateOfMind already conveys "doing nothing" (Asleep / Hiding)
+        // or when the labels would just duplicate each other (Fleeing / Following).
+        String intent = prettyIntent(t.stateOfMind, t.intent);
+        if (intent != null) sb.append(" (").append(intent).append(")");
         return sb.toString();
     }
 
@@ -649,6 +652,27 @@ public class LookRenderer extends Group {
             case SEEKING_HIDING -> "Fleeing";
             case HIDING         -> "Hiding";
             case FOLLOWING      -> "Following";
+        };
+    }
+
+    /** Render the {@link com.bjsp123.rl2.model.Mob.Intent} as a parenthetical
+     *  beside the state-of-mind word. Returns {@code null} when the intent label
+     *  would be redundant or uninformative — e.g. an Asleep mob is always Idle,
+     *  and stamping "Asleep (Idle)" on the panel just adds noise. */
+    private static String prettyIntent(com.bjsp123.rl2.model.Mob.StateOfMind s,
+                                       com.bjsp123.rl2.model.Mob.Intent i) {
+        if (i == null) return null;
+        if (s == com.bjsp123.rl2.model.Mob.StateOfMind.ASLEEP) return null;
+        if (s == com.bjsp123.rl2.model.Mob.StateOfMind.HIDING) return null;
+        return switch (i) {
+            case IDLE               -> null;
+            case WANDERING          -> "Wandering";
+            case PURSUING           -> "Pursuing";
+            case CHASING_LAST_KNOWN -> "Chasing last seen";
+            case SHOOTING           -> "Shooting";
+            case KITING             -> "Kiting";
+            case FLEEING            -> "Fleeing";
+            case FOLLOWING_LEADER   -> "Following leader";
         };
     }
 

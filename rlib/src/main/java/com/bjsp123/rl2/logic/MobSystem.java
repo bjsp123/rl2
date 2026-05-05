@@ -351,77 +351,75 @@ public class MobSystem {
 
     /**
      * What mob {@code a} wants to do about mob {@code b}: ATTACK (chase & hit), FLEE (move
-     * away), or NOTHING (ignore). Purely one-sided — a dog's attitude toward a cat can be
-     * ATTACK while the cat's attitude toward the dog is FLEE. Callers must evaluate both
-     * directions when deciding collision behaviour.
+     * away), ALLY (won't fight, can swap places), or NOTHING (ignore). Purely one-sided —
+     * a dog's attitude toward a cat can be ATTACK while the cat's attitude toward the dog
+     * is FLEE. Callers must evaluate both directions when deciding collision behaviour.
      *
-     * <p>FLEE takes precedence over ATTACK, so a mob that both fears and hates another mob
-     * will prefer to run away. Combat memory (managed in {@link #recordCombatMemory}) wipes
-     * any fear once a fight starts, so an actively-fighting mob degenerates to ATTACK.
+     * <p>Resolution order:
+     * <ol>
+     *   <li>self / null → NOTHING</li>
+     *   <li>owner-based ALLY — pet ↔ master, two pets sharing a master</li>
+     *   <li>FRIGHTENED buff → FLEE everything (player exempt)</li>
+     *   <li>shared {@link Mob#faction} tag → ALLY</li>
+     *   <li>explicit {@link Mob#fleeTypes} membership → FLEE (priority over ATTACK)</li>
+     *   <li>explicit {@link Mob#attackTypes} membership → ATTACK</li>
+     *   <li>owner-inherited hostility — pet attacks what its master attacks</li>
+     *   <li>ally-defense transitivity → ATTACK anyone hostile to {@code a} or any
+     *       mob in {@code a}'s faction ({@link #defendsAlly})</li>
+     *   <li>otherwise NOTHING</li>
+     * </ol>
+     *
+     * <p>Same-{@link Behavior} no longer implies ALLY — alliance is purely the
+     * shared-faction-tag relationship, with lone-wolf species carrying a null
+     * faction.
      */
     public static Attitude getAttitudeToMob(Mob a, Mob b) {
         if (a == null || b == null || a == b) return Attitude.NOTHING;
-        // INANIMATE counts as ALLY (inert: never attacks, never seeks). Exception: the
-        // player may target an inanimate mob whose species is in their attackTypes —
-        // destructible scenery like ant hills works through a normal bump-attack.
-        if (a.behavior == Behavior.INANIMATE) return Attitude.ALLY;
-        if (b.behavior == Behavior.INANIMATE) {
-            if (a.behavior == Behavior.PLAYER && b.mobType != null
-                    && a.attackTypes != null && a.attackTypes.contains(b.mobType)) {
-                return Attitude.ATTACK;
-            }
-            return Attitude.ALLY;
-        }
-        // Tame pets are allies of their owner, AND of any mob that shares the same
-        // owner. Owner / owned-pet checks first because they short-circuit faction
-        // logic — a tame dog should never be treated as hostile by its master even
-        // if they happen to share a behaviour kind elsewhere on the chart.
+        // Owner / owned-pet shortcuts. A tame dog should never be treated as
+        // hostile by its master, and two pets sharing a master are allies.
         if (a.owner == b || b.owner == a)            return Attitude.ALLY;
         if (a.owner != null && a.owner == b.owner)   return Attitude.ALLY;
-        // Same-behaviour faction tie. Catches things like player-summoned dogs not
-        // attacking each other, two MOB-driven monsters not in-fighting unless a
-        // hostility list sets them at odds, etc. Sits BEFORE the attack/flee lists
-        // so a same-faction mob with combat-memory hostility still tilts to ATTACK
-        // via the explicit list below.
-        boolean sameFaction = a.behavior == b.behavior;
-        // Frightened mobs flee everything that isn't them. The buff is applied per-turn
-        // by BuffSystem when a terrifiable mob is adjacent to a terrifying one (subject
-        // to {@link Buff.BuffType#HOPE} immunity). Player exempted: their intent comes
-        // from the user, not AI; the buff is cosmetic on the player side.
+        // Frightened mobs flee everything. Player exempt: their intent comes from
+        // user input, not AI; the buff is cosmetic on the player side.
         if (a.behavior != Behavior.PLAYER
                 && BuffSystem.hasBuff(a, com.bjsp123.rl2.model.Buff.BuffType.FRIGHTENED)) {
             return Attitude.FLEE;
         }
+        // Shared faction wins over attack/flee lists, so a kobold general healing
+        // a kobold he's previously fought (combat-memoried into his attackTypes
+        // by some weird chain) still reads as an ally.
+        if (a.faction != null && a.faction.equals(b.faction)) return Attitude.ALLY;
         if (a.fleeTypes   != null && b.mobType != null && a.fleeTypes  .contains(b.mobType)) return Attitude.FLEE;
         if (a.attackTypes != null && b.mobType != null && a.attackTypes.contains(b.mobType)) return Attitude.ATTACK;
         // Loyalty — a tame mob inherits its owner's hostilities. If the owner wants to
         // attack b's species (either by spec or via combat memory), the pet does too.
-        // Sits below the mob's own attackTypes/fleeTypes so a pet's species-level fear of
-        // something still wins over the owner's attack list.
         if (a.owner != null && a.owner != b
                 && b.mobType != null && a.owner.attackTypes != null
                 && a.owner.attackTypes.contains(b.mobType)) {
             return Attitude.ATTACK;
         }
-        // Player reflects hostility: anything that wants to attack the player is treated
-        // as a hostile target by the player, automatically and without needing combat to
-        // have happened first. Each species' factory populates attackTypes explicitly
-        // (omnihostile mobs include every other MobType via {@code addAttackAllExcept})
-        // so the lookup is a single set check on both sides.
-        if (a.behavior == Behavior.PLAYER && wantsToAttack(b, a)) return Attitude.ATTACK;
-        // No specific hostility AND we share a faction → ALLY, so faction-mate mobs
-        // continue to collision-swap rather than block each other.
-        if (sameFaction) return Attitude.ALLY;
+        // Ally-defense transitivity. {@code a} is hostile to anyone whose
+        // attackTypes lists a's own species OR any species sharing a's faction
+        // — i.e. "I attack anything that's hostile to me or my faction".
+        // Subsumes the legacy player-reflection rule: the player auto-attacks
+        // anything hostile to PLAYER without needing a special case.
+        if (defendsAlly(a, b)) return Attitude.ATTACK;
         return Attitude.NOTHING;
     }
 
-    /** True if {@code attacker}'s {@link Mob#attackTypes} contains {@code target}'s
-     *  species — used by the player-reflection branch in {@link #getAttitudeToMob} to
-     *  echo a non-player's hostility back without recursing. */
-    private static boolean wantsToAttack(Mob attacker, Mob target) {
-        if (attacker == null || target == null) return false;
-        if (target.mobType == null || attacker.attackTypes == null) return false;
-        return attacker.attackTypes.contains(target.mobType);
+    /** True iff {@code b}'s {@link Mob#attackTypes} contains {@code a}'s species
+     *  or any species sharing {@code a}'s {@link Mob#faction}. Powers the
+     *  ally-defense rule in {@link #getAttitudeToMob} — a mob attacks anything
+     *  hostile to itself or its faction. */
+    private static boolean defendsAlly(Mob a, Mob b) {
+        if (b == null || b.attackTypes == null || b.attackTypes.isEmpty()) return false;
+        if (a.mobType != null && b.attackTypes.contains(a.mobType)) return true;
+        if (a.faction != null) {
+            for (String t : MobRegistry.mobsInFaction(a.faction)) {
+                if (b.attackTypes.contains(t)) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -517,6 +515,22 @@ public class MobSystem {
             if (m.position.tileX() == x && m.position.tileY() == y) return m;
         }
         return null;
+    }
+
+    /** True iff the level can accept a new effect-driven mob. Centralised so the
+     *  three magical-spawn sites (wand of dog, kissyblob eat-spawn, mouse
+     *  mushroom-eat-spawn) read off the same gate. */
+    public static boolean levelHasRoomForSpawn(Level level) {
+        return level != null && level.mobs != null
+                && level.mobs.size() < GameBalance.MAX_MOBS_ON_LEVEL;
+    }
+
+    /** Count live mobs of {@code type} currently on the level. O(N) over level.mobs. */
+    public static int countMobsOfType(Level level, String type) {
+        if (level == null || level.mobs == null || type == null) return 0;
+        int n = 0;
+        for (Mob m : level.mobs) if (type.equals(m.mobType)) n++;
+        return n;
     }
 
     /** Probability that {@code attacker} lands a hit on {@code target}. Reads the
@@ -710,10 +724,10 @@ public class MobSystem {
             startHitFlinch(level, target, attacker);
         }
         // Poison-on-hit. Spiders carry {@code intrinsic.poisonsOnAttack} so any blow
-        // they land applies POISONED to the target at level = the spider's character
-        // level, duration = level × 3 turns. Gated on dealt > 0 so a missed/absorbed
-        // hit doesn't envenom.
-        if (dealt > 0 && attacker != null
+        // they land applies POISONED at level = attacker character level, duration
+        // = level × 3 turns. Fires on any landed hit even if armour absorbed it —
+        // a 1-damage spider bite vs scale mail still injects venom.
+        if (attacker != null
                 && attacker.effectiveStats().poisonsOnAttack
                 && target.hp > 0) {
             int lvl = Math.max(1, attacker.characterLevel);
@@ -942,22 +956,59 @@ public class MobSystem {
 
     public static void processAiTurn(Mob mob, Level level) {
         if (mob.ticksTillMove > 0) return;
-        // Player and inanimates have no AI of their own — short-circuit early so the
-        // wake gate below can't accidentally bill the player's turn (which would freeze
-        // input after the first action).
-        if (mob.behavior == Behavior.PLAYER || mob.behavior == Behavior.INANIMATE) return;
-        // Sleep gate — applied uniformly to every behaviour so mice / dogs / cats / blobs
-        // are dormant until a relevant target wanders into their wake radius. Per-behaviour
-        // AI used to gate this only inside processMobAi, which let HUNTER predators and
-        // EXPLORE_HIDE mice patrol awake from level-load.
+        // Player has no AI of its own — short-circuit so the wake gate below can't
+        // accidentally bill the player's turn (which would freeze input).
+        if (mob.behavior == Behavior.PLAYER) return;
+
+        boolean inanimate = (mob.behavior == Behavior.INANIMATE);
+
+        // Sleep gate — applied uniformly to every behaviour so mice / dogs / cats /
+        // blobs / anthills are dormant until a relevant target wanders into their
+        // wake radius. INANIMATE mobs use the inverse perspective (wake when a
+        // hostile is incoming) since their own attackTypes is empty.
         if (mob.stateOfMind == StateOfMind.ASLEEP) {
-            if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
+            boolean wakeUp = inanimate
+                    ? hasIncomingAttackerWithin(mob, level, mob.effectiveStats().wakeRadius)
+                    : hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius);
+            if (wakeUp) {
                 mob.stateOfMind = StateOfMind.AWAKE;
             } else {
-                TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+                mob.intent = Mob.Intent.IDLE;
+                // Only mobile mobs need a sleep cooldown — INANIMATE never has its
+                // ticksTillMove decremented (TurnSystem.tick), so paying a move cost
+                // would freeze them out of future wake checks forever.
+                if (!inanimate) {
+                    TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+                }
                 return;
             }
         }
+
+        // INANIMATE: awake-state-aware (so the sleep-Z effect drops once a player
+        // approaches), but never picks a target, never moves, never attacks.
+        if (inanimate) {
+            mob.intent = Mob.Intent.IDLE;
+            return;
+        }
+
+        // Support-cast abilities (kobold general's haste/heal, etc.) — runs before
+        // behaviour dispatch so any mob carrying an ability list casts before
+        // defaulting to its normal AI step. Off-cooldown casts consume the turn.
+        if (tryCastAbilities(mob, level)) {
+            mob.intent = Mob.Intent.IDLE;
+            return;
+        }
+
+        // Inventory item use (potions, magic-missile wand, dog wand, bombs).
+        // Each usable item rolls 50% per turn — cheap heuristic that gives a
+        // mob carrying a healing potion a steady chance to drink when low,
+        // and a rogue carrying bombs a steady chance to lob one. Skips
+        // anything that would harm self or an ally.
+        if (tryUseInventoryItem(mob, level)) {
+            mob.intent = Mob.Intent.IDLE;
+            return;
+        }
+
         if (mob.behavior == Behavior.MOB) {
             processMobAi(mob, level);
         } else if (mob.behavior == Behavior.EXPLORE_HIDE) {
@@ -968,6 +1019,255 @@ public class MobSystem {
             processRangedMobDumbAi(mob, level);
         } else if (mob.behavior == Behavior.RANGED_MOB_STANDOFF) {
             processRangedMobStandoffAi(mob, level);
+        }
+    }
+
+    /**
+     * Try to cast one of {@code caster.abilities} on a friendly target. Each
+     * ability is checked in order; the first one that's both off-cooldown and has
+     * a valid friendly target fires, applies its cooldown buff, consumes the
+     * caster's attack-cost turn, and returns {@code true}. Returns {@code false}
+     * if no ability is castable, in which case the caller continues to normal AI.
+     *
+     * <p>For buff abilities the target must lack {@code applies}; for heal
+     * abilities the target must be below max HP. Targets are picked nearest-first
+     * within the caster's vision radius, friend/foe via {@link Attitude#ALLY}.
+     */
+    private static boolean tryCastAbilities(Mob caster, Level level) {
+        if (caster == null || caster.abilities == null || caster.abilities.isEmpty()) return false;
+        double vision = caster.effectiveStats().visionRadius;
+        for (Mob.MobAbility ab : caster.abilities) {
+            if (ab == null) continue;
+            if (ab.cooldownTracker != null
+                    && BuffSystem.hasBuff(caster, ab.cooldownTracker)) continue;
+            Mob target = pickAbilityTarget(caster, level, ab, vision);
+            if (target == null) continue;
+            if (ab.healAmount > 0) {
+                heal(level, target, ab.healAmount);
+            } else if (ab.applies != null) {
+                BuffSystem.apply(level, target, ab.applies,
+                        Math.max(1, ab.appliedLevel),
+                        Math.max(1, ab.appliedDuration), caster);
+            } else {
+                continue; // ill-formed ability — neither heal nor buff
+            }
+            if (ab.cooldownTracker != null && ab.cooldownTurns > 0) {
+                BuffSystem.apply(level, caster, ab.cooldownTracker, 1,
+                        ab.cooldownTurns, caster);
+            }
+            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+            return true;
+        }
+        return false;
+    }
+
+    /** Nearest ally within {@code vision} (Chebyshev) that {@code ab} can target.
+     *  Buff abilities skip targets that already have {@code ab.applies}; heal
+     *  abilities skip targets at max HP. Self never qualifies. */
+    private static Mob pickAbilityTarget(Mob caster, Level level,
+                                         Mob.MobAbility ab, double vision) {
+        int cx = caster.position.tileX(), cy = caster.position.tileY();
+        Mob best = null;
+        int bestD = Integer.MAX_VALUE;
+        for (Mob m : level.mobs) {
+            if (m == caster || m.hp <= 0 || m.position == null) continue;
+            if (getAttitudeToMob(caster, m) != Attitude.ALLY) continue;
+            if (ab.healAmount > 0) {
+                if (m.hp >= m.effectiveStats().maxHp) continue;
+            } else if (ab.applies != null) {
+                if (BuffSystem.hasBuff(m, ab.applies)) continue;
+            } else {
+                continue;
+            }
+            int d = Math.max(Math.abs(m.position.tileX() - cx),
+                             Math.abs(m.position.tileY() - cy));
+            if (d > vision) continue;
+            if (d < bestD) { bestD = d; best = m; }
+        }
+        return best;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // AI ITEM USE — wands, potions, bombs in a mob's inventory
+    // ════════════════════════════════════════════════════════════════════════
+
+    /** Per-item probability a mob's AI rolls each turn that it'll actually use
+     *  the item (after the safety / utility gate). 50% gives the rogue a
+     *  steady drumbeat of bomb throws while letting them mix in melee. */
+    private static final double AI_USE_ITEM_CHANCE = 0.5;
+    /** Max Chebyshev distance for an AI bomb throw. Mirrors the rough range
+     *  the player uses in look mode for thrown items. */
+    private static final int AI_BOMB_THROW_RANGE = 6;
+
+    /**
+     * Run the AI item-use heuristic for {@code mob}: walk the bag, find the
+     * first item that's both usable and won't harm self/allies, roll
+     * {@link #AI_USE_ITEM_CHANCE}, and on success apply it. The use consumes
+     * the mob's turn — caller short-circuits.
+     */
+    private static boolean tryUseInventoryItem(Mob mob, Level level) {
+        if (mob == null || mob.inventory == null) return false;
+        if (mob.inventory.bag == null || mob.inventory.bag.isEmpty()) return false;
+        // Ranged-behavior mobs always use a usable item if the safety gate clears —
+        // otherwise a kobold mage with a wand of magic missile would idle half its
+        // turns next to a melee enemy. Other mobs roll AI_USE_ITEM_CHANCE.
+        boolean alwaysUse = mob.behavior == Behavior.RANGED_MOB_DUMB
+                         || mob.behavior == Behavior.RANGED_MOB_STANDOFF;
+        // Snapshot the bag so applyAiItemUse can mutate it (heal potions /
+        // bombs are removed on use).
+        java.util.List<com.bjsp123.rl2.model.Item> snapshot =
+                new java.util.ArrayList<>(mob.inventory.bag);
+        for (com.bjsp123.rl2.model.Item item : snapshot) {
+            if (!isUsableByAi(mob, item, level)) continue;
+            if (!alwaysUse && RANDOM.nextDouble() >= AI_USE_ITEM_CHANCE) continue;
+            applyAiItemUse(mob, item, level);
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        if (item == null) return false;
+        // Bombs first — the {@code thrownBehavior} field is the gate, not
+        // {@code useBehavior}. Any bomb-tagged item is fair game when there's
+        // a hostile in range and no ally caught in the AOE.
+        com.bjsp123.rl2.model.Item.ThrownBehavior tb = item.thrownBehavior;
+        if (tb == com.bjsp123.rl2.model.Item.ThrownBehavior.IGNITE
+                || tb == com.bjsp123.rl2.model.Item.ThrownBehavior.OIL_SPLASH
+                || tb == com.bjsp123.rl2.model.Item.ThrownBehavior.BLAST
+                || tb == com.bjsp123.rl2.model.Item.ThrownBehavior.FREEZE) {
+            return canThrowBombAtSomeone(mob, item, level);
+        }
+        if (item.useBehavior == null
+                || item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.NONE) return false;
+        return switch (item.useBehavior) {
+            case HEAL -> mob.hp < mob.effectiveStats().maxHp;
+            case DRINK -> wouldDrinkHelp(mob, item);
+            case MAGIC_MISSILE -> nearestAttackTarget(mob, level) != null;
+            case WAND -> isWandUsableByAi(mob, item, level);
+            case EAT, GRANT_PERK, NONE -> false;
+        };
+    }
+
+    /** Heuristic for {@code DRINK} potions — only quaff if it'll actually help.
+     *  Healing potions are useful when wounded; self-harming potions
+     *  (non-zero {@link com.bjsp123.rl2.model.Item#selfDamageBase}) are never
+     *  drunk; buff potions are useful when the buff isn't already up. */
+    private static boolean wouldDrinkHelp(Mob mob, com.bjsp123.rl2.model.Item item) {
+        if (item == null) return false;
+        if (item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.HEAL) {
+            return mob.hp < mob.effectiveStats().maxHp;
+        }
+        if (item.selfDamageBase > 0) return false;
+        if (item.appliesBuff != null) return !BuffSystem.hasBuff(mob, item.appliesBuff);
+        return false;
+    }
+
+    /** Element-wand AI gate. Only single-target / ally-creating elements pass
+     *  in this first cut — element wands with AOE / friendly-fire risk
+     *  (water, oil, grass, fungus, fire, detonation, banishment) are deferred. */
+    private static boolean isWandUsableByAi(Mob mob, com.bjsp123.rl2.model.Item wand, Level level) {
+        if (wand.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.MAGIC_MISSILE) {
+            Mob target = nearestAttackTarget(mob, level);
+            return target != null;
+        }
+        if (wand.summonsWhenUsed != null) {
+            return MobSystem.levelHasRoomForSpawn(level)
+                    && MobHooks.freeAdjacentFloor(level, mob.position) != null;
+        }
+        return false;
+    }
+
+    /** True iff the mob has at least one hostile in throw range and no ally
+     *  inside the bomb's AOE around that target. */
+    private static boolean canThrowBombAtSomeone(Mob thrower, com.bjsp123.rl2.model.Item bomb, Level level) {
+        Mob target = nearestAttackTarget(thrower, level);
+        if (target == null || target.position == null) return false;
+        int d = Math.max(Math.abs(target.position.tileX() - thrower.position.tileX()),
+                         Math.abs(target.position.tileY() - thrower.position.tileY()));
+        if (d > AI_BOMB_THROW_RANGE) return false;
+        return !allyInBombAoe(thrower, target.position, bomb, level);
+    }
+
+    /** Walk the bomb's effect disc around {@code centre}; return true the
+     *  moment any tile holds a mob the thrower considers ALLY. */
+    private static boolean allyInBombAoe(Mob thrower, com.bjsp123.rl2.model.Point centre,
+                                         com.bjsp123.rl2.model.Item bomb, Level level) {
+        int radius = ItemSystem.effectiveBombEffectTiles(bomb);
+        int r2 = radius * radius;
+        int cx = centre.tileX(), cy = centre.tileY();
+        for (Mob m : level.mobs) {
+            if (m == thrower || m.hp <= 0 || m.position == null) continue;
+            int dx = m.position.tileX() - cx;
+            int dy = m.position.tileY() - cy;
+            if (dx * dx + dy * dy > r2) continue;
+            if (getAttitudeToMob(thrower, m) == Attitude.ALLY) return true;
+        }
+        return false;
+    }
+
+    /** Apply the chosen AI item-use. Each branch mirrors the player path that
+     *  uses the same item, minus the targeting overlay / animation hook-up. */
+    private static void applyAiItemUse(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        com.bjsp123.rl2.model.Item.ThrownBehavior tb = item.thrownBehavior;
+        if (tb == com.bjsp123.rl2.model.Item.ThrownBehavior.IGNITE
+                || tb == com.bjsp123.rl2.model.Item.ThrownBehavior.OIL_SPLASH
+                || tb == com.bjsp123.rl2.model.Item.ThrownBehavior.BLAST
+                || tb == com.bjsp123.rl2.model.Item.ThrownBehavior.FREEZE) {
+            Mob target = nearestAttackTarget(mob, level);
+            if (target != null) {
+                throwItem(level, mob, item, target.position);
+            }
+            return;
+        }
+        switch (item.useBehavior) {
+            case HEAL -> {
+                heal(level, mob, ItemSystem.effectiveHealAmount(item));
+                removeFromInventory(mob, item);
+                TurnSystem.applyMoveCost(mob, mob.effectiveStats().attackCost);
+            }
+            case DRINK -> {
+                ItemSystem.drinkPotion(level, mob, item);
+                TurnSystem.applyMoveCost(mob, mob.effectiveStats().attackCost);
+            }
+            case MAGIC_MISSILE -> aiCastMagicMissile(mob, item, level);
+            case WAND -> aiCastWand(mob, item, level);
+            default -> { /* unreachable per the gate */ }
+        }
+    }
+
+    /** AI version of the wand-of-magic-missile / staff cast. Mirrors
+     *  {@code PlayController.fireMagicMissile} minus the wandmaster perk
+     *  bump (mobs don't carry perks). Damage is rolled from the wand's
+     *  effective range. */
+    private static void aiCastMagicMissile(Mob caster, com.bjsp123.rl2.model.Item wand, Level level) {
+        Mob target = nearestAttackTarget(caster, level);
+        if (target == null) return;
+        int dmg;
+        if (wand != null) {
+            com.bjsp123.rl2.model.MinMax r = ItemSystem.effectiveWandDamageRange(wand);
+            dmg = rollRange(r);
+        } else {
+            dmg = GameBalance.MAGIC_MISSILE_DAMAGE;
+        }
+        boolean trajectoryVisible = trajectoryTouchesVisible(level, caster.position, target.position);
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MagicMissileFired(
+                    caster, caster.position, target.position, dmg, trajectoryVisible));
+        }
+        TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+    }
+
+    /** AI version of the summon-wand path. Mirrors
+     *  {@code PlayController.beginWand}'s summon branch: pet spawned on a free
+     *  adjacent tile, owner = the wand-user. Generalised — any wand whose item
+     *  carries {@link com.bjsp123.rl2.model.Item#summonsWhenUsed} is summoned
+     *  here. Tile-targeting wands are deferred until friendly-fire AOE checks
+     *  land. */
+    private static void aiCastWand(Mob caster, com.bjsp123.rl2.model.Item wand, Level level) {
+        if (wand.summonsWhenUsed != null) {
+            ItemSystem.castSummonWand(level, caster, wand);
+            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
         }
     }
 
@@ -985,10 +1285,16 @@ public class MobSystem {
         if (mob.stateOfMind == StateOfMind.ASLEEP) {
             if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
                 mob.stateOfMind = StateOfMind.AWAKE;
-            } else { TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost); return; }
+            } else {
+                mob.intent = Mob.Intent.IDLE;
+                TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+                return;
+            }
         }
+        Mob.Intent prevIntent = mob.intent;
         Point fleeAway = fleeTargetFor(mob, level);
         if (fleeAway != null) {
+            mob.intent = Mob.Intent.FLEEING;
             mob.targetPosition = fleeAway;
             stepOrIdle(mob, level);
             return;
@@ -999,15 +1305,28 @@ public class MobSystem {
             // melee (the closing-step path swings on contact via the mob-occupant
             // resolution in stepTowardTarget).
             int cheb = LevelFactoryUtils.chebyshev(mob.position, attackTarget.position);
-            if (cheb > 1 && tryRangedShot(mob, attackTarget, level)) return;
+            if (cheb > 1 && tryRangedShot(mob, attackTarget, level)) {
+                mob.intent = Mob.Intent.SHOOTING;
+                return;
+            }
+            mob.intent = Mob.Intent.PURSUING;
             mob.targetPosition = attackTarget.position;
             stepOrIdle(mob, level);
             return;
         }
-        if (tryFollowLeader(mob, level)) return;
+        if (isChaseCarryover(prevIntent, mob)) {
+            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
+            stepOrIdle(mob, level);
+            return;
+        }
+        if (tryFollowLeader(mob, level)) {
+            mob.intent = Mob.Intent.FOLLOWING_LEADER;
+            return;
+        }
         if (mob.targetPosition == null) {
             mob.targetPosition = randomFloorPoint(level);
         }
+        mob.intent = Mob.Intent.WANDERING;
         stepOrIdle(mob, level);
     }
 
@@ -1022,10 +1341,16 @@ public class MobSystem {
         if (mob.stateOfMind == StateOfMind.ASLEEP) {
             if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
                 mob.stateOfMind = StateOfMind.AWAKE;
-            } else { TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost); return; }
+            } else {
+                mob.intent = Mob.Intent.IDLE;
+                TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+                return;
+            }
         }
+        Mob.Intent prevIntent = mob.intent;
         Point fleeAway = fleeTargetFor(mob, level);
         if (fleeAway != null) {
+            mob.intent = Mob.Intent.FLEEING;
             mob.targetPosition = fleeAway;
             stepOrIdle(mob, level);
             return;
@@ -1037,7 +1362,11 @@ public class MobSystem {
             // is up; otherwise melee on bump. Without this branch the imp kites every turn
             // the cooldown is on, and the player can never close the gap to fight back.
             if (cheb <= 1) {
-                if (tryRangedShot(mob, attackTarget, level)) return;
+                if (tryRangedShot(mob, attackTarget, level)) {
+                    mob.intent = Mob.Intent.SHOOTING;
+                    return;
+                }
+                mob.intent = Mob.Intent.PURSUING;
                 mob.targetPosition = attackTarget.position;
                 stepOrIdle(mob, level);
                 return;
@@ -1045,24 +1374,38 @@ public class MobSystem {
             // Shoot first — a stand-off ranged mob prefers to fire over moving when the
             // shot is available. Only on cooldown does the standoff/retreat/close logic
             // run, and even then only outside melee range.
-            if (tryRangedShot(mob, attackTarget, level)) return;
+            if (tryRangedShot(mob, attackTarget, level)) {
+                mob.intent = Mob.Intent.SHOOTING;
+                return;
+            }
             if (cheb <= STANDOFF_BUBBLE_TILES) {
                 Point retreat = findRetreatTile(mob, attackTarget, level);
                 if (retreat != null) {
+                    mob.intent = Mob.Intent.KITING;
                     mob.targetPosition = retreat;
                     stepOrIdle(mob, level);
                     return;
                 }
                 // Cornered — fall through to closing distance + melee.
             }
+            mob.intent = Mob.Intent.PURSUING;
             mob.targetPosition = attackTarget.position;
             stepOrIdle(mob, level);
             return;
         }
-        if (tryFollowLeader(mob, level)) return;
+        if (isChaseCarryover(prevIntent, mob)) {
+            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
+            stepOrIdle(mob, level);
+            return;
+        }
+        if (tryFollowLeader(mob, level)) {
+            mob.intent = Mob.Intent.FOLLOWING_LEADER;
+            return;
+        }
         if (mob.targetPosition == null) {
             mob.targetPosition = randomFloorPoint(level);
         }
+        mob.intent = Mob.Intent.WANDERING;
         stepOrIdle(mob, level);
     }
 
@@ -1132,48 +1475,74 @@ public class MobSystem {
             if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
                 mob.stateOfMind = StateOfMind.AWAKE;
             } else {
+                mob.intent = Mob.Intent.IDLE;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
                 return;
             }
         }
 
+        Mob.Intent prevIntent = mob.intent;
+
         Point fleeAway = fleeTargetFor(mob, level);
         if (fleeAway != null) {
+            mob.intent = Mob.Intent.FLEEING;
             mob.targetPosition = fleeAway;
             stepOrIdle(mob, level);
             return;
         }
         Mob attackTarget = nearestAttackTarget(mob, level);
         if (attackTarget != null) {
+            mob.intent = Mob.Intent.PURSUING;
             mob.targetPosition = attackTarget.position;
             stepOrIdle(mob, level);
             return;
         }
-        if (tryFollowLeader(mob, level)) return;       // already-handled (idled or set up)
+        // Promotion: was pursuing last tick, target is no longer visible, but the
+        // remembered tile is still ahead. Keep walking toward it; we'll drop to
+        // wander once we arrive (or back to PURSUING if the target reappears).
+        if (isChaseCarryover(prevIntent, mob)) {
+            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
+            stepOrIdle(mob, level);
+            return;
+        }
+        if (tryFollowLeader(mob, level)) {
+            mob.intent = Mob.Intent.FOLLOWING_LEADER;
+            return;
+        }
         if (mob.targetPosition == null) {
             mob.targetPosition = randomFloorPoint(level);
         }
+        mob.intent = Mob.Intent.WANDERING;
         stepOrIdle(mob, level);
     }
 
+    /** True iff this turn should continue an in-progress chase: the previous tick
+     *  was {@link Mob.Intent#PURSUING} or {@link Mob.Intent#CHASING_LAST_KNOWN},
+     *  and {@code mob.targetPosition} still holds an unreached tile. Used by every
+     *  AI dispatcher's no-visible-target branch to keep heading toward where the
+     *  enemy was last seen instead of immediately falling back to wander. */
+    private static boolean isChaseCarryover(Mob.Intent prev, Mob mob) {
+        if (prev != Mob.Intent.PURSUING && prev != Mob.Intent.CHASING_LAST_KNOWN) return false;
+        if (mob.targetPosition == null || mob.position == null) return false;
+        return mob.targetPosition.tileX() != mob.position.tileX()
+            || mob.targetPosition.tileY() != mob.position.tileY();
+    }
+
     /**
-     * Mob this one should treat as its non-combat leader: tame mobs follow the player;
-     * mobs in {@link StateOfMind#FOLLOWING} follow their {@link Mob#followTarget}.
-     * Returns null when neither applies. Self-heals a stale {@code followTarget}
-     * reference (e.g. after the leader died) by clearing it.
+     * Mob this one should treat as its non-combat leader. Returns the mob's
+     * {@link Mob#owner} if it has one and the owner is still on the level — covers
+     * both tame mobs (owner = player) and kittens (owner = parent cat). Returns
+     * null otherwise. Self-heals a stale owner reference (e.g. after the owner
+     * died) by clearing it and stepping any FOLLOWING state back to AWAKE.
      */
     private static Mob leaderToFollow(Mob self, Level level) {
-        if (self.owner != null) {
-            Mob own = self.owner;
-            if (level.mobs.contains(own)) return own;
-            // Owner died or left the level — drop loyalty so the mob doesn't path toward
-            // a corpse forever. Future "respawn the player" flows can re-bind.
-            self.owner = null;
-        }
-        if (self.stateOfMind == StateOfMind.FOLLOWING && self.followTarget != null) {
-            Mob leader = self.followTarget;
-            if (level.mobs.contains(leader)) return leader;
-            self.followTarget = null;
+        if (self.owner == null) return null;
+        Mob own = self.owner;
+        if (level.mobs.contains(own)) return own;
+        // Owner died or left the level — drop loyalty so the mob doesn't path toward
+        // a corpse forever, and exit the FOLLOWING state so the regular AI takes over.
+        self.owner = null;
+        if (self.stateOfMind == StateOfMind.FOLLOWING) {
             self.stateOfMind = StateOfMind.AWAKE;
         }
         return null;
@@ -1244,6 +1613,7 @@ public class MobSystem {
      * </ul>
      */
     private static void processExploreHideAi(Mob mob, Level level) {
+        Mob.Intent prevIntent = mob.intent;
         // Resolve FLEE before ATTACK: the spec says fleeing wins when selecting a target.
         Mob fearedMob = nearestFleeTarget(mob, level);
         if (fearedMob != null) {
@@ -1252,9 +1622,17 @@ public class MobSystem {
                 mob.targetPosition = hide;
                 mob.stateOfMind = StateOfMind.SEEKING_HIDING;
             } else {
+                // No tile is out of the threat's LOS (open room, arena floor, …).
+                // Fall back to a plain retreat — same straight-away-from-threat
+                // pick that HUNTER mobs use, with a side-step fallback when the
+                // direct line is blocked. Without this the mouse's targetPosition
+                // would stay stale and "fleeing" would be cosmetic.
+                Point retreat = fleeTargetFor(mob, level);
+                if (retreat != null) mob.targetPosition = retreat;
                 mob.stateOfMind = StateOfMind.AWAKE;
             }
             BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.HIDING);
+            mob.intent = Mob.Intent.FLEEING;
             stepAndApplyPostMoveEffects(mob, level);
             return;
         }
@@ -1267,6 +1645,7 @@ public class MobSystem {
             mob.stateOfMind = StateOfMind.HIDING;
             BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.HIDING,
                     /*level=*/1, HIDING_TURN_COUNT, mob);
+            mob.intent = Mob.Intent.IDLE;
             TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
             return;
         }
@@ -1275,20 +1654,31 @@ public class MobSystem {
                 mob.stateOfMind = StateOfMind.AWAKE;
                 mob.targetPosition = null;
             }
+            mob.intent = Mob.Intent.IDLE;
             TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
             return;
         }
 
         Mob hated = nearestAttackTarget(mob, level);
         if (hated != null) {
+            mob.intent = Mob.Intent.PURSUING;
             mob.targetPosition = hated.position;
             stepAndApplyPostMoveEffects(mob, level);
             return;
         }
-        if (tryFollowLeader(mob, level)) return;
+        if (isChaseCarryover(prevIntent, mob)) {
+            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
+            stepAndApplyPostMoveEffects(mob, level);
+            return;
+        }
+        if (tryFollowLeader(mob, level)) {
+            mob.intent = Mob.Intent.FOLLOWING_LEADER;
+            return;
+        }
         if (mob.targetPosition == null) {
             mob.targetPosition = randomFloorPoint(level);
         }
+        mob.intent = Mob.Intent.WANDERING;
         stepAndApplyPostMoveEffects(mob, level);
     }
 
@@ -1298,22 +1688,34 @@ public class MobSystem {
      * wake-on-sight gate — predators are active by default.
      */
     private static void processHunterAi(Mob mob, Level level) {
+        Mob.Intent prevIntent = mob.intent;
         Point fleeAway = fleeTargetFor(mob, level);
         if (fleeAway != null) {
+            mob.intent = Mob.Intent.FLEEING;
             mob.targetPosition = fleeAway;
             stepOrIdle(mob, level);
             return;
         }
         Mob target = nearestAttackTarget(mob, level);
         if (target != null) {
+            mob.intent = Mob.Intent.PURSUING;
             mob.targetPosition = target.position;
             stepOrIdle(mob, level);
             return;
         }
-        if (tryFollowLeader(mob, level)) return;
+        if (isChaseCarryover(prevIntent, mob)) {
+            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
+            stepOrIdle(mob, level);
+            return;
+        }
+        if (tryFollowLeader(mob, level)) {
+            mob.intent = Mob.Intent.FOLLOWING_LEADER;
+            return;
+        }
         if (mob.targetPosition == null) {
             mob.targetPosition = randomFloorPoint(level);
         }
+        mob.intent = Mob.Intent.WANDERING;
         stepOrIdle(mob, level);
     }
 
@@ -1330,6 +1732,28 @@ public class MobSystem {
                              Math.abs(m.position.tileY() - my));
             // STEALTH perk halves enemy wake / vision radius when checking against the
             // perked player. Round down so a 4-radius wake becomes 2.
+            double effRadius = radius;
+            if (m.perks != null
+                    && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0) {
+                effRadius = radius / 2.0;
+            }
+            if (d <= effRadius) return true;
+        }
+        return false;
+    }
+
+    /** True iff any other mob within {@code radius} (Chebyshev) has ATTACK
+     *  attitude toward {@code target}. Used as the wake gate for INANIMATE mobs
+     *  (anthills) — their own attackTypes is empty, so the regular wake gate
+     *  never fires; this checks "is something coming for me" instead. STEALTH
+     *  perk applies the same halved-radius rule as the regular wake gate. */
+    private static boolean hasIncomingAttackerWithin(Mob target, Level level, double radius) {
+        int tx = target.position.tileX(), ty = target.position.tileY();
+        for (Mob m : level.mobs) {
+            if (m == target) continue;
+            if (getAttitudeToMob(m, target) != Attitude.ATTACK) continue;
+            int d = Math.max(Math.abs(m.position.tileX() - tx),
+                             Math.abs(m.position.tileY() - ty));
             double effRadius = radius;
             if (m.perks != null
                     && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0) {
@@ -1380,7 +1804,11 @@ public class MobSystem {
     /**
      * If a mob {@code self} fears is in sight, return a floor tile it can path to that
      * moves it directly away — position reflected through self across the threat axis and
-     * clamped to the level bounds and to walkable tiles. Null if nothing to flee.
+     * clamped to the level bounds and to walkable tiles. When the straight-line away path
+     * is blocked, falls back to {@link #findRetreatTile} which picks any 8-neighbour tile
+     * that increases distance from the threat — fleeing into a side-step beats freezing
+     * up against a wall and reverting to wander. Null only if no escape direction
+     * improves distance at all (genuinely cornered).
      */
     private static Point fleeTargetFor(Mob self, Level level) {
         Mob threat = nearestFleeTarget(self, level);
@@ -1398,7 +1826,9 @@ public class MobSystem {
             if (!level.tiles[nx][ny].isFloorLike()) continue;
             return new Point(nx, ny);
         }
-        return null;
+        // No straight-line escape works (wall / chasm in the away direction). Side-step
+        // toward whichever neighbour maximises Chebyshev distance from the threat.
+        return findRetreatTile(self, threat, level);
     }
 
     /**
@@ -1406,16 +1836,27 @@ public class MobSystem {
      * {@code self}'s position. Uses the player's visibility grid as a proxy — "not visible"
      * is the closest thing we have to "out of the threat's line of sight" right now.
      */
+    /** Closest floor tile (Manhattan from {@code self}) that {@code threat} cannot
+     *  see. Used by {@link #processExploreHideAi} to pick a hiding spot when the
+     *  mouse spots a cat. Returns {@code null} when every reachable tile is in
+     *  the threat's LOS (e.g. a featureless arena), in which case the caller
+     *  falls back to a straight retreat. */
     private static Point findHiddenTileFrom(Level level, Mob self, Mob threat) {
+        if (threat == null) return null;
         int cx = self.position.tileX(), cy = self.position.tileY();
         int bestD = Integer.MAX_VALUE;
         Point best = null;
         for (int x = 0; x < level.width; x++) {
             for (int y = 0; y < level.height; y++) {
                 if (!level.tiles[x][y].isFloorLike()) continue;
-                if (level.visible[x][y]) continue;
+                Point candidate = new Point(x, y);
+                // LOS from the *threat*, not the player's fog-of-war. The previous
+                // implementation read level.visible, which only reflects what the
+                // player can see — a tile in the cat's line of sight but outside
+                // the player's FOV would falsely qualify as a hiding spot.
+                if (LevelUtilities.getLineOfSight(level, threat, candidate)) continue;
                 int d = Math.abs(x - cx) + Math.abs(y - cy);
-                if (d < bestD) { bestD = d; best = new Point(x, y); }
+                if (d < bestD) { bestD = d; best = candidate; }
             }
         }
         return best;
@@ -1461,7 +1902,8 @@ public class MobSystem {
             level.vegetation[px][py] = null;
             EventLog.add(Messages.vegetationEaten(
                     mob.name != null ? mob.name : "?", "mushroom"));
-            if (mob.mushroomEatSpawnType != null && mobAt(level, before) == null) {
+            if (mob.mushroomEatSpawnType != null && mobAt(level, before) == null
+                    && levelHasRoomForSpawn(level)) {
                 Mob bud = MobFactory.spawn(mob.mushroomEatSpawnType, before);
                 if (bud != null) {
                     level.mobs.add(bud);
@@ -1504,14 +1946,14 @@ public class MobSystem {
                 processAttack(level, thrower, target, dmg, AttackType.THROWN);
             }
         }
-        // Tame-on-throw — a delicious fish thrown at a stray cat or dog converts that
-        // mob into a tame ally of the thrower. Done as a separate branch (not gated on
-        // ThrownBehavior) so the same item can carry an additional behaviour like
-        // NOTHING (drops on the ground) without the two paths interfering.
-        if (it.tameOnThrow && inBounds) {
+        // Tame-on-throw — items list the mob types they tame; throwing one at a
+        // matching mob converts it to a tame ally of the thrower. Done as a
+        // separate branch (not gated on ThrownBehavior) so the same item can
+        // carry an additional behaviour like NOTHING (drops on the ground)
+        // without the two paths interfering.
+        if (!it.tameOnThrow.isEmpty() && inBounds) {
             Mob target = mobAt(level, dst);
-            if (target != null
-                    && (target.mobType == Mob.MobType.CAT || target.mobType == Mob.MobType.DOG)) {
+            if (target != null && it.tameOnThrow.contains(target.mobType)) {
                 target.owner = thrower;
                 target.attackTypes.remove(thrower.mobType);
                 target.fleeTypes.remove(thrower.mobType);

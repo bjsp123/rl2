@@ -172,7 +172,6 @@ public class MapScreen extends MenuScreen {
             case WATER          -> "~";
             case WALKWAY_LEVEL  -> "=";
             case PLANTS         -> "\"";
-            case BIGROOMS       -> "O";
             case BIGLEVEL       -> "+";
             case ROUGH          -> "&";
         };

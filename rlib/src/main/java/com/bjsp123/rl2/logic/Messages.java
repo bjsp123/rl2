@@ -48,7 +48,6 @@ public final class Messages {
             case WATER:         return "water";
             case WALKWAY_LEVEL: return "plank corridors";
             case PLANTS:        return "plants";
-            case BIGROOMS:      return "big rooms";
             case BIGLEVEL:      return "big level";
             case ROUGH:         return "rough";
             default:            return f.name().toLowerCase();

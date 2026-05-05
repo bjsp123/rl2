@@ -62,6 +62,8 @@ public class Buff {
          *  has a 50% chance per step to leave an OIL surface in the cell it left.
          *  Applied by oil bombs / oil-wand impacts that splash directly onto the mob. */
         OILY,
+        /** Soaked through. Takes double damage from lightning attacks. */
+        WET,
         /** Player has run out of food. Heal regen is suppressed while active; the buff
          *  drops as soon as satiety rises above 0 again (drink a potion, eat a pear).
          *  Player-only — NPCs sit at satiety 0 harmlessly. */
@@ -73,6 +75,11 @@ public class Buff {
          *  distinguish them at a glance — each is just "this action is recharging". */
         TELEPORT_COOLDOWN,
         RANGED_COOLDOWN,
+        /** Recharging haste-cast ability (kobold general, etc.). Same dispatch
+         *  pattern as the other cooldown buffs — present means "can't cast yet". */
+        HASTE_COOLDOWN,
+        /** Recharging heal-cast ability (kobold general, etc.). */
+        HEAL_COOLDOWN,
         /** {@code EXPLORE_HIDE} mob is hunkered in cover; AI keeps it stationary while
          *  the buff is present. Applied when the mob reaches a tile no hostile can see
          *  it from. */

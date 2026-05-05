@@ -56,6 +56,12 @@ public class Effect {
     public int frame;
     /** Per-instance override of the type's default lifetime; 0 means use the type default. */
     public int frameCount;
+    /** Render frames to wait before this effect starts playing — see
+     *  {@link EffectStage#tick()}. Used to stagger attack flashes when several mobs
+     *  attack on the same tick so the slashes appear in sequence rather than all at
+     *  once. Counts down once per render frame; while {@code > 0} the effect is
+     *  parked at frame 0 and renderers skip drawing it. */
+    public int startDelay;
     public String text;
     public EffectTint tint;
     public Item thrownItem;
@@ -112,9 +118,19 @@ public class Effect {
     }
 
     public static Effect attackFlash(Point at, boolean isPlayer, boolean facesRight) {
+        return attackFlash(at, isPlayer, facesRight, 0);
+    }
+
+    /** Attack-flash with a render-frame start delay. {@code startDelay} parks the
+     *  effect at frame 0 for that many frames before it begins playing — used to
+     *  stagger flashes when multiple mobs attack on the same tick so the slashes
+     *  appear in sequence rather than overlapping. */
+    public static Effect attackFlash(Point at, boolean isPlayer, boolean facesRight,
+                                     int startDelay) {
         Effect e = new Effect(at, EffectType.ATTACK_FLASH);
         e.spriteCol = isPlayer ? 0 : 1;
         e.facesRight = facesRight;
+        e.startDelay = Math.max(0, startDelay);
         return e;
     }
 

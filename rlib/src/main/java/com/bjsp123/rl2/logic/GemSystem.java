@@ -70,7 +70,6 @@ public final class GemSystem {
         it.gemSpecies = species;
         it.gemSize = Math.max(1, size);
         it.name = ItemSystem.gemDisplayName(it);
-        it.glyph = "*";
         return it;
     }
 }

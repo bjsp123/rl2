@@ -1,0 +1,447 @@
+package com.bjsp123.rl2.logic;
+
+import com.bjsp123.rl2.model.MinMax;
+import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Point;
+import com.bjsp123.rl2.util.CsvTable;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * One row from {@code assets/data/mobs.csv} parsed into a typed POJO.
+ * Carries every field the legacy hand-written factory methods (spider, cat,
+ * koboldFighter, …) wrote onto a {@link Mob}, plus a few sprite-atlas columns
+ * read separately by the rgame-side {@code MobSprites} loader.
+ *
+ * <p>{@link #apply(Mob, Point)} mirrors the body of the legacy factory: it
+ * calls into {@link MobFactory}'s baseMob equivalent, then writes every
+ * non-default field onto the target Mob. Sprite columns are exposed as
+ * public fields for {@code MobSprites} to read; rlib code never touches them.
+ */
+public final class MobDefinition {
+
+    // ── Identity ────────────────────────────────────────────────────────────
+    public String type;            // CSV key, e.g. "CAT"
+    public String name;
+    public String description;
+    public Mob.Material material;  // FLESH, STONE, …
+    public Mob.Behavior behavior;  // MOB, HUNTER, EXPLORE_HIDE, …
+
+    // ── StatBlock fields ────────────────────────────────────────────────────
+    public int    maxHp;
+    public int    moveCost;
+    public int    attackCost;
+    public double healRate;
+    public int    accuracy = 10;   // StatBlock default
+    public int    evasion  = 5;
+    public MinMax damage      = MinMax.ZERO;
+    public MinMax armor       = MinMax.ZERO;
+    public MinMax apDamage    = MinMax.ZERO;
+    public MinMax magicResist = MinMax.ZERO;
+    public int    size = 4;
+    public double visionRadius;
+    public double wakeRadius;
+    public MinMax rangedDamage = MinMax.ZERO;
+    public int    rangedDistance;
+    public int    rangedCost;
+    public int    rangedRateOfFire;
+    public boolean flying;
+    public boolean fireImmune;
+    public boolean fireSpreadOnAttack;
+    public boolean poisonsOnAttack;
+    public boolean terrifying;
+    public boolean terrifiable = true;  // StatBlock default
+    public double  eatSpawnChance;
+    public double  mushroomEatSpawnChance;
+    public double  turnSpawnChance;
+    public int     teleportRate;
+    public int     fireExplosionRadiusOnDeath;
+
+    // ── Mob-side categorical fields ─────────────────────────────────────────
+    public String eatSpawnType;          // mob-type string ref or null
+    public String mushroomEatSpawnType;
+    public String turnSpawnType;
+    public Mob.DoorClosingBehavior doorClosing = Mob.DoorClosingBehavior.NEVER;
+    public Mob.StateOfMind         stateOfMind = Mob.StateOfMind.ASLEEP;
+
+    // ── AI sets + shorthand ─────────────────────────────────────────────────
+    public Set<String> attackTypes = new HashSet<>();
+    public Set<String> fleeTypes   = new HashSet<>();
+    /** Faction tag (arbitrary string). Mobs sharing a faction are allies; null
+     *  for lone-wolf species. */
+    public String faction;
+    /** Omnihostile shorthand. When set, the mob's {@link #attackTypes} is
+     *  populated with every known mob type EXCEPT this list and the mob
+     *  itself. */
+    public List<String> attackAllExcept = new ArrayList<>();
+
+    // ── Special-case flags (replace hardcoded mob-type checks) ──────────────
+    public String  kittenType;       // non-null => spawns kittens at level-pop time
+    public boolean banishable;
+
+    // ── Per-level scaling deltas (applied by MobProgression on each level up
+    //    or pre-roll). MinMax columns use the {@code MIN_MAX} cell format.
+    public int    hpPerLevel             = 2;
+    public int    accuracyPerLevel       = 1;
+    public int    evasionPerLevel        = 1;
+    public MinMax damagePerLevel         = new MinMax(1, 2);
+    public MinMax apPerLevel             = MinMax.ZERO;
+    public MinMax rangedDamagePerLevel   = MinMax.ZERO;
+    public int    rangedDistancePerLevel = 0;
+    public MinMax armorPerLevel          = new MinMax(0, 1);
+
+    // ── Abilities (single packed cell — only kobold general today) ──────────
+    public List<AbilityDef> abilities = new ArrayList<>();
+
+    // ── Initial buffs (e.g. horror's TELEPORT_COOLDOWN seed) ────────────────
+    public List<InitialBuff> initialBuffs = new ArrayList<>();
+
+    // ── Starting inventory + perks (player rows) ────────────────────────────
+    /** Items added to the bag at construction. Each entry is an
+     *  {@code <ItemType>} or {@code <ItemType>*<count>}. Items whose ItemType
+     *  has a non-null slot are auto-equipped. Empty for non-player rows. */
+    public List<StartItem> startingInventory = new ArrayList<>();
+    /** Perks the mob is born with. Each entry is a Perk enum name (level 1 each). */
+    public List<com.bjsp123.rl2.model.Perk> startingPerks = new ArrayList<>();
+
+    // ── Sprite columns (read by rgame-side MobSprites loader) ───────────────
+    public int     spriteCol;
+    public int     spriteRow;
+    public int     spriteW = 1;
+    public int     spriteH = 1;
+    public boolean spriteFacingPair;
+
+    // ────────────────────────────────────────────────────────────────────────
+
+    /** One support-ability spec. {@code applies} == null means a heal
+     *  ability ({@code healAmount} carries the heal); otherwise a buff
+     *  ability with {@code buffLevel} / {@code buffDuration}. */
+    public static final class AbilityDef {
+        public com.bjsp123.rl2.model.Buff.BuffType applies;
+        public int    buffLevel;
+        public int    buffDuration;
+        public int    healAmount;
+        public com.bjsp123.rl2.model.Buff.BuffType cooldownTracker;
+        public int    cooldownTurns;
+    }
+
+    /** One pre-applied buff to seed onto the mob at spawn time
+     *  (e.g. horror starts with TELEPORT_COOLDOWN duration 20 so its first
+     *  jump lands 20 turns after spawn). */
+    public static final class InitialBuff {
+        public com.bjsp123.rl2.model.Buff.BuffType type;
+        public int level;
+        public int duration;
+    }
+
+    /** One starter-inventory line: an {@link com.bjsp123.rl2.model.Item.ItemType}
+     *  and a stack count (defaults to 1). */
+    public static final class StartItem {
+        public com.bjsp123.rl2.model.Item.ItemType type;
+        public int count;
+        public StartItem(com.bjsp123.rl2.model.Item.ItemType t, int c) {
+            type = t; count = c;
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // PARSE: CSV → list of definitions
+    // ────────────────────────────────────────────────────────────────────────
+
+    public static List<MobDefinition> parseAll(String csv) {
+        CsvTable table = CsvTable.parse(csv);
+        List<MobDefinition> out = new ArrayList<>(table.rows.size());
+        for (Map<String, String> row : table.rows) {
+            out.add(parseRow(row));
+        }
+        return out;
+    }
+
+    private static MobDefinition parseRow(Map<String, String> row) {
+        // Defaults mirror {@link com.bjsp123.rl2.model.StatBlock} so an empty
+        // cell behaves exactly as if the legacy factory hadn't set the field.
+        MobDefinition d = new MobDefinition();
+        d.type        = CsvTable.str(row, "type", null);
+        d.name        = CsvTable.str(row, "name", null);
+        d.description = CsvTable.str(row, "description", null);
+        d.material    = CsvTable.enumCell(row, "material", Mob.Material.class, Mob.Material.FLESH);
+        d.behavior    = CsvTable.enumCell(row, "behavior", Mob.Behavior.class, Mob.Behavior.MOB);
+
+        d.maxHp       = CsvTable.intCell(row, "maxHp", 10);
+        d.moveCost    = CsvTable.intCell(row, "moveCost", 100);
+        d.attackCost  = CsvTable.intCell(row, "attackCost", 100);
+        d.healRate    = CsvTable.dblCell(row, "healRate", 0);
+
+        d.accuracy    = CsvTable.intCell(row, "accuracy", 10);
+        d.evasion     = CsvTable.intCell(row, "evasion", 5);
+        d.damage      = CsvTable.minMaxCell(row, "damage", MinMax.ZERO);
+        d.armor       = CsvTable.minMaxCell(row, "armor", MinMax.ZERO);
+        d.apDamage    = CsvTable.minMaxCell(row, "apDamage", MinMax.ZERO);
+        d.magicResist = CsvTable.minMaxCell(row, "magicResist", MinMax.ZERO);
+
+        d.size         = CsvTable.intCell(row, "size", 4);
+        d.visionRadius = CsvTable.dblCell(row, "visionRadius", 8);
+        d.wakeRadius   = CsvTable.dblCell(row, "wakeRadius", 6);
+
+        d.rangedDamage     = CsvTable.minMaxCell(row, "rangedDamage", MinMax.ZERO);
+        d.rangedDistance   = CsvTable.intCell(row, "rangedDistance", 0);
+        d.rangedCost       = CsvTable.intCell(row, "rangedCost", 0);
+        d.rangedRateOfFire = CsvTable.intCell(row, "rangedRateOfFire", 0);
+
+        d.flying              = CsvTable.boolCell(row, "flying", false);
+        d.fireImmune          = CsvTable.boolCell(row, "fireImmune", false);
+        d.fireSpreadOnAttack  = CsvTable.boolCell(row, "fireSpreadOnAttack", false);
+        d.poisonsOnAttack     = CsvTable.boolCell(row, "poisonsOnAttack", false);
+        d.terrifying          = CsvTable.boolCell(row, "terrifying", false);
+        d.terrifiable         = CsvTable.boolCell(row, "terrifiable", true);
+
+        d.eatSpawnChance         = CsvTable.dblCell(row, "eatSpawnChance", 0);
+        d.mushroomEatSpawnChance = CsvTable.dblCell(row, "mushroomEatSpawnChance", 0);
+        d.turnSpawnChance        = CsvTable.dblCell(row, "turnSpawnChance", 0);
+        d.teleportRate                 = CsvTable.intCell(row, "teleportRate", 0);
+        d.fireExplosionRadiusOnDeath   = CsvTable.intCell(row, "fireExplosionRadiusOnDeath", 0);
+
+        d.eatSpawnType         = CsvTable.str(row, "eatSpawnType", null);
+        d.mushroomEatSpawnType = CsvTable.str(row, "mushroomEatSpawnType", null);
+        d.turnSpawnType        = CsvTable.str(row, "turnSpawnType", null);
+        d.doorClosing = CsvTable.enumCell(row, "doorClosing",
+                Mob.DoorClosingBehavior.class, Mob.DoorClosingBehavior.NEVER);
+        d.stateOfMind = CsvTable.enumCell(row, "stateOfMind",
+                Mob.StateOfMind.class, Mob.StateOfMind.ASLEEP);
+
+        d.attackTypes.addAll(CsvTable.listCell(row, "attackTypes"));
+        d.fleeTypes  .addAll(CsvTable.listCell(row, "fleeTypes"));
+        d.faction         = CsvTable.str(row, "faction", null);
+        d.attackAllExcept = new ArrayList<>(CsvTable.listCell(row, "attackAllExcept"));
+
+        d.kittenType     = CsvTable.str(row, "kittenType", null);
+        d.banishable     = CsvTable.boolCell(row, "banishable", false);
+
+        d.hpPerLevel             = CsvTable.intCell(row, "hpPerLevel", 2);
+        d.accuracyPerLevel       = CsvTable.intCell(row, "accuracyPerLevel", 1);
+        d.evasionPerLevel        = CsvTable.intCell(row, "evasionPerLevel", 1);
+        d.damagePerLevel         = CsvTable.minMaxCell(row, "damagePerLevel", new MinMax(1, 2));
+        d.apPerLevel             = CsvTable.minMaxCell(row, "apPerLevel", MinMax.ZERO);
+        d.rangedDamagePerLevel   = CsvTable.minMaxCell(row, "rangedDamagePerLevel", MinMax.ZERO);
+        d.rangedDistancePerLevel = CsvTable.intCell(row, "rangedDistancePerLevel", 0);
+        d.armorPerLevel          = CsvTable.minMaxCell(row, "armorPerLevel", new MinMax(0, 1));
+
+        d.abilities = parseAbilities(CsvTable.str(row, "abilities", null));
+        d.initialBuffs = parseInitialBuffs(CsvTable.str(row, "initialBuffs", null));
+        d.startingInventory = parseStartingInventory(CsvTable.str(row, "startingInventory", null));
+        d.startingPerks = parseStartingPerks(CsvTable.str(row, "startingPerks", null));
+
+        d.spriteCol        = CsvTable.intCell(row, "spriteCol", 0);
+        d.spriteRow        = CsvTable.intCell(row, "spriteRow", 0);
+        d.spriteW          = CsvTable.intCell(row, "spriteW", 1);
+        d.spriteH          = CsvTable.intCell(row, "spriteH", 1);
+        d.spriteFacingPair = CsvTable.boolCell(row, "spriteFacingPair", false);
+
+        return d;
+    }
+
+    /** Parse the {@code abilities} cell.
+     *  Format: {@code buff:HASTED:2:8:HASTE_COOLDOWN:6 ; heal:15:HEAL_COOLDOWN:6}
+     *  — semicolon separates abilities, colon separates fields. */
+    private static List<AbilityDef> parseAbilities(String cell) {
+        List<AbilityDef> out = new ArrayList<>();
+        if (cell == null || cell.isEmpty()) return out;
+        for (String entry : cell.split(";")) {
+            String e = entry.trim();
+            if (e.isEmpty()) continue;
+            String[] parts = e.split(":");
+            for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
+            AbilityDef a = new AbilityDef();
+            String kind = parts[0];
+            if ("buff".equals(kind)) {
+                // buff:<BuffType>:<level>:<duration>:<cooldownBuff>:<cooldownTurns>
+                a.applies         = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[1]);
+                a.buffLevel       = Integer.parseInt(parts[2]);
+                a.buffDuration    = Integer.parseInt(parts[3]);
+                a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[4]);
+                a.cooldownTurns   = Integer.parseInt(parts[5]);
+            } else if ("heal".equals(kind)) {
+                // heal:<amount>:<cooldownBuff>:<cooldownTurns>
+                a.healAmount      = Integer.parseInt(parts[1]);
+                a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[2]);
+                a.cooldownTurns   = Integer.parseInt(parts[3]);
+            } else {
+                throw new IllegalArgumentException("unknown ability kind: " + kind);
+            }
+            out.add(a);
+        }
+        return out;
+    }
+
+    /** Parse the {@code startingInventory} cell. Format: pipe-separated
+     *  {@code <ItemType>} or {@code <ItemType>*<count>}. e.g.
+     *  {@code DAGGER | FIRE_BOMB*5 | OIL_BOMB*5}. */
+    private static List<StartItem> parseStartingInventory(String cell) {
+        List<StartItem> out = new ArrayList<>();
+        if (cell == null || cell.isEmpty()) return out;
+        for (String entry : cell.split("\\|")) {
+            String e = entry.trim();
+            if (e.isEmpty()) continue;
+            int star = e.indexOf('*');
+            String typeName;
+            int count;
+            if (star < 0) { typeName = e; count = 1; }
+            else {
+                typeName = e.substring(0, star).trim();
+                count = Integer.parseInt(e.substring(star + 1).trim());
+            }
+            com.bjsp123.rl2.model.Item.ItemType t =
+                    com.bjsp123.rl2.model.Item.ItemType.valueOf(typeName);
+            out.add(new StartItem(t, Math.max(1, count)));
+        }
+        return out;
+    }
+
+    /** Parse the {@code startingPerks} cell. Format: pipe-separated Perk enum
+     *  names. e.g. {@code KILLER | STEALTH}. */
+    private static List<com.bjsp123.rl2.model.Perk> parseStartingPerks(String cell) {
+        List<com.bjsp123.rl2.model.Perk> out = new ArrayList<>();
+        if (cell == null || cell.isEmpty()) return out;
+        for (String entry : cell.split("\\|")) {
+            String e = entry.trim();
+            if (e.isEmpty()) continue;
+            out.add(com.bjsp123.rl2.model.Perk.valueOf(e));
+        }
+        return out;
+    }
+
+    /** Parse the {@code initialBuffs} cell. Format:
+     *  {@code TELEPORT_COOLDOWN:1:20 ; ANOTHER_BUFF:2:5}. Each entry is
+     *  {@code buffType:level:duration}. */
+    private static List<InitialBuff> parseInitialBuffs(String cell) {
+        List<InitialBuff> out = new ArrayList<>();
+        if (cell == null || cell.isEmpty()) return out;
+        for (String entry : cell.split(";")) {
+            String e = entry.trim();
+            if (e.isEmpty()) continue;
+            String[] parts = e.split(":");
+            for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
+            InitialBuff b = new InitialBuff();
+            b.type     = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[0]);
+            b.level    = Integer.parseInt(parts[1]);
+            b.duration = Integer.parseInt(parts[2]);
+            out.add(b);
+        }
+        return out;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // APPLY: write fields onto a fresh Mob
+    // ────────────────────────────────────────────────────────────────────────
+
+    /** Stamp this definition's fields onto a fresh {@link Mob} positioned
+     *  at {@code pos}. Mirrors the body of the legacy factory methods. */
+    public void apply(Mob m, Point pos) {
+        m.mobType  = type;
+        m.position = pos;
+        m.material = material;
+        m.behavior = behavior;
+        m.name        = name;
+        m.description = description;
+        m.doorClosing = doorClosing;
+        m.stateOfMind = stateOfMind;
+
+        // Vital state seeded from the intrinsic max.
+        m.intrinsic.maxHp     = maxHp;
+        m.hp                  = maxHp;
+        m.intrinsic.moveCost  = moveCost;
+        m.intrinsic.attackCost = attackCost;
+        m.intrinsic.healRate  = healRate;
+
+        m.intrinsic.accuracy    = accuracy;
+        m.intrinsic.evasion     = evasion;
+        m.intrinsic.damage      = damage;
+        m.intrinsic.armor       = armor;
+        m.intrinsic.apDamage    = apDamage;
+        m.intrinsic.magicResist = magicResist;
+
+        m.intrinsic.size         = size;
+        m.intrinsic.visionRadius = visionRadius;
+        m.intrinsic.wakeRadius   = wakeRadius;
+
+        m.intrinsic.rangedDamage     = rangedDamage;
+        m.intrinsic.rangedDistance   = rangedDistance;
+        m.intrinsic.rangedCost       = rangedCost;
+        m.intrinsic.rangedRateOfFire = rangedRateOfFire;
+
+        m.intrinsic.flying             = flying;
+        m.intrinsic.fireImmune         = fireImmune;
+        m.intrinsic.fireSpreadOnAttack = fireSpreadOnAttack;
+        m.intrinsic.poisonsOnAttack    = poisonsOnAttack;
+        m.intrinsic.terrifying         = terrifying;
+        m.intrinsic.terrifiable        = terrifiable;
+
+        m.intrinsic.eatSpawnChance         = eatSpawnChance;
+        m.intrinsic.mushroomEatSpawnChance = mushroomEatSpawnChance;
+        m.intrinsic.turnSpawnChance        = turnSpawnChance;
+        m.intrinsic.teleportRate           = teleportRate;
+        m.intrinsic.fireExplosionRadiusOnDeath = fireExplosionRadiusOnDeath;
+
+        m.eatSpawnType         = eatSpawnType;
+        m.mushroomEatSpawnType = mushroomEatSpawnType;
+        m.turnSpawnType        = turnSpawnType;
+
+        m.kittenType     = kittenType;
+        m.banishable     = banishable;
+
+        m.hpPerLevel             = hpPerLevel;
+        m.accuracyPerLevel       = accuracyPerLevel;
+        m.evasionPerLevel        = evasionPerLevel;
+        m.damagePerLevel         = damagePerLevel;
+        m.apPerLevel             = apPerLevel;
+        m.rangedDamagePerLevel   = rangedDamagePerLevel;
+        m.rangedDistancePerLevel = rangedDistancePerLevel;
+        m.armorPerLevel          = armorPerLevel;
+
+        // AI sets — copy directly, then expand the attackAllExcept shorthand.
+        m.attackTypes.addAll(attackTypes);
+        m.fleeTypes  .addAll(fleeTypes);
+        m.faction    = faction;
+        if (!attackAllExcept.isEmpty()) {
+            Set<String> excluded = new HashSet<>(attackAllExcept);
+            if (m.mobType != null) excluded.add(m.mobType);
+            for (String t : MobRegistry.knownTypes()) {
+                if (!excluded.contains(t)) m.attackTypes.add(t);
+            }
+        }
+
+        // Abilities.
+        for (AbilityDef a : abilities) {
+            if (a.applies != null) {
+                m.abilities.add(Mob.MobAbility.buff(
+                        a.applies, a.buffLevel, a.buffDuration,
+                        a.cooldownTracker, a.cooldownTurns));
+            } else {
+                m.abilities.add(Mob.MobAbility.heal(
+                        a.healAmount, a.cooldownTracker, a.cooldownTurns));
+            }
+        }
+
+        // Pre-seeded buffs (horror's TELEPORT_COOLDOWN start).
+        for (InitialBuff b : initialBuffs) {
+            m.buffs.add(new com.bjsp123.rl2.model.Buff(b.type, b.level, b.duration, m));
+        }
+
+        // Starting inventory: build via ItemFactory, equip anything with a slot.
+        for (StartItem s : startingInventory) {
+            for (int i = 0; i < s.count; i++) {
+                com.bjsp123.rl2.model.Item it = ItemFactory.build(s.type);
+                m.inventory.bag.add(it);
+                if (it.slot != null) m.inventory.equip(it);
+            }
+        }
+        // Starting perks: each entry awarded at level 1.
+        for (com.bjsp123.rl2.model.Perk perk : startingPerks) {
+            m.perks.put(perk, 1);
+        }
+    }
+}

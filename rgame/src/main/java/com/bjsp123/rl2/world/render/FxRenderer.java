@@ -74,6 +74,9 @@ final class FxRenderer {
      * ignore FOV so the player can see their own projectiles crossing dark tiles.
      */
     void drawEffect(Level level, Effect effect) {
+        // Effects with a pending start delay are parked — EffectStage.tick is still
+        // counting down the delay; nothing should render yet.
+        if (effect.startDelay > 0) return;
         int ex = effect.location.tileX(), ey = effect.location.tileY();
         if (ex < 0 || ey < 0 || ex >= level.width || ey >= level.height) return;
         if (effect.type == EffectType.FLOATING_TEXT) {

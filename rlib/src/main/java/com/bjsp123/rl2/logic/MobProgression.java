@@ -5,8 +5,11 @@ import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 
 /**
- * Character progression — XP accumulation and level-ups. Tunables come from
- * {@link GameBalance}.
+ * Character progression — XP accumulation and level-ups. The XP cost schedule
+ * and global cap come from {@link GameBalance}; per-level stat deltas are
+ * carried per-mob on the {@link Mob} itself (set from
+ * {@code assets/data/mobs.csv}'s {@code *PerLevel} columns by
+ * {@link MobDefinition#apply}).
  *
  * <p><b>XP cost schedule.</b> Advancing from level {@code N} to {@code N+1} costs
  * {@code N × GameBalance.XP_PER_LEVEL_STEP} XP — 10/20/30/... by default. Cumulative XP
@@ -16,10 +19,11 @@ import com.bjsp123.rl2.model.Mob;
  * <p><b>Level-up effects</b> (applied once per level gained):
  * <ul>
  *   <li>+{@link GameBalance#PERK_POINTS_PER_LEVEL} perk point.</li>
- *   <li>+{@link GameBalance#ATTACK_PER_LEVEL}  attack  ({@link Mob#accuracy}).</li>
- *   <li>+{@link GameBalance#DEFENSE_PER_LEVEL} defense ({@link Mob#evasion}).</li>
- *   <li>+{@link GameBalance#HP_PER_LEVEL}      max HP (and current HP bumped by the same
- *       amount, so a full-HP character stays at full HP after the bonus).</li>
+ *   <li>+{@link Mob#accuracyPerLevel} accuracy.</li>
+ *   <li>+{@link Mob#evasionPerLevel} evasion.</li>
+ *   <li>+{@link Mob#hpPerLevel} max HP (and current HP bumped by the same amount).</li>
+ *   <li>+ damage / AP / ranged-damage / ranged-distance / armour ranges per the
+ *       matching {@code *PerLevel} fields (defaults: dmg 1-2, armour 0-1, others 0).</li>
  * </ul>
  *
  * <p><b>XP never resets</b>; it's a lifetime counter, so surplus rolls over toward the next
@@ -68,23 +72,16 @@ public final class MobProgression {
 
     /**
      * Spawn-time level setter for fresh mobs. Bumps {@code mob.characterLevel} from its
-     * current value (typically 1) up to {@code targetLevel}, applying the per-level
-     * {@link GameBalance#MOB_ACCURACY_INCREMENT} / {@link GameBalance#MOB_EVASION_INCREMENT}
-     * / {@link GameBalance#HP_PER_LEVEL} bumps cumulatively. No XP / history /
-     * level-up message — this is a quiet "born at level N" assignment.
-     *
-     * <p>Used by {@code LevelFactoryPopulate} to scale mobs to dungeon depth and by the
-     * wand-of-dog summon path to scale the summoned dog with the wand's level.
+     * current value (typically 1) up to {@code targetLevel}, applying the per-mob
+     * stat deltas cumulatively. No XP / history / level-up message — this is a quiet
+     * "born at level N" assignment.
      */
     public static void setSpawnLevel(Mob mob, int targetLevel) {
         if (mob == null) return;
         int target = Math.min(GameBalance.MAX_CHARACTER_LEVEL, Math.max(1, targetLevel));
         while (mob.characterLevel < target) {
             mob.characterLevel++;
-            mob.intrinsic.accuracy += GameBalance.MOB_ACCURACY_INCREMENT;
-            mob.intrinsic.evasion  += GameBalance.MOB_EVASION_INCREMENT;
-            mob.intrinsic.maxHp    += GameBalance.HP_PER_LEVEL;
-            mob.hp       += GameBalance.HP_PER_LEVEL;
+            applyPerLevelDeltas(mob);
         }
     }
 
@@ -95,16 +92,26 @@ public final class MobProgression {
         if (mob.characterLevel >= GameBalance.MAX_CHARACTER_LEVEL) return;
         mob.characterLevel++;
         mob.perkPoints += GameBalance.PERK_POINTS_PER_LEVEL;
-        mob.intrinsic.accuracy   += GameBalance.ATTACK_PER_LEVEL;
-        mob.intrinsic.evasion    += GameBalance.DEFENSE_PER_LEVEL;
-        // Max HP grows and current HP grows by the same amount, so a full-HP character
-        // stays at full HP right after the bump (rather than suddenly being below cap).
-        mob.intrinsic.maxHp += GameBalance.HP_PER_LEVEL;
-        mob.hp    += GameBalance.HP_PER_LEVEL;
+        applyPerLevelDeltas(mob);
 
         if (level != null && mob.history != null) {
             mob.history.add(HistoricalRecord.levelUp(
                     level.currentTurn, level.depth, mob.characterLevel));
         }
+    }
+
+    /** Add one tier's worth of {@code *PerLevel} deltas to the mob's intrinsic stats.
+     *  Current HP grows by the same amount as max HP, so a full-HP character stays at
+     *  full HP right after the bump. */
+    private static void applyPerLevelDeltas(Mob mob) {
+        mob.intrinsic.accuracy += mob.accuracyPerLevel;
+        mob.intrinsic.evasion  += mob.evasionPerLevel;
+        mob.intrinsic.maxHp    += mob.hpPerLevel;
+        mob.hp                 += mob.hpPerLevel;
+        mob.intrinsic.damage         = mob.intrinsic.damage      .plus(mob.damagePerLevel);
+        mob.intrinsic.apDamage       = mob.intrinsic.apDamage    .plus(mob.apPerLevel);
+        mob.intrinsic.rangedDamage   = mob.intrinsic.rangedDamage.plus(mob.rangedDamagePerLevel);
+        mob.intrinsic.rangedDistance += mob.rangedDistancePerLevel;
+        mob.intrinsic.armor          = mob.intrinsic.armor       .plus(mob.armorPerLevel);
     }
 }

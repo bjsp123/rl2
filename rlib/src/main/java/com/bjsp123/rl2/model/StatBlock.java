@@ -34,10 +34,10 @@ public final class StatBlock {
     public MinMax magicResist = MinMax.ZERO;
 
     // ── Vital + economy ─────────────────────────────────────────────────────
-    public double maxHp;
-    public double healRate;
+    public double maxHp = 10;
+    public double healRate = 0;   // HP per turn, applied at the end of the mob's turn after all actions resolve
     public int    attackCost = 100;
-    public int    moveCost;
+    public int    moveCost = 100;
 
     // ── Ranged attack ───────────────────────────────────────────────────────
     /** Damage range of a ranged shot. {@code rangedDamage.max() > 0} is the gate that
@@ -58,8 +58,8 @@ public final class StatBlock {
     public int rangedDistance;
 
     // ── Perception + lighting ───────────────────────────────────────────────
-    public double visionRadius;
-    public double wakeRadius;
+    public double visionRadius = 8;
+    public double wakeRadius = 6;
     /** Light emission. Composes by max — the brightest source wins (an amulet of light
      *  doesn't "stack" on top of a wand of true sight). */
     public double lightRadius;
@@ -68,39 +68,39 @@ public final class StatBlock {
     /** Body size, 1..10. Drives sight blocking, oil drip, swap rules. Composes by sum
      *  (a future "potion of growth" could plausibly add to it). Most species set this
      *  intrinsically; modifiers haven't shown up yet but the slot is here. */
-    public int size;
+    public int size = 4;
     /** Standard turns between teleport-to-player attempts. {@code 0} = no teleport.
      *  Composes by sum. */
-    public int teleportRate;
+    public int teleportRate = 0;
     /** Tile radius (Euclidean) of the fire-ball this mob releases on death. {@code 0}
      *  disables. Composes by sum. */
-    public int fireExplosionRadiusOnDeath;
+    public int fireExplosionRadiusOnDeath = 0;
     /** Probability of spawning a mob on any kill of a {@link Mob.Material#FLESH} victim.
      *  Composes by sum (with implicit clamp at 1.0 by callers). */
-    public double eatSpawnChance;
+    public double eatSpawnChance = 0;
     /** Probability of spawning a copy on stepping onto a mushroom tile. */
-    public double mushroomEatSpawnChance;
+    public double mushroomEatSpawnChance = 0;
     /** Probability per standard turn of spawning a {@link Mob#turnSpawnType} on a free
      *  adjacent tile. Used by ant hills (20% per turn). Composes by sum (callers clamp). */
-    public double turnSpawnChance;
+    public double turnSpawnChance = 0   ;
 
     // ── Boolean capabilities ────────────────────────────────────────────────
-    public boolean flying;
-    public boolean fireImmune;
+    public boolean flying =false;   
+    public boolean fireImmune = false;;
     /** When the mob takes a damaging blow, ignite a small area around it. OR-merged. */
-    public boolean fireSpreadOnAttack;
+    public boolean fireSpreadOnAttack = false;;
     /** When this mob lands a damaging blow, applies a {@code POISONED} buff to the
      *  target. Buff level = the mob's character level; duration = level × 3 turns.
      *  OR-merged so an item or buff that grants "poisoned weapon" composes with a
      *  species (e.g. spider) that already has it. */
-    public boolean poisonsOnAttack;
+    public boolean poisonsOnAttack = false;;
     /** "Especially frightening" — terrifiable observers always flee. OR-merged. */
-    public boolean terrifying;
+    public boolean terrifying = false;
     /** Susceptible to terrifying mobs. OR-merged so a "ring of fearlessness" can clear
      *  it (well, not quite — OR-merging a true clears nothing; if anyone needs to
      *  *suppress* terrifiable, that's a separate "fearlessness" boolean). Default true,
      *  factories clear it on terrifying mobs themselves. */
-    public boolean terrifiable;
+    public boolean terrifiable = true;
 
     public StatBlock() {}
 

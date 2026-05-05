@@ -22,8 +22,6 @@ public class Level {
         WALKWAY_LEVEL,
         /** Spawns many more vegetation patches than usual. */
         PLANTS,
-        /** Only 3-5 rooms on this level, but each is much larger than a normal room. */
-        BIGROOMS,
         /** Scales the level's tile dimensions up by 1.5×. The downstream builders are
          *  data-driven (BSP partitions to fit, Poisson scales with area, Loop's radius
          *  derives from {@code min(w,h)}) so room counts and corridor lengths grow with
@@ -86,7 +84,8 @@ public class Level {
      */
     public enum VisualTheme {
                 CRYSTAL,
-               CONCRETE
+               CONCRETE,
+               STRAIGHTFORWARD
     }
 
     public int width;

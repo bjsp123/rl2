@@ -33,7 +33,16 @@ public final class AnimQueue {
 
     /** Drain one render frame. Call once per render frame from PlayScreen. */
     public void tick() {
-        if (freezeFrames > 0) freezeFrames--;
+        tick(1);
+    }
+
+    /** Drain {@code n} frames at once. Used by PlayScreen to honour the "animation
+     *  speed" setting — when the {@link com.bjsp123.rl2.world.anim.Animator} is
+     *  advancing N animation frames per render frame, the freeze gate has to drain
+     *  at the same pace or the game-tick gate stays closed too long. */
+    public void tick(int n) {
+        if (n <= 0 || freezeFrames <= 0) return;
+        freezeFrames = Math.max(0, freezeFrames - n);
     }
 
     public int concurrent(int frames) {

@@ -95,35 +95,9 @@ public final class GameBalance {
     public static final int MAX_CHARACTER_LEVEL   = 32;
     /** XP cost to advance from level {@code N} to {@code N+1} = {@code N × XP_PER_LEVEL_STEP}. */
     public static final int XP_PER_LEVEL_STEP     = 10;
-    /** Stat bumps applied each time a character levels up. */
-    public static final int ATTACK_PER_LEVEL      = 1;
-    public static final int DEFENSE_PER_LEVEL     = 1;
-    public static final int HP_PER_LEVEL          = 2;
+    /** Perk points granted on each level-up. (Per-stat level deltas are now
+     *  per-mob — see the {@code *PerLevel} columns of {@code mobs.csv}.) */
     public static final int PERK_POINTS_PER_LEVEL = 1;
-
-    // ───────────────────────── Player shared costs ───────────────────────────
-    public static final int    PLAYER_MOVE_COST     = 100;
-    public static final int    PLAYER_ATTACK_COST   = 100;
-    public static final double PLAYER_VISION_RADIUS = 16.0;
-    public static final double PLAYER_HEAL_RATE     = 0.01;
-
-    // ───────────────────────── Warrior class ─────────────────────────────────
-    public static final int WARRIOR_START_HP    = 25;
-    public static final int WARRIOR_BASE_ATTACK = 12;
-    public static final int WARRIOR_BASE_DEFENSE = 5;
-    public static final int WARRIOR_BASE_DAMAGE = 2;
-
-    // ───────────────────────── Rogue class ───────────────────────────────────
-    public static final int ROGUE_START_HP    = 15;
-    public static final int ROGUE_BASE_ATTACK = 14;
-    public static final int ROGUE_BASE_DEFENSE = 10;
-    public static final int ROGUE_BASE_DAMAGE = 1;
-
-    // ───────────────────────── Mage class ────────────────────────────────────
-    public static final int MAGE_START_HP    = 12;
-    public static final int MAGE_BASE_ATTACK = 10;
-    public static final int MAGE_BASE_DEFENSE = 6;
-    public static final int MAGE_BASE_DAMAGE = 1;
 
     // ───────────────────────── Combat effects ────────────────────────────────
     /** Damage dealt by a magic missile hit. Legacy fallback for the staff's vanilla
@@ -163,13 +137,6 @@ public final class GameBalance {
     public static final int WEAPON_INCREMENT_MIN = 1;
     public static final int WEAPON_INCREMENT_MAX = 2;
 
-    /** Per-level accuracy / evasion bump for mobs (and the player) when their character
-     *  level rises. Aliases of {@link #ATTACK_PER_LEVEL} and {@link #DEFENSE_PER_LEVEL}
-     *  — kept for clarity in mob-spawn code that wants to read "what does each mob
-     *  level grant?" rather than the player-progression-flavoured names above. */
-    public static final int MOB_ACCURACY_INCREMENT = ATTACK_PER_LEVEL;
-    public static final int MOB_EVASION_INCREMENT  = DEFENSE_PER_LEVEL;
-
     /** Healing amount on a level-0 healing potion. Higher-level potions add
      *  {@link #HEAL_VALUE_INCREMENT} per level. */
     public static final int BASIC_HEAL_VALUE     = 20;
@@ -182,6 +149,41 @@ public final class GameBalance {
     /** Bomb base AOE (tiles affected at level 0) and per-level increment. */
     public static final int BOMB_EFFECT_TILES          = 5;
     public static final int BOMB_EFFECT_TILE_INCREMENT = 4;
+
+    // ───────────────────────── Level dimensions / density ───────────────────
+    /** Default base dimensions for every dungeon level. The {@code BIGLEVEL}
+     *  flag scales these by 1.5×; otherwise every level is exactly this size. */
+    public static final int LEVEL_BASE_W = 48;
+    public static final int LEVEL_BASE_H = 48;
+
+    /** Target number of rooms per level. Each {@code Layout} builder in
+     *  {@link LevelFactory} is parameterised by this so different layouts in
+     *  the same dungeon don't read as wildly different densities. */
+    public static final int LEVEL_TARGET_ROOMS    = 8;
+    /** ± tolerance around {@link #LEVEL_TARGET_ROOMS}. Builders that can produce
+     *  more rooms than the cap (greedy growth in PACKED, BSP partition leaf
+     *  variance) trim or stop at {@code LEVEL_TARGET_ROOMS + LEVEL_ROOM_TOLERANCE}. */
+    public static final int LEVEL_ROOM_TOLERANCE  = 2;
+
+    /** Inclusive size range, in tiles, for a single room's side length. Applies
+     *  uniformly to every layout's randomly-sized rooms. (VILLAGE buildings are
+     *  thematically smaller and intentionally use their own narrower range.) */
+    public static final int ROOM_MIN_SIZE = 4;
+    public static final int ROOM_MAX_SIZE = 10;
+
+    // ───────────────────────── Mob population caps ───────────────────────────
+    /** Hard cap on mobs alive on a level — magical / scripted spawn effects
+     *  (summon wands, kissyblob eat-spawn, mouse mushroom-eat-spawn) skip
+     *  their spawn when the level is at or above this. Initial level
+     *  population (LevelFactoryPopulate) is NOT subject to this cap. */
+    public static final int MAX_MOBS_ON_LEVEL = 30;
+
+    /** Per-species cap for spawner mobs (anthills today, future spawners by the
+     *  same {@code turnSpawnType} flag). A spawner skips its budding roll when
+     *  the level already holds this many of its {@code turnSpawnType}. Combined
+     *  with {@link #MAX_MOBS_ON_LEVEL} — both must pass before the bud is
+     *  created. */
+    public static final int MAX_MOBS_FROM_SPAWNER = 8;
 
     // ───────────────────────── Hunger / satiety ──────────────────────────────
     /** Starting satiety for a fresh mob. Counts down by one per passing tick. */

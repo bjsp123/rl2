@@ -129,7 +129,6 @@ public class Inventory {
         out.material = src.material;
         out.name = src.name;
         out.description = src.description;
-        out.glyph = src.glyph;
         out.damageMin = src.damageMin;
         out.damageMax = src.damageMax;
         out.armorMin = src.armorMin;

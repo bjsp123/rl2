@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.Item;
+import com.bjsp123.rl2.model.Item.ItemType;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Level.LevelFlag;
 import com.bjsp123.rl2.model.Mob;
@@ -12,7 +13,6 @@ import com.bjsp123.rl2.model.Level.Vegetation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.function.Function;
 
 /**
  * Stage-3 population pass: lays surfaces (water/blood pools), vegetation patches, items and
@@ -25,57 +25,54 @@ public final class LevelFactoryPopulate {
 
     private LevelFactoryPopulate() {}
 
-    private static final List<Function<Point, Item>> ITEM_POOL = List.of(
-            p -> ItemFactory.sword(),
-            p -> ItemFactory.dagger(),
-            p -> ItemFactory.shield(),
-            p -> ItemFactory.scaleMail(),
-            p -> ItemFactory.amuletOfLight(),
+    /** Item types eligible for random scatter on a fresh level. {@link ItemType#GEM}
+     *  is excluded — gems have their own placement path via {@link #placeGems}. */
+    private static final List<ItemType> ITEM_POOL = List.of(
+            ItemType.SWORD, ItemType.DAGGER, ItemType.SHIELD, ItemType.SCALE_MAIL,
+            ItemType.AMULET_OF_LIGHT,
             // Food
-            p -> ItemFactory.pear(),
-            p -> ItemFactory.fish(),
-            p -> ItemFactory.scrumptiousPear(),
-            p -> ItemFactory.silveryPear(),
-            p -> ItemFactory.conferencePear(),
+            ItemType.PEAR, ItemType.FISH, ItemType.PEAR_SCRUMPTIOUS,
+            ItemType.PEAR_SILVERY, ItemType.PEAR_CONFERENCE,
             // Bombs
-            p -> ItemFactory.fireBomb(),
-            p -> ItemFactory.oilBomb(),
-            p -> ItemFactory.blastBomb(),
-            p -> ItemFactory.freezeBomb(),
+            ItemType.FIRE_BOMB, ItemType.OIL_BOMB, ItemType.BLAST_BOMB, ItemType.FREEZE_BOMB,
             // Potions
-            p -> ItemFactory.healingPotion(),
-            p -> ItemFactory.potionOfSorcery(),
-            p -> ItemFactory.potionOfGhostliness(),
-            p -> ItemFactory.potionOfInvisibility(),
-            p -> ItemFactory.potionOfPoison()
+            ItemType.HEALING_POTION, ItemType.POTION_SORCERY, ItemType.POTION_GHOSTLINESS,
+            ItemType.POTION_INVISIBILITY, ItemType.POTION_POISON,
+            // Magical consumables
+            ItemType.POWER_ORB
     );
 
-    /** Hostile pool — everything that wants to attack the player. {@link #pickMob} ranks
-     *  these by {@link MobFight#powerScore} and weights the pick by closeness to a
-     *  depth-scaled target so deeper levels favour stronger species. */
-    private static final List<Function<Point, Mob>> HOSTILE_POOL = List.of(
-            MobFactory::spider,
-            MobFactory::loathesomeBug,
-            MobFactory::bat,
-            MobFactory::soldierBug,
-            MobFactory::bugProdigy,
-            MobFactory::koboldFighter,
-            MobFactory::maskImp,
-            MobFactory::largeMaskImp,
-            MobFactory::developedMaskImp,
-            MobFactory::ghost
+    /** Hostile pool — every mob-type string the depth-scaled mob roller draws from.
+     *  Mirrors the legacy method-reference pool; species names match the {@code type}
+     *  column of {@code assets/data/mobs.csv}. {@link #pickMob} weights these by
+     *  {@link MobFight#threatScore} closeness to a depth-scaled target so deeper
+     *  levels favour stronger species. */
+    private static final List<String> HOSTILE_POOL = List.of(
+            "SPIDER",
+            "LOATHESOME_BUG",
+            "RAT",
+            "BAT",
+            "SOLDIER_BUG",
+            "BUG_PRODIGY",
+            "KOBOLD_FIGHTER",
+            "KOBOLD_SPEARMAN",
+            "KOBOLD_CLEAVER",
+            "KOBOLD_GENERAL",
+            "MASK_IMP",
+            "LARGE_MASK_IMP",
+            "DEVELOPED_MASK_IMP",
+            "GHOST"
     );
 
     /** Non-hostile pool — critters that don't attack the player. Each {@link #pickMob}
      *  call has a flat {@link #NON_HOSTILE_FRACTION} chance to draw from this pool
-     *  regardless of dungeon depth, so a level-1 mouse and a level-5 cat are equally
-     *  likely. Kittens never appear here — they only spawn as litters via
-     *  {@link #placeKittens}. */
-    private static final List<Function<Point, Mob>> NON_HOSTILE_POOL = List.of(
-            MobFactory::mouse,
-            MobFactory::blazingFiremouse,
-            MobFactory::cat,
-            MobFactory::dog
+     *  regardless of dungeon depth. Kittens never appear here — they only spawn as
+     *  litters via {@link #placeKittens}. */
+    private static final List<String> NON_HOSTILE_POOL = List.of(
+            "MOUSE",
+            "BLAZING_FIREMOUSE",
+            "CAT",
+            "DOG"
     );
 
     /** Probability that {@link #pickMob} returns a non-hostile rather than a hostile.
@@ -93,28 +90,29 @@ public final class LevelFactoryPopulate {
             hostileThreatScores = new double[HOSTILE_POOL.size()];
             Point dummy = new Point(0, 0);
             for (int i = 0; i < HOSTILE_POOL.size(); i++) {
-                Mob sample = HOSTILE_POOL.get(i).apply(dummy);
-                hostileThreatScores[i] = MobFight.threatScore(sample);
+                Mob sample = MobFactory.spawn(HOSTILE_POOL.get(i), dummy);
+                hostileThreatScores[i] = sample == null ? 0.0 : MobFight.threatScore(sample);
             }
         }
         return hostileThreatScores[hostileIdx];
     }
 
     /**
-     * Pick a mob factory appropriate for {@code level}. Each call rolls
+     * Pick a mob-type string appropriate for {@code level}. Each call rolls
      * {@link #NON_HOSTILE_FRACTION} for non-hostile-vs-hostile; non-hostile draws are
      * uniform across {@link #NON_HOSTILE_POOL}; hostile draws are weighted by closeness
      * of the candidate's {@link MobFight#threatScore} to a depth-scaled target so deeper
-     * levels favour more dangerous species.
+     * levels favour more dangerous species. Caller invokes
+     * {@code MobFactory.spawn(picked, pos)} to materialize.
      *
      * <p>The depth-target ramp is {@code 4 * depth} — depth 1 targets threat ~4
      * (NEGLIGIBLE/MINOR), depth 5 targets ~20 (MODERATE+). The weight is
      * {@code 1 / (1 + ((score - target) / 5)²)} so candidates within ±5 of the target
      * dominate the roll, but every species retains a non-zero chance.
      */
-    public static Function<Point, Mob> pickMob(Level level, Random rng) {
+    public static String pickMob(Level level, Random rng) {
         if (NON_HOSTILE_POOL.isEmpty() && HOSTILE_POOL.isEmpty()) {
-            return MobFactory::mouse;
+            return "MOUSE";
         }
         boolean nonHostile = !NON_HOSTILE_POOL.isEmpty()
                 && (HOSTILE_POOL.isEmpty() || rng.nextDouble() < NON_HOSTILE_FRACTION);
@@ -242,7 +240,7 @@ public final class LevelFactoryPopulate {
     public static void placeItems(Level level, Random rng) {
         Point pearSpot = LevelFactoryUtils.randomInnerFloorTile(level, rng, INNER_TILE_SAMPLES);
         if (pearSpot != null) {
-            Item pear = ItemFactory.pear();
+            Item pear = ItemFactory.build(ItemType.PEAR);
             pear.location = pearSpot;
             // Food is always level 0 — leave alone.
             level.items.add(pear);
@@ -251,7 +249,7 @@ public final class LevelFactoryPopulate {
         for (int i = 0; i < count; i++) {
             Point p = LevelFactoryUtils.randomInnerFloorTile(level, rng, INNER_TILE_SAMPLES);
             if (p == null) return;
-            Item it = ITEM_POOL.get(rng.nextInt(ITEM_POOL.size())).apply(p);
+            Item it = ItemFactory.build(ITEM_POOL.get(rng.nextInt(ITEM_POOL.size())));
             it.location = p;
             assignItemLevel(it, level.depth, rng);
             level.items.add(it);
@@ -332,7 +330,7 @@ public final class LevelFactoryPopulate {
                 break; // no growth possible — keep what we have
             }
             for (Point p : taken) {
-                Item bomb = fire ? ItemFactory.fireBomb() : ItemFactory.oilBomb();
+                Item bomb = ItemFactory.build(fire ? ItemType.FIRE_BOMB : ItemType.OIL_BOMB);
                 bomb.location = p;
                 level.items.add(bomb);
             }
@@ -350,22 +348,23 @@ public final class LevelFactoryPopulate {
             Point p = LevelFactoryUtils.randomFloorTile(level, rng);
             if (p == null) return;
             if (mobAt(level, p.tileX(), p.tileY())) continue;
-            Mob m = pickMob(level, rng).apply(p);
+            Mob m = MobFactory.spawn(pickMob(level, rng), p);
+            if (m == null) continue;
             // Every dungeon-spawned mob starts at character-level 1 + depth so combat
             // stats scale alongside the player's progression.
             MobProgression.setSpawnLevel(m, spawnLevel);
             level.mobs.add(m);
         }
-        placeSpecialMob(level, rng, MobFactory::horror);
-        placeSpecialMob(level, rng, MobFactory::horribleMaskImp);
-        placeSpecialMob(level, rng, MobFactory::kissyblob);
-        placeSpecialMob(level, rng, MobFactory::blob);
-        placeSpecialMob(level, rng, MobFactory::barbarianPrincess);
+        placeSpecialMob(level, rng, "HORROR");
+        placeSpecialMob(level, rng, "HORRIBLE_MASK_IMP");
+        placeSpecialMob(level, rng, "KISSYBLOB");
+        placeSpecialMob(level, rng, "BLOB");
+        placeSpecialMob(level, rng, "BARBARIAN_PRINCESS");
         // Ant hills — independent rolls per colour, same 50%-per-special cadence as the
         // other set-pieces. The hill itself will start spitting out ants on a 20%/turn
         // roll once the level loads (see TurnSystem.tickStandardTurn).
-        placeSpecialMob(level, rng, MobFactory::blackAntHill);
-        placeSpecialMob(level, rng, MobFactory::redAntHill);
+        placeSpecialMob(level, rng, "BLACK_ANT_HILL");
+        placeSpecialMob(level, rng, "RED_ANT_HILL");
         placeKittens(level, rng);
     }
 
@@ -373,8 +372,8 @@ public final class LevelFactoryPopulate {
      * Per cat, roll a 1/3 chance of giving the cat a litter of 1–2 kittens. Successful
      * rolls drop the kittens onto random unoccupied floor tiles inside the cat's room
      * (BFS bounded by walls + doors so we don't cross into the next chamber); each
-     * kitten's {@link Mob#followTarget} is wired to the cat that triggered the spawn so
-     * its FOLLOWING-state AI shadows the right leader.
+     * kitten's {@link Mob#owner} is wired to the cat that triggered the spawn so its
+     * FOLLOWING-state AI shadows the right leader.
      *
      * <p>Kittens never spawn solo — the {@link #MOB_POOL} excludes them and the
      * {@link #placeSpecialMob} calls in {@link #placeMobs} don't reference them, so this
@@ -382,21 +381,25 @@ public final class LevelFactoryPopulate {
      * just an adult cat, no kittens, no fuss.
      */
     private static void placeKittens(Level level, Random rng) {
-        List<Mob> cats = new ArrayList<>();
+        // Iterate every mob whose CSV row carries a {@code kittenType} — today that's
+        // only the cat, but the loop is data-driven so any future "spawns young
+        // alongside itself" species drops in by adding a column value.
+        List<Mob> parents = new ArrayList<>();
         for (Mob m : level.mobs) {
-            if (m.mobType == com.bjsp123.rl2.model.Mob.MobType.CAT) cats.add(m);
+            if (m.kittenType != null) parents.add(m);
         }
-        for (Mob cat : cats) {
+        for (Mob parent : parents) {
             if (rng.nextDouble() >= 1.0 / 3.0) continue;   // most cats are childless
-            List<Point> roomFloors = sameRoomFloorTiles(level, cat.position);
+            List<Point> roomFloors = sameRoomFloorTiles(level, parent.position);
             if (roomFloors.isEmpty()) continue;
             int count = 1 + rng.nextInt(2);
             for (int i = 0; i < count; i++) {
                 // Re-roll a free tile each kitten to avoid collisions with siblings.
                 Point spot = pickFreeTile(level, roomFloors, rng);
                 if (spot == null) break;
-                Mob kitten = MobFactory.kitten(spot);
-                kitten.followTarget = cat;
+                Mob kitten = MobFactory.spawn(parent.kittenType, spot);
+                if (kitten == null) break;
+                kitten.owner = parent;
                 level.mobs.add(kitten);
             }
         }
@@ -444,15 +447,16 @@ public final class LevelFactoryPopulate {
         return null;
     }
 
-    /** 50%-chance per call: pick a random floor tile and spawn the result of
-     *  {@code factory}. Skipped if the chosen tile is already occupied — keeps the spawn
+    /** 50%-chance per call: pick a random floor tile and spawn a mob of
+     *  {@code mobType}. Skipped if the chosen tile is already occupied — keeps the spawn
      *  decision independent across species so two specials can both land. */
-    private static void placeSpecialMob(Level level, Random rng, Function<Point, Mob> factory) {
+    private static void placeSpecialMob(Level level, Random rng, String mobType) {
         if (rng.nextInt(2) != 0) return;
         Point p = LevelFactoryUtils.randomFloorTile(level, rng);
         if (p == null) return;
         if (mobAt(level, p.tileX(), p.tileY())) return;
-        Mob m = factory.apply(p);
+        Mob m = MobFactory.spawn(mobType, p);
+        if (m == null) return;
         MobProgression.setSpawnLevel(m, 1 + level.depth);
         level.mobs.add(m);
     }

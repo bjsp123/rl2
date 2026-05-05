@@ -24,10 +24,11 @@ import java.util.Map;
  */
 public final class PortraitSprites {
 
-    // Source columns per class on row 0 — mirrors MOB_CELL_* in DefaultLevelRenderer.
-    private static final int COL_ROGUE   = 2;
-    private static final int COL_MAGE    = 3;
-    private static final int COL_WARRIOR = 4;
+    // Source column per class on row 0 — mobs_simple.png ships a single shared
+    // player sprite at column 0, so all classes pull their head from there.
+    private static final int COL_ROGUE   = 0;
+    private static final int COL_MAGE    = 0;
+    private static final int COL_WARRIOR = 0;
 
     private static Map<CharacterClass, TextureRegion> regions;
 

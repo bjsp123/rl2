@@ -63,27 +63,11 @@ public class Mob {
         MAGIC_MISSILE
     }
 
-    /**
-     * Stable identity tag for every species in the game. Used as the membership key in
-     * {@link #attackTypes} / {@link #fleeTypes} / {@link #eatSpawnType} and for renderer
-     * dispatch — never for ad-hoc "is this a kissyblob?" branches; flag fields cover
-     * those.
-     */
-    public enum MobType {
-        PLAYER,
-        // Insects
-        SPIDER, LOATHESOME_BUG, BAT, SOLDIER_BUG, BUG_PRODIGY,
-        BLACK_ANT, RED_ANT, BLACK_ANT_HILL, RED_ANT_HILL,
-        // Critters
-        MOUSE, BLAZING_FIREMOUSE, DOG, CAT, KITTEN,
-        // Humanoids
-        KOBOLD_FIGHTER, BARBARIAN_PRINCESS,
-        // Blobs (terrifying, mutually peaceful)
-        BLOB, KISSYBLOB,
-        // Mask imps + horrors (terrifying lineage at the top)
-        MASK_IMP, LARGE_MASK_IMP, DEVELOPED_MASK_IMP, HORRIBLE_MASK_IMP,
-        GHOST, HORROR
-    }
+    /** Engine-level reserved identifier for the player. The only mob type
+     *  string we hardcode in code — every other species is referenced by
+     *  string literals or set membership, with the canonical roster living
+     *  in {@code assets/data/mobs.csv}. */
+    public static final String TYPE_PLAYER = "PLAYER";
 
     /** Physical substance of a mob (or item) — drives e.g. fire interactions and damage
      *  modifiers. Shared with {@link Item} since both have a material. */
@@ -124,17 +108,53 @@ public class Mob {
         /**
          * "Hunkered down" state used by {@link Behavior#EXPLORE_HIDE} mobs: they've just
          * reached a tile not visible to any hostile and are waiting a few turns before
-         * resuming exploration. {@link Mob#hidingTurnsLeft} counts down each tick.
+         * resuming exploration. 
          */
         HIDING,
         /**
-         * Companion state — the mob continually paths toward a designated leader mob
-         * ({@link Mob#followTarget}). Combat / flee resolution still pre-empts following
-         * (via the standard attitude lookup); FOLLOWING is the fallback target source
-         * when nothing else demands attention. Used by kittens (follow their cat) and
-         * tame mobs (follow the player).
+         * Companion state — the mob continually paths toward its {@link Mob#owner}.
+         * Combat / flee resolution still pre-empts following (via the standard
+         * attitude lookup); FOLLOWING is the fallback target source when nothing
+         * else demands attention. Used by kittens (owner = parent cat) and tame
+         * mobs (owner = player).
          */
         FOLLOWING
+    }
+
+    /**
+     * Short-term action label — what this mob has decided to do this turn. Lives
+     * one level below {@link StateOfMind}: while a mob is {@link StateOfMind#AWAKE}
+     * its intent flips between pursuing / shooting / chasing-last-known / wandering
+     * etc. depending on what the AI dispatcher picks each tick. Useful for the
+     * look panel ("kobold cleaver: chasing last seen") and as a memory hint —
+     * the {@link #CHASING_LAST_KNOWN} promotion needs the previous tick's intent
+     * to know it should keep walking toward a remembered tile rather than fall
+     * straight back to wander.
+     *
+     * <p>Set by {@code MobSystem}'s AI dispatchers at every return path; each
+     * tick overwrites the previous label. Persisted (non-transient) so save/load
+     * preserves the chase-vs-wander distinction.
+     */
+    public enum Intent {
+        /** No movement decided this turn — stationary. */
+        IDLE,
+        /** Pathing to a randomly chosen exploration tile. */
+        WANDERING,
+        /** Pathing to the live position of an enemy currently in sight. */
+        PURSUING,
+        /** Pathing to the last-seen tile of an enemy that has dropped out of
+         *  sight. Drops to {@link #WANDERING} on arrival; promotes back to
+         *  {@link #PURSUING} if the target reappears. */
+        CHASING_LAST_KNOWN,
+        /** Stationary ranged attack on a visible target. */
+        SHOOTING,
+        /** Pathing to a retreat tile to keep range from a too-close enemy. */
+        KITING,
+        /** Pathing away from a threat. Driven by {@link #fleeTypes} or the
+         *  {@link com.bjsp123.rl2.model.Buff.BuffType#FRIGHTENED} buff. */
+        FLEEING,
+        /** Pathing toward {@link #owner}. */
+        FOLLOWING_LEADER
     }
 
     /** Player class chosen at character creation. Drives starting kit and base stats. */
@@ -162,6 +182,57 @@ public class Mob {
         NEVER, ALWAYS, ONLY_IF_WAS_CLOSED
     }
 
+    /**
+     * One support-cast ability — a buff to apply on a friendly mob, or a one-shot
+     * heal. The kobold general carries two of these (haste + heal); the generic AI
+     * loop in {@code MobSystem.tryCastAbilities} iterates a mob's ability list each
+     * turn and casts the first one that's both off-cooldown and has a valid target.
+     *
+     * <p>For buff abilities ({@link #applies} non-null, {@link #healAmount} == 0):
+     * a target is "valid" iff it's a non-self ally within vision and does NOT
+     * already have {@code applies}. For heal abilities ({@link #applies} == null,
+     * {@link #healAmount} > 0): valid iff non-self ally within vision and below
+     * max HP. Cooldowns are tracked by applying a dedicated cooldown
+     * {@link Buff.BuffType} to the caster — same pattern as
+     * {@link Buff.BuffType#RANGED_COOLDOWN}.
+     */
+    public static final class MobAbility {
+        /** Buff to apply on the target. Null for heal abilities. */
+        public Buff.BuffType applies;
+        /** Buff level / strength of {@link #applies}. */
+        public int appliedLevel;
+        /** Buff duration (turns) of {@link #applies}. */
+        public int appliedDuration;
+        /** Amount of HP to restore. {@code > 0} marks this as a heal ability;
+         *  buff abilities use 0. */
+        public int healAmount;
+        /** Buff type used to track this ability's cooldown on the caster. */
+        public Buff.BuffType cooldownTracker;
+        /** Cooldown length in turns. */
+        public int cooldownTurns;
+
+        public MobAbility() {}
+
+        private MobAbility(Buff.BuffType applies, int level, int duration,
+                           int healAmount, Buff.BuffType cooldown, int cooldownTurns) {
+            this.applies         = applies;
+            this.appliedLevel    = level;
+            this.appliedDuration = duration;
+            this.healAmount      = healAmount;
+            this.cooldownTracker = cooldown;
+            this.cooldownTurns   = cooldownTurns;
+        }
+
+        public static MobAbility buff(Buff.BuffType applies, int level, int duration,
+                                      Buff.BuffType cooldown, int cooldownTurns) {
+            return new MobAbility(applies, level, duration, 0, cooldown, cooldownTurns);
+        }
+
+        public static MobAbility heal(int amount, Buff.BuffType cooldown, int cooldownTurns) {
+            return new MobAbility(null, 0, 0, amount, cooldown, cooldownTurns);
+        }
+    }
+
     // ════════════════════════════════════════════════════════════════════════
     // 1. STATS — what the mob is (mostly immutable per species)
     // ════════════════════════════════════════════════════════════════════════
@@ -170,10 +241,15 @@ public class Mob {
     /** Human-readable species name, e.g. "mouse", "cat", "Warrior". Used by the text log. */
     public String name;
     public String description;
-    public MobType mobType;
+    /** Species identifier — string key matching the {@code type} column of a
+     *  row in {@code assets/data/mobs.csv}. The only hardcoded value is
+     *  {@link #TYPE_PLAYER}; every other species lives in the data file. Used
+     *  as the key in {@link #attackTypes} / {@link #fleeTypes} and in
+     *  spawn-cross-reference fields. */
+    public String mobType;
     public Material material;
     // (was: size — moved to {@link #intrinsic}.)
-    /** Player-class for {@link MobType#PLAYER}; null for everything else. Drives
+    /** Player-class for the player; null for everything else. Drives
      *  player-only renderer + starting-kit branches. */
     public CharacterClass characterClass;
 
@@ -198,14 +274,24 @@ public class Mob {
     public Behavior behavior;
     /** Mob types this one wants to attack. Populated from species defaults at spawn and
      *  mutated by combat memory at runtime — once two mobs have fought, both add each
-     *  other's {@link MobType} here. Omnihostile mobs (blob/kissyblob/horror) seed this
-     *  with every {@link MobType} except their allies via
-     *  {@code MobFactory.addAttackAllExcept}. */
-    public java.util.Set<MobType> attackTypes = new java.util.HashSet<>();
+     *  other's mob-type string here. Omnihostile mobs (blob/kissyblob/horror) seed this
+     *  with every species except their allies via the {@code attackAllExcept} CSV
+     *  shorthand. Strings, not enums — the canonical roster lives in
+     *  {@code assets/data/mobs.csv}. */
+    public java.util.Set<String> attackTypes = new java.util.HashSet<>();
     /** Mob types this one wants to flee. Flee targets take priority over attack targets
      *  in AI target selection. Combat memory removes a type from this set once a fight
      *  breaks out — "if A and B have fought before, the answer is always ATTACK." */
-    public java.util.Set<MobType> fleeTypes = new java.util.HashSet<>();
+    public java.util.Set<String> fleeTypes = new java.util.HashSet<>();
+    /** Faction tag (arbitrary string). Two mobs with the same non-null {@code faction}
+     *  are allies — wins over {@link #attackTypes} / {@link #fleeTypes} at attitude
+     *  resolution time, and drives ally-defense transitivity (this mob attacks anyone
+     *  hostile to anything sharing its faction). Null for lone-wolf species. */
+    public String faction;
+    /** Support-cast abilities (haste/heal/etc.) tried each turn before the mob's
+     *  normal AI dispatch. See {@link MobAbility} and
+     *  {@code MobSystem.tryCastAbilities}. Empty for ordinary mobs. */
+    public java.util.List<MobAbility> abilities = new java.util.ArrayList<>();
 
     // ── Inventory ───────────────────────────────────────────────────────────
     public Inventory inventory = new Inventory();
@@ -251,17 +337,28 @@ public class Mob {
     //  {@link #intrinsic}.)
 
     /** What species to spawn when {@link com.bjsp123.rl2.model.StatBlock#eatSpawnChance}
-     *  fires. Null disables. Categorical mob-type ref, not a stat. */
-    public MobType eatSpawnType;
+     *  fires. Null disables. Mob-type string ref, not a stat. */
+    public String eatSpawnType;
 
     /** What species to spawn from {@link com.bjsp123.rl2.model.StatBlock#mushroomEatSpawnChance}.
-     *  Categorical mob-type ref, not a stat. */
-    public MobType mushroomEatSpawnType;
+     *  Mob-type string ref, not a stat. */
+    public String mushroomEatSpawnType;
 
     /** What species to spawn each standard turn when
      *  {@link com.bjsp123.rl2.model.StatBlock#turnSpawnChance} fires. Used by ant hills.
-     *  Categorical mob-type ref, not a stat. */
-    public MobType turnSpawnType;
+     *  Mob-type string ref, not a stat. */
+    public String turnSpawnType;
+
+    // ── CSV-driven species flags ────────────────────────────────────────────
+    /** Mob-type string of the kitten this species spawns alongside itself at
+     *  level-population time. Non-null on the cat row only today; the level
+     *  populator iterates mobs whose {@code kittenType != null} instead of
+     *  hardcoding {@code mobType.equals("CAT")}. */
+    public String kittenType;
+    /** When {@code true}, this mob can be one-shot by the wand-of-banishment.
+     *  Set on the ghost row. Replaces the legacy {@code mobType == GHOST}
+     *  check in the wand path. */
+    public boolean banishable;
 
     // ════════════════════════════════════════════════════════════════════════
     // 3. WORLD-INTERACTION MODES — universal but not really "stats"
@@ -287,6 +384,10 @@ public class Mob {
      *  into their wakeRadius. Factories override (e.g. princess starts AWAKE, kitten
      *  starts FOLLOWING) when a different starting state is needed. */
     public StateOfMind stateOfMind = StateOfMind.ASLEEP;
+    /** Per-turn micro-decision label. See {@link Intent}. Set by the AI dispatchers
+     *  on every tick; default {@link Intent#IDLE} for spawn / ASLEEP / freshly-loaded
+     *  mobs. */
+    public Intent intent = Intent.IDLE;
 
     // ── Status effects ──────────────────────────────────────────────────────
     /** Active buffs and debuffs. Managed exclusively by
@@ -294,7 +395,7 @@ public class Mob {
      *  this list directly. Each {@link Buff} carries its type, level, duration, and the
      *  mob that applied it (for attribution / death messages). */
     public java.util.List<Buff> buffs = new java.util.ArrayList<>();
-    /** The specific mob this one is loyal to ({@code null} = wild). A tame mob:
+    /** The specific mob this one is loyal to ({@code null} = wild). An owned mob:
      *  <ul>
      *    <li>Follows the owner — paths toward them whenever no combat/flee target is
      *        closer (see {@link com.bjsp123.rl2.logic.MobSystem}'s leader-follow path).</li>
@@ -303,10 +404,16 @@ public class Mob {
      *        treated as ATTACK by this mob too. Implemented dynamically in
      *        {@link com.bjsp123.rl2.logic.MobSystem#getAttitudeToMob}, so the loyalty
      *        tracks combat memory live without needing a parallel sync.</li>
+     *    <li>Counts as ALLY both ways with the owner, and ALLY with any other mob
+     *        that shares the same owner (so litter-mates don't fight each other).</li>
      *  </ul>
-     *  Transient — owner references aren't persisted (re-link on load via a future
+     *  Two distinct use cases share the field: tame mobs (player as owner — wand-of-
+     *  dog summons, future taming) and kittens (their parent cat as owner, wired up
+     *  by {@code LevelFactoryPopulate.placeKittens}).
+     *
+     *  <p>Transient — owner references aren't persisted (re-link on load via a future
      *  rebind hook; players who load mid-run lose their pets, which is acceptable for
-     *  now). Wand-of-dog sets the player as the new dog's owner. */
+     *  now). */
     public transient Mob owner;
 
     // ── Turn scheduling + counters ──────────────────────────────────────────
@@ -326,6 +433,18 @@ public class Mob {
     public int characterLevel = 1;
     /** Unspent perk points awarded on level-up. */
     public int perkPoints;
+
+    // ── Per-level scaling deltas (set by MobDefinition.apply from mobs.csv) ─
+    // Applied by MobProgression once per character level — both at spawn time
+    // (depth-based pre-roll) and on XP-driven level-up.
+    public int    hpPerLevel             = 2;
+    public int    accuracyPerLevel       = 1;
+    public int    evasionPerLevel        = 1;
+    public MinMax damagePerLevel         = new MinMax(1, 2);
+    public MinMax apPerLevel             = MinMax.ZERO;
+    public MinMax rangedDamagePerLevel   = MinMax.ZERO;
+    public int    rangedDistancePerLevel = 0;
+    public MinMax armorPerLevel          = new MinMax(0, 1);
     /** Player's perk levels — perk → level (≥1 = taken). Absence means perk not taken.
      *  Each entry consumed one perk point at acquisition. */
     public java.util.EnumMap<Perk, Integer> perks = new java.util.EnumMap<>(Perk.class);
@@ -334,12 +453,6 @@ public class Mob {
     public java.util.List<HistoricalRecord> history = new java.util.ArrayList<>();
 
     // ── Transient runtime — not part of the save format ─────────────────────
-    // (was: starvationTicks, teleportTurnsLeft, rangedTurnsTillShot, hidingTurnsLeft —
-    //  all moved to {@link #cooldowns}.)
-    /** Specific leader mob for the {@link StateOfMind#FOLLOWING} state (e.g. a kitten's
-     *  cat). Tame mobs leave this null and follow the player by behaviour alone. Cleared
-     *  + state stepped to AWAKE if the leader dies or leaves the level. */
-    public transient Mob followTarget;
     /** True iff the door tile the mob currently stands on was {@link Tile#DOOR} (closed)
      *  at the moment of entry. Read by {@link DoorClosingBehavior#ONLY_IF_WAS_CLOSED}
      *  mobs on the way out so they restore the door's prior state. */

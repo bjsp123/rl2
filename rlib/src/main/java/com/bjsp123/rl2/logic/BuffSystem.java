@@ -354,9 +354,12 @@ public final class BuffSystem {
             case ESP          -> "ESP";
             case CHILLED      -> "Chilled";
             case OILY         -> "Oily";
+            case WET          -> "Wet";
             case STARVING     -> "Starving";
             case TELEPORT_COOLDOWN -> "Recharging";
             case RANGED_COOLDOWN   -> "Recharging";
+            case HASTE_COOLDOWN    -> "Recharging";
+            case HEAL_COOLDOWN     -> "Recharging";
             case HIDING            -> "Hiding";
             case KILLER            -> "Killer";
         };
@@ -379,9 +382,12 @@ public final class BuffSystem {
             case ESP -> "Can see mobs through walls, but not their HP bars or names.";
             case CHILLED -> "Acting slower than normal.";
             case OILY -> "Takes extra damage from fire.";
+            case WET -> "Takes extra damage from lightning.";
             case STARVING -> "Needs to eat soon or start taking damage.";
             case TELEPORT_COOLDOWN -> "Can't teleport again until this wears off.";
             case RANGED_COOLDOWN   -> "Can't use ranged attacks until this wears off.";
+            case HASTE_COOLDOWN    -> "Can't cast haste again until this wears off.";
+            case HEAL_COOLDOWN     -> "Can't cast heal again until this wears off.";
             case HIDING            -> "Hidden from enemies. Moving or attacking will cancel this.";
             case KILLER            -> "Striking with deadly precision.";
         };

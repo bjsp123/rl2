@@ -44,8 +44,6 @@ import com.bjsp123.rl2.world.anim.Animator;
 
 public class PlayScreen implements Screen {
 
-    private static final int   LEVEL_W       = 48;
-    private static final int   LEVEL_H       = 48;
     private static final float DEFAULT_ZOOM  = 0.35f;
 
     private final Rl2Game game;
@@ -109,13 +107,19 @@ public class PlayScreen implements Screen {
             initialize();
             initialized = true;
         }
-        // uiStage goes first so HUD buttons stay reachable even while Look or Targeting is
-        // active — the stage returns false for clicks that don't land on a widget, letting
-        // them fall through to the world cursors. This is what lets a re-tap of the same
-        // action-slot button confirm an open targeting session, or a tap on a different
-        // action swap the target picker to that new action.
+        // cameraController goes FIRST so mouse-wheel zoom and pinch-zoom are always
+        // available regardless of UI focus state — opening the inventory or the
+        // encyclopaedia must not lock the camera at the current zoom level. Wheel
+        // events return true (consumed); touchDown / touchDragged return false so
+        // they continue to uiStage and the action handlers below.
+        // uiStage goes second so HUD buttons stay reachable even while Look or
+        // Targeting is active — the stage returns false for clicks that don't land
+        // on a widget, letting them fall through to the world cursors. This is what
+        // lets a re-tap of the same action-slot button confirm an open targeting
+        // session, or a tap on a different action swap the target picker to that
+        // new action.
         Gdx.input.setInputProcessor(new InputMultiplexer(
-                uiStage, targetingOverlay, lookMode, gameInput, cameraController));
+                cameraController, uiStage, targetingOverlay, lookMode, gameInput));
         game.currentPlay = this;
     }
 
@@ -134,7 +138,9 @@ public class PlayScreen implements Screen {
             // builder generates the levels, places extra stairs on the branching boundary
             // levels, and wires every level's stairs(Up|Down)(Alt)Target so the runtime
             // topology is fully encoded in per-level data.
-            Level[] levels = WorldTopology.buildDiamond(LEVEL_W, LEVEL_H);
+            Level[] levels = WorldTopology.buildDiamond(
+                    com.bjsp123.rl2.logic.GameBalance.LEVEL_BASE_W,
+                    com.bjsp123.rl2.logic.GameBalance.LEVEL_BASE_H);
             world = new World(levels);
             Point spawn = levels[0].spawnPoint != null ? levels[0].spawnPoint : new Point(2, 2);
             Mob player  = MobFactory.player(spawn, charClass);
@@ -321,7 +327,9 @@ public class PlayScreen implements Screen {
         // Drain one frame off the animation gate BEFORE the tick check. This lets a
         // step that finishes "this frame" hand off to the next step in the same render
         // frame instead of leaving a one-frame stationary gap that reads as jerky.
-        animator.queue.tick();
+        // The drain count matches the Animator's frames-per-render multiplier so the
+        // freeze gate clears at the user-selected animation speed.
+        animator.queue.tick(com.bjsp123.rl2.ui.skin.AnimationSpeed.framesPerRender());
         // Single gate: any visible game-action animation in progress (step interpolation,
         // attack lunge / flinch, projectile in flight, death flicker / fade) bumps
         // animator.queue.freezeFrames; we wait for it to drain before letting another tick

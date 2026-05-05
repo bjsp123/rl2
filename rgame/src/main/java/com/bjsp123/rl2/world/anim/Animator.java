@@ -57,44 +57,54 @@ public final class Animator {
 
     /** Per-render-frame: advance per-mob anims, ghosts, the freeze queue, the effect
      *  stage, fire-pending-impact callbacks for completing projectiles, and the
-     *  real-time-driven teleport-fade / burning / asleep particle cadences. */
+     *  real-time-driven teleport-fade / burning / asleep particle cadences.
+     *
+     *  <p>The frame-counter section runs {@code framesPerRender()} times per render
+     *  frame so the user-facing "animation speed" setting (1×, 2×, 4×) shortens every
+     *  authored animation duration uniformly. The real-time {@code dtMs} drain is
+     *  pre-multiplied by the same factor so fire-particle / sleep-Z / teleport-fade
+     *  cadences keep pace with the frame-counter speedup. */
     public void tick(Level level, int dtMs) {
         // queue.tick() is driven by PlayScreen at the top of render(), BEFORE the
         // game-tick gate check, so a step that ends "this frame" can immediately
         // chain into the next one without leaving a stationary gap.
-        for (MobAnimState s : states.values()) {
-            if (s.delayFrames > 0) { s.delayFrames--; continue; }
-            if (s.stepTotal > 0) {
-                s.stepFrame++;
-                if (s.stepFrame >= s.stepTotal) {
-                    s.stepFrame = 0;
-                    s.stepTotal = 0;
-                    s.stepFromDx = 0f;
-                    s.stepFromDy = 0f;
+        int n = framesPerRender();
+        for (int step = 0; step < n; step++) {
+            for (MobAnimState s : states.values()) {
+                if (s.delayFrames > 0) { s.delayFrames--; continue; }
+                if (s.stepTotal > 0) {
+                    s.stepFrame++;
+                    if (s.stepFrame >= s.stepTotal) {
+                        s.stepFrame = 0;
+                        s.stepTotal = 0;
+                        s.stepFromDx = 0f;
+                        s.stepFromDy = 0f;
+                    }
+                }
+                if (s.animEndFrame > 0) {
+                    s.animFrame++;
+                    if (s.animFrame >= s.animEndFrame) {
+                        s.animFrame = 0;
+                        s.animEndFrame = 0;
+                        s.animPeakFrame = 0;
+                        s.animPeakX = 0f;
+                        s.animPeakY = 0f;
+                    }
                 }
             }
-            if (s.animEndFrame > 0) {
-                s.animFrame++;
-                if (s.animFrame >= s.animEndFrame) {
-                    s.animFrame = 0;
-                    s.animEndFrame = 0;
-                    s.animPeakFrame = 0;
-                    s.animPeakX = 0f;
-                    s.animPeakY = 0f;
-                }
-            }
+            ghosts.removeIf(g -> { g.frame++; return g.done(); });
+            // Fire pending impacts at the moment their carrier effect's NEXT advance would
+            // remove it — mirrors PlayScreen.resolveCompletingMissiles' "frame + 1 ==
+            // totalFrames" check. The impact runs before the effect itself ticks so the
+            // hit lines up with the last visible frame.
+            firePendingImpacts();
+            stage.tick();
         }
-        ghosts.removeIf(g -> { g.frame++; return g.done(); });
-        // Fire pending impacts at the moment their carrier effect's NEXT advance would
-        // remove it — mirrors PlayScreen.resolveCompletingMissiles' "frame + 1 ==
-        // totalFrames" check. The impact runs before the effect itself ticks so the
-        // hit lines up with the last visible frame.
-        firePendingImpacts();
-        stage.tick();
-        if (level != null && dtMs > 0) {
-            tickTeleportFades(level, dtMs);
-            tickBurningParticles(level, dtMs);
-            tickSleepZs(level, dtMs);
+        int scaledDtMs = dtMs * n;
+        if (level != null && scaledDtMs > 0) {
+            tickTeleportFades(level, scaledDtMs);
+            tickBurningParticles(level, scaledDtMs);
+            tickSleepZs(level, scaledDtMs);
         }
         // Project the freeze gate against any in-flight visible projectile (until rlib
         // spawns ALL effects via events with their own freeze contribution).
@@ -117,9 +127,9 @@ public final class Animator {
     public void consume(Level level) {
         if (level.events == null || level.events.isEmpty()) return;
         for (GameEvent ev : level.events) {
-            if      (ev instanceof GameEvent.MobMoved m)              onMobMoved(m);
+            if      (ev instanceof GameEvent.MobMoved m)              onMobMoved(level, m);
             else if (ev instanceof GameEvent.MobMeleeAttacked m)      onMobMeleeAttacked(level, m);
-            else if (ev instanceof GameEvent.MobHitFlinched m)        onMobHitFlinched(m);
+            else if (ev instanceof GameEvent.MobHitFlinched m)        onMobHitFlinched(level, m);
             else if (ev instanceof GameEvent.MobKilled m)             onMobKilled(m);
             else if (ev instanceof GameEvent.MobTeleported m)         onMobTeleported(m);
             else if (ev instanceof GameEvent.MagicMissileFired m)     onMagicMissileFired(level, m);
@@ -149,7 +159,14 @@ public final class Animator {
 
     // ── Event handlers ─────────────────────────────────────────────────────────────
 
-    private void onMobMoved(GameEvent.MobMoved m) {
+    private void onMobMoved(Level level, GameEvent.MobMoved m) {
+        // Skip step animation for off-screen mobs entirely. Without this gate every
+        // ant stepping in an unseen ant hill bumps freezeFrames and stalls the
+        // player's autotravel for a few frames — autotravel becomes jerky in direct
+        // proportion to how busy the rest of the level is. Mobs that aren't visible
+        // when they move just snap to their new position the next time the player
+        // can see them, which is standard roguelike behaviour.
+        if (!MobSystem.isVisibleToPlayer(level, m.mob())) return;
         MobAnimState s = stateOf(m.mob());
         int frames = stepFramesFor(m.mob());
         s.stepFromDx = (float) (m.fromX() - m.toX());
@@ -176,9 +193,14 @@ public final class Animator {
                     LUNGE_OUT_FRAMES, LUNGE_OUT_FRAMES + LUNGE_BACK_FRAMES,
                     /*concurrent=*/false);
         }
-        // Attack-flash sprite next to the attacker.
+        // Attack-flash sprite next to the attacker. If multiple mobs attack in the
+        // same tick, each one's lunge is queued sequentially (different start delays
+        // on the AnimQueue), and we use the same start delay for the slash so the
+        // flashes appear in sequence with their lunges instead of overlapping.
         boolean isPlayer = attacker.behavior == Mob.Behavior.PLAYER;
-        stage.add(Effect.attackFlash(attacker.position, isPlayer, attacker.facingEast));
+        int flashDelay = (n > 0f) ? stateOf(attacker).delayFrames : 0;
+        stage.add(Effect.attackFlash(attacker.position, isPlayer,
+                attacker.facingEast, flashDelay));
         // Per-hit visuals (burst on hit, "miss" feedback on miss). The DamageDealt event
         // (emitted later in the tick from processAttack) drives the floating "−N" /
         // "miss" / "blunt" text, so we only handle the bursts here.
@@ -189,10 +211,16 @@ public final class Animator {
         }
     }
 
-    private void onMobHitFlinched(GameEvent.MobHitFlinched m) {
+    private void onMobHitFlinched(Level level, GameEvent.MobHitFlinched m) {
         Mob target = m.victim(), src = m.hitSource();
         if (target == null || src == null
                 || target.position == null || src.position == null) return;
+        // Same off-screen gate as onMobMoved — flinch animation queues a sequential
+        // freeze frame, so flinches happening in unseen rooms would stall the
+        // player's autotravel for FLINCH_OUT_FRAMES + FLINCH_BACK_FRAMES per hit.
+        boolean visible = MobSystem.isVisibleToPlayer(level, target)
+                || MobSystem.isVisibleToPlayer(level, src);
+        if (!visible) return;
         float dx = target.position.tileX() - src.position.tileX();
         float dy = target.position.tileY() - src.position.tileY();
         float n  = (float) Math.hypot(dx, dy);
@@ -303,7 +331,7 @@ public final class Animator {
             case GRASS     -> Effect.EffectTint.GREEN;
             case FUNGUS    -> Effect.EffectTint.RED;
             case FIRE      -> Effect.EffectTint.RED;
-            case DOG_SPAWN -> Effect.EffectTint.YELLOW;
+            case LIGHTNING -> Effect.EffectTint.YELLOW;
             case DETONATION,
                  BANISHMENT -> Effect.EffectTint.WHITE;
         };
@@ -535,4 +563,16 @@ public final class Animator {
      *  layer at startup. {@code null} means fall back to text. */
     private static java.util.function.BooleanSupplier iconPrefSupplier;
     public static void setIconPreferenceSupplier(java.util.function.BooleanSupplier s) { iconPrefSupplier = s; }
+
+    /** Renderer-side preference: animation-speed multiplier (frames advanced per
+     *  render frame). Wired by the rgame layer at startup. {@code null} means
+     *  default to 1 (animations play at their authored frame counts). */
+    private static java.util.function.IntSupplier animationSpeedSupplier;
+    public static void setAnimationSpeedSupplier(java.util.function.IntSupplier s) { animationSpeedSupplier = s; }
+
+    private static int framesPerRender() {
+        if (animationSpeedSupplier == null) return 1;
+        int n = animationSpeedSupplier.getAsInt();
+        return n > 0 ? n : 1;
+    }
 }

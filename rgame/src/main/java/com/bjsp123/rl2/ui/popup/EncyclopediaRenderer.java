@@ -25,7 +25,6 @@ import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.ItemType;
 import com.bjsp123.rl2.model.Level.VisualTheme;
 import com.bjsp123.rl2.model.Mob;
-import com.bjsp123.rl2.model.Mob.MobType;
 import com.bjsp123.rl2.model.Perk;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
@@ -171,7 +170,8 @@ public class EncyclopediaRenderer extends Group {
         frame.add(closeBtn).padTop(6);
 
         framed = new Container<>(frame);
-        framed.setBackground(skin.getDrawable("panel"));
+        framed.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
+                .windowBackgroundOr(skin.getDrawable("panel")));
         framed.fill();
         framed.pack();
         addActor(framed);
@@ -374,24 +374,8 @@ public class EncyclopediaRenderer extends Group {
 
     private List<Entry> buildItemEntries() {
         List<Entry> out = new ArrayList<>();
-        for (Supplier<Item> f : List.<Supplier<Item>>of(
-                ItemFactory::sword, ItemFactory::dagger,
-                ItemFactory::shield, ItemFactory::scaleMail,
-                ItemFactory::amuletOfLight,
-                ItemFactory::fireBomb, ItemFactory::oilBomb,
-                ItemFactory::blastBomb, ItemFactory::freezeBomb,
-                ItemFactory::healingPotion, ItemFactory::potionOfSorcery,
-                ItemFactory::potionOfGhostliness, ItemFactory::potionOfInvisibility,
-                ItemFactory::potionOfPoison,
-                ItemFactory::wandOfMagicMissile, ItemFactory::wandOfWater,
-                ItemFactory::wandOfOil, ItemFactory::wandOfFire,
-                ItemFactory::wandOfVegetation, ItemFactory::wandOfFungus,
-                ItemFactory::wandOfDog, ItemFactory::wandOfDetonation,
-                ItemFactory::wandOfBanishment,
-                ItemFactory::pear, ItemFactory::scrumptiousPear,
-                ItemFactory::silveryPear, ItemFactory::conferencePear,
-                ItemFactory::fish)) {
-            Item it = f.get();
+        for (Item.ItemType type : com.bjsp123.rl2.logic.ItemRegistry.knownTypes()) {
+            Item it = ItemFactory.build(type);
             String name = com.bjsp123.rl2.ui.Names.titleCase(
                     it.name == null ? "—" : it.name);
             out.add(new Entry(it.type, ItemSprites.regionFor(it), name, describeItem(it)));
@@ -420,11 +404,11 @@ public class EncyclopediaRenderer extends Group {
     private List<Entry> buildCreatureEntries() {
         List<Entry> out = new ArrayList<>();
         Point p = new Point(0, 0);
-        for (MobType t : MobType.values()) {
+        for (String t : com.bjsp123.rl2.logic.MobRegistry.knownTypes()) {
             Mob m = MobFactory.spawn(t, p);
             if (m == null) continue;          // PLAYER has no spawn factory.
             String name = com.bjsp123.rl2.ui.Names.titleCase(
-                    (m.name == null || m.name.isEmpty()) ? t.name() : m.name);
+                    (m.name == null || m.name.isEmpty()) ? t : m.name);
             out.add(new Entry(t, MobSprites.regionFor(m), name, describeCreature(m)));
         }
         return out;
