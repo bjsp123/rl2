@@ -16,89 +16,123 @@ ROOT = Path(__file__).resolve().parent.parent
 # Column-by-column defaults. Cells whose default is None / empty are left
 # blank (string + list columns where the parser treats empty as null/empty).
 MOB_DEFAULTS: dict[str, str | None] = {
+    # Identity
     "type": None,
     "name": None,
     "description": None,
     "material": "FLESH",
     "behavior": "MOB",
+    # Faction relationships
+    "faction": None,
+    "enemyFactions": None,
+    # Spawn eligibility (level-gen)
+    "minDepth": "1",
+    "maxDepth": "10",
+    "theme": None,
+    # Combat baseline
     "maxHp": "10",
-    "moveCost": "100",
+    "healRate": "0",
     "accuracy": "10",
     "evasion": "5",
     "damage": "0",
     "armor": "0",
     "apDamage": "0",
     "magicResist": "0",
+    # Per-level scaling
+    "hpPerLevel": "2",
+    "accuracyPerLevel": "1",
+    "evasionPerLevel": "1",
+    "damagePerLevel": "1_2",
+    "armorPerLevel": "0_1",
+    "apPerLevel": "0",
+    # Body / movement / perception
     "size": "4",
+    "moveCost": "100",
     "visionRadius": "8",
     "wakeRadius": "6",
+    # Ranged
     "rangedDamage": "0",
     "rangedDistance": "0",
     "rangedCost": "0",
     "rangedRateOfFire": "0",
+    "rangedDamagePerLevel": "0",
+    "rangedDistancePerLevel": "0",
+    # Capability flags
     "flying": "false",
     "fireImmune": "false",
     "fireSpreadOnAttack": "false",
     "poisonsOnAttack": "false",
     "terrifying": "false",
     "terrifiable": "true",
-    "healRate": "0",
-    "eatSpawnChance": "0",
-    "mushroomEatSpawnChance": "0",
-    "turnSpawnChance": "0",
-    "teleportRate": "0",
+    "banishable": "false",
+    # Death / spawn behaviours
     "fireExplosionRadiusOnDeath": "0",
+    "teleportRate": "0",
+    "eatSpawnChance": "0",
     "eatSpawnType": None,
+    "mushroomEatSpawnChance": "0",
     "mushroomEatSpawnType": None,
+    "turnSpawnChance": "0",
     "turnSpawnType": None,
+    "kittenType": None,
+    # Door / mind
     "doorClosing": "NEVER",
     "stateOfMind": "ASLEEP",
+    # AI memory sets
     "attackTypes": None,
     "fleeTypes": None,
-    "faction": None,
     "attackAllExcept": None,
-    "kittenType": None,
-    "banishable": "false",
+    # Abilities
     "abilities": None,
     "initialBuffs": None,
+    # Player kit
+    "startingInventory": None,
+    "startingPerks": None,
+    "actionBar": None,
+    # Sprite
     "spriteCol": "0",
     "spriteRow": "0",
     "spriteW": "1",
     "spriteH": "1",
-    "hpPerLevel": "2",
-    "accuracyPerLevel": "1",
-    "evasionPerLevel": "1",
-    "damagePerLevel": "1_2",
-    "apPerLevel": "0",
-    "rangedDamagePerLevel": "0",
-    "rangedDistancePerLevel": "0",
-    "armorPerLevel": "0_1",
-    "startingInventory": None,
-    "startingPerks": None,
 }
 
 ITEM_DEFAULTS: dict[str, str | None] = {
+    # Identity
     "type": None,
     "name": None,
     "description": None,
-    "slot": None,
     "material": "MAGIC",
+    # Inventory placement
+    "slot": None,
+    "inventoryCategory": "ITEMS",
+    "silhouetteForSlot": None,
+    # Spawn eligibility (level-gen)
+    "minDepth": "1",
+    "maxDepth": "10",
+    "theme": None,
+    "guaranteedPerLevel": "false",
+    # Equip stats
     "damageMin": "0",
     "damageMax": "0",
     "armorMin": "0",
     "armorMax": "0",
     "lightRadius": "0",
-    "foodValue": "0",
-    "healAmount": "0",
+    # Throw
     "thrownBehavior": "NOTHING",
+    "tameOnThrow": None,
+    # Use behaviour + effects
     "useBehavior": "NONE",
     "useVerb": None,
-    "wandElement": None,
-    "summonsWhenUsed": None,
-    "tameOnThrow": None,
+    "foodValue": "0",
+    "healAmount": "0",
     "appliesBuff": None,
     "buffDuration": "0",
     "selfDamageBase": "0",
+    "wandElement": None,
+    "summonsWhenUsed": None,
+    # Floor flag
+    "glows": "false",
+    # Sprite
     "spriteCol": "0",
     "spriteRow": "0",
 }

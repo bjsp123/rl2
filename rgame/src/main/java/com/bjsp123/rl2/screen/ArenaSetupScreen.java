@@ -21,9 +21,9 @@ import java.util.List;
  */
 public class ArenaSetupScreen extends MenuScreen {
 
-    /** Tagged team-type. Either a species ({@link #charClass} == null) or a
-     *  player class ({@link #mobType} equals {@link Mob#TYPE_PLAYER},
-     *  {@link #charClass} set). */
+    /** Tagged team-type. Either a species ({@link #charClass} == null,
+     *  {@link #mobType} set to a registry key) or a player class
+     *  ({@link #charClass} set, {@link #mobType} ignored). */
     public static final class TeamType {
         public final String mobType;
         public final Mob.CharacterClass charClass;
@@ -60,10 +60,11 @@ public class ArenaSetupScreen extends MenuScreen {
     private static List<TeamType> typeChoices() {
         if (typeChoices == null) {
             List<TeamType> out = new ArrayList<>();
-            // Player classes first.
-            out.add(new TeamType(Mob.TYPE_PLAYER, Mob.CharacterClass.WARRIOR, "warrior"));
-            out.add(new TeamType(Mob.TYPE_PLAYER, Mob.CharacterClass.ROGUE,   "rogue"));
-            out.add(new TeamType(Mob.TYPE_PLAYER, Mob.CharacterClass.MAGE,    "mage"));
+            // Player classes first. mobType is unused for these entries — the
+            // spawn path routes through MobFactory.player(charClass).
+            out.add(new TeamType(null, Mob.CharacterClass.WARRIOR, "warrior"));
+            out.add(new TeamType(null, Mob.CharacterClass.ROGUE,   "rogue"));
+            out.add(new TeamType(null, Mob.CharacterClass.MAGE,    "mage"));
             // Every species in the registry. Names lifted from a freshly-spawned
             // template so the label matches what the look panel shows.
             Point dummy = new Point(0, 0);

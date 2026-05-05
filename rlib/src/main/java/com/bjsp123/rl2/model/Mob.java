@@ -63,12 +63,6 @@ public class Mob {
         MAGIC_MISSILE
     }
 
-    /** Engine-level reserved identifier for the player. The only mob type
-     *  string we hardcode in code — every other species is referenced by
-     *  string literals or set membership, with the canonical roster living
-     *  in {@code assets/data/mobs.csv}. */
-    public static final String TYPE_PLAYER = "PLAYER";
-
     /** Physical substance of a mob (or item) — drives e.g. fire interactions and damage
      *  modifiers. Shared with {@link Item} since both have a material. */
     public enum Material {
@@ -242,10 +236,9 @@ public class Mob {
     public String name;
     public String description;
     /** Species identifier — string key matching the {@code type} column of a
-     *  row in {@code assets/data/mobs.csv}. The only hardcoded value is
-     *  {@link #TYPE_PLAYER}; every other species lives in the data file. Used
-     *  as the key in {@link #attackTypes} / {@link #fleeTypes} and in
-     *  spawn-cross-reference fields. */
+     *  row in {@code assets/data/mobs.csv}. Used as the key in
+     *  {@link #attackTypes} / {@link #fleeTypes} and in spawn-cross-reference
+     *  fields. */
     public String mobType;
     public Material material;
     // (was: size — moved to {@link #intrinsic}.)
@@ -288,6 +281,12 @@ public class Mob {
      *  resolution time, and drives ally-defense transitivity (this mob attacks anyone
      *  hostile to anything sharing its faction). Null for lone-wolf species. */
     public String faction;
+    /** Faction tags this mob is hostile to. A mob whose {@link #faction} matches
+     *  any entry resolves to ATTACK in attitude lookups — symmetric with the
+     *  shared-faction-is-ally rule. The player carries the {@code PLAYER}
+     *  faction tag so any species with {@code PLAYER} in this set is hostile to
+     *  the player. */
+    public java.util.Set<String> enemyFactions = new java.util.HashSet<>();
     /** Support-cast abilities (haste/heal/etc.) tried each turn before the mob's
      *  normal AI dispatch. See {@link MobAbility} and
      *  {@code MobSystem.tryCastAbilities}. Empty for ordinary mobs. */
@@ -350,14 +349,12 @@ public class Mob {
     public String turnSpawnType;
 
     // ── CSV-driven species flags ────────────────────────────────────────────
-    /** Mob-type string of the kitten this species spawns alongside itself at
-     *  level-population time. Non-null on the cat row only today; the level
-     *  populator iterates mobs whose {@code kittenType != null} instead of
-     *  hardcoding {@code mobType.equals("CAT")}. */
+    /** Mob-type string of the offspring this species spawns alongside itself at
+     *  level-population time (cats spawn kittens). The level populator iterates
+     *  mobs whose {@code kittenType != null}, so any species opting in just sets
+     *  the column. */
     public String kittenType;
-    /** When {@code true}, this mob can be one-shot by the wand-of-banishment.
-     *  Set on the ghost row. Replaces the legacy {@code mobType == GHOST}
-     *  check in the wand path. */
+    /** When {@code true}, this mob can be one-shot by the wand-of-banishment. */
     public boolean banishable;
 
     // ════════════════════════════════════════════════════════════════════════

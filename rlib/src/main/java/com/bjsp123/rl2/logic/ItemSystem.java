@@ -172,9 +172,6 @@ public final class ItemSystem {
         }
     }
 
-    /** Backwards-compat shim — older callers without a Level handle. */
-    public static void eat(Mob eater, Item item) { eat(null, eater, item); }
-
     /**
      * Drink a potion. Applies the item's {@link Item#appliesBuff} (level and
      * duration from the item-level helpers) and any {@link Item#selfDamageBase}

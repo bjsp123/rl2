@@ -1,26 +1,6 @@
 package com.bjsp123.rl2.model;
 
 public class Item {
-    /** Distinct kind of item. Mostly informational — code branches on flags rather than this
-     *  tag, but renderers and the encyclopedia look it up. */
-    public enum ItemType {
-        SWORD, DAGGER, SHIELD, SCALE_MAIL, AMULET_OF_LIGHT,
-        // Food
-        PEAR, PEAR_SCRUMPTIOUS, PEAR_SILVERY, PEAR_CONFERENCE,
-        FISH,
-        // Bombs
-        FIRE_BOMB, OIL_BOMB, BLAST_BOMB, FREEZE_BOMB,
-        // Potions
-        HEALING_POTION, POTION_SORCERY, POTION_GHOSTLINESS, POTION_INVISIBILITY, POTION_POISON,
-        // Wands
-        WAND_WATER, WAND_OIL, WAND_GRASS, WAND_FUNGUS, WAND_FIRE, WAND_DOG, WAND_DETONATION,
-        WAND_MAGIC_MISSILE, WAND_BANISHMENT, WAND_LIGHTNING,
-        // Magical consumables
-        POWER_ORB,
-        // Gems — single ItemType, with species + size carried on the Item instance.
-        GEM
-    }
-
     /** Element a wand applies on impact. Summon-style wands (wand of dog) carry a
      *  null {@code wandElement} and instead set {@link Item#summonsWhenUsed} — they
      *  bypass the targeting overlay and never emit a missile / impact event. */
@@ -109,7 +89,11 @@ public class Item {
         GRANT_PERK
     }
 
-    public ItemType type;
+    /** Identifier — string key matching the {@code type} column of a row in
+     *  {@code assets/data/items.csv}. Null for procedurally-generated items
+     *  (gems) that aren't catalogued in the CSV. Used as the registry lookup
+     *  key and as the stack-merge identity. */
+    public String type;
     public ItemSlot slot;
     public Mob.Material material;
     public String name;
@@ -171,9 +155,16 @@ public class Item {
     public boolean glows;
 
     /** Slot for which this item is the "empty-slot silhouette" art shown in the
-     *  inventory. Null for everything except the few designated silhouette items
-     *  (sword for WEAPON, shield for OFFHAND, …). */
+     *  inventory. Set per item in {@code items.csv} via the
+     *  {@code silhouetteForSlot} column; null for items that aren't a slot's
+     *  placeholder. */
     public ItemSlot silhouetteForSlot;
+
+    /** Tab the inventory popup files this item under (rgame-side string tag —
+     *  recognised values match the {@code InventoryRenderer.Category} enum:
+     *  {@code GEAR}/{@code FOOD}/{@code ITEMS}/{@code GEMS}). Null falls back
+     *  to the default tab. */
+    public String inventoryCategory;
 
     /** Gem species — non-null iff this item is a gem. Drives icon colour, theme
      *  shape (triangle for crystal, square for concrete), and same-kind recipe matching.
@@ -200,7 +191,7 @@ public class Item {
      *  consulted; callers ensure they're stacking on bag items. */
     public boolean matchesStackKey(Item other) {
         if (other == null || other == this) return false;
-        if (type != other.type) return false;
+        if (!java.util.Objects.equals(type, other.type)) return false;
         if (level != other.level) return false;
         if (gemSpecies != other.gemSpecies) return false;
         if (gemSize != other.gemSize) return false;

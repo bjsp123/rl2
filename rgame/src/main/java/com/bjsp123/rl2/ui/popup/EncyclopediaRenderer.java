@@ -22,7 +22,6 @@ import com.bjsp123.rl2.logic.MobFactory;
 import com.bjsp123.rl2.model.Buff.BuffType;
 import com.bjsp123.rl2.model.GemSpecies;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemType;
 import com.bjsp123.rl2.model.Level.VisualTheme;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Perk;
@@ -39,7 +38,6 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * In-game encyclopaedia: a Large modal popup with one tab per category (Items,
@@ -209,7 +207,7 @@ public class EncyclopediaRenderer extends Group {
     public void close() { open = false; setVisible(false); }
 
     /** Open the encyclopaedia pre-selected on a particular entry. {@code id} is the
-     *  natural key for that category — {@link ItemType} for items, {@link MobType}
+     *  natural key for that category — item-type string for items, mob-type string
      *  for creatures, {@link BuffType} for buffs, {@link GemSpecies} for gems,
      *  {@link Perk} for perks, {@link Tile} for terrain. Falls back to opening the
      *  category's first entry when {@code id} is null or unmatched. */
@@ -374,7 +372,7 @@ public class EncyclopediaRenderer extends Group {
 
     private List<Entry> buildItemEntries() {
         List<Entry> out = new ArrayList<>();
-        for (Item.ItemType type : com.bjsp123.rl2.logic.ItemRegistry.knownTypes()) {
+        for (String type : com.bjsp123.rl2.logic.ItemRegistry.knownTypes()) {
             Item it = ItemFactory.build(type);
             String name = com.bjsp123.rl2.ui.Names.titleCase(
                     it.name == null ? "—" : it.name);

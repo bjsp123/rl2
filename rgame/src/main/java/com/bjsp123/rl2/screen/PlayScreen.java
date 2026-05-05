@@ -363,9 +363,6 @@ public class PlayScreen implements Screen {
         animator.tick(level, dtMs);
         com.bjsp123.rl2.logic.FireSystem.tickRealTime(level, dtMs);
         com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
-        // Death animation (flicker + fade) also ticks at real time and drops finished
-        // corpses from level.mobs once their fade completes.
-        MobSystem.advanceDeathAnimations(level);
 
         Mob playerAfter = TurnSystem.findPlayer(level);
         if (player != null && playerAfter == null && lastSnapshot != null) {

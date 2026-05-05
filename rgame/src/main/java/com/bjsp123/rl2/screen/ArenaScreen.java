@@ -280,7 +280,6 @@ public class ArenaScreen implements Screen {
         animator.tick(level, dtMs);
         com.bjsp123.rl2.logic.FireSystem.tickRealTime(level, dtMs);
         com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
-        com.bjsp123.rl2.logic.MobSystem.advanceDeathAnimations(level);
 
         camera.update();
         levelRenderer.render(level, camera);

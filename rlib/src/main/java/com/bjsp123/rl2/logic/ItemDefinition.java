@@ -3,7 +3,6 @@ package com.bjsp123.rl2.logic;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.ItemSlot;
-import com.bjsp123.rl2.model.Item.ItemType;
 import com.bjsp123.rl2.model.Item.ThrownBehavior;
 import com.bjsp123.rl2.model.Item.UseBehavior;
 import com.bjsp123.rl2.model.Item.WandElement;
@@ -20,13 +19,12 @@ import java.util.Map;
  * {@link #apply(Item)} stamps the row's fields onto a fresh {@link Item}.
  *
  * <p>The {@code type} cell is the lookup key in {@link ItemRegistry}; case
- * matters and must match an {@link ItemType} enum constant. Sprite atlas
- * coordinates are NOT in this file — those live in the rgame-side
- * {@code item_sprites.csv} loaded by {@code ItemSprites}.
+ * matters and is referenced by string from CSV cells (player kits, summon
+ * targets, etc.).
  */
 public final class ItemDefinition {
 
-    public ItemType type;
+    public String type;
     public ItemSlot slot;
     public Material material;
     public String   name;
@@ -68,6 +66,22 @@ public final class ItemDefinition {
      *  {@link Item#silhouetteForSlot}. */
     public ItemSlot silhouetteForSlot;
 
+    /** Inventory tab tag — see {@link Item#inventoryCategory}. */
+    public String inventoryCategory;
+
+    /** Inclusive dungeon-depth window in which the level populator considers
+     *  this item eligible for random scatter. {@code minDepth = maxDepth = 0}
+     *  takes the item out of the random pool entirely. */
+    public int minDepth = 1;
+    public int maxDepth = 10;
+    /** Optional theme gate. When non-null, the item is only eligible on levels
+     *  whose {@code theme} matches; null means "any theme". */
+    public com.bjsp123.rl2.model.Level.VisualTheme theme;
+
+    /** When true, the level populator places one of this item on every floor
+     *  (in addition to the random scatter). Used by the pear food-floor rule. */
+    public boolean guaranteedPerLevel;
+
     /** Atlas-cell coordinates on {@code sprites/items.png} (32-px grid). Read by
      *  the rgame-side {@code ItemSprites} loader; rlib code never touches them. */
     public int spriteCol;
@@ -84,7 +98,7 @@ public final class ItemDefinition {
 
     private static ItemDefinition parseRow(Map<String, String> row) {
         ItemDefinition d = new ItemDefinition();
-        d.type        = CsvTable.enumCell(row, "type", ItemType.class, null);
+        d.type        = CsvTable.str(row, "type", null);
         d.name        = CsvTable.str(row, "name", null);
         d.description = CsvTable.str(row, "description", "");
         d.slot        = CsvTable.enumCell(row, "slot", ItemSlot.class, null);
@@ -116,6 +130,12 @@ public final class ItemDefinition {
         d.glows             = CsvTable.boolCell(row, "glows", false);
         d.silhouetteForSlot = CsvTable.enumCell(row, "silhouetteForSlot",
                 ItemSlot.class, null);
+        d.inventoryCategory = CsvTable.str(row, "inventoryCategory", null);
+        d.minDepth          = CsvTable.intCell(row, "minDepth", 1);
+        d.maxDepth          = CsvTable.intCell(row, "maxDepth", 10);
+        d.theme             = CsvTable.enumCell(row, "theme",
+                com.bjsp123.rl2.model.Level.VisualTheme.class, null);
+        d.guaranteedPerLevel = CsvTable.boolCell(row, "guaranteedPerLevel", false);
 
         d.spriteCol     = CsvTable.intCell(row, "spriteCol", 0);
         d.spriteRow     = CsvTable.intCell(row, "spriteRow", 0);
@@ -151,5 +171,6 @@ public final class ItemDefinition {
         it.selfDamageBase = selfDamageBase;
         it.glows          = glows;
         it.silhouetteForSlot = silhouetteForSlot;
+        it.inventoryCategory = inventoryCategory;
     }
 }

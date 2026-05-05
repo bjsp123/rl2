@@ -51,10 +51,6 @@ import com.bjsp123.rl2.logic.TurnSystem;
  */
 public class DefaultLevelRenderer implements LevelRenderer {
 
-    /** On-screen size of a shore-mask tile when drawn — the shader-batch draw call
-     *  uses it directly. Mirrors {@link SurfaceSprites#MASK_TILE}. */
-    private static final int    SURFACE_MASK_TILE      = SurfaceSprites.MASK_TILE;
-
     /** Liquid tile size in source pixels — matches {@link SurfaceSprites#LIQUID_TILE}.
      *  The shader's per-cell UV math divides world coordinates by this to get a UV
      *  that wraps once per tile. */
@@ -119,12 +115,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static final float WALL_BASE_SHADOW_PX = 6f;
 
     // Per-theme shadow tints — cached so shadow passes don't allocate a new Color per cell.
-    // Classic: cool blue-black. Urban: slightly reddish black. Organic: warm violet.
-    // Neutral: mossy green-black. Crystal: pure black.
-    private static final Color SHADOW_CLASSIC = new Color(0.04f, 0.05f, 0.14f, 0.55f);
-    private static final Color SHADOW_URBAN   = new Color(0.16f, 0.05f, 0.07f, 0.55f);
-    private static final Color SHADOW_ORGANIC = new Color(0.22f, 0.08f, 0.28f, 0.60f);
-    private static final Color SHADOW_NEUTRAL = new Color(0.05f, 0.16f, 0.06f, 0.55f);
+    // Crystal: pure black; Concrete: warm sodium-amber bias; Straightforward: cool cyan bias.
     private static final Color SHADOW_BLACK   = new Color(0f, 0f, 0f, 0.65f);
     /** Black with a faint warm brown bias — concrete tunnels and brutalist interiors
      *  sit in dim sodium-amber light, so shadows lean warm rather than neutral.
@@ -1926,8 +1917,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
      */
     private Sprite spriteForMob(Mob mob) {
         int f = mob.facingEast ? 1 : 0;
+        if (mob.characterClass != null) return playerSprite(mob, f);
         if (mob.mobType == null) return null;
-        if (Mob.TYPE_PLAYER.equals(mob.mobType)) return playerSprite(mob, f);
         Sprite[] pair = speciesFacing.get(mob.mobType);
         return pair == null ? null : pair[f];
     }

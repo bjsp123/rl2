@@ -1,7 +1,5 @@
 package com.bjsp123.rl2.logic;
 
-import com.bjsp123.rl2.model.Mob;
-
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -47,17 +45,18 @@ public final class MobRegistry {
         }
     }
 
-    /** Lookup a definition by mob-type string. Returns {@code null} for
-     *  unknown types or for the player ({@link Mob#TYPE_PLAYER} is not in
-     *  the CSV). */
+    /** Lookup a definition by mob-type string. Returns {@code null} for unknown
+     *  types. The CSV does include the {@code PLAYER_*} kit rows — callers that
+     *  want to skip them filter on {@code def.behavior == Mob.Behavior.PLAYER}. */
     public static MobDefinition get(String mobType) {
         if (mobType == null) return null;
         return defs.get(mobType);
     }
 
     /** Read-only view of every mob-type string in the CSV. Order matches the
-     *  CSV's row order (insertion-order map). Does NOT include
-     *  {@link Mob#TYPE_PLAYER}. */
+     *  CSV's row order (insertion-order map). The {@code PLAYER_*} kit rows
+     *  are included — callers that only want random-encounter species filter
+     *  by {@code def.behavior != PLAYER}. */
     public static Set<String> knownTypes() {
         return Collections.unmodifiableSet(defs.keySet());
     }

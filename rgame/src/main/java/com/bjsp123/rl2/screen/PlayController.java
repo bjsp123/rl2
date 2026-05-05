@@ -11,7 +11,6 @@ import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.ItemSlot;
-import com.bjsp123.rl2.model.Item.ItemType;
 import com.bjsp123.rl2.model.Item.UseBehavior;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.LogEvent;
@@ -150,7 +149,7 @@ final class PlayController {
         switch (ub) {
             case MAGIC_MISSILE -> beginMagicMissile(level, player, bound);
             case EAT -> {
-                ItemSystem.eat(player, bound);
+                ItemSystem.eat(level, player, bound);
                 TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
                 afterMove(level);
             }
@@ -340,35 +339,37 @@ final class PlayController {
         return out;
     }
 
-    /** Seed the HUD action bar with the class-default bindings on a brand-new run. */
+    /** Seed the HUD action bar with the class-default bindings on a brand-new run.
+     *  Bindings come from the {@code actionBar} cell of the player's row in
+     *  {@code mobs.csv} — pipe-separated {@code <slotIndex>:<itemType>} entries.
+     *  Each entry resolves against the player's current inventory; entries whose
+     *  item isn't carried are skipped. */
     void seedDefaultActionBar(Mob player, CharacterClass cls) {
-        if (player == null || actionBar == null) return;
-        actionBar.set(2, firstOfType(player, ItemType.HEALING_POTION));
-        if (cls == null) return;
-        switch (cls) {
-            case WARRIOR -> { /* sword + scale mail equipped; no quickslot bindings */ }
-            case ROGUE -> {
-                actionBar.set(0, firstOfType(player, ItemType.FIRE_BOMB));
-                actionBar.set(1, firstOfType(player, ItemType.OIL_BOMB));
-            }
-            case MAGE -> {
-                actionBar.set(0, firstEquipped(player, ItemType.DAGGER));
-                actionBar.set(1, firstOfType(player, ItemType.WAND_DOG));
-            }
+        if (player == null || actionBar == null || cls == null) return;
+        com.bjsp123.rl2.logic.MobDefinition def =
+                com.bjsp123.rl2.logic.MobRegistry.get("PLAYER_" + cls.name());
+        if (def == null || def.actionBar == null || def.actionBar.isEmpty()) return;
+        for (String entry : def.actionBar.split("\\|")) {
+            String e = entry.trim();
+            int colon = e.indexOf(':');
+            if (colon <= 0) continue;
+            int slot;
+            try { slot = Integer.parseInt(e.substring(0, colon).trim()); }
+            catch (NumberFormatException nfe) { continue; }
+            String type = e.substring(colon + 1).trim();
+            actionBar.set(slot, firstByType(player, type));
         }
     }
 
-    private static Item firstOfType(Mob player, ItemType type) {
-        for (Item it : player.inventory.bag) if (it.type == type) return it;
-        return null;
-    }
-
-    private static Item firstEquipped(Mob player, ItemType type) {
+    private static Item firstByType(Mob player, String type) {
+        if (type == null) return null;
+        // Equipped items first so an equipped sword binds over a bag duplicate.
         for (ItemSlot s : ItemSlot.values()) {
             Item eq = player.inventory.equipped(s);
-            if (eq != null && eq.type == type) return eq;
+            if (eq != null && type.equals(eq.type)) return eq;
         }
-        return firstOfType(player, type);
+        for (Item it : player.inventory.bag) if (type.equals(it.type)) return it;
+        return null;
     }
 
     void tryStairsUp()   { tryStairs(-1); }

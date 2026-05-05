@@ -3,7 +3,6 @@ package com.bjsp123.rl2.logic;
 import com.bjsp123.rl2.model.GemSpecies;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.ItemSlot;
-import com.bjsp123.rl2.model.Item.ItemType;
 import com.bjsp123.rl2.model.Level.VisualTheme;
 
 import java.util.ArrayList;
@@ -63,9 +62,8 @@ public final class GemSystem {
 
     public static Item createGem(GemSpecies species, int size) {
         Item it = new Item();
-        it.type = ItemType.GEM;
-        // Tag with the canonical gem slot so Inventory.equip routes it via the same
-        // multi-slot resolution path that rings use (first empty / else swap GEM1).
+        // Procedural item — null type. Identity is carried by gemSpecies + gemSize,
+        // and Item.isGem reads the species field rather than checking the type.
         it.slot = ItemSlot.GEM1;
         it.gemSpecies = species;
         it.gemSize = Math.max(1, size);

@@ -5,9 +5,8 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.logic.ItemDefinition;
 import com.bjsp123.rl2.logic.ItemRegistry;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemType;
 
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -27,36 +26,35 @@ public final class ItemSprites {
     private static final int CELL = 32;
 
     private static Texture saiItemsTex; // sprites/items.png (32-px grid)
-    private static Map<ItemType, TextureRegion> regions;
+    private static Map<String, TextureRegion> regions;
 
     private ItemSprites() {}
 
-    /** TextureRegion for the item's type, or {@code null} when no sprite is mapped
-     *  (e.g. a future ItemType added but not yet wired here). */
+    /** TextureRegion for the item, or {@code null} when no sprite is mapped
+     *  (procedural items go through their own path; missing rows return null). */
     public static TextureRegion regionFor(Item item) {
-        if (item == null || item.type == null) return null;
+        if (item == null) return null;
         // Gems are procedural — species + size produce a unique colour-and-shape icon
-        // that ItemType alone can't address. GemSprites caches per-(species, size).
+        // that the registry can't address. GemSprites caches per-(species, size).
         if (item.isGem()) return GemSprites.regionFor(item);
-        if (regions == null) load();
-        return regions.get(item.type);
+        return regionFor(item.type);
     }
 
-    /** Direct ItemType lookup — used by code paths that don't have an Item handle
+    /** Direct type lookup — used by code paths that don't have an Item handle
      *  (e.g. silhouette rendering for an empty slot). */
-    public static TextureRegion regionFor(ItemType type) {
+    public static TextureRegion regionFor(String type) {
         if (type == null) return null;
         if (regions == null) load();
         return regions.get(type);
     }
 
     private static void load() {
-        regions = new EnumMap<>(ItemType.class);
+        regions = new HashMap<>();
         saiItemsTex = nearest("sprites/items.png");
         if (saiItemsTex == null) return;
         // Pull (col, row) for every catalogued item type from ItemRegistry. New
         // items added to items.csv pick up sprites here without any code change.
-        for (ItemType type : ItemRegistry.knownTypes()) {
+        for (String type : ItemRegistry.knownTypes()) {
             ItemDefinition def = ItemRegistry.get(type);
             if (def == null) continue;
             regions.put(type, sai(def.spriteCol, def.spriteRow));

@@ -54,19 +54,20 @@ public final class MobSprites {
         }
     }
 
-    /** Region for the given mob (handles {@code PLAYER} via {@link Mob#characterClass}).
+    /** Region for the given mob — players (any {@link Mob#characterClass}) get the
+     *  per-class sprite; everything else looks up its row in {@code mobs.csv}.
      *  Returns {@code null} if the texture didn't load or the mob's type has no mapping. */
     public static TextureRegion regionFor(Mob mob) {
-        if (mob == null || mob.mobType == null) return null;
-        if (Mob.TYPE_PLAYER.equals(mob.mobType)) return regionFor(mob.characterClass);
+        if (mob == null) return null;
+        if (mob.characterClass != null) return regionFor(mob.characterClass);
         return regionFor(mob.mobType);
     }
 
     /** Region for a non-player mob type, or {@code null} if the type has no mapping
-     *  or the texture didn't load. {@link Mob#TYPE_PLAYER} is rejected — use the
+     *  or the texture didn't load. Player rows are skipped — use the
      *  {@link #regionFor(CharacterClass)} overload instead. */
     public static TextureRegion regionFor(String type) {
-        if (type == null || Mob.TYPE_PLAYER.equals(type)) return null;
+        if (type == null) return null;
         ensureLoaded();
         if (mobsTex == null) return null;
         TextureRegion cached = regions.get(type);

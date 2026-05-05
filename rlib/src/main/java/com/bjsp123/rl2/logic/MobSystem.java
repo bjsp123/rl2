@@ -389,30 +389,39 @@ public class MobSystem {
         // a kobold he's previously fought (combat-memoried into his attackTypes
         // by some weird chain) still reads as an ally.
         if (a.faction != null && a.faction.equals(b.faction)) return Attitude.ALLY;
+        // Symmetric rule: declaring b's faction as an enemy resolves to ATTACK
+        // without needing every member of that faction in attackTypes. Powers
+        // the player-hostility relationship via the PLAYER faction.
+        if (b.faction != null && a.enemyFactions.contains(b.faction)) return Attitude.ATTACK;
         if (a.fleeTypes   != null && b.mobType != null && a.fleeTypes  .contains(b.mobType)) return Attitude.FLEE;
         if (a.attackTypes != null && b.mobType != null && a.attackTypes.contains(b.mobType)) return Attitude.ATTACK;
         // Loyalty — a tame mob inherits its owner's hostilities. If the owner wants to
-        // attack b's species (either by spec or via combat memory), the pet does too.
+        // attack b's species (either by spec or via combat memory) or b's faction, the pet does too.
         if (a.owner != null && a.owner != b
                 && b.mobType != null && a.owner.attackTypes != null
                 && a.owner.attackTypes.contains(b.mobType)) {
             return Attitude.ATTACK;
         }
+        if (a.owner != null && a.owner != b
+                && b.faction != null && a.owner.enemyFactions.contains(b.faction)) {
+            return Attitude.ATTACK;
+        }
         // Ally-defense transitivity. {@code a} is hostile to anyone whose
-        // attackTypes lists a's own species OR any species sharing a's faction
-        // — i.e. "I attack anything that's hostile to me or my faction".
-        // Subsumes the legacy player-reflection rule: the player auto-attacks
-        // anything hostile to PLAYER without needing a special case.
+        // attackTypes lists a's own species, any species sharing a's faction,
+        // or anyone who has declared a's faction an enemy.
         if (defendsAlly(a, b)) return Attitude.ATTACK;
         return Attitude.NOTHING;
     }
 
-    /** True iff {@code b}'s {@link Mob#attackTypes} contains {@code a}'s species
-     *  or any species sharing {@code a}'s {@link Mob#faction}. Powers the
-     *  ally-defense rule in {@link #getAttitudeToMob} — a mob attacks anything
-     *  hostile to itself or its faction. */
+    /** True iff {@code b} would treat {@code a} as a hostile target — covers
+     *  {@code b.attackTypes} containing {@code a}'s species or any species
+     *  sharing {@code a}'s {@link Mob#faction}, and {@code b.enemyFactions}
+     *  including {@code a}'s faction. Powers the ally-defense rule in
+     *  {@link #getAttitudeToMob}. */
     private static boolean defendsAlly(Mob a, Mob b) {
-        if (b == null || b.attackTypes == null || b.attackTypes.isEmpty()) return false;
+        if (b == null) return false;
+        if (a.faction != null && b.enemyFactions.contains(a.faction)) return true;
+        if (b.attackTypes == null || b.attackTypes.isEmpty()) return false;
         if (a.mobType != null && b.attackTypes.contains(a.mobType)) return true;
         if (a.faction != null) {
             for (String t : MobRegistry.mobsInFaction(a.faction)) {
@@ -933,25 +942,6 @@ public class MobSystem {
                     mob, killer, mob.position.tileX(), mob.position.tileY(), visible));
         }
         level.mobs.remove(mob);
-    }
-
-    /**
-     * Legacy no-op kept for source-compat with PlayScreen until that call site is
-     * dropped in the next pass. Death animations now play out on rgame's Animator
-     * against ghost snapshots; rlib has no dying-mob list to drain.
-     */
-    public static void advanceDeathAnimations(Level level) {
-        // No-op: synchronous removal in killMob plus the rgame-side ghost list have
-        // already replaced the legacy "drain dying mobs from the list" loop. Kept as a
-        // shim so PlayScreen's call site doesn't need a same-PR change.
-    }
-
-    /** @deprecated Use {@link #killMob(Level, Mob, Mob)} so XP is awarded consistently.
-     *  This overload exists only as a transitional shim and routes to the new signature with
-     *  a {@code null} killer (no XP awarded). */
-    @Deprecated
-    public static void killMob(Level level, Mob mob) {
-        killMob(level, mob, null);
     }
 
     public static void processAiTurn(Mob mob, Level level) {

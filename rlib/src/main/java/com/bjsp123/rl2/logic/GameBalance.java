@@ -2,6 +2,11 @@ package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.Mob;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.Properties;
 import java.util.Random;
 
 /**
@@ -12,18 +17,52 @@ import java.util.Random;
  * <p>Non-balance constants (e.g. atlas offsets, rendering padding) do NOT belong here — this
  * class is reserved for <i>gameplay</i> knobs so they can be scanned and adjusted together.
  *
- * <p>This class is intentionally final + no-construct — all fields are {@code public static
- * final}. Grouping is by section header; keep new constants inside the right section.
+ * <p>Tunables are {@code public static} (not {@code final}) so {@link #load(String)} can
+ * override them at startup from {@code assets/data/gamebalance.properties}. Each Java field
+ * carries a baked-in baseline that takes effect if the properties file is missing or omits
+ * a key. Grouping is by section header; keep new constants inside the right section.
  */
 public final class GameBalance {
 
     private GameBalance() {}
 
+    /** Read a {@code key=value} properties file and override any matching {@code public
+     *  static} field on this class. Unknown keys are ignored; missing keys keep their
+     *  Java-side baseline. Currently handles {@code int} and {@code double} fields — that
+     *  covers every tunable we have today. Call once at startup, before gameplay code
+     *  reads any of these fields. */
+    public static void load(String text) {
+        if (text == null || text.isEmpty()) return;
+        Properties props = new Properties();
+        try {
+            props.load(new StringReader(text));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to parse gamebalance.properties", e);
+        }
+        for (String key : props.stringPropertyNames()) {
+            String raw = props.getProperty(key);
+            if (raw == null) continue;
+            String value = raw.trim();
+            try {
+                Field f = GameBalance.class.getDeclaredField(key);
+                int mods = f.getModifiers();
+                if (!Modifier.isStatic(mods) || Modifier.isFinal(mods)) continue;
+                Class<?> t = f.getType();
+                if (t == int.class)         f.setInt(null, Integer.parseInt(value));
+                else if (t == double.class) f.setDouble(null, Double.parseDouble(value));
+                else if (t == long.class)   f.setLong(null, Long.parseLong(value));
+                else if (t == boolean.class) f.setBoolean(null, Boolean.parseBoolean(value));
+            } catch (NoSuchFieldException | IllegalAccessException | NumberFormatException ignored) {
+                // Unknown key, non-overridable field, or malformed value — keep the baseline.
+            }
+        }
+    }
+
     // ───────────────────────── Combat simulation ─────────────────────────────
 
     /** Default number of duels {@link #mobfight} runs to estimate win rate. 10k gives ~±1%
      *  on the percentage it returns; bumping higher costs linearly more time. */
-    public static final int MOBFIGHT_DEFAULT_TRIALS = 10_000;
+    public static int MOBFIGHT_DEFAULT_TRIALS = 10_000;
 
     /**
      * Simulate {@link #MOBFIGHT_DEFAULT_TRIALS} headless 1-on-1 melee duels between
@@ -92,18 +131,18 @@ public final class GameBalance {
 
     // ───────────────────────── Character progression ─────────────────────────
     /** Hard cap — characters stop leveling at this level even if they accrue more XP. */
-    public static final int MAX_CHARACTER_LEVEL   = 32;
+    public static int MAX_CHARACTER_LEVEL   = 32;
     /** XP cost to advance from level {@code N} to {@code N+1} = {@code N × XP_PER_LEVEL_STEP}. */
-    public static final int XP_PER_LEVEL_STEP     = 10;
+    public static int XP_PER_LEVEL_STEP     = 10;
     /** Perk points granted on each level-up. (Per-stat level deltas are now
      *  per-mob — see the {@code *PerLevel} columns of {@code mobs.csv}.) */
-    public static final int PERK_POINTS_PER_LEVEL = 1;
+    public static int PERK_POINTS_PER_LEVEL = 1;
 
     // ───────────────────────── Combat effects ────────────────────────────────
     /** Damage dealt by a magic missile hit. Legacy fallback for the staff's vanilla
      *  missile path; the wand-of-magic-missile and other level-scaling sources use
      *  {@link #BASIC_WAND_DAMAGE_MIN} / {@link #BASIC_WAND_DAMAGE_MAX} instead. */
-    public static final int MAGIC_MISSILE_DAMAGE = 3;
+    public static int MAGIC_MISSILE_DAMAGE = 3;
 
     // ───────────────────────── Item-level scaling ────────────────────────────
     // Items carry a {@code level} field. Level 0 is baseline; every level above adds
@@ -112,82 +151,82 @@ public final class GameBalance {
     // is always level 0.
 
     /** Baseline damage range for a level-0 wand attack (wand of magic missile, etc.). */
-    public static final int BASIC_WAND_DAMAGE_MIN = 2;
-    public static final int BASIC_WAND_DAMAGE_MAX = 4;
+    public static int BASIC_WAND_DAMAGE_MIN = 2;
+    public static int BASIC_WAND_DAMAGE_MAX = 4;
     /** Per-level damage increment for wand attacks. */
-    public static final int WAND_DAMAGE_INCREMENT_MIN = 1;
-    public static final int WAND_DAMAGE_INCREMENT_MAX = 2;
+    public static int WAND_DAMAGE_INCREMENT_MIN = 1;
+    public static int WAND_DAMAGE_INCREMENT_MAX = 2;
 
     /** Baseline area-of-effect (in tiles affected) for level-0 wand spells with an
      *  area component (vegetation / fungus / fire / oil / water). */
-    public static final int WAND_EFFECT_TILES = 5;
+    public static int WAND_EFFECT_TILES = 5;
     /** Extra tiles affected per wand level. */
-    public static final int WAND_EFFECT_TILE_INCREMENT = 4;
+    public static int WAND_EFFECT_TILE_INCREMENT = 4;
 
     /** Baseline food value of a level-0 food item. Food doesn't scale with level — it's
      *  always level 0 — so this is the only food number that matters. */
-    public static final int BASIC_FOOD_VALUE = 10_000;
+    public static int BASIC_FOOD_VALUE = 10_000;
 
     /** Per-level armour-range bump applied to any armour-slot or shield-slot item that
      *  has a non-zero level. Stacks additively on top of the item's base armour range. */
-    public static final int ARMOR_INCREMENT_MIN = 1;
-    public static final int ARMOR_INCREMENT_MAX = 1;
+    public static int ARMOR_INCREMENT_MIN = 1;
+    public static int ARMOR_INCREMENT_MAX = 1;
 
     /** Per-level damage-range bump for any weapon-slot item with a non-zero level. */
-    public static final int WEAPON_INCREMENT_MIN = 1;
-    public static final int WEAPON_INCREMENT_MAX = 2;
+    public static int WEAPON_INCREMENT_MIN = 1;
+    public static int WEAPON_INCREMENT_MAX = 2;
 
     /** Healing amount on a level-0 healing potion. Higher-level potions add
      *  {@link #HEAL_VALUE_INCREMENT} per level. */
-    public static final int BASIC_HEAL_VALUE     = 20;
-    public static final int HEAL_VALUE_INCREMENT = 10;
+    public static int BASIC_HEAL_VALUE     = 20;
+    public static int HEAL_VALUE_INCREMENT = 10;
 
     /** Bomb base damage (level 0) and per-level increment. Used by the fire / oil /
      *  blast / freeze bomb thrown effects. */
-    public static final int BOMB_DAMAGE_BASE      = 3;
-    public static final int BOMB_DAMAGE_INCREMENT = 2;
+    public static int BOMB_DAMAGE_BASE      = 3;
+    public static int BOMB_DAMAGE_INCREMENT = 2;
     /** Bomb base AOE (tiles affected at level 0) and per-level increment. */
-    public static final int BOMB_EFFECT_TILES          = 5;
-    public static final int BOMB_EFFECT_TILE_INCREMENT = 4;
+    public static int BOMB_EFFECT_TILES          = 5;
+    public static int BOMB_EFFECT_TILE_INCREMENT = 4;
 
     // ───────────────────────── Level dimensions / density ───────────────────
     /** Default base dimensions for every dungeon level. The {@code BIGLEVEL}
      *  flag scales these by 1.5×; otherwise every level is exactly this size. */
-    public static final int LEVEL_BASE_W = 48;
-    public static final int LEVEL_BASE_H = 48;
+    public static int LEVEL_BASE_W = 48;
+    public static int LEVEL_BASE_H = 48;
 
     /** Target number of rooms per level. Each {@code Layout} builder in
      *  {@link LevelFactory} is parameterised by this so different layouts in
      *  the same dungeon don't read as wildly different densities. */
-    public static final int LEVEL_TARGET_ROOMS    = 8;
+    public static int LEVEL_TARGET_ROOMS    = 8;
     /** ± tolerance around {@link #LEVEL_TARGET_ROOMS}. Builders that can produce
      *  more rooms than the cap (greedy growth in PACKED, BSP partition leaf
      *  variance) trim or stop at {@code LEVEL_TARGET_ROOMS + LEVEL_ROOM_TOLERANCE}. */
-    public static final int LEVEL_ROOM_TOLERANCE  = 2;
+    public static int LEVEL_ROOM_TOLERANCE  = 2;
 
     /** Inclusive size range, in tiles, for a single room's side length. Applies
      *  uniformly to every layout's randomly-sized rooms. (VILLAGE buildings are
      *  thematically smaller and intentionally use their own narrower range.) */
-    public static final int ROOM_MIN_SIZE = 4;
-    public static final int ROOM_MAX_SIZE = 10;
+    public static int ROOM_MIN_SIZE = 4;
+    public static int ROOM_MAX_SIZE = 10;
 
     // ───────────────────────── Mob population caps ───────────────────────────
     /** Hard cap on mobs alive on a level — magical / scripted spawn effects
      *  (summon wands, kissyblob eat-spawn, mouse mushroom-eat-spawn) skip
      *  their spawn when the level is at or above this. Initial level
      *  population (LevelFactoryPopulate) is NOT subject to this cap. */
-    public static final int MAX_MOBS_ON_LEVEL = 30;
+    public static int MAX_MOBS_ON_LEVEL = 30;
 
     /** Per-species cap for spawner mobs (anthills today, future spawners by the
      *  same {@code turnSpawnType} flag). A spawner skips its budding roll when
      *  the level already holds this many of its {@code turnSpawnType}. Combined
      *  with {@link #MAX_MOBS_ON_LEVEL} — both must pass before the bud is
      *  created. */
-    public static final int MAX_MOBS_FROM_SPAWNER = 8;
+    public static int MAX_MOBS_FROM_SPAWNER = 8;
 
     // ───────────────────────── Hunger / satiety ──────────────────────────────
     /** Starting satiety for a fresh mob. Counts down by one per passing tick. */
-    public static final int STARTING_SATIETY       = 10000;
+    public static int STARTING_SATIETY       = 10000;
     /** Once satiety is exhausted, the player loses 1 HP per this many ticks. */
-    public static final int STARVATION_TICKS_PER_HP = 100;
+    public static int STARVATION_TICKS_PER_HP = 100;
 }

@@ -503,7 +503,7 @@ public class LookRenderer extends Group {
             }
             if (it.count > 1) line = line + " ×" + it.count;
             // Each item row: description label, then a "?" button that opens the
-            // encyclopaedia turned to that ItemType. The button captures `it` via
+            // encyclopaedia turned to that item type. The button captures `it` via
             // closure so the click handler doesn't need a separate selection field.
             Table row = new Table();
             row.add(new Label(line, skin, "default")).left().expandX().fillX();

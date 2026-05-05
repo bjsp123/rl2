@@ -10,7 +10,6 @@ import com.bjsp123.rl2.screen.TitleScreen;
 import com.bjsp123.rl2.ui.skin.UiPixelScale;
 import com.bjsp123.rl2.ui.skin.UiScale;
 import com.bjsp123.rl2.ui.skin.UiStyleChoice;
-import com.bjsp123.rl2.world.anim.Animator;
 
 public class Rl2Game extends Game {
 
@@ -36,9 +35,10 @@ public class Rl2Game extends Game {
 
     @Override
     public void create() {
-        // Data-driven mob and item registries — read once at startup, before any
-        // factory call. The mobs CSV carries one row per species (sprite columns
-        // re-read by MobSprites); items CSV carries the item catalog.
+        // Data-driven configs — read once at startup, before any factory call or
+        // gameplay code reads a balance number. Game-balance loads first because
+        // some Mob field initializers reference GameBalance.STARTING_SATIETY etc.
+        loadGameBalance();
         loadMobConfig();
         loadItemConfig();
         UiScale.init(persistence);
@@ -61,6 +61,16 @@ public class Rl2Game extends Game {
         arenaHallOfFame = new ArenaHallOfFame(persistence);
         saveSystem = new SaveSystem(persistence);
         setScreen(new TitleScreen(this));
+    }
+
+    /** Read {@code assets/data/gamebalance.properties} and override matching
+     *  {@link com.bjsp123.rl2.logic.GameBalance} fields. Missing file is non-fatal —
+     *  the Java-side baselines stand. */
+    private void loadGameBalance() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/gamebalance.properties");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.logic.GameBalance.load(fh.readString());
     }
 
     /** Read {@code assets/data/mobs.csv} and feed it into both the gameplay-side

@@ -104,9 +104,9 @@ public class InventoryRenderer extends Group {
     private int bindingSlot = -1;
 
     /** Bag-tab categories. Items are grouped by {@link Category} via
-     *  {@link #categorize(Item.ItemType)}, sorted by ItemType ordinal then by name, and
-     *  displayed in a single shared 6×6 grid. The {@link #currentCategory} field tracks
-     *  which tab is currently visible. */
+     *  {@code categorize(Item)}, sorted by {@link ItemRegistry#typeOrder} (CSV row
+     *  order) then by name, and displayed in a single shared 6×6 grid. The
+     *  {@link #currentCategory} field tracks which tab is currently visible. */
     private enum Category { GEAR, FOOD, ITEMS, GEMS }
     private Category currentCategory = Category.GEAR;
     private final TextButton[] tabButtons = new TextButton[Category.values().length];
@@ -285,8 +285,8 @@ public class InventoryRenderer extends Group {
         popupIcon = new Image();
         popupIcon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
         // "?" info button under the icon — opens the encyclopaedia turned to the
-        // popup item's ItemType. Reads the current item via itemAtSlot(popupSlot)
-        // at click time so it always matches whatever the popup is showing.
+        // popup item's type. Reads the current item via itemAtSlot(popupSlot) at
+        // click time so it always matches whatever the popup is showing.
         TextButton popupEncBtn = new TextButton("?", skin);
         popupEncBtn.addListener(new ClickListener() {
             @Override public void clicked(InputEvent e, float x, float y) {
@@ -497,20 +497,20 @@ public class InventoryRenderer extends Group {
             setCellIcon(equipCells[i], eq != null ? regionFor(eq) : silhouetteRegionFor(SLOTS[i]),
                         eq == null);
         }
-        // Build the visible bag list for the active tab. Sorted by ItemType ordinal
-        // first, then by display name within type, so a stack of pears always reads
-        // pear → silvery → conference → scrumptious → fish (or wherever those types
-        // sit in their enum group).
+        // Build the visible bag list for the active tab. Sorted by items.csv row
+        // order first (the registry's insertion order), then by display name within
+        // type, so a stack of pears always reads pear → silvery → conference →
+        // scrumptious → fish (or wherever those types sit in the data file).
         java.util.List<Integer> tabIndices = new java.util.ArrayList<>();
         for (int i = 0; i < player.inventory.bag.size(); i++) {
             Item it = player.inventory.bag.get(i);
-            if (it == null || it.type == null) continue;
-            if (categorize(it.type) == currentCategory) tabIndices.add(i);
+            if (it == null) continue;
+            if (categorize(it) == currentCategory) tabIndices.add(i);
         }
         tabIndices.sort((a, b) -> {
             Item ia = player.inventory.bag.get(a);
             Item ib = player.inventory.bag.get(b);
-            int cmp = Integer.compare(ia.type.ordinal(), ib.type.ordinal());
+            int cmp = Integer.compare(typeOrder(ia.type), typeOrder(ib.type));
             if (cmp != 0) return cmp;
             String na = ia.name == null ? "" : ia.name;
             String nb = ib.name == null ? "" : ib.name;
@@ -531,15 +531,21 @@ public class InventoryRenderer extends Group {
         if (popupSlot >= 0) updatePopup();
     }
 
-    /** Map an ItemType to one of the four bag tabs. New ItemTypes default to
-     *  {@link Category#ITEMS} so they show up somewhere. */
-    private static Category categorize(Item.ItemType type) {
-        return switch (type) {
-            case SWORD, DAGGER, SHIELD, SCALE_MAIL, AMULET_OF_LIGHT -> Category.GEAR;
-            case PEAR, PEAR_SCRUMPTIOUS, PEAR_SILVERY, PEAR_CONFERENCE, FISH -> Category.FOOD;
-            case GEM -> Category.GEMS;
-            default -> Category.ITEMS;
-        };
+    /** Map an item to one of the four bag tabs. Procedural items (gems) always
+     *  go to {@link Category#GEMS}; everything else reads its CSV-tagged
+     *  {@link Item#inventoryCategory}, defaulting to {@link Category#ITEMS}. */
+    private static Category categorize(Item it) {
+        if (it.isGem()) return Category.GEMS;
+        if (it.inventoryCategory != null && !it.inventoryCategory.isEmpty()) {
+            try { return Category.valueOf(it.inventoryCategory); }
+            catch (IllegalArgumentException ignored) { /* unknown tag → default */ }
+        }
+        return Category.ITEMS;
+    }
+
+    /** Sort key — items.csv row order via {@link com.bjsp123.rl2.logic.ItemRegistry#typeOrder}. */
+    private static int typeOrder(String type) {
+        return com.bjsp123.rl2.logic.ItemRegistry.typeOrder(type);
     }
 
     private void setCellIcon(Stack cell, TextureRegion region, boolean dim) {

@@ -12,15 +12,14 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * One row from {@code assets/data/mobs.csv} parsed into a typed POJO.
- * Carries every field the legacy hand-written factory methods (spider, cat,
- * koboldFighter, …) wrote onto a {@link Mob}, plus a few sprite-atlas columns
- * read separately by the rgame-side {@code MobSprites} loader.
+ * One row from {@code assets/data/mobs.csv} parsed into a typed POJO. Carries
+ * every gameplay field needed to materialize a {@link Mob} via
+ * {@link #apply(Mob, Point)}, plus a few sprite-atlas columns read separately
+ * by the rgame-side {@code MobSprites} loader (rlib code never touches them).
  *
- * <p>{@link #apply(Mob, Point)} mirrors the body of the legacy factory: it
- * calls into {@link MobFactory}'s baseMob equivalent, then writes every
- * non-default field onto the target Mob. Sprite columns are exposed as
- * public fields for {@code MobSprites} to read; rlib code never touches them.
+ * <p>{@link MobFactory#spawn(String, Point)} fetches a definition from
+ * {@link MobRegistry} and calls {@code apply}; the registry replaces the
+ * deleted {@code Mob.MobType} enum.
  */
 public final class MobDefinition {
 
@@ -74,6 +73,18 @@ public final class MobDefinition {
     /** Faction tag (arbitrary string). Mobs sharing a faction are allies; null
      *  for lone-wolf species. */
     public String faction;
+    /** Faction tags this mob is hostile to — see {@link Mob#enemyFactions}. */
+    public Set<String> enemyFactions = new HashSet<>();
+    /** Inclusive dungeon-depth window in which the level populator considers
+     *  this mob eligible for random spawn. {@code minDepth = maxDepth = 0} takes
+     *  the species out of the random pool entirely (used by player-class rows,
+     *  scripted set-pieces, summon-only mobs, etc. — though today every CSV row
+     *  is open at 1..10). */
+    public int minDepth = 1;
+    public int maxDepth = 10;
+    /** Optional theme gate. When non-null, the species is only eligible on
+     *  levels whose {@code theme} matches; null means "any theme". */
+    public com.bjsp123.rl2.model.Level.VisualTheme theme;
     /** Omnihostile shorthand. When set, the mob's {@link #attackTypes} is
      *  populated with every known mob type EXCEPT this list and the mob
      *  itself. */
@@ -101,12 +112,19 @@ public final class MobDefinition {
     public List<InitialBuff> initialBuffs = new ArrayList<>();
 
     // ── Starting inventory + perks (player rows) ────────────────────────────
-    /** Items added to the bag at construction. Each entry is an
-     *  {@code <ItemType>} or {@code <ItemType>*<count>}. Items whose ItemType
-     *  has a non-null slot are auto-equipped. Empty for non-player rows. */
+    /** Items added to the bag at construction. Each entry is an item-type
+     *  string (a key into {@code items.csv}) or {@code <type>*<count>}. Items
+     *  whose definition carries a non-null slot are auto-equipped. Empty for
+     *  non-player rows. */
     public List<StartItem> startingInventory = new ArrayList<>();
     /** Perks the mob is born with. Each entry is a Perk enum name (level 1 each). */
     public List<com.bjsp123.rl2.model.Perk> startingPerks = new ArrayList<>();
+
+    /** Default HUD action-bar binds for player rows. Pipe-separated
+     *  {@code <slotIndex>:<itemType>} entries — e.g.
+     *  {@code 0:FIRE_BOMB|1:OIL_BOMB|2:HEALING_POTION}. Null/empty for non-player
+     *  mobs and for player classes with no preset binds. */
+    public String actionBar;
 
     // ── Sprite columns (read by rgame-side MobSprites loader) ───────────────
     public int     spriteCol;
@@ -138,12 +156,12 @@ public final class MobDefinition {
         public int duration;
     }
 
-    /** One starter-inventory line: an {@link com.bjsp123.rl2.model.Item.ItemType}
+    /** One starter-inventory line: an item-type id (CSV row key in items.csv)
      *  and a stack count (defaults to 1). */
     public static final class StartItem {
-        public com.bjsp123.rl2.model.Item.ItemType type;
+        public String type;
         public int count;
-        public StartItem(com.bjsp123.rl2.model.Item.ItemType t, int c) {
+        public StartItem(String t, int c) {
             type = t; count = c;
         }
     }
@@ -163,7 +181,7 @@ public final class MobDefinition {
 
     private static MobDefinition parseRow(Map<String, String> row) {
         // Defaults mirror {@link com.bjsp123.rl2.model.StatBlock} so an empty
-        // cell behaves exactly as if the legacy factory hadn't set the field.
+        // cell behaves exactly like the field had never been touched.
         MobDefinition d = new MobDefinition();
         d.type        = CsvTable.str(row, "type", null);
         d.name        = CsvTable.str(row, "name", null);
@@ -216,6 +234,11 @@ public final class MobDefinition {
         d.attackTypes.addAll(CsvTable.listCell(row, "attackTypes"));
         d.fleeTypes  .addAll(CsvTable.listCell(row, "fleeTypes"));
         d.faction         = CsvTable.str(row, "faction", null);
+        d.enemyFactions.addAll(CsvTable.listCell(row, "enemyFactions"));
+        d.minDepth        = CsvTable.intCell(row, "minDepth", 1);
+        d.maxDepth        = CsvTable.intCell(row, "maxDepth", 10);
+        d.theme           = CsvTable.enumCell(row, "theme",
+                com.bjsp123.rl2.model.Level.VisualTheme.class, null);
         d.attackAllExcept = new ArrayList<>(CsvTable.listCell(row, "attackAllExcept"));
 
         d.kittenType     = CsvTable.str(row, "kittenType", null);
@@ -234,6 +257,7 @@ public final class MobDefinition {
         d.initialBuffs = parseInitialBuffs(CsvTable.str(row, "initialBuffs", null));
         d.startingInventory = parseStartingInventory(CsvTable.str(row, "startingInventory", null));
         d.startingPerks = parseStartingPerks(CsvTable.str(row, "startingPerks", null));
+        d.actionBar = CsvTable.str(row, "actionBar", null);
 
         d.spriteCol        = CsvTable.intCell(row, "spriteCol", 0);
         d.spriteRow        = CsvTable.intCell(row, "spriteRow", 0);
@@ -278,7 +302,7 @@ public final class MobDefinition {
     }
 
     /** Parse the {@code startingInventory} cell. Format: pipe-separated
-     *  {@code <ItemType>} or {@code <ItemType>*<count>}. e.g.
+     *  item-type strings, optionally with {@code *<count>} suffix. e.g.
      *  {@code DAGGER | FIRE_BOMB*5 | OIL_BOMB*5}. */
     private static List<StartItem> parseStartingInventory(String cell) {
         List<StartItem> out = new ArrayList<>();
@@ -294,9 +318,7 @@ public final class MobDefinition {
                 typeName = e.substring(0, star).trim();
                 count = Integer.parseInt(e.substring(star + 1).trim());
             }
-            com.bjsp123.rl2.model.Item.ItemType t =
-                    com.bjsp123.rl2.model.Item.ItemType.valueOf(typeName);
-            out.add(new StartItem(t, Math.max(1, count)));
+            out.add(new StartItem(typeName, Math.max(1, count)));
         }
         return out;
     }
@@ -339,7 +361,7 @@ public final class MobDefinition {
     // ────────────────────────────────────────────────────────────────────────
 
     /** Stamp this definition's fields onto a fresh {@link Mob} positioned
-     *  at {@code pos}. Mirrors the body of the legacy factory methods. */
+     *  at {@code pos}. */
     public void apply(Mob m, Point pos) {
         m.mobType  = type;
         m.position = pos;
@@ -406,6 +428,7 @@ public final class MobDefinition {
         m.attackTypes.addAll(attackTypes);
         m.fleeTypes  .addAll(fleeTypes);
         m.faction    = faction;
+        m.enemyFactions.addAll(enemyFactions);
         if (!attackAllExcept.isEmpty()) {
             Set<String> excluded = new HashSet<>(attackAllExcept);
             if (m.mobType != null) excluded.add(m.mobType);

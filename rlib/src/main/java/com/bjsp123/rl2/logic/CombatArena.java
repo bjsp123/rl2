@@ -148,7 +148,6 @@ public final class CombatArena {
         TurnSystem.tick(level);
         FireSystem.tickRealTime(level, dtMs);
         LevelSystem.tickLightMotesRealTime(level, dtMs);
-        MobSystem.advanceDeathAnimations(level);
         // Headless callers drop the event log; visual callers consume it from
         // the Animator before this method returns.
     }
