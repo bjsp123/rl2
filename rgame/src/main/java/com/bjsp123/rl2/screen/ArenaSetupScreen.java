@@ -51,7 +51,7 @@ public class ArenaSetupScreen extends MenuScreen {
     private static final int[] LEVEL_CHOICES = { 1, 5, 10, 15 };
     private static final int[] COUNT_CHOICES = { 1, 3, 5, 8 };
     private static final float PANEL_W = 540;
-    private static final float PANEL_H = 460;
+    private static final float PANEL_H = 660;
 
     /** Lazily initialised — population reads from {@link com.bjsp123.rl2.logic.MobRegistry}
      *  which isn't loaded yet at static-init time. */
@@ -112,18 +112,26 @@ public class ArenaSetupScreen extends MenuScreen {
         panel.add(vs).center().pad(4);
         panel.add(teamB).top().pad(4).row();
 
-        // Bottom row — Start Fight + Back.
+        // Bottom column — Start Fight + Hall of Fame as full-width chunky
+        // buttons stacked vertically. Avoids the side-by-side overflow on
+        // narrow viewports and matches the "vertical column of large
+        // buttons" pattern used by the title and settings screens.
         Table bottom = new Table();
-        bottom.add(button("Start Fight", () -> {
+        bottom.defaults().pad(6).fillX();
+        bottom.add(chunkyButton("Start Fight", () -> {
             TeamSpec a = currentSpec(true);
             TeamSpec b = currentSpec(false);
             game.setScreen(new ArenaScreen(game, a, b));
-        })).width(140).height(36).pad(6);
-        bottom.add(button("Back", () -> game.setScreen(new TitleScreen(game))))
-                .width(120).height(36).pad(6);
+        })).width(360).height(64).row();
+        bottom.add(chunkyButton("Hall of Fame",
+                        () -> game.setScreen(new ArenaHallOfFameScreen(game))))
+                .width(360).height(64);
         panel.add(bottom).colspan(3).padTop(14).center().row();
 
-        Container<Table> framed = fixedPanel(panel, PANEL_W, PANEL_H);
+        // Back button overlaid by framedWithBack — 12 px from the BR corner.
+        com.badlogic.gdx.scenes.scene2d.ui.Stack framed =
+                framedWithBack(panel, PANEL_W, PANEL_H,
+                        () -> game.setScreen(new TitleScreen(game)));
         root.center().add(framed);
     }
 
@@ -135,9 +143,9 @@ public class ArenaSetupScreen extends MenuScreen {
         // Type selector — prev / current-label / next.
         TeamType currentType = typeChoices().get(isA ? teamAIdx : teamBIdx);
         Table typeRow = new Table();
-        typeRow.add(button("<", () -> shiftType(isA, -1))).width(30).height(28).pad(2);
-        typeRow.add(label(currentType.label, "default", 1.0f)).width(150).center().pad(4);
-        typeRow.add(button(">", () -> shiftType(isA, +1))).width(30).height(28).pad(2);
+        typeRow.add(button("<", () -> shiftType(isA, -1))).width(48).height(40).pad(2);
+        typeRow.add(label(currentType.label, "default", 1.2f)).width(150).center().pad(4);
+        typeRow.add(button(">", () -> shiftType(isA, +1))).width(48).height(40).pad(2);
         col.add(label("Type", "dim", 1f)).left().padTop(4).row();
         col.add(typeRow).left().row();
 
@@ -162,7 +170,7 @@ public class ArenaSetupScreen extends MenuScreen {
             final int chosen = v;
             TextButton b = button(Integer.toString(v), () -> onPick.accept(chosen));
             if (v == currentValue) b.setChecked(true);
-            row.add(b).width(40).height(28).pad(2);
+            row.add(b).width(60).height(40).pad(2);
         }
         return row;
     }

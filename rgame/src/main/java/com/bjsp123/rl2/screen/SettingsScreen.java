@@ -22,17 +22,18 @@ import com.bjsp123.rl2.ui.skin.UiStyleChoice;
  */
 public class SettingsScreen extends MenuScreen {
 
-    private enum Tab { GAMEPLAY, SOUND, GRAPHICS }
+    private enum Tab { GAMEPLAY, SOUND, GRAPHICS, LOG }
 
     private static Tab currentTab = Tab.GRAPHICS;
 
-    /** Tab strip height — same as the inventory tabs so the visual rhythm matches. */
-    private static final int TAB_H = 26;
+    /** Tab strip height — bumped from the legacy 26 to match the chunkier
+     *  thumb-target sizing used elsewhere in the game. */
+    private static final int TAB_H = 42;
     /** Outer panel size. Fixed so adding/removing settings options doesn't resize the
      *  modal. Bounded by {@link MenuScreen#effectiveScale} which scales the viewport
      *  down on small screens so this never bleeds off-edge. */
-    private static final float PANEL_W = 380;
-    private static final float PANEL_H = 460;
+    private static final float PANEL_W = 420;
+    private static final float PANEL_H = 720;
 
     private final Rl2Game game;
     private final Runnable onBack;
@@ -78,6 +79,7 @@ public class SettingsScreen extends MenuScreen {
         for (Tab t : Tab.values()) {
             final Tab tab = t;
             TextButton b = new TextButton(label(t), skin, "tab");
+            b.getLabel().setFontScale(1.2f);
             b.addListener(new ClickListener() {
                 @Override public void clicked(InputEvent event, float x, float y) {
                     currentTab = tab;
@@ -97,6 +99,7 @@ public class SettingsScreen extends MenuScreen {
         switch (currentTab) {
             case GRAPHICS -> graphicsContent(tabContent);
             case GAMEPLAY -> gameplayContent(tabContent);
+            case LOG      -> logContent(tabContent);
             case SOUND ->
                 tabContent.add(label("(no settings yet)", "dim", 1f))
                           .left().padTop(24).padBottom(24).row();
@@ -106,24 +109,101 @@ public class SettingsScreen extends MenuScreen {
 
         panel.add(tabSection).fillX().expand().fill().padBottom(10).row();
 
-        panel.add(button("Back", onBack)).left().width(120).height(34);
-
-        // Fixed-size outer panel — switching tabs does not resize.
-        Container<Table> framed = fixedPanel(panel, PANEL_W, PANEL_H);
+        // Fixed-size outer panel — switching tabs does not resize. Back-icon
+        // button is overlaid by framedWithBack at a fixed 12 px from the BR
+        // corner regardless of which tab's content is showing.
+        com.badlogic.gdx.scenes.scene2d.ui.Stack framed =
+                framedWithBack(panel, PANEL_W, PANEL_H, onBack);
         root.center().add(framed);
     }
 
     private void graphicsContent(Table panel) {
+        // UI Pixel Scale removed from the Settings UI per the chunkier-pass
+        // brief; the underlying class is kept (the log-font math reads it)
+        // but it's no longer user-tunable.
         addLabeledRow(panel, "UI Scale", buildUiScaleRow());
-        addLabeledRow(panel, "UI Pixel Scale", buildUiPixelScaleRow());
+        addLabeledRow(panel, "UI Font Size", buildUiFontScaleRow());
         addLabeledRow(panel, "UI Style", buildUiStyleRow());
         addLabeledRow(panel, "Mob Outline Width", buildOutlineWidthRow());
         addLabeledRow(panel, "Mob Outline Darkness", buildOutlineDarknessRow());
         addLabeledRow(panel, "Mob Outline Smoothing", buildOutlineSmoothRow());
     }
 
+    private Table buildUiFontScaleRow() {
+        Table row = new Table();
+        for (float f : com.bjsp123.rl2.ui.skin.UiFontScale.CHOICES) {
+            final float chosen = f;
+            TextButton b = button(formatNumber(f) + "x", () -> {
+                com.bjsp123.rl2.ui.skin.UiFontScale.set(chosen);
+                game.setScreen(new SettingsScreen(game, onBack));
+            });
+            if (Math.abs(com.bjsp123.rl2.ui.skin.UiFontScale.scale() - f) < 0.001f) {
+                b.setChecked(true);
+            }
+            row.add(b).width(54).height(40).pad(2);
+        }
+        return row;
+    }
+
     private void gameplayContent(Table panel) {
         addLabeledRow(panel, "Animation Speed", buildAnimationSpeedRow());
+    }
+
+    /** Log filter / expand / font-size controls — formerly four toggle buttons
+     *  on the HUD, now a column here in Settings.
+     *  {@link com.bjsp123.rl2.ui.skin.LogPreferences} owns the boolean flags
+     *  and {@link com.bjsp123.rl2.ui.skin.LogFontScale} the font multiplier so
+     *  {@code LogView} reads from a single source for both. */
+    private void logContent(Table panel) {
+        addLabeledRow(panel, "Show Event Log",
+                buildBoolToggle(com.bjsp123.rl2.ui.skin.LogPreferences::logOn,
+                                com.bjsp123.rl2.ui.skin.LogPreferences::setLogOn));
+        addLabeledRow(panel, "Show Low-Priority Lines",
+                buildBoolToggle(com.bjsp123.rl2.ui.skin.LogPreferences::showLowPriority,
+                                com.bjsp123.rl2.ui.skin.LogPreferences::setShowLowPriority));
+        addLabeledRow(panel, "Show Mob-vs-Mob Lines",
+                buildBoolToggle(com.bjsp123.rl2.ui.skin.LogPreferences::showNonPlayer,
+                                com.bjsp123.rl2.ui.skin.LogPreferences::setShowNonPlayer));
+        addLabeledRow(panel, "Expanded (10 lines)",
+                buildBoolToggle(com.bjsp123.rl2.ui.skin.LogPreferences::expanded,
+                                com.bjsp123.rl2.ui.skin.LogPreferences::setExpanded));
+        addLabeledRow(panel, "Log Font Size", buildLogFontScaleRow());
+    }
+
+    private Table buildLogFontScaleRow() {
+        Table row = new Table();
+        for (float f : com.bjsp123.rl2.ui.skin.LogFontScale.CHOICES) {
+            final float chosen = f;
+            TextButton b = button(formatNumber(f) + "x", () -> {
+                com.bjsp123.rl2.ui.skin.LogFontScale.set(chosen);
+                game.setScreen(new SettingsScreen(game, onBack));
+            });
+            if (Math.abs(com.bjsp123.rl2.ui.skin.LogFontScale.scale() - f) < 0.001f) b.setChecked(true);
+            row.add(b).width(48).height(40).pad(2);
+        }
+        return row;
+    }
+
+    /** Two-button On/Off row backed by a getter+setter pair, so a single helper
+     *  serves every boolean preference on this screen. The currently-active
+     *  side is rendered as checked (depressed) and rebuilds the screen on tap
+     *  so the new state shows immediately. */
+    private Table buildBoolToggle(java.util.function.BooleanSupplier getter,
+                                  java.util.function.Consumer<Boolean> setter) {
+        Table row = new Table();
+        TextButton onBtn  = button("On",  () -> {
+            setter.accept(true);
+            game.setScreen(new SettingsScreen(game, onBack));
+        });
+        TextButton offBtn = button("Off", () -> {
+            setter.accept(false);
+            game.setScreen(new SettingsScreen(game, onBack));
+        });
+        if (getter.getAsBoolean()) onBtn.setChecked(true);
+        else                       offBtn.setChecked(true);
+        row.add(onBtn).width(64).height(40).pad(2);
+        row.add(offBtn).width(64).height(40).pad(2);
+        return row;
     }
 
     private Table buildAnimationSpeedRow() {
@@ -135,7 +215,7 @@ public class SettingsScreen extends MenuScreen {
                 game.setScreen(new SettingsScreen(game, onBack));
             });
             if (AnimationSpeed.framesPerRender() == n) b.setChecked(true);
-            row.add(b).width(54).height(28).pad(2);
+            row.add(b).width(54).height(40).pad(2);
         }
         return row;
     }
@@ -156,21 +236,7 @@ public class SettingsScreen extends MenuScreen {
                 game.setScreen(new SettingsScreen(game, onBack));
             });
             if (Math.abs(UiScale.scale() - s) < 0.001f) b.setChecked(true);
-            row.add(b).width(54).height(28).pad(2);
-        }
-        return row;
-    }
-
-    private Table buildUiPixelScaleRow() {
-        Table row = new Table();
-        for (int s : UiPixelScale.CHOICES) {
-            final int chosen = s;
-            TextButton b = button(s + "x", () -> {
-                UiPixelScale.set(chosen);
-                game.setScreen(new SettingsScreen(game, onBack));
-            });
-            if (UiPixelScale.scale() == s) b.setChecked(true);
-            row.add(b).width(54).height(28).pad(2);
+            row.add(b).width(54).height(40).pad(2);
         }
         return row;
     }
@@ -183,7 +249,7 @@ public class SettingsScreen extends MenuScreen {
                 game.setScreen(new SettingsScreen(game, onBack));
             });
             if (UiStyleChoice.mode() == m) b.setChecked(true);
-            row.add(b).width(110).height(28).pad(2);
+            row.add(b).width(110).height(40).pad(2);
         }
         return row;
     }
@@ -197,7 +263,7 @@ public class SettingsScreen extends MenuScreen {
                 game.setScreen(new SettingsScreen(game, onBack));
             });
             if (Math.abs(MobOutline.width() - w) < 0.0001f) b.setChecked(true);
-            row.add(b).width(44).height(28).pad(2);
+            row.add(b).width(44).height(40).pad(2);
         }
         return row;
     }
@@ -211,7 +277,7 @@ public class SettingsScreen extends MenuScreen {
                 game.setScreen(new SettingsScreen(game, onBack));
             });
             if (Math.abs(MobOutline.darkness() - a) < 0.0001f) b.setChecked(true);
-            row.add(b).width(44).height(28).pad(2);
+            row.add(b).width(44).height(40).pad(2);
         }
         return row;
     }
@@ -230,8 +296,8 @@ public class SettingsScreen extends MenuScreen {
         });
         if (MobOutline.smooth())  smooth.setChecked(true);
         else                      aliased.setChecked(true);
-        row.add(smooth).width(80).height(28).pad(2);
-        row.add(aliased).width(80).height(28).pad(2);
+        row.add(smooth).width(80).height(40).pad(2);
+        row.add(aliased).width(80).height(40).pad(2);
         return row;
     }
 
@@ -251,6 +317,7 @@ public class SettingsScreen extends MenuScreen {
             case GAMEPLAY -> "Gameplay";
             case SOUND    -> "Sound";
             case GRAPHICS -> "Graphics";
+            case LOG      -> "Log";
         };
     }
 

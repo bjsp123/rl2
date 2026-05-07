@@ -47,6 +47,7 @@ public class Rl2Game extends Game {
         UiScale.init(persistence);
         UiPixelScale.init(persistence);
         UiStyleChoice.init(persistence);
+        com.bjsp123.rl2.ui.skin.UiFontScale.init(persistence);
         com.bjsp123.rl2.ui.skin.MobOutline.init(persistence);
         com.bjsp123.rl2.ui.skin.UseBuffIcons.init(persistence);
         com.bjsp123.rl2.ui.skin.AnimationSpeed.init(persistence);

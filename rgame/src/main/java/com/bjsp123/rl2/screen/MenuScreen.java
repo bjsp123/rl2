@@ -149,6 +149,82 @@ public abstract class MenuScreen implements Screen {
         return b;
     }
 
+    /** Like {@link #button(String, Runnable)} but with the inner label scaled
+     *  up by {@code labelScale} (default {@code 1.4f}). Use this for the
+     *  title-screen / character-select buttons that need to read at arm's
+     *  length on a phone. */
+    protected TextButton chunkyButton(String label, Runnable onClick) {
+        return chunkyButton(label, 1.4f, onClick);
+    }
+
+    protected TextButton chunkyButton(String label, float labelScale, Runnable onClick) {
+        TextButton b = button(label, onClick);
+        b.getLabel().setFontScale(labelScale);
+        return b;
+    }
+
+    /** Pixels of inset between the back-icon button and the framed panel's
+     *  bottom-right corner. Same value across every screen so the back
+     *  affordance always lives in the same spot relative to the corner. */
+    protected static final float BACK_BUTTON_INSET = 12f;
+    /** On-screen footprint of the back-icon button. Bigger than the legacy
+     *  48-px size so it reads as thumb-sized on a phone. */
+    protected static final float BACK_BUTTON_SIZE  = 56f;
+
+    /** Standard back button for non-title screens — an icon-only Button using
+     *  the {@link com.bjsp123.rl2.world.render.IconSprites.Icon#BACK} glyph
+     *  on top of the regular action-icon chrome. Use this instead of a text
+     *  "Back" label so every screen's back affordance reads identically.
+     *  Position via {@link #framedWithBack} so the inset from the panel's
+     *  bottom-right corner is uniform. */
+    protected com.badlogic.gdx.scenes.scene2d.ui.Button backIconButton(Runnable onClick) {
+        com.badlogic.gdx.scenes.scene2d.ui.Button btn =
+                new com.badlogic.gdx.scenes.scene2d.ui.Button(skin, "action-icon");
+        com.badlogic.gdx.graphics.g2d.TextureRegion region =
+                com.bjsp123.rl2.world.render.IconSprites.regionFor(
+                        com.bjsp123.rl2.world.render.IconSprites.Icon.BACK);
+        if (region != null) {
+            com.badlogic.gdx.scenes.scene2d.ui.Image icon =
+                    new com.badlogic.gdx.scenes.scene2d.ui.Image(region);
+            icon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
+            btn.add(icon).size(32, 32).pad(8);
+        } else {
+            btn.add(new Label("Back", skin, "default")).pad(8);
+        }
+        btn.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent event, float x, float y) {
+                onClick.run();
+            }
+        });
+        return btn;
+    }
+
+    /** Like {@link #fixedPanel} but ALSO overlays the back-icon button at the
+     *  bottom-right corner of the framed panel via a {@code Stack}. Every
+     *  non-title screen should use this so the back glyph anchors at exactly
+     *  {@link #BACK_BUTTON_INSET} from each edge regardless of inner-panel
+     *  layout (no more per-screen padTop / padBottom calls to muscle the
+     *  button into roughly the right corner). */
+    protected com.badlogic.gdx.scenes.scene2d.ui.Stack framedWithBack(
+            Table content, float fixedW, float fixedH, Runnable onBack) {
+        Container<Table> framed = fixedPanel(content, fixedW, fixedH);
+        com.badlogic.gdx.scenes.scene2d.ui.Stack stack =
+                new com.badlogic.gdx.scenes.scene2d.ui.Stack();
+        stack.add(framed);
+
+        com.badlogic.gdx.scenes.scene2d.ui.Container<com.badlogic.gdx.scenes.scene2d.ui.Button>
+                backHolder = new com.badlogic.gdx.scenes.scene2d.ui.Container<>(
+                        backIconButton(onBack));
+        backHolder.bottom().right().pad(BACK_BUTTON_INSET);
+        backHolder.prefSize(BACK_BUTTON_SIZE, BACK_BUTTON_SIZE);
+        // childrenOnly: the holder itself doesn't catch taps (the inner button
+        // handles its own clicks), so taps on the empty area beside the back
+        // glyph still pass through to whatever's behind in the Stack.
+        backHolder.setTouchable(com.badlogic.gdx.scenes.scene2d.Touchable.childrenOnly);
+        stack.add(backHolder);
+        return stack;
+    }
+
     /** {@link Label} with optional font scale and the named style ({@code default}, {@code title}, {@code dim}). */
     protected Label label(String text, String style, float fontScale) {
         Label l = new Label(text, skin, style);

@@ -48,7 +48,10 @@ public class InventoryRenderer extends Group {
     private static final int GEAR_COUNT = 5;
     private static final int BAG_COLS = 6;
     private static final int BAG_ROWS = 6;
-    private static final float CELL = 32f;
+    /** Cell size in stage units. Larger than the 32-px item sprite so the sprite plus
+     *  its 1-px black outline ({@link com.bjsp123.rl2.ui.skin.OutlinedImage}) sit inside
+     *  a visible light-slot bezel. 48 = 32 sprite + 8 px of slot chrome on each side. */
+    private static final float CELL = 48f;
 
     private final Skin skin;
 
@@ -100,7 +103,8 @@ public class InventoryRenderer extends Group {
      *  {@link #currentCategory} field tracks which tab is currently visible. */
     private enum Category { GEAR, FOOD, ITEMS, GEMS }
     private Category currentCategory = Category.GEAR;
-    private final TextButton[] tabButtons = new TextButton[Category.values().length];
+    private final com.badlogic.gdx.scenes.scene2d.ui.Button[] tabButtons
+            = new com.badlogic.gdx.scenes.scene2d.ui.Button[Category.values().length];
     /** {@code currentTabBagIndices[i]} = the index into {@code player.inventory.bag} of the
      *  item displayed in {@code bagCells[i]} for the current tab. {@code -1} means the cell
      *  is empty. Rebuilt on every {@link #refresh()}. */
@@ -150,18 +154,36 @@ public class InventoryRenderer extends Group {
         // 3. Backpack — tab strip above an open-top panel.
         Table tabsRow = new Table();
         tabsRow.defaults().pad(0);
+        // Inventory tabs use icons from the shared sheet — Gear maps to the
+        // EQUIPMENT cell, Food to ITEMS (no dedicated food icon), Items to
+        // ITEMS, and Gems to OTHER as a fallback. Each tab is a Button (not
+        // TextButton) using the "tab-icon" style.
         Category[] cats = Category.values();
-        String[] tabLabels = {"Gear", "Food", "Items", "Gems"};
+        com.bjsp123.rl2.world.render.IconSprites.Icon[] tabIcons = {
+            com.bjsp123.rl2.world.render.IconSprites.Icon.EQUIPMENT,
+            com.bjsp123.rl2.world.render.IconSprites.Icon.OTHER,
+            com.bjsp123.rl2.world.render.IconSprites.Icon.ITEMS,
+            com.bjsp123.rl2.world.render.IconSprites.Icon.OTHER
+        };
         for (int i = 0; i < cats.length; i++) {
             final Category cat = cats[i];
-            tabButtons[i] = new TextButton(tabLabels[i], skin, "tab");
-            tabButtons[i].addListener(new ClickListener() {
+            com.badlogic.gdx.scenes.scene2d.ui.Button btn =
+                    new com.badlogic.gdx.scenes.scene2d.ui.Button(skin, "tab-icon");
+            com.badlogic.gdx.graphics.g2d.TextureRegion region =
+                    com.bjsp123.rl2.world.render.IconSprites.regionFor(tabIcons[i]);
+            if (region != null) {
+                Image img = new Image(region);
+                img.setScaling(com.badlogic.gdx.utils.Scaling.fit);
+                btn.add(img).size(20, 20).pad(2);
+            }
+            btn.addListener(new ClickListener() {
                 @Override public void clicked(InputEvent e, float x, float y) {
                     currentCategory = cat;
                     update();
                 }
             });
-            tabsRow.add(tabButtons[i]).width(60).height(26);
+            tabButtons[i] = btn;
+            tabsRow.add(btn).width(40).height(26);
         }
 
         Table bagGrid = new Table();
@@ -402,8 +424,12 @@ public class InventoryRenderer extends Group {
         // use the plain {@code item-slot} drawable.
         String bgKey = (index < SLOT_CATS.length) ? "equip-slot" : "item-slot";
         Image bg = new Image(skin.getDrawable(bgKey));
-        Image content = new Image();
-        content.setScaling(com.badlogic.gdx.utils.Scaling.fit);
+        // OutlinedImage paints a 1-px black silhouette behind the icon so the sprite
+        // contour reads against the light slot fill. Scaling.none keeps the icon at
+        // its native 32 px even though the cell is 40 px — the 4-px ring of chrome on
+        // each side is the bezel the user wants to see around every item.
+        Image content = new com.bjsp123.rl2.ui.skin.OutlinedImage();
+        content.setScaling(com.badlogic.gdx.utils.Scaling.none);
         // Count badge for stacked items — bottom-left, blank when stack size is 1.
         Label countL = new Label("", skin, "default");
         countL.setColor(Color.WHITE);

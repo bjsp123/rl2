@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.screen;
 
-import com.badlogic.gdx.scenes.scene2d.ui.Container;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
+import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Level.LevelFlag;
@@ -42,27 +42,26 @@ public class LevelInfoScreen extends MenuScreen {
         if (currentLevel != null) {
             appendCurrentLevelSection(list);
         } else {
-            list.add(label("(no level loaded)", "dim", 1f)).row();
+            list.add(label("(no level loaded)", "dim", 1.5f)).row();
         }
 
         ScrollPane scroll = new ScrollPane(list);
         scroll.setFadeScrollBars(false);
         scroll.setScrollingDisabled(true, false);
-        panel.add(scroll).expand().fill().row();
+        panel.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(scroll, skin))
+                .expand().fill().row();
 
-        panel.add(button("Back", onBack)).width(180).height(36).padTop(20);
-
-        Container<Table> framed = fixedPanel(panel, 460, 620);
+        Stack framed = framedWithBack(panel, 460, 620, onBack);
         root.center().add(framed).expand().fill().pad(20);
     }
 
     private void appendCurrentLevelSection(Table list) {
         Level lvl = currentLevel;
-        list.add(label("Current Level", "title", 1.1f)).padTop(4).padBottom(4).row();
-        list.add(label("  Depth     " + lvl.depth, "default", 1f)).row();
-        list.add(label("  Size      " + lvl.width + "×" + lvl.height, "default", 1f)).row();
-        list.add(label("  Layout    " + lvl.layout, "default", 1f)).row();
-        list.add(label("  Theme     " + lvl.theme,  "default", 1f)).row();
+        list.add(label("Current Level", "title", 1.4f)).padTop(4).padBottom(4).row();
+        list.add(label("  Depth     " + lvl.depth, "default", 1.5f)).row();
+        list.add(label("  Size      " + lvl.width + "×" + lvl.height, "default", 1.5f)).row();
+        list.add(label("  Layout    " + lvl.layout, "default", 1.5f)).row();
+        list.add(label("  Theme     " + lvl.theme,  "default", 1.5f)).row();
 
         StringBuilder flags = new StringBuilder();
         if (lvl.flags != null) {
@@ -72,7 +71,7 @@ public class LevelInfoScreen extends MenuScreen {
             }
         }
         list.add(label("  Flags     " + (flags.length() == 0 ? "none" : flags),
-                "default", 1f)).row();
+                "default", 1.5f)).row();
 
         int floor = 0, wall = 0, chasm = 0, door = 0, lamp = 0, woodFloor = 0;
         for (int x = 0; x < lvl.width; x++) {
@@ -92,12 +91,12 @@ public class LevelInfoScreen extends MenuScreen {
         }
         list.add(label(com.bjsp123.rl2.util.Fmt.of(
                 "  Tiles     floor %d  wood %d  wall %d  chasm %d  door %d  lamp %d",
-                floor, woodFloor, wall, chasm, door, lamp), "dim", 1f)).row();
+                floor, woodFloor, wall, chasm, door, lamp), "dim", 1.5f)).row();
 
         int mobCount  = lvl.mobs  == null ? 0 : lvl.mobs.size();
         int itemCount = lvl.items == null ? 0 : lvl.items.size();
-        list.add(label("  Mobs      " + mobCount,  "default", 1f)).row();
-        list.add(label("  Items     " + itemCount, "default", 1f)).row();
+        list.add(label("  Mobs      " + mobCount,  "default", 1.5f)).row();
+        list.add(label("  Items     " + itemCount, "default", 1.5f)).row();
     }
 
     @Override

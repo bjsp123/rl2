@@ -256,25 +256,24 @@ public class MobSystem {
         }
     }
 
-    /**
-     * Standard-turn teleport check for mobs with {@link Mob#teleportRate} &gt; 0. If the
-     * mob can see the player and there's a free tile adjacent to the player, jumps the
-     * mob there and runs the same door-leave / oil-pickup hooks a regular step would.
-     * Cooldown management is left to the caller — this method just performs the attempt
-     * and returns whether the jump landed.
-     */
     /** Total real-time duration of the teleport fade, ms. Split evenly between fade-out
      *  at origin (first half) and fade-in at destination (second half). */
     public static final int TELEPORT_FADE_TOTAL_MS = 1000;
     /** Half of {@link #TELEPORT_FADE_TOTAL_MS} — phase transition threshold. */
     public static final int TELEPORT_FADE_HALF_MS  = TELEPORT_FADE_TOTAL_MS / 2;
 
-    public static boolean tryTeleportToPlayer(Level level, Mob mob) {
-        if (mob == null || level == null) return false;
-        Mob player = TurnSystem.findPlayer(level);
-        if (player == null) return false;
-        if (!LevelUtilities.getLineOfSight(level, mob, player.position)) return false;
-        Point dest = MobHooks.freeAdjacentFloor(level, player.position);
+    /**
+     * Jump {@code mob} to a free tile adjacent to {@code target}. Caller is
+     * responsible for the LOS / free-tile pre-checks (the teleport ability
+     * picker does this in {@code pickAbilityTarget}); we still re-check the
+     * free-tile clause here defensively in case state shifted between the
+     * picker and this call. Runs the same per-step hooks a normal move would
+     * (door leave, oil pickup, ...).
+     */
+    public static boolean tryTeleportToTarget(Level level, Mob mob, Mob target) {
+        if (mob == null || level == null || target == null) return false;
+        if (target.position == null) return false;
+        Point dest = MobHooks.freeAdjacentFloor(level, target.position);
         if (dest == null) return false;
         Point origin = mob.position;
         int oldX = origin.tileX(), oldY = origin.tileY();
@@ -294,9 +293,8 @@ public class MobSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobTeleported(
                     mob, oldX, oldY, newX, newY));
         }
-        // The jump is a move — bill the standard move cost so the horror's ranged
-        // attack doesn't fire on the same turn it teleported.
-        TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+        // Move cost is the caller's concern — {@code tryCastAbilities} already
+        // bills attackCost after a successful cast, so we don't double-charge.
         return true;
     }
 
@@ -494,6 +492,39 @@ public class MobSystem {
         } else if (!aPlayer && !bPlayer) {
             if (aLearned) EventLog.add(Messages.attitudeMobOnMob(aName, bName));
             else          EventLog.add(Messages.attitudeMobOnMob(bName, aName));
+        }
+    }
+
+    /** Walk the projectile path from {@code from} to {@code to} and return the
+     *  position of the first mob standing in the way (excluding {@code shooter}),
+     *  or {@code to} itself if the trajectory is clear. The shooter's own tile is
+     *  always skipped so a caster doesn't block their own missile. Used by wand
+     *  fire and AI ranged shots so a target picked beyond a mob clips to that
+     *  intervening mob — otherwise the projectile would visually fly through the
+     *  blocker and resolve only at the original target. */
+    public static Point firstMobBlocking(Level level, Point from, Point to, Mob shooter) {
+        if (level == null || from == null || to == null) return to;
+        int x0 = from.tileX(), y0 = from.tileY();
+        int x1 = to.tileX(),   y1 = to.tileY();
+        int dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy;
+        int x = x0, y = y0;
+        while (true) {
+            if (!(x == x0 && y == y0)) {
+                for (Mob m : level.mobs) {
+                    if (m == shooter) continue;
+                    if (m.position == null) continue;
+                    if (m.position.tileX() == x && m.position.tileY() == y) {
+                        return m.position;
+                    }
+                }
+            }
+            if (x == x1 && y == y1) return to;
+            int e2 = err << 1;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 <  dx) { err += dx; y += sy; }
         }
     }
 
@@ -1220,14 +1251,17 @@ public class MobSystem {
                     && BuffSystem.hasBuff(caster, ab.cooldownTracker)) continue;
             Mob target = pickAbilityTarget(caster, level, ab, vision);
             if (target == null) continue;
-            if (ab.healAmount > 0) {
-                heal(level, target, ab.healAmount);
-            } else if (ab.applies != null) {
-                BuffSystem.apply(level, target, ab.applies,
+            switch (ab.kind) {
+                case BUFF -> BuffSystem.apply(level, target, ab.applies,
                         Math.max(1, ab.appliedLevel),
                         Math.max(1, ab.appliedDuration), caster);
-            } else {
-                continue; // ill-formed ability — neither heal nor buff
+                case HEAL -> heal(level, target, ab.healAmount);
+                case TELEPORT -> {
+                    // tryTeleportToTarget handles LOS, free-tile, and the
+                    // visual event; if it bails the ability is wasted, but
+                    // still costs the turn so the caster doesn't loop forever.
+                    tryTeleportToTarget(level, caster, target);
+                }
             }
             if (ab.cooldownTracker != null && ab.cooldownTurns > 0) {
                 BuffSystem.apply(level, caster, ab.cooldownTracker, 1,
@@ -1239,9 +1273,11 @@ public class MobSystem {
         return false;
     }
 
-    /** Nearest ally within {@code vision} (Chebyshev) that {@code ab} can target.
-     *  Buff abilities skip targets that already have {@code ab.applies}; heal
-     *  abilities skip targets at max HP. Self never qualifies. */
+    /** Nearest valid target within {@code vision} (Chebyshev) for {@code ab}.
+     *  {@code BUFF} / {@code HEAL} pick allies (buffs skip already-buffed
+     *  targets, heals skip full-HP targets); {@code TELEPORT} picks the nearest
+     *  enemy in line of sight with a free adjacent tile to land on. Self never
+     *  qualifies. */
     private static Mob pickAbilityTarget(Mob caster, Level level,
                                          Mob.MobAbility ab, double vision) {
         int cx = caster.position.tileX(), cy = caster.position.tileY();
@@ -1249,13 +1285,20 @@ public class MobSystem {
         int bestD = Integer.MAX_VALUE;
         for (Mob m : level.mobs) {
             if (m == caster || m.hp <= 0 || m.position == null) continue;
-            if (getAttitudeToMob(caster, m) != Attitude.ALLY) continue;
-            if (ab.healAmount > 0) {
-                if (m.hp >= m.effectiveStats().maxHp) continue;
-            } else if (ab.applies != null) {
-                if (BuffSystem.hasBuff(m, ab.applies)) continue;
-            } else {
-                continue;
+            switch (ab.kind) {
+                case BUFF -> {
+                    if (getAttitudeToMob(caster, m) != Attitude.ALLY) continue;
+                    if (BuffSystem.hasBuff(m, ab.applies)) continue;
+                }
+                case HEAL -> {
+                    if (getAttitudeToMob(caster, m) != Attitude.ALLY) continue;
+                    if (m.hp >= m.effectiveStats().maxHp) continue;
+                }
+                case TELEPORT -> {
+                    if (getAttitudeToMob(caster, m) != Attitude.ATTACK) continue;
+                    if (!LevelUtilities.getLineOfSight(level, caster, m.position)) continue;
+                    if (MobHooks.freeAdjacentFloor(level, m.position) == null) continue;
+                }
             }
             int d = Math.max(Math.abs(m.position.tileX() - cx),
                              Math.abs(m.position.tileY() - cy));
@@ -1388,37 +1431,26 @@ public class MobSystem {
             return;
         }
         switch (item.useBehavior) {
-            case DRINK -> {
-                ItemSystem.drinkPotion(level, mob, item);
-                TurnSystem.applyMoveCost(mob, mob.effectiveStats().attackCost);
-            }
-            case WAND -> aiCastWand(mob, item, level);
-            default -> { /* unreachable per the gate */ }
+            case DRINK -> ItemSystem.useItem(level, mob, item);
+            case WAND  -> aiCastWand(mob, item, level);
+            default    -> { /* unreachable per the gate */ }
         }
     }
 
-    /** AI wand cast. Mirrors {@code PlayController.beginWand}: summon wands spawn
-     *  the carried mob type adjacent to the caster; missile wands fire a
-     *  {@link com.bjsp123.rl2.event.GameEvent.WandMissileFired} at the nearest
-     *  attack target so the animator's pending-impact callback resolves damage
-     *  via {@link ItemSystem#applyWandImpact}. Tile-targeting element wands
-     *  (water/oil/fire/etc.) are deferred until friendly-fire AOE checks land. */
+    /** AI wand cast. Picks a target (no targeting UI) and delegates to the shared
+     *  {@link ItemSystem#fireWand} entry point so trajectory clipping, event
+     *  emission, and move cost stay identical between player and AI. Summon
+     *  wands ignore target. Tile-targeting element wands (water/oil/fire/etc.)
+     *  are deferred until friendly-fire AOE checks land. */
     private static void aiCastWand(Mob caster, com.bjsp123.rl2.model.Item wand, Level level) {
         if (wand.summonsWhenUsed != null) {
-            ItemSystem.castSummonWand(level, caster, wand);
-            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+            ItemSystem.fireWand(level, caster, wand, null);
             return;
         }
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
             Mob target = nearestAttackTarget(caster, level);
             if (target == null) return;
-            boolean trajectoryVisible = trajectoryTouchesVisible(level, caster.position, target.position);
-            if (level.events != null) {
-                level.events.add(new com.bjsp123.rl2.event.GameEvent.WandMissileFired(
-                        caster, caster.position, target.position,
-                        wand.wandEffect, wand, wand.level, trajectoryVisible));
-            }
-            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+            ItemSystem.fireWand(level, caster, wand, target.position);
         }
     }
 
@@ -1582,9 +1614,12 @@ public class MobSystem {
         }
         int dmg = rollRange(ss.rangedDamage);
         if (level.events != null) {
-            boolean trajectoryVisible = trajectoryTouchesVisible(level, shooter.position, target.position);
+            // Clip to the first mob in the way so the missile resolves on whoever
+            // it actually hits visually rather than passing through them.
+            Point impact = firstMobBlocking(level, shooter.position, target.position, shooter);
+            boolean trajectoryVisible = trajectoryTouchesVisible(level, shooter.position, impact);
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MagicMissileFired(
-                    shooter, shooter.position, target.position, dmg, trajectoryVisible));
+                    shooter, shooter.position, impact, dmg, trajectoryVisible));
         }
         int cooldownTurns = Math.max(0, ss.rangedRateOfFire - 1);
         if (cooldownTurns > 0) {
@@ -1746,8 +1781,15 @@ public class MobSystem {
         }
         Point dest = leaderApproachTile(mob, leader, level);
         if (dest == null) return false;
+        // Step toward the leader's approach tile here so callers can treat a true
+        // return as "fully handled, intent = FOLLOWING_LEADER" without needing to
+        // fall through to their own wander/step path. Previously this returned
+        // false after setting targetPosition, which left the caller to step but
+        // record the intent as WANDERING — making the look screen show a pet that
+        // was actually following its master as "Awake (Wandering)".
         mob.targetPosition = dest;
-        return false;
+        stepOrIdle(mob, level);
+        return true;
     }
 
     /** How many turns a just-hidden {@link Behavior#EXPLORE_HIDE} mob stays put. */

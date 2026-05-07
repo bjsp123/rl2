@@ -13,7 +13,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.bjsp123.rl2.logic.BuffSystem;
@@ -75,8 +74,16 @@ public class EncyclopediaRenderer extends Group {
 
     private final Skin skin;
     private final Container<Table> framed;
+    /** Overlay back button anchored at the bottom-right corner of {@link #framed}.
+     *  Mirrors the {@code framedWithBack} treatment {@link com.bjsp123.rl2.screen.MenuScreen}
+     *  applies to fullscreen menus — every modal window has the back glyph at the
+     *  same screen-relative offset. */
+    private final com.badlogic.gdx.scenes.scene2d.ui.Button backOverlay;
+    private static final float BACK_OVERLAY_INSET = 12f;
+    private static final float BACK_OVERLAY_SIZE  = 56f;
 
-    private final Map<Category, TextButton> tabButtons   = new EnumMap<>(Category.class);
+    private final Map<Category, com.badlogic.gdx.scenes.scene2d.ui.Button> tabButtons
+            = new EnumMap<>(Category.class);
     private final Map<Category, Table>      tabContent   = new EnumMap<>(Category.class);
     private final Map<Category, Label>      detailLabels = new EnumMap<>(Category.class);
     private final Map<Category, Image>      detailIcons  = new EnumMap<>(Category.class);
@@ -90,8 +97,21 @@ public class EncyclopediaRenderer extends Group {
             = new EnumMap<>(Category.class);
     private final Map<Category, List<Entry>> entries     = new EnumMap<>(Category.class);
     private final Map<Category, Entry>       selected    = new EnumMap<>(Category.class);
+    /** Per-category info panels (header + scrollable description + back). One
+     *  is visible at a time when the user has tapped a list entry; otherwise
+     *  the list view (tabs + grid) is visible. Stacked into {@link #infoStack}. */
+    private final Map<Category, Table>       infoPanels  = new EnumMap<>(Category.class);
+
+    /** Toggleable view layer — either the list view (tabs + entries) is
+     *  visible or the info panel for the picked entry. Per the UI rules a
+     *  window is one or the other, never both side-by-side. */
+    private com.badlogic.gdx.scenes.scene2d.ui.Stack listView;
+    private com.badlogic.gdx.scenes.scene2d.ui.Stack infoStack;
 
     private boolean open;
+    /** True when an entry has been picked from the list and the info panel is
+     *  showing; false when the list view is showing. */
+    private boolean showingInfo;
     private Category activeTab = Category.ITEMS;
 
     public EncyclopediaRenderer(Skin skin) {
@@ -112,20 +132,32 @@ public class EncyclopediaRenderer extends Group {
         frame.pad(8);
         frame.defaults().pad(2);
 
-        // Tabs row — one TextButton per category, manila-folder style aligned to
-        // the left so the active tab visually merges with the body panel below.
+        // Tabs row — one icon Button per category, manila-folder style aligned
+        // to the left so the active tab visually merges with the body panel
+        // below. Each tab shows the category's icon (from {@link IconSprites})
+        // instead of a text label so the strip stays compact across themes.
         Table tabs = new Table();
         tabs.left();
         tabs.defaults().pad(0);
         for (Category cat : Category.values()) {
-            TextButton btn = new TextButton(cat.label, skin, "tab");
+            com.badlogic.gdx.scenes.scene2d.ui.Button btn =
+                    new com.badlogic.gdx.scenes.scene2d.ui.Button(skin, "tab-icon");
+            com.badlogic.gdx.graphics.g2d.TextureRegion iconRegion =
+                    com.bjsp123.rl2.world.render.IconSprites.regionFor(iconForCategory(cat));
+            if (iconRegion != null) {
+                Image icon = new Image(iconRegion);
+                icon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
+                btn.add(icon).size(20, 20).pad(2);
+            } else {
+                btn.add(new Label(cat.label, skin, "default")).pad(2);
+            }
             btn.addListener(new ClickListener() {
                 @Override public void clicked(InputEvent e, float x, float y) {
                     setActiveTab(cat);
                 }
             });
             tabButtons.put(cat, btn);
-            tabs.add(btn).minWidth(72).height(26);
+            tabs.add(btn).minWidth(40).height(26);
         }
 
         // Body — one Table per tab, stacked so visibility-toggling switches tabs
@@ -159,13 +191,25 @@ public class EncyclopediaRenderer extends Group {
         contentLayer.add(body).expand().fill().pad(8);
         tabSection.add(contentLayer);
 
-        frame.add(tabSection).expand().fill().row();
+        // List view = the tab strip + entry grid; info view = the info panel
+        // for the picked entry. The two are siblings inside an outer Stack so
+        // we can flip visibility without rebuilding either side.
+        listView = new com.badlogic.gdx.scenes.scene2d.ui.Stack();
+        listView.add(tabSection);
 
-        TextButton closeBtn = new TextButton("Close", skin);
-        closeBtn.addListener(new ClickListener() {
-            @Override public void clicked(InputEvent e, float x, float y) { close(); }
-        });
-        frame.add(closeBtn).padTop(6);
+        infoStack = new com.badlogic.gdx.scenes.scene2d.ui.Stack();
+        for (Category cat : Category.values()) {
+            Table panel = infoPanels.get(cat);
+            if (panel != null) infoStack.add(panel);
+        }
+        infoStack.setVisible(false);
+
+        com.badlogic.gdx.scenes.scene2d.ui.Stack viewToggle =
+                new com.badlogic.gdx.scenes.scene2d.ui.Stack();
+        viewToggle.add(listView);
+        viewToggle.add(infoStack);
+
+        frame.add(viewToggle).expand().fill().row();
 
         framed = new Container<>(frame);
         framed.setBackground(com.bjsp123.rl2.ui.skin.UiTextures
@@ -174,22 +218,56 @@ public class EncyclopediaRenderer extends Group {
         framed.pack();
         addActor(framed);
 
+        // Overlay back button — added as a sibling of {@code framed} inside this
+        // Group and repositioned each frame in {@link #layoutForStage} so it sits
+        // {@code BACK_OVERLAY_INSET} px from the bottom-right corner of the panel
+        // regardless of inner-panel layout. Tap unwinds one level (info → list → close).
+        backOverlay = new com.badlogic.gdx.scenes.scene2d.ui.Button(skin, "action-icon");
+        com.badlogic.gdx.graphics.g2d.TextureRegion backRegion =
+                com.bjsp123.rl2.world.render.IconSprites.regionFor(
+                        com.bjsp123.rl2.world.render.IconSprites.Icon.BACK);
+        if (backRegion != null) {
+            Image backIcon = new Image(backRegion);
+            backIcon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
+            backOverlay.add(backIcon).size(32, 32).pad(8);
+        } else {
+            backOverlay.add(new Label("Back", skin, "default")).pad(4);
+        }
+        backOverlay.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent e, float x, float y) { back(); }
+        });
+        backOverlay.setSize(BACK_OVERLAY_SIZE, BACK_OVERLAY_SIZE);
+        addActor(backOverlay);
+
         setVisible(false);
         setTouchable(Touchable.enabled);
         addListener(new InputListener() {
             @Override public boolean touchDown(InputEvent e, float x, float y, int p, int b) {
                 if (!open) return false;
-                if (!withinFrame(x, y)) { close(); return true; }
+                if (!withinFrame(x, y)) { back(); return true; }
                 return false;
             }
             @Override public boolean keyDown(InputEvent e, int keycode) {
                 if (!open) return false;
-                if (keycode == Input.Keys.ESCAPE) { close(); return true; }
+                if (keycode == Input.Keys.ESCAPE) { back(); return true; }
                 return false;
             }
         });
 
         setActiveTab(activeTab);
+    }
+
+    /** Map each tab category to a glyph in the shared UI icon sheet. Categories
+     *  without a dedicated icon (BUFFS, GEMS) fall through to the generic
+     *  {@code OTHER} cell so every tab still shows artwork instead of text. */
+    private static com.bjsp123.rl2.world.render.IconSprites.Icon iconForCategory(Category cat) {
+        return switch (cat) {
+            case ITEMS     -> com.bjsp123.rl2.world.render.IconSprites.Icon.ITEMS;
+            case CREATURES -> com.bjsp123.rl2.world.render.IconSprites.Icon.MOBS;
+            case PERKS     -> com.bjsp123.rl2.world.render.IconSprites.Icon.PERKS;
+            case TERRAIN   -> com.bjsp123.rl2.world.render.IconSprites.Icon.TERRAIN;
+            case BUFFS, GEMS -> com.bjsp123.rl2.world.render.IconSprites.Icon.OTHER;
+        };
     }
 
     // ── Public entry points ─────────────────────────────────────────────────
@@ -204,7 +282,22 @@ public class EncyclopediaRenderer extends Group {
         if (getStage() != null) getStage().setKeyboardFocus(this);
     }
 
-    public void close() { open = false; setVisible(false); }
+    public void close() {
+        open = false;
+        setVisible(false);
+        // Reset to the list view so the next open() lands on the picker
+        // instead of whatever info window the user last viewed.
+        showListView();
+    }
+
+    /** Unified one-level back: from the info view, return to the list; from
+     *  the list, close the popup entirely. Bound to the Back button, the
+     *  ESC key, and the tap-outside-the-frame handler so all three feel
+     *  identical. */
+    private void back() {
+        if (showingInfo) showListView();
+        else             close();
+    }
 
     /** Open the encyclopaedia pre-selected on a particular entry. {@code id} is the
      *  natural key for that category — item-type string for items, mob-type string
@@ -236,6 +329,11 @@ public class EncyclopediaRenderer extends Group {
         float panelH = PanelSize.heightFor(PanelSize.Kind.LARGE, h);
         framed.setSize(panelW, panelH);
         framed.setPosition((w - panelW) / 2f, (h - panelH) / 2f);
+        if (backOverlay != null) {
+            backOverlay.setPosition(
+                    framed.getX() + panelW - BACK_OVERLAY_SIZE - BACK_OVERLAY_INSET,
+                    framed.getY() + BACK_OVERLAY_INSET);
+        }
     }
 
     @Override
@@ -262,6 +360,29 @@ public class EncyclopediaRenderer extends Group {
     private void selectEntry(Category cat, Entry e) {
         selected.put(cat, e);
         refreshDetail(cat);
+        showInfoView(cat);
+    }
+
+    /** Swap to the info view for {@code cat} — only the picked category's
+     *  info panel is visible inside {@link #infoStack}. */
+    private void showInfoView(Category cat) {
+        showingInfo = true;
+        if (listView != null)  listView.setVisible(false);
+        if (infoStack != null) {
+            infoStack.setVisible(true);
+            for (Category c : Category.values()) {
+                Table panel = infoPanels.get(c);
+                if (panel != null) panel.setVisible(c == cat);
+            }
+        }
+    }
+
+    /** Return to the list view (tabs + grid). Called by the info panel's Back
+     *  button and after {@link #close()} to reset state for the next open. */
+    private void showListView() {
+        showingInfo = false;
+        if (infoStack != null) infoStack.setVisible(false);
+        if (listView != null)  listView.setVisible(true);
     }
 
     /** Push the currently-selected entry's name / icon / detail into the detail
@@ -285,20 +406,53 @@ public class EncyclopediaRenderer extends Group {
             if (sel != null && sel.icon != null) {
                 w = sel.icon.getRegionWidth();
                 h = sel.icon.getRegionHeight();
-                // Buffs ship as 7×7 and creatures as 16×16 (or 16×32) — both
-                // render at 2× source so they read clearly in the detail header.
-                if (cat == Category.BUFFS || cat == Category.CREATURES) {
+                // Buffs ship as 7×7 and showcase categories (items / creatures)
+                // double the source size so the header sprite reads at glance.
+                if (cat == Category.BUFFS || isShowcaseCategory(cat)) {
                     w *= 2; h *= 2;
                 }
             }
-            cell.size(w, h);
+            // Showcase categories wrap the icon in a Container with a light
+            // slot background; pad the cell to leave a chrome border around
+            // the sprite so it matches the in-list presentation.
+            if (isShowcaseCategory(cat) && w > 0) {
+                int pad = 4;
+                cell.size(w + pad * 2, h + pad * 2);
+            } else {
+                cell.size(w, h);
+            }
             if (header != null) header.invalidateHierarchy();
         }
     }
 
     // ── Per-tab content ─────────────────────────────────────────────────────
 
+    /** Items and creatures get the showcase treatment in the detail panel:
+     *  2× source size, opaque light slot fill behind the sprite, and a 1-px
+     *  black silhouette outline. Other categories (buffs / gems / perks /
+     *  terrain) keep their plainer presentation. List rows are uniform across
+     *  all categories — see {@link #buildTabContent}. */
+    private static boolean isShowcaseCategory(Category cat) {
+        return cat == Category.ITEMS || cat == Category.CREATURES;
+    }
+
+    /** Produce a single-line summary of a longer detail block for the list row.
+     *  Takes the first non-empty line, trims to about 80 characters, and adds
+     *  an ellipsis if the result is shorter than the source. Null- and empty-
+     *  tolerant so categories without detail bodies don't print "null". */
+    private static String shortSummary(String detail) {
+        if (detail == null) return "";
+        String firstLine = detail;
+        int nl = detail.indexOf('\n');
+        if (nl >= 0) firstLine = detail.substring(0, nl);
+        firstLine = firstLine.trim();
+        final int MAX = 80;
+        if (firstLine.length() > MAX) firstLine = firstLine.substring(0, MAX - 1) + "…";
+        return firstLine;
+    }
+
     private Table buildTabContent(Category cat) {
+        boolean showcase = isShowcaseCategory(cat);
         // Left: scrollable list of (icon, name) rows.
         Table list = new Table();
         list.top().left();
@@ -306,32 +460,52 @@ public class EncyclopediaRenderer extends Group {
         for (Entry entry : entries.get(cat)) {
             Table row = new Table();
             row.setTouchable(Touchable.enabled);
-            row.left();
-            Image icon = new Image();
+            row.left().top();
+
+            // Every category uses the same 32×32 framed icon cell so list rows
+            // line up regardless of source sprite size — small buff icons (7×7
+            // in source) get scaled up into the 32×32 box via Scaling.fit, big
+            // mob sprites get scaled down. The OutlinedImage adds a 1-px black
+            // silhouette so light-fill cells don't bleed the contour.
+            int boxSize = 32;
+            Image icon = new com.bjsp123.rl2.ui.skin.OutlinedImage();
             icon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
-            int dispW = 16, dispH = 16;
             if (entry.icon != null) {
                 icon.setDrawable(new TextureRegionDrawable(entry.icon));
-                int srcW = entry.icon.getRegionWidth();
-                int srcH = entry.icon.getRegionHeight();
-                // Mobs render at 2× source so the silhouette reads at glance —
-                // single-cell species are 16×16 in the atlas which is too small
-                // to identify next to the descriptive name.
-                if (cat == Category.CREATURES) { dispW = srcW * 2; dispH = srcH * 2; }
-                // Halve the displayed size if the source sprite is taller than 32 px,
-                // so an oversized item doesn't dwarf its row.
-                else if (srcH > 32) { dispW = srcW / 2; dispH = srcH / 2; }
-                else                { dispW = srcW;     dispH = srcH; }
             }
-            row.add(icon).size(dispW, dispH).padRight(8);
+            Table bgCell = new Table();
+            bgCell.setBackground(skin.getDrawable("item-slot"));
+            bgCell.add(icon).size(boxSize, boxSize).pad(4);
+            row.add(bgCell).top().padRight(8);
+
+            // Right column: entry name on top, short description below — gives
+            // the user enough context to pick without opening the info view.
+            // prefWidth(0) on each wrapped Label cell forces libGDX to size
+            // the cell from the row width rather than the label's unwrapped
+            // text length, otherwise long descriptions blow the row's width
+            // out and the icon ends up squeezed to the left.
+            Table textCol = new Table();
+            textCol.left().top();
             Label nameLbl = new Label(entry.name, skin, "default");
-            row.add(nameLbl).left().expandX().fillX();
+            nameLbl.setWrap(true);
+            textCol.add(nameLbl).left().growX().prefWidth(0).row();
+            String summary = shortSummary(entry.detail);
+            if (summary != null && !summary.isEmpty()) {
+                Label descLbl = new Label(summary, skin, "dim");
+                descLbl.setWrap(true);
+                textCol.add(descLbl).left().growX().prefWidth(0);
+            }
+            row.add(textCol).left().top().expandX().fillX().growX();
+
             row.addListener(new ClickListener() {
                 @Override public void clicked(InputEvent e, float x, float y) {
                     selectEntry(cat, entry);
                 }
             });
-            list.add(row).left().fillX().padBottom(2).row();
+            // .growX() (= expandX + fillX) so the cell takes the full width
+            // of the list and the row's text column stretches across the rest
+            // of the panel instead of shrinking to its preferred width.
+            list.add(row).left().growX().padBottom(2).row();
         }
         // No skin for ScrollPane — StoneUi's skin doesn't register a ScrollPaneStyle,
         // and the no-arg style draws no chrome which is fine for a text list.
@@ -342,19 +516,36 @@ public class EncyclopediaRenderer extends Group {
         // Right: bordered detail panel — header (icon + name) on top, wrapping
         // description label below. The icon cell is resized on selection so the
         // image renders at native source size (or 2× for buffs whose tiny 7×7
-        // sprite would be invisible otherwise).
+        // sprite would be invisible otherwise). Showcase categories (items,
+        // creatures) wrap the icon in a light slot cell with an outline so the
+        // header sprite matches the in-list presentation.
         Table detail = new Table();
         detail.setBackground(skin.getDrawable("simple-panel"));
         detail.pad(8);
         detail.top().left();
 
-        Image detailIcon = new Image();
+        Image detailIcon = showcase
+                ? new com.bjsp123.rl2.ui.skin.OutlinedImage()
+                : new Image();
         detailIcon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
         Label detailNameL = new Label("", skin, "title");
         detailNameL.setWrap(true);
         Table headerRow = new Table();
         @SuppressWarnings({"rawtypes", "unchecked"})
-        com.badlogic.gdx.scenes.scene2d.ui.Cell iconCell = headerRow.add(detailIcon).top();
+        com.badlogic.gdx.scenes.scene2d.ui.Cell iconCell;
+        if (showcase) {
+            // Container fills its child to its own size minus padding so the icon
+            // scales (via Scaling.fit) to the inner area while the slot drawable
+            // paints the bezel around it. refreshDetail resizes the outer Cell on
+            // selection, which propagates through to the icon.
+            com.badlogic.gdx.scenes.scene2d.ui.Container<Image> bgCell =
+                    new com.badlogic.gdx.scenes.scene2d.ui.Container<>(detailIcon);
+            bgCell.setBackground(skin.getDrawable("item-slot"));
+            bgCell.fill().pad(4);
+            iconCell = headerRow.add(bgCell).top();
+        } else {
+            iconCell = headerRow.add(detailIcon).top();
+        }
         headerRow.add(detailNameL).left().padLeft(8).top().expandX().fillX().growX();
         detail.add(headerRow).growX().padBottom(8).left().row();
 
@@ -368,11 +559,36 @@ public class EncyclopediaRenderer extends Group {
         detailIconCells.put(cat, iconCell);
         detailLabels.put(cat, detailL);
 
-        // Outer split — list grabs a fixed-width column, detail expands.
+        // The detail panel is no longer rendered next to the list — per the
+        // UI rules a window is a list OR an info view, never both. The widgets
+        // built above (detailIcon, detailNameL, detailL, headerRow) are kept
+        // and registered into the maps so {@link #buildInfoPanel} can wrap
+        // them in a dedicated info-window panel that replaces the list view
+        // when an entry is tapped.
         Table content = new Table();
-        content.add(scroll) .width(220).top().expandY().fillY().padRight(8);
-        content.add(detail).top().expand().fill();
+        content.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(scroll, skin))
+                .top().expand().fill();
+        infoPanels.put(cat, buildInfoPanel(cat, detail));
         return content;
+    }
+
+    /** Wrap the per-category {@code detail} table built by {@link #buildTabContent}
+     *  in an info-window panel: scrollable body + a Back button at the bottom that
+     *  returns to the list view. The detail Table is the same object whose
+     *  {@code detailNameL} / {@code detailL} / icon cell are mutated by
+     *  {@link #refreshDetail}, so refreshing on selection still works without
+     *  any extra plumbing. */
+    private Table buildInfoPanel(Category cat, Table detail) {
+        Table panel = new Table();
+        panel.top();
+        panel.defaults().left();
+
+        ScrollPane detailScroll = new ScrollPane(detail);
+        detailScroll.setFadeScrollBars(false);
+        detailScroll.setScrollingDisabled(true, false);
+        panel.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(detailScroll, skin))
+                .expand().fill().top().left().row();
+        return panel;
     }
 
     // ── Entry builders ──────────────────────────────────────────────────────
@@ -431,28 +647,7 @@ public class EncyclopediaRenderer extends Group {
     }
 
     private static String describeCreature(Mob m) {
-        com.bjsp123.rl2.model.StatBlock s = m.effectiveStats();
-        StringBuilder sb = new StringBuilder();
-        sb.append(m.description).append('\n').append('\n');
-        sb.append("HP: ").append((int) Math.round(s.maxHp)).append('\n');
-        sb.append("Attack: ").append(s.accuracy)
-          .append("   Defense: ").append(s.evasion).append('\n');
-        sb.append("Damage: ").append(s.damage.min()).append('-').append(s.damage.max()).append('\n');
-        sb.append("Armor:  ").append(s.armor .min()).append('-').append(s.armor .max()).append('\n');
-        if (s.lightRadius > 0) {
-            sb.append("Light radius: ").append((int) s.lightRadius).append('\n');
-        }
-        if (s.terrifying)   sb.append("Terrifying — frightens nearby susceptible mobs.\n");
-        if (s.terrifiable)  sb.append("Frightens easily.\n");
-        if (s.teleportRate > 0)  sb.append("Can teleport.\n");
-        if (s.eatSpawnChance > 0) sb.append("Can eat corpses to spawn new creatures.\n");
-        if (s.mushroomEatSpawnChance > 0) sb.append("Can eat mushrooms to spawn new creatures.\n");
-        if (s.rangedDistance > 0) sb.append("Can attack from afar.\n");
-        if (s.flying) sb.append("Flies over chasms and traps.\n");
-        if (s.turnSpawnChance > 0) sb.append("Can bring new creatures into the world.\n");
-        if (s.fireImmune) sb.append("Immune to fire.\n");
-        if (s.poisonsOnAttack) sb.append("Venomous attacks.\n");
-        return sb.toString().trim();
+        return com.bjsp123.rl2.ui.MobLore.describe(m);
     }
 
     private List<Entry> buildBuffEntries() {

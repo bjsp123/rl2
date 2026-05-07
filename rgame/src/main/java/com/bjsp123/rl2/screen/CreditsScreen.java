@@ -1,6 +1,6 @@
 package com.bjsp123.rl2.screen;
 
-import com.badlogic.gdx.scenes.scene2d.ui.Container;
+import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.bjsp123.rl2.Rl2Game;
 
@@ -10,8 +10,8 @@ public class CreditsScreen extends MenuScreen {
 
     public CreditsScreen(Rl2Game game) { this.game = game; }
 
-    @Override protected float minVirtualWidth()  { return 560; }
-    @Override protected float minVirtualHeight() { return 500; }
+    @Override protected float minVirtualWidth()  { return 420; }
+    @Override protected float minVirtualHeight() { return 660; }
 
     @Override
     protected void build(Table root) {
@@ -28,12 +28,11 @@ public class CreditsScreen extends MenuScreen {
             "Thanks for playing.",
         };
         for (String s : lines) {
-            panel.add(label(s, "dim", 1.1f)).row();
+            panel.add(label(s, "dim", 1.6f)).row();
         }
-        panel.add(button("Back", () -> game.setScreen(new TitleScreen(game))))
-             .width(220).height(40).padTop(28);
 
-        Container<Table> framed = fixedPanel(panel, 520, 460);
+        Stack framed = framedWithBack(panel, 380, 600,
+                () -> game.setScreen(new TitleScreen(game)));
         root.center().add(framed);
     }
 

@@ -116,17 +116,9 @@ public class TurnSystem {
             // Satiety drains by one full turn's worth of ticks (and may cascade into
             // starvation HP loss for the player — see advanceSatiety).
             advanceSatiety(level, mob, STANDARD_TURN_TICKS);
-            // Teleport cadence — once per standard turn, fires when no cooldown buff
-            // is active AND the player is in line of sight; the cooldown is re-applied
-            // either way as a TELEPORT_COOLDOWN buff with duration = teleportRate.
-            int tRate = mob.effectiveStats().teleportRate;
-            if (tRate > 0
-                    && !BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.TELEPORT_COOLDOWN)) {
-                MobSystem.tryTeleportToPlayer(level, mob);
-                BuffSystem.apply(level, mob,
-                        com.bjsp123.rl2.model.Buff.BuffType.TELEPORT_COOLDOWN,
-                        /*level=*/1, tRate, mob);
-            }
+            // Teleport now lives on Mob.abilities (kind = TELEPORT) and dispatches
+            // through {@code MobSystem.tryCastAbilities} on the mob's own AI turn,
+            // so there's no per-turn special case to fire here.
         }
         // Fire lifetime decay + on-fire-mob damage. Both live on the standard-turn cadence
         // (fire damage interval = standard turn, fire lifetime measured in ticks but only

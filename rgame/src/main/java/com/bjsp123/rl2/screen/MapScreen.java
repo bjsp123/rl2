@@ -8,9 +8,9 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
-import com.badlogic.gdx.scenes.scene2d.ui.Container;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
+import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.Widget;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
@@ -94,9 +94,21 @@ public class MapScreen extends MenuScreen {
         body.addListener(new ClickListener() {
             @Override public void clicked(InputEvent event, float x, float y) {
                 int idx = body.levelIndexAt(x, y);
-                if (idx >= 0) {
-                    selectedIndex = idx;
-                    refreshInfoPanel();
+                if (idx < 0) return;
+                selectedIndex = idx;
+                refreshInfoPanel();
+                // Tap on a level that's been seen at all → open the full
+                // Level Info screen for it. Levels at 0% exploration stay
+                // unscoutable: the side panel still updates with what we
+                // know (depth, side) but the deep dump is gated.
+                Level lvl = (world != null && idx < world.levels.length)
+                        ? world.levels[idx] : null;
+                if (lvl != null && percentExplored(lvl) > 0) {
+                    final Level chosen = lvl;
+                    final com.badlogic.gdx.Screen self = MapScreen.this;
+                    com.badlogic.gdx.Game gameApp =
+                            (com.badlogic.gdx.Game) com.badlogic.gdx.Gdx.app.getApplicationListener();
+                    gameApp.setScreen(new LevelInfoScreen(() -> gameApp.setScreen(self), chosen));
                 }
             }
         });
@@ -109,10 +121,12 @@ public class MapScreen extends MenuScreen {
         Table mapFrame = new Table();
         mapFrame.setBackground(skin.getDrawable("simple-panel"));
         mapFrame.pad(6);
-        mapFrame.add(scroll).expand().fill();
+        mapFrame.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(scroll, skin))
+                .expand().fill();
         panel.add(mapFrame).expand().fill().row();
 
-        // Bottom row: Back button on the left, level-info panel on the right.
+        // Bottom row: level-info panel only. Back button is overlaid by
+        // framedWithBack at the panel's bottom-right corner.
         infoLabel = new Label("", skin, "default");
         infoLabel.setWrap(true);
         Table infoPanel = new Table();
@@ -120,15 +134,9 @@ public class MapScreen extends MenuScreen {
         infoPanel.pad(8);
         infoPanel.add(infoLabel).width(220).left();
         refreshInfoPanel();
+        panel.add(infoPanel).left().padTop(12);
 
-        Table bottomRow = new Table();
-        bottomRow.add(button("Back", onBack)).width(180).height(36).left();
-        bottomRow.add().expandX();   // spacer
-        bottomRow.add(infoPanel).right();
-        panel.add(bottomRow).fillX().padTop(12);
-
-        // Fixed-size outer panel — does not resize with map dimensions.
-        Container<Table> framed = fixedPanel(panel, 580, 700);
+        Stack framed = framedWithBack(panel, 580, 700, onBack);
         root.center().add(framed);
 
         // Force a layout pass so the ScrollPane knows its scroll bounds, then centre

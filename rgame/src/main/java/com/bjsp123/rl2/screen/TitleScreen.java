@@ -11,26 +11,28 @@ public class TitleScreen extends MenuScreen {
 
     public TitleScreen(Rl2Game game) { this.game = game; }
 
-    @Override protected float minVirtualWidth()  { return 400; }
-    @Override protected float minVirtualHeight() { return 620; }
+    @Override protected float minVirtualWidth()  { return 420; }
+    @Override protected float minVirtualHeight() { return 760; }
 
     @Override
     protected void build(Table root) {
         Table panel = new Table();
-        panel.pad(28).defaults().pad(6).width(220).height(44).fillX();
-        panel.add(button("Saved Games",         () -> game.setScreen(new SavesScreen(game)))).row();
-        panel.add(button("Hall of Fame",        () -> game.setScreen(new HallOfFameScreen(game)))).row();
-        panel.add(button("Arena",               () -> game.setScreen(new ArenaSetupScreen(game)))).row();
-        panel.add(button("Arena Hall of Fame",  () -> game.setScreen(new ArenaHallOfFameScreen(game)))).row();
-        panel.add(button("Settings",            () -> game.setScreen(new SettingsScreen(game)))).row();
-        panel.add(button("Credits",             () -> game.setScreen(new CreditsScreen(game)))).row();
-        panel.add(button("Quit",                Gdx.app::exit));
+        // Each row fills ~95% of the panel's inner width and stands ~72 px
+        // tall — matches the screenshot reference where the menu fills the
+        // bulk of the screen and every entry is comfortably thumb-sized.
+        panel.pad(20).defaults().pad(8).width(340).height(72).fillX();
+        panel.add(chunkyButton("Saved Games", () -> game.setScreen(new SavesScreen(game)))).row();
+        panel.add(chunkyButton("Hall of Fame", () -> game.setScreen(new HallOfFameScreen(game)))).row();
+        panel.add(chunkyButton("Arena",        () -> game.setScreen(new ArenaSetupScreen(game)))).row();
+        panel.add(chunkyButton("Settings",     () -> game.setScreen(new SettingsScreen(game)))).row();
+        panel.add(chunkyButton("Credits",      () -> game.setScreen(new CreditsScreen(game)))).row();
+        panel.add(chunkyButton("Quit",         Gdx.app::exit));
 
-        Container<Table> framed = fixedPanel(panel, 360, 360);
+        Container<Table> framed = fixedPanel(panel, 400, 640);
 
         root.center();
-        root.add(label("rl2", "title", 4f)).padBottom(8).row();
-        root.add(label("a roguelike", "dim", 1.2f)).padBottom(28).row();
+        root.add(label("rl2", "title", 5f)).padBottom(8).row();
+        root.add(label("a roguelike", "dim", 1.6f)).padBottom(28).row();
         root.add(framed);
     }
 }

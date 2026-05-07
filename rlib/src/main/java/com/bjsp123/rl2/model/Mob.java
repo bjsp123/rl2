@@ -191,24 +191,42 @@ public class Mob {
      * {@link Buff.BuffType#RANGED_COOLDOWN}.
      */
     public static final class MobAbility {
-        /** Buff to apply on the target. Null for heal abilities. */
+        /** Discriminator — drives the switch in {@code MobSystem.tryCastAbilities}
+         *  and {@code pickAbilityTarget} so each kind picks the right target
+         *  (ally vs enemy) and applies the right effect. New kinds plug in by
+         *  adding an enum constant + a switch arm in those two methods. */
+        public AbilityKind kind = AbilityKind.BUFF;
+        /** Buff to apply on the target. Used by {@link AbilityKind#BUFF}. */
         public Buff.BuffType applies;
         /** Buff level / strength of {@link #applies}. */
         public int appliedLevel;
         /** Buff duration (turns) of {@link #applies}. */
         public int appliedDuration;
-        /** Amount of HP to restore. {@code > 0} marks this as a heal ability;
-         *  buff abilities use 0. */
+        /** Amount of HP to restore. Used by {@link AbilityKind#HEAL}. */
         public int healAmount;
         /** Buff type used to track this ability's cooldown on the caster. */
         public Buff.BuffType cooldownTracker;
         /** Cooldown length in turns. */
         public int cooldownTurns;
 
+        public enum AbilityKind {
+            /** Cast a {@link Buff} on a friendly mob within vision (e.g. kobold
+             *  general's haste). */
+            BUFF,
+            /** Restore HP on a friendly mob within vision (e.g. kobold general's
+             *  heal). */
+            HEAL,
+            /** Jump the caster adjacent to the nearest enemy in line of sight
+             *  (e.g. stalking horror's blink). */
+            TELEPORT
+        }
+
         public MobAbility() {}
 
-        private MobAbility(Buff.BuffType applies, int level, int duration,
+        private MobAbility(AbilityKind kind,
+                           Buff.BuffType applies, int level, int duration,
                            int healAmount, Buff.BuffType cooldown, int cooldownTurns) {
+            this.kind            = kind;
             this.applies         = applies;
             this.appliedLevel    = level;
             this.appliedDuration = duration;
@@ -219,11 +237,18 @@ public class Mob {
 
         public static MobAbility buff(Buff.BuffType applies, int level, int duration,
                                       Buff.BuffType cooldown, int cooldownTurns) {
-            return new MobAbility(applies, level, duration, 0, cooldown, cooldownTurns);
+            return new MobAbility(AbilityKind.BUFF, applies, level, duration, 0,
+                    cooldown, cooldownTurns);
         }
 
         public static MobAbility heal(int amount, Buff.BuffType cooldown, int cooldownTurns) {
-            return new MobAbility(null, 0, 0, amount, cooldown, cooldownTurns);
+            return new MobAbility(AbilityKind.HEAL, null, 0, 0, amount,
+                    cooldown, cooldownTurns);
+        }
+
+        public static MobAbility teleport(Buff.BuffType cooldown, int cooldownTurns) {
+            return new MobAbility(AbilityKind.TELEPORT, null, 0, 0, 0,
+                    cooldown, cooldownTurns);
         }
     }
 

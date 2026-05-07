@@ -100,7 +100,6 @@ public class StoneUi implements Disposable {
         switch (UiStyleChoice.mode()) {
             case SHATTERED  -> createShattered();
             case MINIMALIST -> createMinimalist();
-            case STONEBASE  -> createStonebase();
         }
     }
 
@@ -123,34 +122,16 @@ public class StoneUi implements Disposable {
         panel        = shatteredSkin.panel;
         simplePanel  = shatteredSkin.panel;
         metalPanel   = shatteredSkin.dashboard;
-        itemSlot     = shatteredSkin.slot;
+        // Inventory + action-bar cells use the LIGHT slot so item sprites land on a
+        // high-contrast surface; the icons paint a 1-px black outline (OutlinedImage)
+        // to keep their silhouette crisp against the pale fill.
+        itemSlot     = shatteredSkin.slotLight;
         hudBar       = shatteredSkin.hudStrip;
-        actionBox    = shatteredSkin.slot;
+        actionBox    = shatteredSkin.slotLight;
         tab          = shatteredSkin.tab;
         tabActive    = shatteredSkin.tabActive;
-        equipSlot    = shatteredSkin.equipSlot;
+        equipSlot    = shatteredSkin.slotLight;
         panelOpenTop = shatteredSkin.panelOpenTop;
-
-        portraitTex        = loadTexFrom(BASE_STONEBASE, "Portrait.png");
-        iconCompassTex     = loadTexFrom(BASE_STONEBASE, "IconCompass.png");
-        iconQuestionTex    = loadTexFrom(BASE_STONEBASE, "IconQuestion.png");
-        iconMarkerTex      = loadTexFrom(BASE_STONEBASE, "IconMapmarker.png");
-        iconCogTex         = loadTexFrom(BASE_STONEBASE, "Cog.png");
-        iconChestTex       = loadTexFrom(BASE_STONEBASE, "IconChest.png");
-        iconExclamationTex = loadTexFrom(BASE_STONEBASE, "IconExclamation.png");
-    }
-
-    /** Default sandy stone look — original SPD-ish chrome with ornate frames and chunky buttons. */
-    private void createStonebase() {
-        // Corner sizes chosen to match the art so stretching only touches uniform centre pixels.
-        buttonUp     = npFrom(BASE_STONEBASE, "StoneButton.png",       3);
-        buttonDown   = npFrom(BASE_STONEBASE, "StoneButtonDown.png",   3);
-        panel        = npFrom(BASE_STONEBASE, "IntricateFrame.png",   10);
-        simplePanel  = npFrom(BASE_STONEBASE, "SmallFrame.png",        4);
-        metalPanel   = npFrom(BASE_STONEBASE, "MetalFrame.png",        8);
-        itemSlot     = npFrom(BASE_STONEBASE, "ItemSlot.png",          2);
-        hudBar       = npFrom(BASE_STONEBASE, "ActionBarBottom.png",   8, 8, 0, 0);
-        actionBox    = npFrom(BASE_STONEBASE, "ActionBox33x34.png",   10);
 
         portraitTex        = loadTexFrom(BASE_STONEBASE, "Portrait.png");
         iconCompassTex     = loadTexFrom(BASE_STONEBASE, "IconCompass.png");
@@ -170,16 +151,20 @@ public class StoneUi implements Disposable {
     private void createMinimalist() {
         buttonUp     = npFrom(BASE_MINIMALIST, "button_up.png",    5);
         buttonDown   = npFrom(BASE_MINIMALIST, "button_down.png",  5);
-        NinePatch framed = npFrom(BASE_MINIMALIST, "panel.png",    8);
+        // Panel + slot backgrounds load via {@link #npFromHalfAlpha} — every
+        // pixel's alpha is multiplied by 0.5 at load time so the gold-on-dark
+        // chrome becomes 50% transparent and the dungeon view shows through it.
+        // Buttons stay fully opaque so they remain visually solid for tapping.
+        NinePatch framed = npFromHalfAlpha(BASE_MINIMALIST, "panel.png", 8);
         panel        = framed;
         simplePanel  = framed;
         metalPanel   = framed;
-        NinePatch slot9 = npFrom(BASE_MINIMALIST, "slot.png",      5);
+        NinePatch slot9 = npFromHalfAlpha(BASE_MINIMALIST, "slot.png", 5);
         itemSlot     = slot9;
         actionBox    = slot9;
         // hudBar needs a strip that stretches horizontally but not vertically — reuse the
         // panel's corners for the L/R caps and zero top/bottom so the bevel stays put.
-        hudBar       = npFrom(BASE_MINIMALIST, "panel.png",        8, 8, 0, 0);
+        hudBar       = npFromHalfAlpha(BASE_MINIMALIST, "panel.png", 8, 8, 0, 0);
 
         portraitTex        = loadTexFrom(BASE_STONEBASE, "Portrait.png");
         iconCompassTex     = loadTexFrom(BASE_STONEBASE, "IconCompass.png");
@@ -216,11 +201,93 @@ public class StoneUi implements Disposable {
         return new NinePatch(tex, l, r, t, b);
     }
 
+    /** Same as {@link #npFrom} but every source pixel's alpha channel is
+     *  multiplied by 0.5 before the texture is uploaded — the resulting
+     *  9-patch renders 50% transparent so the scene behind it shows through.
+     *  Used by the Minimalist theme's panel / slot / hud-strip backgrounds. */
+    private NinePatch npFromHalfAlpha(String base, String filename, int corner) {
+        return npFromHalfAlpha(base, filename, corner, corner, corner, corner);
+    }
+    private NinePatch npFromHalfAlpha(String base, String filename,
+                                      int l, int r, int t, int b) {
+        Pixmap src = new Pixmap(Gdx.files.internal(base + filename));
+        Pixmap pm  = new Pixmap(src.getWidth(), src.getHeight(), Pixmap.Format.RGBA8888);
+        pm.setBlending(Pixmap.Blending.None);
+        pm.drawPixmap(src, 0, 0);
+        // Halve alpha across every pixel. The Pixmap encoding is RGBA8888 —
+        // the low 8 bits are the alpha channel, integer-divide by 2 to halve.
+        for (int y = 0; y < pm.getHeight(); y++) {
+            for (int x = 0; x < pm.getWidth(); x++) {
+                int rgba = pm.getPixel(x, y);
+                int a    = rgba & 0xFF;
+                int newA = a >>> 1;             // a / 2 with no sign-bit weirdness
+                pm.drawPixel(x, y, (rgba & 0xFFFFFF00) | newA);
+            }
+        }
+        Texture tex = new Texture(pm);
+        tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        src.dispose();
+        loaded.add(tex);
+        return new NinePatch(tex, l, r, t, b);
+    }
+
     private Texture loadTexFrom(String base, String filename) {
         Texture t = new Texture(Gdx.files.internal(base + filename));
         t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         loaded.add(t);
         return t;
+    }
+
+    /** Path to the bundled Pixel Operator TTF — Jayvee Enaguas's CC-0 raster
+     *  pixel font, sized to render crisply at 16-px native cap height. The
+     *  {@code Mono} variant is monospace; the regular {@code PixelOperator.ttf}
+     *  is proportional and reads more naturally for body text. */
+    private static final String FONT_PATH = "ui/fonts/PixelOperator.ttf";
+    /** Native-pixel rendering size for the Pixel Operator font. The face is
+     *  hand-pixelled at this size — rendering at any other size produces
+     *  fuzz, so we always rasterise at 16 and let {@link UiFontScale} scale
+     *  the resulting bitmap up via integer-multiple nearest-neighbour. */
+    private static final int FONT_PX = 16;
+
+    /** Construct the standard UI font — Pixel Operator (CC-0), rasterised once
+     *  at its native 16-px size with a 1-px black outline baked in by FreeType.
+     *  Every text surface in the game (HUD, popups, encyclopedia, character
+     *  stats, log) routes through this helper so they all share the same
+     *  crisp pixel-art aesthetic.
+     *
+     *  <p>The font's base scale is multiplied by {@link UiFontScale#scale()} so
+     *  the user-facing "UI Font Size" setting controls the size of every label
+     *  in the game from a single point. Per-call {@code setFontScale()} bumps
+     *  (e.g. a 1.6× title) compose on top of this base.
+     *
+     *  <p>If the TTF can't be loaded (e.g. a stripped asset bundle), falls back
+     *  to the hand-encoded {@link PixelFont} so the UI still renders. */
+    public static BitmapFont newDefaultFont() {
+        BitmapFont font;
+        try {
+            com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator gen =
+                    new com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator(
+                            Gdx.files.internal(FONT_PATH));
+            com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter
+                    p = new com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter();
+            p.size          = FONT_PX;
+            p.borderWidth   = 1f;
+            p.borderColor   = com.badlogic.gdx.graphics.Color.BLACK;
+            p.borderStraight = true;            // crisp non-anti-aliased outline
+            p.minFilter     = Texture.TextureFilter.Nearest;
+            p.magFilter     = Texture.TextureFilter.Nearest;
+            font = gen.generateFont(p);
+            gen.dispose();
+        } catch (Exception e) {
+            Gdx.app.error("StoneUi",
+                    "Pixel Operator load failed (" + e.getMessage()
+                  + "), falling back to PixelFont", e);
+            font = PixelFont.create();
+        }
+        font.setUseIntegerPositions(true);
+        font.getData().setScale(UiFontScale.scale());
+        return font;
     }
 
     /**
@@ -236,7 +303,7 @@ public class StoneUi implements Disposable {
      */
     public Skin newSkin() {
         Skin skin = new Skin();
-        BitmapFont font = new BitmapFont();
+        BitmapFont font = newDefaultFont();
         skin.add("default-font", font);
 
         // Per-theme text palette. SHATTERED uses muted whites + gold accents that match
@@ -289,6 +356,17 @@ public class StoneUi implements Disposable {
         tabStyle.checkedFontColor = textAccent;
         tabStyle.disabledFontColor = Color.GRAY;
         skin.add("tab", tabStyle);
+
+        // "tab-icon" — Button.ButtonStyle (no text cell) reusing the same tab
+        // drawables. Tabs that show an icon (encyclopedia / character stats)
+        // pick this style and add an Image child; tabs that show text use the
+        // "tab" TextButtonStyle above.
+        Button.ButtonStyle tabIconStyle = new Button.ButtonStyle();
+        tabIconStyle.up      = tabUp;
+        tabIconStyle.down    = tabActDr;
+        tabIconStyle.over    = tabActDr;
+        tabIconStyle.checked = tabActDr;
+        skin.add("tab-icon", tabIconStyle);
 
         // Register the bare NinePatch — Skin.getDrawable() will lazily wrap it as a
         // NinePatchDrawable on lookup, which is what we want for panel backgrounds.

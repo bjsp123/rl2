@@ -129,6 +129,10 @@ public class PlayScreen implements Screen {
         // lets a re-tap of the same action-slot button confirm an open targeting
         // session, or a tap on a different action swap the target picker to that
         // new action.
+        // Block map drag/pinch/scroll while any modal is open — per the UI
+        // rules, the topmost window owns input and the world behind it
+        // shouldn't slide under the user's finger.
+        cameraController.setInputBlocker(this::isAnyPopupOpen);
         Gdx.input.setInputProcessor(new InputMultiplexer(
                 cameraController, uiStage, targetingOverlay, lookMode, gameInput));
         game.currentPlay = this;
@@ -345,10 +349,7 @@ public class PlayScreen implements Screen {
             lastSnapshot = controller.snapshotOf(player);
         }
 
-        boolean overlayOpen = inventoryRenderer.isOpen() || lookMode.isActive()
-                || (craftingRenderer != null && craftingRenderer.isOpen())
-                || hudRenderer.isMenuOpen() || targetingOverlay.isActive()
-                || (characterStatsRenderer != null && characterStatsRenderer.isOpen());
+        boolean overlayOpen = isAnyPopupOpen();
         // Drain one frame off the animation gate BEFORE the tick check. This lets a
         // step that finishes "this frame" hand off to the next step in the same render
         // frame instead of leaving a one-frame stationary gap that reads as jerky.
@@ -427,6 +428,20 @@ public class PlayScreen implements Screen {
         uiStage.draw();
     }
 
+    /** True iff any modal popup or input-claiming overlay is currently open.
+     *  Used both as the game-tick gate (don't tick the world while a window
+     *  is up) and as the camera input blocker (don't pan the map under a
+     *  finger that's interacting with a popup). */
+    private boolean isAnyPopupOpen() {
+        if (inventoryRenderer != null && inventoryRenderer.isOpen()) return true;
+        if (lookMode != null && lookMode.isActive()) return true;
+        if (craftingRenderer != null && craftingRenderer.isOpen()) return true;
+        if (hudRenderer != null && hudRenderer.isMenuOpen()) return true;
+        if (targetingOverlay != null && targetingOverlay.isActive()) return true;
+        if (characterStatsRenderer != null && characterStatsRenderer.isOpen()) return true;
+        if (encyclopediaRenderer != null && encyclopediaRenderer.isOpen()) return true;
+        return false;
+    }
 
     private void recenterCameraOnPlayer() {
         Mob player = TurnSystem.findPlayer(world.currentLevel());

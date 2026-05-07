@@ -43,6 +43,9 @@ dependencies {
     implementation project(':rgame')
     implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    // FreeType native libraries — required by FreeTypeFontGenerator on the desktop
+    // backend; mirrors the gdx-platform natives line above.
+    implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
     // Explicit LWJGL 3.4.1 natives for desktop
     runtimeOnly "org.lwjgl:lwjgl::natives-windows"
     runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"

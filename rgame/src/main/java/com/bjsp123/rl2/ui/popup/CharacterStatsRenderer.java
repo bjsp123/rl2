@@ -37,8 +37,14 @@ public class CharacterStatsRenderer extends Group {
 
     private final Skin skin;
     private final Container<Table> framed;
-    private final TextButton tabCharacter, tabPerks, tabHistory;
+    private final com.badlogic.gdx.scenes.scene2d.ui.Button tabCharacter, tabPerks, tabHistory;
     private final Table contentCharacter, contentPerks, contentHistory;
+    /** Scroll-hinted wrappers around the three tab body Tables — these are what
+     *  the body Stack actually shows / hides for tab switching, so scroll arrow
+     *  visibility (and the underlying ScrollPane that hosts overflowing content
+     *  on small screens) belongs to the wrapper, not the bare Table. */
+    private final com.badlogic.gdx.scenes.scene2d.Actor contentCharacterScroll,
+            contentPerksScroll, contentHistoryScroll;
     private final Label characterLabel, historyLabel;
 
     private Mob player;
@@ -61,12 +67,13 @@ public class CharacterStatsRenderer extends Group {
         frame.pad(8);
         frame.defaults().pad(2);
 
-        // Tab row — uses the dedicated "tab" TextButtonStyle so the active tab visually
-        // merges with the body panel below it, and adjacent tabs sit flush (no gap)
-        // forming a continuous tab strip rather than a row of standalone buttons.
-        tabCharacter = new TextButton("Character", skin, "tab");
-        tabPerks     = new TextButton("Perks",     skin, "tab");
-        tabHistory   = new TextButton("History",   skin, "tab");
+        // Tab row — icon Buttons using the "tab-icon" style so the active tab
+        // visually merges with the body panel below it, and adjacent tabs sit
+        // flush (no gap) forming a continuous tab strip. Each tab shows its
+        // glyph from the shared UI icon sheet instead of a text label.
+        tabCharacter = makeIconTab(com.bjsp123.rl2.world.render.IconSprites.Icon.CHARACTER);
+        tabPerks     = makeIconTab(com.bjsp123.rl2.world.render.IconSprites.Icon.PERKS);
+        tabHistory   = makeIconTab(com.bjsp123.rl2.world.render.IconSprites.Icon.OTHER);
         wireTab(tabCharacter, 0);
         wireTab(tabPerks,     1);
         wireTab(tabHistory,   2);
@@ -115,15 +122,33 @@ public class CharacterStatsRenderer extends Group {
         // No minSize on the cell — letting the scroll pane expand/fill is enough,
         // and a hard minSize forces the body Stack at least 280 wide which makes the
         // popup overflow its panel chrome on narrow viewports.
-        contentHistory.add(historyScroll).expand().fill();
+        contentHistory.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(historyScroll, skin))
+                .expand().fill();
 
-        // Body — exactly one of the three content tables is visible at any time (driven
-        // by setActiveTab), so we stack them via a Stack and let scene2d hide/show them.
+        // Wrap each tab body in a ScrollPane + ScrollHinted so the long MobLore
+        // dump on the Character tab and the lengthy Perks list both stay usable
+        // on small screens / portrait orientations. History was already a
+        // scroll; wrap it the same way for the arrow indicators.
+        ScrollPane characterScroll = new ScrollPane(contentCharacter);
+        characterScroll.setFadeScrollBars(false);
+        characterScroll.setScrollingDisabled(true, false);
+        contentCharacterScroll = new com.bjsp123.rl2.ui.skin.ScrollHinted(characterScroll, skin);
+
+        ScrollPane perksScroll = new ScrollPane(contentPerks);
+        perksScroll.setFadeScrollBars(false);
+        perksScroll.setScrollingDisabled(true, false);
+        contentPerksScroll = new com.bjsp123.rl2.ui.skin.ScrollHinted(perksScroll, skin);
+
+        contentHistoryScroll = contentHistory;
+
+        // Body — exactly one of the three wrapped tab bodies is visible at any
+        // time (driven by setActiveTab), so we stack them via a Stack and let
+        // scene2d hide/show them.
         com.badlogic.gdx.scenes.scene2d.ui.Stack body =
                 new com.badlogic.gdx.scenes.scene2d.ui.Stack();
-        body.add(contentCharacter);
-        body.add(contentPerks);
-        body.add(contentHistory);
+        body.add(contentCharacterScroll);
+        body.add(contentPerksScroll);
+        body.add(contentHistoryScroll);
 
         // Tab section — Stack with a bordered content panel BELOW the tab strip;
         // tabs overlap only the panel's 2-px top border (manila-folder pattern,
@@ -191,10 +216,27 @@ public class CharacterStatsRenderer extends Group {
             && y >= framed.getY() && y <= framed.getY() + framed.getHeight();
     }
 
-    private void wireTab(TextButton btn, int idx) {
+    private void wireTab(com.badlogic.gdx.scenes.scene2d.ui.Button btn, int idx) {
         btn.addListener(new ClickListener() {
             @Override public void clicked(InputEvent e, float x, float y) { setActiveTab(idx); }
         });
+    }
+
+    /** Build a single icon-only tab Button for the given UI icon glyph. Uses
+     *  the shared "tab-icon" style so it shares the manila-folder chrome with
+     *  the encyclopedia's tabs. */
+    private com.badlogic.gdx.scenes.scene2d.ui.Button makeIconTab(
+            com.bjsp123.rl2.world.render.IconSprites.Icon icon) {
+        com.badlogic.gdx.scenes.scene2d.ui.Button btn =
+                new com.badlogic.gdx.scenes.scene2d.ui.Button(skin, "tab-icon");
+        com.badlogic.gdx.graphics.g2d.TextureRegion region =
+                com.bjsp123.rl2.world.render.IconSprites.regionFor(icon);
+        if (region != null) {
+            Image img = new Image(region);
+            img.setScaling(com.badlogic.gdx.utils.Scaling.fit);
+            btn.add(img).size(20, 20).pad(2);
+        }
+        return btn;
     }
 
     public void setPlayer(Mob p) { this.player = p; }
@@ -219,9 +261,12 @@ public class CharacterStatsRenderer extends Group {
         tabCharacter.setChecked(idx == 0);
         tabPerks    .setChecked(idx == 1);
         tabHistory  .setChecked(idx == 2);
-        contentCharacter.setVisible(idx == 0);
-        contentPerks    .setVisible(idx == 1);
-        contentHistory  .setVisible(idx == 2);
+        // Toggle the wrappers, not the bare Tables — the Stack body holds the
+        // ScrollHinted wrappers, so visibility on the Tables alone wouldn't
+        // hide the surrounding scroll/arrow chrome.
+        contentCharacterScroll.setVisible(idx == 0);
+        contentPerksScroll    .setVisible(idx == 1);
+        contentHistoryScroll  .setVisible(idx == 2);
         if (idx == 1) perksDirty = true;
     }
 
@@ -229,7 +274,10 @@ public class CharacterStatsRenderer extends Group {
     public void update() {
         if (!open || player == null) return;
 
-        // Character tab — plain key/value block.
+        // Character tab — identity + life-state header, then the same full
+        // creature stat block the encyclopedia uses (so the player can see
+        // every contribution: knockback, immunities, per-level scaling, AI
+        // abilities, etc., reflecting equipped items + active buffs live).
         StringBuilder sb = new StringBuilder();
         sb.append("Name:  ").append(player.name != null ? player.name : "Adventurer").append('\n');
         sb.append("Class: ").append(player.characterClass != null ? player.characterClass.displayName : "?")
@@ -242,18 +290,14 @@ public class CharacterStatsRenderer extends Group {
             sb.append("    (MAX)");
         }
         sb.append('\n');
-        com.bjsp123.rl2.model.StatBlock ps = player.effectiveStats();
-        sb.append("HP:    ").append((int) Math.round(player.hp)).append(" / ")
-          .append((int) Math.round(ps.maxHp)).append('\n');
+        sb.append("HP:      ").append((int) Math.round(player.hp)).append(" / ")
+          .append((int) Math.round(player.effectiveStats().maxHp)).append('\n');
         sb.append("Satiety: ").append(player.satiety).append(" / ")
           .append(GameBalance.STARTING_SATIETY).append('\n');
-        sb.append("Score: ").append(player.score).append('\n');
+        sb.append("Score:   ").append(player.score).append('\n');
         sb.append('\n');
-        sb.append("Attack:  ").append(ps.accuracy).append('\n');
-        sb.append("Defense: ").append(ps.evasion).append('\n');
-        sb.append("Damage:  ").append(meleeDamageLine(player)).append('\n');
-        sb.append("Armor:   ").append(armorLine(player)).append('\n');
-        sb.append('\n');
+        sb.append(com.bjsp123.rl2.ui.MobLore.describe(player));
+        sb.append("\n\n");
         sb.append("Perk points: ").append(player.perkPoints);
         characterLabel.setText(sb.toString());
 
@@ -314,18 +358,6 @@ public class CharacterStatsRenderer extends Group {
         }
     }
 
-    /** Current melee damage range formatted as "min-max", pulled directly from the
-     *  StatBlock pipeline so item level scaling and any future buff contributions show. */
-    private static String meleeDamageLine(Mob m) {
-        com.bjsp123.rl2.model.MinMax d = m.effectiveStats().damage;
-        return d.min() + "-" + d.max();
-    }
-
-    /** Current armor range, same StatBlock-sourced shape as {@link #meleeDamageLine}. */
-    private static String armorLine(Mob m) {
-        com.bjsp123.rl2.model.MinMax a = m.effectiveStats().armor;
-        return a.min() + "-" + a.max();
-    }
 
     /** Position the panel centred against the stage at a deterministic preferred size
      *  ({@link com.bjsp123.rl2.ui.skin.PanelSize.Kind#MEDIUM}). The size is independent

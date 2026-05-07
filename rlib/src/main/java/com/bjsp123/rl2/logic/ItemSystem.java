@@ -1,11 +1,13 @@
 package com.bjsp123.rl2.logic;
 
+import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.Behavior;
+import com.bjsp123.rl2.model.Perk;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.StatBlock;
 
@@ -461,6 +463,67 @@ public final class ItemSystem {
      * callers always pay the move cost regardless, so the wand burns a turn
      * even when the spawn is gated out by population caps or no-room.
      */
+    /**
+     * Single entry point for firing a wand, used by both the player (after the
+     * targeting overlay confirms a tile) and AI (after picking a target). Handles
+     * the three wand flavours uniformly:
+     * <ul>
+     *   <li>summon-style ({@code wand.summonsWhenUsed != null}) — {@code target}
+     *       is ignored; defers to {@link #castSummonWand}.</li>
+     *   <li>banishment ray — emits {@link GameEvent.WandRayFired}.</li>
+     *   <li>everything else — emits {@link GameEvent.WandMissileFired}.</li>
+     * </ul>
+     * Trajectory is clipped to the first mob standing between caster and target so
+     * a wand fired past an enemy resolves on that enemy. Caster always pays
+     * {@code attackCost}, even if the summon spawn was gated out — keeps the move
+     * cost identical between player and AI paths.
+     */
+    public static void fireWand(Level level, Mob caster, Item wand, Point target) {
+        if (level == null || caster == null || wand == null) return;
+        if (wand.summonsWhenUsed != null) {
+            castSummonWand(level, caster, wand);
+            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+            return;
+        }
+        if (target == null) return;
+        Point impact = MobSystem.firstMobBlocking(level, caster.position, target, caster);
+        boolean trajectoryVisible =
+                MobSystem.trajectoryTouchesVisible(level, caster.position, impact);
+        int effLvl = wand.level
+                + (caster.perks != null
+                        && caster.perks.getOrDefault(Perk.WANDMASTER, 0) > 0 ? 1 : 0);
+        if (level.events != null) {
+            if (wand.wandEffect == Item.ItemEffect.BANISHMENT) {
+                level.events.add(new GameEvent.WandRayFired(
+                        caster, caster.position, impact, wand.wandEffect, wand, effLvl,
+                        trajectoryVisible));
+            } else {
+                level.events.add(new GameEvent.WandMissileFired(
+                        caster, caster.position, impact, wand.wandEffect, wand, effLvl,
+                        trajectoryVisible));
+            }
+        }
+        TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+    }
+
+    /**
+     * Single entry point for the non-targeted use behaviours (eat / drink /
+     * grant-perk). Both the player's inventory popup and the AI item-use path
+     * route here so the move-cost (always {@code moveCost}) is identical and
+     * the dispatch table lives in one place. WAND and throw require a target
+     * and use {@link #fireWand} / {@link MobSystem#throwItem} instead.
+     */
+    public static void useItem(Level level, Mob user, Item item) {
+        if (level == null || user == null || item == null || item.useBehavior == null) return;
+        switch (item.useBehavior) {
+            case EAT         -> eat(level, user, item);
+            case DRINK       -> drinkPotion(level, user, item);
+            case GRANT_PERK  -> grantPerk(level, user, item);
+            case WAND, NONE  -> { return; } // need a target — caller routes elsewhere
+        }
+        TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+    }
+
     public static boolean castSummonWand(Level level, Mob caster, Item wand) {
         if (level == null || caster == null || wand == null) return false;
         if (wand.summonsWhenUsed == null) return false;

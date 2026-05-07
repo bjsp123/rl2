@@ -27,7 +27,7 @@ import com.bjsp123.rl2.world.render.Effect.EffectType;
 final class FxRenderer {
 
     private static final int CELL = 16;
-    private static final int ENTITY_Y_OFFSET = 2;
+    private static final int ENTITY_Y_OFFSET = 4;
 
     /** Wall-clock duration of one painted-fire frame, in milliseconds. */
     private static final int  FIRE_FRAME_MS      = 90;

@@ -34,18 +34,15 @@ public class LogView extends Actor implements Disposable {
     /** Width of the log area in screen pixels — caller can also override via setSize. */
     private static final float DEFAULT_WIDTH_PX = 320f;
 
-    public boolean logOn          = true;
-    public boolean showLowPriority = false;
-    public boolean showNonPlayer   = false;
-    /** When false (default), the log shows only {@link #COLLAPSED_LINES} of recent events;
-     *  when true it expands to {@link #MAX_LINES}. The HUD toggle button drives this. */
-    public boolean expanded        = false;
+    // Filter flags now live on the global LogPreferences so the Settings
+    // screen can flip them. The HUD log used to expose four toggle buttons
+    // for these; that's been folded into Settings → Log per the UI rules.
 
     private final BitmapFont font;
     private final List<LogEvent> scratch = new ArrayList<>(MAX_LINES);
 
     public LogView() {
-        this.font = new BitmapFont();
+        this.font = com.bjsp123.rl2.ui.skin.StoneUi.newDefaultFont();
         this.font.setUseIntegerPositions(false);
     }
 
@@ -56,7 +53,8 @@ public class LogView extends Actor implements Disposable {
      * pixelated except the text log".
      */
     public float preferredHeight() {
-        int lines = expanded ? MAX_LINES : COLLAPSED_LINES;
+        int lines = com.bjsp123.rl2.ui.skin.LogPreferences.expanded()
+                ? MAX_LINES : COLLAPSED_LINES;
         float pxScale = logFontScale();
         float lineH = font.getLineHeight() * pxScale;
         return lineH * lines + LINE_GAP_PX * Math.max(0, lines - 1) * pxScale;
@@ -67,17 +65,23 @@ public class LogView extends Actor implements Disposable {
         return DEFAULT_WIDTH_PX * logFontScale();
     }
 
-    /** Stage-units-per-screen-pixel for this log's text. Both UiScale and UiPixelScale get
-     *  divided out so the log renders at a fixed screen-pixel size — the log deliberately
-     *  ignores the pixel-scale knob so readable text wins over chunky pixels. */
+    /** Stage-units-per-screen-pixel for this log's text. UiScale and UiPixelScale
+     *  get divided out so the log renders at a fixed screen-pixel size; the
+     *  user-facing {@link com.bjsp123.rl2.ui.skin.LogFontScale} knob multiplies
+     *  on top so the player can bump the log without inflating the rest of the
+     *  UI. */
     private static float logFontScale() {
-        return 1f / (UiScale.scale() * UiPixelScale.scale());
+        return com.bjsp123.rl2.ui.skin.LogFontScale.scale()
+                / (UiScale.scale() * UiPixelScale.scale());
     }
 
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        if (!logOn) return;
+        if (!com.bjsp123.rl2.ui.skin.LogPreferences.logOn()) return;
 
+        boolean expanded        = com.bjsp123.rl2.ui.skin.LogPreferences.expanded();
+        boolean showLowPriority = com.bjsp123.rl2.ui.skin.LogPreferences.showLowPriority();
+        boolean showNonPlayer   = com.bjsp123.rl2.ui.skin.LogPreferences.showNonPlayer();
         int cap = expanded ? MAX_LINES : COLLAPSED_LINES;
         List<LogEvent> all = EventLog.all();
         scratch.clear();

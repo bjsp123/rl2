@@ -41,10 +41,26 @@ public class CameraController extends InputAdapter {
         this.animator = animator;
     }
 
+    /** Optional gate — when this supplier returns true, every touch / scroll
+     *  event is ignored (no pan, no zoom, no state mutation). Used by
+     *  {@link com.bjsp123.rl2.screen.PlayScreen} to suppress map drag while a
+     *  modal popup is open: per the UI rules, the topmost window owns input
+     *  and the world behind should not move under the user's finger. */
+    private java.util.function.BooleanSupplier inputBlocker;
+
+    public void setInputBlocker(java.util.function.BooleanSupplier blocker) {
+        this.inputBlocker = blocker;
+    }
+
+    private boolean blocked() {
+        return inputBlocker != null && inputBlocker.getAsBoolean();
+    }
+
     // ── Desktop scroll-wheel zoom ────────────────────────────────────────────
 
     @Override
     public boolean scrolled(float amountX, float amountY) {
+        if (blocked()) return false;
         camera.zoom = MathUtils.clamp(camera.zoom + amountY * 0.15f, MIN_ZOOM, MAX_ZOOM);
         return true;
     }
@@ -53,6 +69,14 @@ public class CameraController extends InputAdapter {
 
     @Override
     public boolean touchDown(int x, int y, int pointer, int button) {
+        // While a modal popup is up, swallow the touch state so a follow-up
+        // touchDragged can't pan the world. We DO clear our own pressed flags
+        // first so a stale "still holding" state doesn't persist after the
+        // popup closes.
+        if (blocked()) {
+            touch0Down = false; touch1Down = false; lastPinchDist = -1;
+            return false;
+        }
         if (pointer == 0) { touch0.set(x, y); touch0Down = true; lastX = x; lastY = y; }
         if (pointer == 1) { touch1.set(x, y); touch1Down = true; lastPinchDist = -1; }
         return false; // don't consume — GameInput also needs touchDown
@@ -67,6 +91,7 @@ public class CameraController extends InputAdapter {
 
     @Override
     public boolean touchDragged(int x, int y, int pointer) {
+        if (blocked()) return false;
         if (pointer == 0) touch0.set(x, y);
         if (pointer == 1) touch1.set(x, y);
 

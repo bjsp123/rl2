@@ -69,9 +69,6 @@ public final class StatBlock {
      *  (a future "potion of growth" could plausibly add to it). Most species set this
      *  intrinsically; modifiers haven't shown up yet but the slot is here. */
     public int size = 4;
-    /** Standard turns between teleport-to-player attempts. {@code 0} = no teleport.
-     *  Composes by sum. */
-    public int teleportRate = 0;
     /** Tile radius (Euclidean) of the fire-ball this mob releases on death. {@code 0}
      *  disables. Composes by sum. */
     public int fireExplosionRadiusOnDeath = 0;
@@ -125,7 +122,6 @@ public final class StatBlock {
         rangedCost       = 0;
         rangedDistance   = 0;
         size = 0;
-        teleportRate = 0;
         fireExplosionRadiusOnDeath = 0;
         eatSpawnChance = 0;
         mushroomEatSpawnChance = 0;
@@ -161,7 +157,6 @@ public final class StatBlock {
         rangedCost       = src.rangedCost;
         rangedDistance   = src.rangedDistance;
         size = src.size;
-        teleportRate = src.teleportRate;
         fireExplosionRadiusOnDeath = src.fireExplosionRadiusOnDeath;
         eatSpawnChance = src.eatSpawnChance;
         mushroomEatSpawnChance = src.mushroomEatSpawnChance;
@@ -206,7 +201,6 @@ public final class StatBlock {
         rangedCost       += other.rangedCost;
         rangedDistance   += other.rangedDistance;
         size += other.size;
-        teleportRate += other.teleportRate;
         fireExplosionRadiusOnDeath += other.fireExplosionRadiusOnDeath;
         eatSpawnChance += other.eatSpawnChance;
         mushroomEatSpawnChance += other.mushroomEatSpawnChance;

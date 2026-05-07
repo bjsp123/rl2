@@ -11,7 +11,6 @@ public class UiStyleChoice {
 
     public enum Mode {
         SHATTERED   ("Shattered"),
-        STONEBASE   ("Stonebase"),
         MINIMALIST  ("Minimalist");
 
         public final String displayName;

@@ -24,18 +24,22 @@ public final class UiTheme {
     private UiTheme() {}
 
     // ── Palette ─────────────────────────────────────────────────────────────
-    public static final Color BG_DARK     = rgb(0x0c0e12);  // slot fill (very dark)
-    public static final Color BG_PANEL    = rgb(0x1a1c20);  // panel / dashboard fill
-    public static final Color BG_PANEL_HI = rgb(0x22252a);  // pressed / focus highlight
-    public static final Color BORDER_DIM  = rgb(0x2a2f37);  // slot border, calm
-    public static final Color BORDER_MID  = rgb(0x3d434c);  // panel border
-    public static final Color BORDER_BRT  = rgb(0x5a606a);  // dashboard border
-    public static final Color ACCENT      = rgb(0xd8a040);  // gold — focus, level badges
-    public static final Color ACCENT_DIM  = rgb(0x8a6020);  // dim gold — pressed border
-    public static final Color TEXT_WHITE  = rgb(0xe8e8e8);
-    public static final Color TEXT_DIM    = rgb(0x989ca4);
+    // Dark text-area backgrounds (slate-on-warm) with cream borders + bright
+    // corner accents, bright yellow titles + highlights, white body text. The
+    // dark background is the chosen carrier for text — readable against either
+    // the dungeon view behind a popup or a screen-filling menu chrome.
+    public static final Color BG_DARK     = rgb(0x0c0a08);  // slot recess (deep dark)
+    public static final Color BG_PANEL    = rgb(0x1f1d1a);  // panel / dashboard / slot fill (text-area dark)
+    public static final Color BG_PANEL_HI = rgb(0x2d2a26);  // pressed / focus highlight (slightly brighter)
+    public static final Color BORDER_DIM  = rgb(0x3d3a35);  // slot grid border (visible against panel)
+    public static final Color BORDER_MID  = rgb(0xdcd6c4);  // panel border (cream)
+    public static final Color BORDER_BRT  = rgb(0xf0eadc);  // dashboard border + corner accents (bright cream)
+    public static final Color ACCENT      = rgb(0xf4ee2b);  // bright yellow — focus, level badges, titles
+    public static final Color ACCENT_DIM  = rgb(0xb09020);  // dim yellow — pressed border
+    public static final Color TEXT_WHITE  = rgb(0xffffff);
+    public static final Color TEXT_DIM    = rgb(0xa8a4a0);  // muted gray (legible on dark panel)
     public static final Color TEXT_WARN   = rgb(0xd44848);
-    public static final Color TEXT_TITLE  = rgb(0xd8b070);
+    public static final Color TEXT_TITLE  = rgb(0xf4ee2b);  // bright yellow (matches ACCENT)
 
     // ── Modal dim overlay ───────────────────────────────────────────────────
     /** Alpha applied to the full-stage black overlay drawn behind every modal popup. */

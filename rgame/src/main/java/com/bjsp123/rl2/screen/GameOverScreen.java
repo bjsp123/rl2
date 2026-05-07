@@ -41,7 +41,8 @@ public class GameOverScreen extends MenuScreen {
         ScrollPane scroll = new ScrollPane(eq);
         scroll.setFadeScrollBars(false);
         scroll.setScrollingDisabled(true, false);
-        panel.add(scroll).expand().fill().row();
+        panel.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(scroll, skin))
+                .expand().fill().row();
 
         panel.add(button("Return to Title", () -> game.setScreen(new TitleScreen(game))))
              .width(240).height(44).padTop(28);

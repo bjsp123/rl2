@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.screen;
 
-import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.logic.EventLog;
 import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.LevelSystem;
@@ -14,7 +13,6 @@ import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
-import com.bjsp123.rl2.model.Perk;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.World;
@@ -141,9 +139,8 @@ final class PlayController {
             return;
         }
         switch (ub) {
-            case EAT -> {
-                ItemSystem.eat(level, player, bound);
-                TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+            case EAT, DRINK, GRANT_PERK -> {
+                ItemSystem.useItem(level, player, bound);
                 afterMove(level);
             }
             case WAND -> beginWand(level, player, bound);
@@ -151,45 +148,44 @@ final class PlayController {
         }
     }
 
-    /** Apply the inventory popup's "Use" action. EAT resolves immediately; WAND
-     *  hands off to the targeting overlay (which is now visible because tryUse closed the
-     *  inventory before invoking this callback). */
+    /** Apply the inventory popup's "Use" action. Non-targeted use behaviours
+     *  (eat / drink / grant-perk) route through the shared
+     *  {@link ItemSystem#useItem} entry point; WAND hands off to the targeting
+     *  overlay (now visible because tryUse closed the inventory before invoking
+     *  this callback). */
     void useItemFromInventory(Mob user, Item item) {
         if (user == null || item == null || item.useBehavior == null) return;
         Level level = world.currentLevel();
         if (!TurnSystem.isPlayerTurn(level)) return;
         switch (item.useBehavior) {
-            case EAT -> {
-                ItemSystem.eat(level, user, item);
-                TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
-                afterMove(level);
-            }
-            case DRINK -> {
-                ItemSystem.drinkPotion(level, user, item);
-                TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+            case EAT, DRINK, GRANT_PERK -> {
+                ItemSystem.useItem(level, user, item);
                 afterMove(level);
             }
             case WAND -> beginWand(level, user, item);
-            case GRANT_PERK -> {
-                ItemSystem.grantPerk(level, user, item);
-                TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
-                afterMove(level);
-            }
             case NONE -> { /* unreachable — the popup gates Use on isUsable() */ }
         }
     }
 
-    /** Wand use entry point. Summon-style wands (non-null
-     *  {@link Item#summonsWhenUsed}) summon immediately with no targeting; tile-
-     *  targeting wands open the targeting overlay and emit the projectile event
-     *  on confirm. The Animator translates the event into a coloured missile /
-     *  ray and fires the impact callback on the final frame. */
+    /** Wand use entry point. Summon-style wands ({@code summonsWhenUsed != null})
+     *  summon immediately with no targeting; tile-targeting wands open the
+     *  targeting overlay. Both branches delegate to the shared
+     *  {@link ItemSystem#fireWand} so target clipping, event emission, and the
+     *  attack-cost charge are identical to the AI path. The animator translates
+     *  the resulting event into a coloured missile / ray and fires the impact
+     *  callback on the final frame. */
     private void beginWand(Level level, Mob user, Item wand) {
         if (wand.summonsWhenUsed != null) {
-            // Always burns a turn — the room-check / no-spot fallback inside
-            // castSummonWand silently no-ops the spawn but the user still pays.
-            ItemSystem.castSummonWand(level, user, wand);
-            TurnSystem.applyMoveCost(user, user.effectiveStats().attackCost);
+            ItemSystem.fireWand(level, user, wand, null);
+            // Drain the MobSpawned event into the Animator now so the spawn-grow
+            // freeze is in place before the next render frame's controller.tick
+            // can let the new pet take its first turn — otherwise the dog acts
+            // before its own spawn animation plays.
+            animator.consume(level);
+            // Force a renderer index rebuild — no game tick ran, so the mob-by-cell
+            // cache wouldn't otherwise pick up the freshly-summoned pet and its
+            // grow animation wouldn't play until the freeze finally drains.
+            levelRenderer.markDirty();
             afterMove(level);
             return;
         }
@@ -197,22 +193,13 @@ final class PlayController {
         targetingOverlay.setLevel(level);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
-            boolean trajectoryVisible =
-                    MobSystem.trajectoryTouchesVisible(cur, user.position, target);
-            int effLvl = wand.level
-                    + (user.perks != null
-                            && user.perks.getOrDefault(Perk.WANDMASTER, 0) > 0
-                            ? 1 : 0);
-            if (wand.wandEffect == Item.ItemEffect.BANISHMENT) {
-                cur.events.add(new GameEvent.WandRayFired(
-                        user, user.position, target, wand.wandEffect, wand, effLvl,
-                        trajectoryVisible));
-            } else {
-                cur.events.add(new GameEvent.WandMissileFired(
-                        user, user.position, target, wand.wandEffect, wand, effLvl,
-                        trajectoryVisible));
-            }
-            TurnSystem.applyMoveCost(user, user.effectiveStats().attackCost);
+            ItemSystem.fireWand(cur, user, wand, target);
+            // Drain the wand event into the Animator now so its visible-trajectory
+            // freeze contribution is in place before the next render frame's
+            // controller.tick gets a chance to run AI turns. Without this, the
+            // projectile and the adjacent enemy's reaction would queue together
+            // in the same consume() pass and animate concurrently.
+            animator.consume(cur);
         }, wand);
     }
 

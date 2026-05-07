@@ -58,3 +58,24 @@ rgame renders the game on the screen and operates the UI and presentation.
 - rlib → rgame: `Level.events` (List<GameEvent>) appended during tick, drained once by `Animator` before next frame. No listeners/callbacks.
 - rgame → rlib: direct calls through `PlayController` into `logic/` systems.
 - Both modules read the same CSVs at startup.
+
+## UI principles
+
+### Structure
+- **Burger menu is always present**, top-right corner, every screen. It always opens to the same three destinations: title screen, settings, encyclopedia.
+- **Non-game screens are vertical lists of large buttons.** No dense layouts, no side-by-side panels. One column, one button per row, big tap targets. Title, save list, hall of fame, settings, credits, arena setup all follow this shape.
+- **Every window is fully modal.** When a popup is open, only that popup receives input — the world, the HUD, and any windows behind it are inert. Stacked popups are forbidden; close-then-open or replace-in-place.
+- **Windows are either lists OR info, never both.** A list shows many items so the user can pick one; an info window shows the details of one thing. Tapping a list entry replaces the list with the info window for that entry; the info window's back button returns to the list. The encyclopedia today violates this (list + detail side-by-side) and needs to be split.
+- **The map counts as a "list" too.** The whole UX is a single pattern: user picks from a grid, a list, or the map → next screen is an info window about whatever was picked.
+- **Lists of "a few" items → vertical button list** (tabs of a popup, menu screens — column of full-width buttons).
+- **Lists of "many" items → grid** (inventory bag, encyclopedia entries — uniform cells laid out in a grid).
+- **Minimize window-tree depth.** A user shouldn't need three taps to do a one-tap action. Inline destructive controls where they read clearly — e.g. a delete glyph rendered on top of each row in the saved-game list (not "tap row → confirm dialog → delete"). The confirmation lives at the action site, not behind another screen.
+
+### Visual style
+- **Chunky.** Big fonts, big tap targets, integer pixel positions, nearest-neighbour filtering. Adopt the proportions of the user-supplied screenshots in [assets/scratch/shots/](assets/scratch/shots/) — thin single-line gray slot cells, manila-folder tabs at the bottom of modal panels, flat HUD strip at the bottom of the screen.
+- **Few nested or multi-part visuals.** A button is a button — not a Button containing a Container containing a Frame containing a Label inside a Stack. When tempted to layer chrome, ask: "could this be one drawable instead?". Replace 9-patch frames with flat fills + 1-px outline where reasonable.
+- **Where the screenshot reference doesn't have an analog**, deviate consciously. We have much more information to surface for mobs and items than SPD does — when an info window's content overflows, wrap the body in a scrolling panel (`ScrollHinted`) rather than splitting it into yet another window.
+
+### Settings as the granular-options bucket
+- **Settings holds every granular toggle and preference.** If a control is "do this less often" / "show this kind of thing" / "tweak this number", it lives in Settings, not on the HUD. Examples: the log filter buttons (log on/off, low-priority, non-player, expand) currently in the HUD all belong under Settings.
+- **Settings itself is compact + tabbed.** Tabs for Display, Gameplay, Log, Audio, etc., each tab a vertical list of toggles / sliders / dropdowns.

@@ -70,7 +70,6 @@ MOB_DEFAULTS: dict[str, str | None] = {
     "banishable": "false",
     # Death / spawn behaviours
     "fireExplosionRadiusOnDeath": "0",
-    "teleportRate": "0",
     "eatSpawnChance": "0",
     "eatSpawnType": None,
     "mushroomEatSpawnChance": "0",

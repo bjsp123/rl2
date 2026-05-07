@@ -50,8 +50,11 @@ import java.util.Random;
  */
 public class ArenaScreen implements Screen {
 
-    /** Animation-speed override applied while the arena is active. */
-    private static final int ARENA_ANIM_SPEED = 4;
+    /** Default animation-speed override applied while the arena is active.
+     *  The Speed button in the HUD flips between this and {@link #NORMAL_ANIM_SPEED}. */
+    private static final int ARENA_ANIM_SPEED  = 4;
+    /** Normal speed — used when the Speed button is toggled off. */
+    private static final int NORMAL_ANIM_SPEED = 1;
     /** Camera zoom — slightly more zoomed-out than dungeon play so the whole
      *  arena fits comfortably in view. */
     private static final float ARENA_ZOOM = 0.45f;
@@ -83,6 +86,8 @@ public class ArenaScreen implements Screen {
     private Skin uiSkin;
     private Table banner;
     private TextButton pauseButton;
+    private TextButton speedButton;
+    private boolean fastSpeed = true;
     private boolean paused;
     private boolean fightOver;
     private boolean recordedToHallOfFame;
@@ -418,11 +423,26 @@ public class ArenaScreen implements Screen {
             if (fightOver) return;
             runFastForward();
         })).width(120).height(30).pad(2);
+        // Speed toggle — flips between 4× (default for arena) and 1× (normal
+        // dungeon speed) so a user can slow the action down to inspect what's
+        // happening blow-by-blow without leaving the screen.
+        speedButton = makeButton(speedLabel(), () -> {
+            fastSpeed = !fastSpeed;
+            AnimationSpeed.setTransientOverride(
+                    fastSpeed ? ARENA_ANIM_SPEED : NORMAL_ANIM_SPEED);
+            speedButton.setText(speedLabel());
+        });
+        hud.add(speedButton).width(120).height(30).pad(2);
         hud.add(makeButton("Abort", () ->
                 game.setScreen(new ArenaSetupScreen(game))))
                 .width(80).height(30).pad(2);
         uiStage.addActor(hud);
     }
+
+    /** Label flips between "Speed: 4×" (fast) and "Speed: 1×" (normal) so the
+     *  current setting is visible without a separate "is-checked" indicator —
+     *  the button itself stays a momentary press. */
+    private String speedLabel() { return "Speed: " + (fastSpeed ? "4×" : "1×"); }
 
     private void buildBanner() {
         if (banner != null) return;

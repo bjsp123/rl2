@@ -60,17 +60,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static final float WATER_SCROLL_PX_PER_SEC = 1.2f;
 
     private static final int CELL = 16;
-    /** Pixels above the cell's bottom edge where a mob's baseline sits — its feet end here
-     *  and the sprite extends upward from this line. */
-    private static final int ENTITY_Y_OFFSET = 2;
+    /** Pixels above the cell's bottom edge where every drawable object's baseline sits —
+     *  mobs, items, effects, and terrain props (lamps, statues, throne, altar) all rest
+     *  on this line so figures read as standing on the floor rather than embedded in it. */
+    private static final int ENTITY_Y_OFFSET = 4;
 
     /** Uniform on-screen size for every mob's VISIBLE silhouette (not including blank padding). */
     private static final int MOB_VISIBLE_W = 16;
     private static final int MOB_VISIBLE_H = 20;
-    /** Extra Y lift (in y-up world pixels) applied to the player only — pushes the
-     *  character a few pixels above the tile's baseline so they read as standing on the
-     *  floor rather than embedded in it. NPCs keep the default baseline. */
-    private static final float PLAYER_Y_LIFT = 4f;
 
     /** Minimum radial taps for the silhouette outline at small widths — 8 hits the
      *  cardinals + diagonals every 45°. At thicker widths we add taps proportional
@@ -296,7 +293,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     @Override
     public void create() {
         batch = new SpriteBatch();
-        font  = new BitmapFont();
+        font  = com.bjsp123.rl2.ui.skin.StoneUi.newDefaultFont();
 
         // Player class poses.
         warriorFacing          = mobsFacingPair(CharacterClass.WARRIOR);
@@ -1215,9 +1212,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.setColor(Color.WHITE);
         drawLampShadow(x, y);
         // 1 cell wide × 2 cells tall, anchored at the floor cell so the upper half
-        // overhangs into the cell above (matching the source 32×64 art).
+        // overhangs into the cell above (matching the source 32×64 art). Y is lifted
+        // to the shared baseline so the lamp's foot sits on the same line as mobs/items.
         float dx = x * (float) CELL;
-        float dy = y * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
         drawRegionOutline(currentLampOrnament, dx, dy, CELL, 2f * CELL);
         batch.setColor(Color.WHITE);
         batch.draw(currentLampOrnament, dx, dy, CELL, 2f * CELL);
@@ -1329,7 +1327,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (level.tiles[x][y] != Tile.ALTAR) return;
         if (currentAltar == null) return;
         float dx = (x - 1) * (float) CELL;
-        float dy = y * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
         float dw = 3f * CELL;
         float dh = CELL;
         drawRegionOutline(currentAltar, dx, dy, dw, dh);
@@ -1353,7 +1351,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         drawStatueShadow(x, y, /* large= */ false);
         batch.setColor(Color.WHITE);
         float dx = x * (float) CELL;
-        float dy = y * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
         float dw = CELL;
         float dh = 2f * CELL;
         if (flip) {
@@ -1387,7 +1385,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         drawStatueShadow(x, y, large);
         batch.setColor(Color.WHITE);
         float dx = x * (float) CELL;
-        float dy = y * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
         // Display dimensions: small → 1 cell square; large → 1 cell wide × 2 cells tall.
         float dw = CELL;
         float dh = small ? CELL : 2f * CELL;
@@ -1649,13 +1647,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (region != null) {
             // Same silhouette outline mobs/statues/lamps get — items on the floor
             // were the lone holdout. Helps loot pop visually against busy terrain.
-            drawRegionOutline(region, x * (float) CELL, y * (float) CELL,
-                    (float) CELL, (float) CELL);
+            float dx = x * (float) CELL;
+            float dy = y * (float) CELL + ENTITY_Y_OFFSET;
+            drawRegionOutline(region, dx, dy, (float) CELL, (float) CELL);
             batch.setColor(Color.WHITE);
             // Source art is 32×32, world cell is 16×16 — libGDX scales 2:1 down with
             // nearest-neighbour filtering for crisp pixels.
-            batch.draw(region, x * (float) CELL, y * (float) CELL,
-                    (float) CELL, (float) CELL);
+            batch.draw(region, dx, dy, (float) CELL, (float) CELL);
         } else {
             System.err.println("No sprite for item " + it.type + " at (" + x + ", " + y + ")");
             //here draw a placeholder
@@ -1717,11 +1715,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
             ox += as.stepFromDx * (1f - t) * CELL;
             oy += as.stepFromDy * (1f - t) * CELL;
         }
-        // Player-only lift — sits the character a few pixels off the tile floor so they
-        // read as a figure standing on the ground rather than rooted into it.
-        if (mob.behavior == Behavior.PLAYER) {
-            oy += PLAYER_Y_LIFT;
-        }
         // Live mobs render fully opaque; the death-fade lives on rgame's ghost list,
         // not on the mob itself (killMob removes the mob from level.mobs immediately).
         // Teleport fade still multiplies in.
@@ -1775,7 +1768,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // (the centre orbit position when 3 gems are equipped) sits over the player's
         // chest rather than above their head. Horizontal centre is the tile centre.
         float cx     = mx * CELL + CELL * 0.5f + ox;
-        float midY   = my * CELL + CELL * 1.55f + oy + PLAYER_Y_LIFT;
+        float midY   = my * CELL + CELL * 1.55f + oy;
         float t      = (float) ((System.nanoTime() / 1_000_000L) % 1_000_000L) / 1000f;
         float iconSize = CELL * 0.6f;
         // Wider spread + larger bob amplitude so the gems are clearly orbiting around

@@ -52,8 +52,16 @@ public final class PortraitSprites {
         regions.put(CharacterClass.ROGUE,   head(mobsTex, cell, COL_ROGUE));
     }
 
+    /** Crop the portrait window from the player column. We pull pixel rows 8-40
+     *  (a 32-row band) rather than the top 32×32 cell because the player sprite's
+     *  silhouette starts a few pixels down inside its cell — the top 8 rows are
+     *  blank padding above the head, and rows 8-40 frame the head + chest cleanly
+     *  for a HUD avatar. */
+    private static final int PORTRAIT_Y0     = 8;
+    private static final int PORTRAIT_HEIGHT = 32;
+
     private static TextureRegion head(Texture mobsTex, int cell, int col) {
-        return new TextureRegion(mobsTex, col * cell, 0, cell, cell);
+        return new TextureRegion(mobsTex, col * cell, PORTRAIT_Y0, cell, PORTRAIT_HEIGHT);
     }
 
     /** No-op tear-down — the underlying texture is owned by {@link MobSprites};

@@ -57,7 +57,6 @@ public final class MobDefinition {
     public double  eatSpawnChance;
     public double  mushroomEatSpawnChance;
     public double  turnSpawnChance;
-    public int     teleportRate;
     public int     fireExplosionRadiusOnDeath;
 
     // ── Mob-side categorical fields ─────────────────────────────────────────
@@ -159,10 +158,14 @@ public final class MobDefinition {
 
     // ────────────────────────────────────────────────────────────────────────
 
-    /** One support-ability spec. {@code applies} == null means a heal
-     *  ability ({@code healAmount} carries the heal); otherwise a buff
-     *  ability with {@code buffLevel} / {@code buffDuration}. */
+    /** One support-ability spec — mirrors {@link com.bjsp123.rl2.model.Mob.MobAbility}'s
+     *  shape so {@link #apply} can copy it across one-for-one. {@link #kind}
+     *  drives the dispatch; the per-kind fields below are populated only for
+     *  the kinds that need them (buff fields for {@code BUFF}, {@code healAmount}
+     *  for {@code HEAL}, and just the cooldown fields for {@code TELEPORT}). */
     public static final class AbilityDef {
+        public com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind kind
+                = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.BUFF;
         public com.bjsp123.rl2.model.Buff.BuffType applies;
         public int    buffLevel;
         public int    buffDuration;
@@ -244,7 +247,6 @@ public final class MobDefinition {
         d.eatSpawnChance         = CsvTable.dblCell(row, "eatSpawnChance", 0);
         d.mushroomEatSpawnChance = CsvTable.dblCell(row, "mushroomEatSpawnChance", 0);
         d.turnSpawnChance        = CsvTable.dblCell(row, "turnSpawnChance", 0);
-        d.teleportRate                 = CsvTable.intCell(row, "teleportRate", 0);
         d.fireExplosionRadiusOnDeath   = CsvTable.intCell(row, "fireExplosionRadiusOnDeath", 0);
 
         d.eatSpawnType         = CsvTable.str(row, "eatSpawnType", null);
@@ -299,8 +301,13 @@ public final class MobDefinition {
     }
 
     /** Parse the {@code abilities} cell.
-     *  Format: {@code buff:HASTED:2:8:HASTE_COOLDOWN:6 ; heal:15:HEAL_COOLDOWN:6}
-     *  — semicolon separates abilities, colon separates fields. */
+     *  Format examples:
+     *  <ul>
+     *    <li>{@code buff:HASTED:2:8:HASTE_COOLDOWN:6}</li>
+     *    <li>{@code heal:15:HEAL_COOLDOWN:6}</li>
+     *    <li>{@code teleport:TELEPORT_COOLDOWN:15}</li>
+     *  </ul>
+     *  Semicolon separates abilities, colon separates fields. */
     private static List<AbilityDef> parseAbilities(String cell) {
         List<AbilityDef> out = new ArrayList<>();
         if (cell == null || cell.isEmpty()) return out;
@@ -313,6 +320,7 @@ public final class MobDefinition {
             String kind = parts[0];
             if ("buff".equals(kind)) {
                 // buff:<BuffType>:<level>:<duration>:<cooldownBuff>:<cooldownTurns>
+                a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.BUFF;
                 a.applies         = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[1]);
                 a.buffLevel       = Integer.parseInt(parts[2]);
                 a.buffDuration    = Integer.parseInt(parts[3]);
@@ -320,9 +328,15 @@ public final class MobDefinition {
                 a.cooldownTurns   = Integer.parseInt(parts[5]);
             } else if ("heal".equals(kind)) {
                 // heal:<amount>:<cooldownBuff>:<cooldownTurns>
+                a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.HEAL;
                 a.healAmount      = Integer.parseInt(parts[1]);
                 a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[2]);
                 a.cooldownTurns   = Integer.parseInt(parts[3]);
+            } else if ("teleport".equals(kind)) {
+                // teleport:<cooldownBuff>:<cooldownTurns>
+                a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.TELEPORT;
+                a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[1]);
+                a.cooldownTurns   = Integer.parseInt(parts[2]);
             } else {
                 throw new IllegalArgumentException("unknown ability kind: " + kind);
             }
@@ -426,7 +440,6 @@ public final class MobDefinition {
         m.intrinsic.eatSpawnChance         = eatSpawnChance;
         m.intrinsic.mushroomEatSpawnChance = mushroomEatSpawnChance;
         m.intrinsic.turnSpawnChance        = turnSpawnChance;
-        m.intrinsic.teleportRate           = teleportRate;
         m.intrinsic.fireExplosionRadiusOnDeath = fireExplosionRadiusOnDeath;
 
         m.eatSpawnType         = eatSpawnType;
@@ -460,13 +473,14 @@ public final class MobDefinition {
 
         // Abilities.
         for (AbilityDef a : abilities) {
-            if (a.applies != null) {
-                m.abilities.add(Mob.MobAbility.buff(
+            switch (a.kind) {
+                case BUFF -> m.abilities.add(Mob.MobAbility.buff(
                         a.applies, a.buffLevel, a.buffDuration,
                         a.cooldownTracker, a.cooldownTurns));
-            } else {
-                m.abilities.add(Mob.MobAbility.heal(
+                case HEAL -> m.abilities.add(Mob.MobAbility.heal(
                         a.healAmount, a.cooldownTracker, a.cooldownTurns));
+                case TELEPORT -> m.abilities.add(Mob.MobAbility.teleport(
+                        a.cooldownTracker, a.cooldownTurns));
             }
         }
 

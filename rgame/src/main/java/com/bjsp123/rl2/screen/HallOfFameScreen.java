@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.screen;
 
-import com.badlogic.gdx.scenes.scene2d.ui.Container;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
+import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.HallOfFameEntry;
@@ -14,8 +14,8 @@ public class HallOfFameScreen extends MenuScreen {
 
     public HallOfFameScreen(Rl2Game game) { this.game = game; }
 
-    @Override protected float minVirtualWidth()  { return 820; }
-    @Override protected float minVirtualHeight() { return 680; }
+    @Override protected float minVirtualWidth()  { return 420; }
+    @Override protected float minVirtualHeight() { return 720; }
 
     @Override
     protected void build(Table root) {
@@ -28,29 +28,26 @@ public class HallOfFameScreen extends MenuScreen {
         list.defaults().left().pad(2);
         List<HallOfFameEntry> entries = game.hallOfFame.entries;
         if (entries.isEmpty()) {
-            list.add(label("No entries yet — die first.", "dim", 1f));
+            list.add(label("No entries yet — die first.", "dim", 1.6f));
         } else {
             list.add(label(com.bjsp123.rl2.util.Fmt.of("%-4s %-10s %-7s %-7s  %s",
-                    "#", "Class", "Score", "Depth", "Equipment"), "dim", 1f)).row();
+                    "#", "Class", "Score", "Depth", "Equipment"), "dim", 1.6f)).row();
             for (int i = 0; i < entries.size(); i++) {
                 HallOfFameEntry e = entries.get(i);
                 String eq = String.join(", ", e.equipment);
                 if (eq.length() > 60) eq = eq.substring(0, 57) + "...";
                 list.add(label(com.bjsp123.rl2.util.Fmt.of("%-4d %-10s %-7d %-7d  %s",
-                        i + 1, e.charClass, e.score, e.depth, eq), "default", 1f)).row();
+                        i + 1, e.charClass, e.score, e.depth, eq), "default", 1.6f)).row();
             }
         }
         ScrollPane scroll = new ScrollPane(list);
         scroll.setFadeScrollBars(false);
         scroll.setScrollingDisabled(true, false);
-        panel.add(scroll).expand().fill().row();
+        panel.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(scroll, skin))
+                .expand().fill().row();
 
-        panel.add(button("Back", () -> game.setScreen(new TitleScreen(game))))
-             .width(220).height(40).padTop(24);
-
-        // Fixed-size panel — entry count varies, but the visible window does not. The
-        // ScrollPane handles overflow when there are more entries than fit.
-        Container<Table> framed = fixedPanel(panel, 780, 600);
+        Stack framed = framedWithBack(panel, 380, 660,
+                () -> game.setScreen(new TitleScreen(game)));
         root.center().add(framed).expand().fill().pad(20);
     }
 

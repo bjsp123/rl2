@@ -51,7 +51,7 @@ public class CraftingRenderer extends Group {
 
     private final Container<Table> framed;
     private final Table content;
-    private final TextButton tabCombineBtn, tabRecipesBtn;
+    private final com.badlogic.gdx.scenes.scene2d.ui.Button tabCombineBtn, tabRecipesBtn;
     private final Table combineTab, recipesTab;
 
     /** The three crafting input cells. {@link #slots}[i] holds the Item placed in cell i,
@@ -84,16 +84,18 @@ public class CraftingRenderer extends Group {
         // tab section so the active tab can visually overlap the panel's top border.
         Table tabRow = new Table();
         tabRow.defaults().pad(0);
-        tabCombineBtn = new TextButton("Combine", skin, "tab");
-        tabRecipesBtn = new TextButton("Recipes", skin, "tab");
+        // Icon tabs: combine cell uses the "equipment" glyph (mash-things-
+        // together imagery), recipes uses "book" (recipe book).
+        tabCombineBtn = makeIconTab(com.bjsp123.rl2.world.render.IconSprites.Icon.EQUIPMENT);
+        tabRecipesBtn = makeIconTab(com.bjsp123.rl2.world.render.IconSprites.Icon.BOOK);
         tabCombineBtn.addListener(new ClickListener() {
             @Override public void clicked(InputEvent e, float x, float y) { setTab(Tab.COMBINE); }
         });
         tabRecipesBtn.addListener(new ClickListener() {
             @Override public void clicked(InputEvent e, float x, float y) { setTab(Tab.RECIPES); }
         });
-        tabRow.add(tabCombineBtn).minWidth(96).height(26);
-        tabRow.add(tabRecipesBtn).minWidth(96).height(26);
+        tabRow.add(tabCombineBtn).minWidth(40).height(26);
+        tabRow.add(tabRecipesBtn).minWidth(40).height(26);
 
         // ── Combine tab ───────────────────────────────────────────────────
         combineTab = new Table();
@@ -137,7 +139,8 @@ public class CraftingRenderer extends Group {
         // bar; the recipes list is short enough that scrolling is a nice-to-have.
         ScrollPane scroll = new ScrollPane(list);
         scroll.setFadeScrollBars(false);
-        recipesTab.add(scroll).expand().fill().left();
+        recipesTab.add(new com.bjsp123.rl2.ui.skin.ScrollHinted(scroll, skin))
+                .expand().fill().left();
 
         // Tab content goes in a Stack — both tabs occupy the same body area; only
         // the visible one renders. Switching tabs is a setVisible() toggle (see
@@ -283,6 +286,22 @@ public class CraftingRenderer extends Group {
     }
 
     // ── Internals ───────────────────────────────────────────────────────────
+
+    /** Build a single icon-only tab Button using the shared "tab-icon" style. */
+    private com.badlogic.gdx.scenes.scene2d.ui.Button makeIconTab(
+            com.bjsp123.rl2.world.render.IconSprites.Icon icon) {
+        com.badlogic.gdx.scenes.scene2d.ui.Button btn =
+                new com.badlogic.gdx.scenes.scene2d.ui.Button(skin, "tab-icon");
+        com.badlogic.gdx.graphics.g2d.TextureRegion region =
+                com.bjsp123.rl2.world.render.IconSprites.regionFor(icon);
+        if (region != null) {
+            com.badlogic.gdx.scenes.scene2d.ui.Image img =
+                    new com.badlogic.gdx.scenes.scene2d.ui.Image(region);
+            img.setScaling(com.badlogic.gdx.utils.Scaling.fit);
+            btn.add(img).size(20, 20).pad(2);
+        }
+        return btn;
+    }
 
     private void setTab(Tab t) {
         tab = t;

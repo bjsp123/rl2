@@ -42,9 +42,17 @@ import com.bjsp123.rl2.logic.TurnSystem;
  */
 public class HudRenderer extends Group {
 
-    private static final int ACTION_BTN  = 32;   // bottom-right action + inventory cells
-    private static final int BOTTOM_BTN  = 32;   // wait / look / info squares
-    private static final int INFO_BTN    = 32;   // burger
+    private static final int ACTION_BTN     = 48;   // bottom-right action cells —
+                                                    // larger than the 32-px item sprites so the
+                                                    // sprite + outline sit inside a visible bezel
+    /** Inventory cell — same width as the action cells but slightly taller so it
+     *  reads as the head-of-row "open my bag" button rather than a 7th quickslot. */
+    private static final int INVENTORY_BTN_W = ACTION_BTN;
+    private static final int INVENTORY_BTN_H = ACTION_BTN + 8;
+    private static final int BOTTOM_BTN  = ACTION_BTN;   // wait / look / info squares — match
+                                                         // the quickslot footprint so the HUD
+                                                         // tap targets are uniformly thumb-sized
+    private static final int INFO_BTN    = ACTION_BTN;   // burger
     private static final int BAR_W       = 140;
     private static final int BAR_H       = 12;
     /** Inset for the top-left portrait + bars cluster. Bigger than 0 so the bars
@@ -83,18 +91,17 @@ public class HudRenderer extends Group {
     private final Table      menuPanel;
     private boolean menuOpen;
 
-    // Bottom-left — Wait, Look, Info
-    private final TextButton waitBtn;
+    // Bottom-left — Look only (Wait was redundant with tap-on-player / SPACE,
+    // Info / Map moved into the burger menu).
     private final Button     lookBtn;
-    private final Button     infoBtn;
     private final Table      bottomLeft;
 
-    // Bottom-right — 6 action buttons + inventory button
+    // Bottom-right — 6 action buttons + inventory button (Combine moved
+    // exclusively into the inventory popup so it doesn't crowd the HUD).
     private final ActionButton[] actionBtns = new ActionButton[6];
     private final Image[]      actionIcons = new Image[6];
     private final Item[]       actionIconItem = new Item[6];
     private final Button       inventoryBtn;
-    private final Button       combineBtn;
     private final Table        bottomRight;
     /** Top-left portrait — tap (or {@code c}) opens the character screen. The button
      *  body is a class-aware Image actor whose drawable is swapped per frame in
@@ -114,8 +121,7 @@ public class HudRenderer extends Group {
      *  the current player without re-wiring on level change. */
     private java.util.function.Supplier<Mob> playerSupplier;
     private final LogView      logView;
-    private final TextButton   logToggleBtn, lowToggleBtn, npcToggleBtn, expandToggleBtn;
-    private final Table        logToggleRow;
+    // Log filter / expand toggles moved to the Settings → Log tab per the UI rules.
     private IntConsumer        onActionUse;
     private com.bjsp123.rl2.ui.hud.ActionBar  actionBar;
 
@@ -201,9 +207,13 @@ public class HudRenderer extends Group {
             closeMenu();
             if (onOpenSettings != null) onOpenSettings.run();
         })).width(180).height(30).pad(3).row();
-        menuPanel.add(makeMenuItem("Level Info",      () -> {
+        menuPanel.add(makeMenuItem("Map",             () -> {
             closeMenu();
-            if (onOpenLevelInfo != null) onOpenLevelInfo.run();
+            // The Map screen is the entry point for Level Info — tapping a
+            // partially-explored level there pops up its details. Keeping
+            // Level Info OUT of this menu prevents the user from short-cutting
+            // to a level they haven't actually scouted yet.
+            if (onOpenInfo != null) onOpenInfo.run();
         })).width(180).height(30).pad(3).row();
         menuPanel.add(makeMenuItem("Encyclopaedia",   () -> {
             closeMenu();
@@ -219,21 +229,14 @@ public class HudRenderer extends Group {
         addActor(burgerBtn);
         addActor(menuPanel);
 
-        // ── Bottom-left: Wait / Look / Info ─────────────────────────────
-        // Wait fires the same handler as SPACE / tapping the player tile (pickup or
-        // wait one move-cost). Look toggles the world look-mode cursor. Info opens
-        // the map dialog (overall map + current-level info tabs).
-        waitBtn = makeTextButton("Wait",
-                () -> { if (onWait != null) onWait.run(); });
+        // ── Bottom-left: Look only ───────────────────────────────────────
+        // Wait was redundant with tap-on-player / SPACE so it's been removed.
+        // The compass / Info button moved to the burger menu (entry: "Map").
         lookBtn = makeIconButton(stoneUi.iconMarkerTex, "L",
                 () -> { if (lookMode != null) lookMode.toggle(); });
-        infoBtn = makeIconButton(stoneUi.iconCompassTex,
-                () -> { if (onOpenInfo != null) onOpenInfo.run(); });
         bottomLeft = new Table();
         bottomLeft.defaults().size(BOTTOM_BTN, BOTTOM_BTN);
-        bottomLeft.add(waitBtn);
         bottomLeft.add(lookBtn);
-        bottomLeft.add(infoBtn);
         addActor(bottomLeft);
 
         // ── Bottom-right: 6 action buttons (smaller, tighter, edge-hugging) ──
@@ -257,36 +260,19 @@ public class HudRenderer extends Group {
         inventoryBtn = makeIconButton(stoneUi.iconChestTex, "I", () -> {
             if (inventoryRenderer != null) inventoryRenderer.toggle();
         });
-        bottomRight.add(inventoryBtn).size(ACTION_BTN, ACTION_BTN);
-        // Combine — sibling button next to the inventory icon. Falls back to a text label
-        // if no dedicated icon is loaded.
-        combineBtn = makeTextButton("❂", () -> {
-            if (onCombineToggle != null) onCombineToggle.run();
-        });
-        bottomRight.add(combineBtn).size(ACTION_BTN, ACTION_BTN);
+        bottomRight.add(inventoryBtn).size(INVENTORY_BTN_W, INVENTORY_BTN_H);
+        // Combine no longer has its own HUD button — it's accessed from the
+        // inventory popup, which is a single tap away via the chest icon
+        // above. Keeping {@code onCombineToggle} wired so external callers
+        // (e.g. inventory's combine button) still resolve.
         addActor(bottomRight);
 
         // ── Event log (above action buttons) ───────────────────────────
         logView = new LogView();
         addActor(logView);
 
-        // ── Log toggles: on, show-low-priority, show-non-player, expand ───────
-        logToggleBtn = makeTextButton("L", () -> logView.logOn          = !logView.logOn);
-        lowToggleBtn = makeTextButton("!", () -> logView.showLowPriority = !logView.showLowPriority);
-        npcToggleBtn = makeTextButton("M", () -> logView.showNonPlayer   = !logView.showNonPlayer);
-        // Up-caret when collapsed (tap to expand to 10 lines), down-caret when expanded
-        // (tap to collapse back to 2). Glyph is updated each frame in update(). ASCII so
-        // it renders correctly in the default bitmap font without needing a Unicode glyph.
-        expandToggleBtn = makeTextButton("^",
-                () -> logView.expanded = !logView.expanded);
-        int TOGGLE = 16;
-        logToggleRow = new Table();
-        logToggleRow.defaults().size(TOGGLE, TOGGLE).pad(1);
-        logToggleRow.add(logToggleBtn);
-        logToggleRow.add(lowToggleBtn);
-        logToggleRow.add(npcToggleBtn);
-        logToggleRow.add(expandToggleBtn);
-        addActor(logToggleRow);
+        // Log filter / expand toggles formerly lived here — they've been moved
+        // to Settings → Log so the HUD strip stays uncluttered.
     }
 
     public LogView logView() { return logView; }
@@ -375,13 +361,11 @@ public class HudRenderer extends Group {
     private void toggleMenu() {
         menuOpen = !menuOpen;
         menuPanel.setVisible(menuOpen);
-        burgerBtn.setChecked(menuOpen);
     }
 
     private void closeMenu() {
         menuOpen = false;
         menuPanel.setVisible(false);
-        burgerBtn.setChecked(false);
     }
 
     public void recordTick() {
@@ -491,15 +475,10 @@ public class HudRenderer extends Group {
         statusLine.setText(com.bjsp123.rl2.util.Fmt.of(
                 "Lvl %d  Turn %d  Tick %d   TPS %.1f", depth, turn, tick, tps));
 
-        lookBtn.setChecked(lookMode != null && lookMode.isActive());
-        inventoryBtn.setChecked(inventoryRenderer != null && inventoryRenderer.isOpen());
-
-        logToggleBtn.setChecked(logView.logOn);
-        lowToggleBtn.setChecked(logView.showLowPriority);
-        npcToggleBtn.setChecked(logView.showNonPlayer);
-        expandToggleBtn.setChecked(logView.expanded);
-        expandToggleBtn.setText(logView.expanded ? "v" : "^");
-
+        // HUD buttons are momentary — they fire once on click and never persist a
+        // "checked" visual. The state they drive (look mode active, inventory open)
+        // lives elsewhere and is shown by the relevant overlay, not by the button
+        // looking depressed.
         refreshActionIcons(player);
     }
 
@@ -520,9 +499,14 @@ public class HudRenderer extends Group {
                 // to the legacy glyph-keyed map when ItemSprites can't resolve.
                 TextureRegion region = ItemSprites.regionFor(bound);
                 if (region != null) {
-                    Image icon = new Image(region);
+                    // OutlinedImage paints a 1-px black silhouette behind the sprite so
+                    // the item reads against the light slotLight bg without dissolving.
+                    // Cell at full 32×32 sprite size — the 40×40 button leaves a 4-px
+                    // bezel of slot chrome around the icon.
+                    Image icon = new com.bjsp123.rl2.ui.skin.OutlinedImage(
+                            new TextureRegionDrawable(region));
                     icon.setScaling(com.badlogic.gdx.utils.Scaling.fit);
-                    btn.add(icon).size(18, 18);
+                    btn.add(icon).size(32, 32);
                     actionIcons[i] = icon;
                 }
             }
@@ -567,15 +551,13 @@ public class HudRenderer extends Group {
         bottomRight.pack();
         bottomRight.setPosition(w - EDGE_MARGIN - bottomRight.getWidth(), EDGE_MARGIN);
 
-        logToggleRow.pack();
-        logToggleRow.setPosition(w - EDGE_MARGIN - logToggleRow.getWidth(),
-                                 bottomRight.getY() + bottomRight.getHeight() + 4);
-
+        // Log sits above the bottom-right cluster directly — there's no longer a
+        // toggle row between them since the filters moved to Settings.
         float logW = logView.preferredWidth();
         float logH = logView.preferredHeight();
         logView.setSize(logW, logH);
         logView.setPosition(w - EDGE_MARGIN - logW,
-                            logToggleRow.getY() + logToggleRow.getHeight() + 4);
+                            bottomRight.getY() + bottomRight.getHeight() + 4);
     }
 
     @Override
