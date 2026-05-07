@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.ui.hud;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemSlot;
 import com.bjsp123.rl2.model.Mob;
 
 /**
@@ -84,8 +83,8 @@ public final class ActionBar {
 
     private static boolean heldByPlayer(Mob player, Item it) {
         if (player.inventory.bag.contains(it)) return true;
-        for (ItemSlot s : ItemSlot.values()) {
-            if (player.inventory.equipped(s) == it) return true;
+        for (Item eq : player.inventory.allEquipped()) {
+            if (eq == it) return true;
         }
         return false;
     }

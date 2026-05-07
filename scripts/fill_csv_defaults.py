@@ -25,9 +25,12 @@ MOB_DEFAULTS: dict[str, str | None] = {
     # Faction relationships
     "faction": None,
     "enemyFactions": None,
+    # Uniqueness + drops
+    "unique": "false",
+    "dropQuality": "1",
     # Spawn eligibility (level-gen)
-    "minDepth": "1",
-    "maxDepth": "10",
+    "powerLevel": "0.3_0.7",
+    "clusterSize": "1",
     "theme": None,
     # Combat baseline
     "maxHp": "10",
@@ -74,7 +77,9 @@ MOB_DEFAULTS: dict[str, str | None] = {
     "mushroomEatSpawnType": None,
     "turnSpawnChance": "0",
     "turnSpawnType": None,
-    "kittenType": None,
+    # Retainers
+    "numRetainers": "0",
+    "retainerTypes": None,
     # Door / mind
     "doorClosing": "NEVER",
     "stateOfMind": "ASLEEP",
@@ -107,15 +112,17 @@ ITEM_DEFAULTS: dict[str, str | None] = {
     "inventoryCategory": "ITEMS",
     "silhouetteForSlot": None,
     # Spawn eligibility (level-gen)
-    "minDepth": "1",
-    "maxDepth": "10",
+    "powerLevel": "0.3_0.7",
+    "clusterSize": "1",
     "theme": None,
     "guaranteedPerLevel": "false",
     # Equip stats
-    "damageMin": "0",
-    "damageMax": "0",
-    "armorMin": "0",
-    "armorMax": "0",
+    "damage": "0",
+    "damagePerLevel": "0_0",
+    "armor": "0",
+    "armorPerLevel": "0_0",
+    "tilesAffected": "0",
+    "tilesAffectedPerLevel": "0",
     "lightRadius": "0",
     # Throw
     "thrownBehavior": "NOTHING",
@@ -124,10 +131,8 @@ ITEM_DEFAULTS: dict[str, str | None] = {
     "useBehavior": "NONE",
     "useVerb": None,
     "foodValue": "0",
-    "healAmount": "0",
     "appliesBuff": None,
     "buffDuration": "0",
-    "selfDamageBase": "0",
     "wandElement": None,
     "summonsWhenUsed": None,
     # Floor flag
@@ -135,6 +140,30 @@ ITEM_DEFAULTS: dict[str, str | None] = {
     # Sprite
     "spriteCol": "0",
     "spriteRow": "0",
+}
+
+THEMED_ROOM_DEFAULTS: dict[str, str | None] = {
+    # Identity
+    "type": None,
+    "unique": "false",
+    # Eligibility
+    "powerLevel": "0_1",
+    "minWidth": "5",
+    "minHeight": "5",
+    "maxWidth": "999",
+    "maxHeight": "999",
+    "requireLong": "false",
+    # Decoration axes
+    "roomShape": "RECTANGLE",
+    "chasmShape": "NONE",
+    "vegetation": "NONE",
+    "surface": "NONE",
+    "specialFloor": "NONE",
+    "decorations": None,
+    "placement": "CENTER",
+    # Spawns
+    "mobs": None,
+    "items": None,
 }
 
 def normalise_bool(cell: str) -> str:
@@ -182,6 +211,7 @@ def fill_csv(path: Path, defaults: dict[str, str | None]) -> None:
 def main() -> None:
     fill_csv(ROOT / "assets" / "data" / "mobs.csv", MOB_DEFAULTS)
     fill_csv(ROOT / "assets" / "data" / "items.csv", ITEM_DEFAULTS)
+    fill_csv(ROOT / "assets" / "data" / "themedrooms.csv", THEMED_ROOM_DEFAULTS)
     print("done")
 
 

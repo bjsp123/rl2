@@ -342,11 +342,11 @@ public class CraftingRenderer extends Group {
         // the bag entry once the count hits 0.
         for (int i = 0; i < N_INPUTS; i++) {
             Item s = slots[i];
-            if (s != null) player.inventory.removeOneFromBag(s);
+            if (s != null) com.bjsp123.rl2.logic.InventorySystem.removeOneFromBag(player.inventory, s);
             slots[i] = null;
         }
         // Result merges into an existing matching stack if one exists.
-        player.inventory.addToBag(result);
+        com.bjsp123.rl2.logic.InventorySystem.addToBag(player.inventory, result);
         EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                 "Combined: " + ItemSystem.displayName(result),
                 com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH,

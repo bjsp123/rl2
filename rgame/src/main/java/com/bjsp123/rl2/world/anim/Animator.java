@@ -91,6 +91,13 @@ public final class Animator {
                         s.animPeakY = 0f;
                     }
                 }
+                if (s.spawnTotalFrames > 0) {
+                    s.spawnFrame++;
+                    if (s.spawnFrame >= s.spawnTotalFrames) {
+                        s.spawnFrame = 0;
+                        s.spawnTotalFrames = 0;
+                    }
+                }
             }
             ghosts.removeIf(g -> { g.frame++; return g.done(); });
             // Fire pending impacts at the moment their carrier effect's NEXT advance would
@@ -145,7 +152,16 @@ public final class Animator {
             else if (ev instanceof GameEvent.ExplosionEffect m)       stage.add(Effect.explosion(m.pos(), m.radiusTiles(), RNG));
             else if (ev instanceof GameEvent.LightMoteSpawn m)        stage.add(Effect.lightMote(m.pos(), RNG));
             else if (ev instanceof GameEvent.WandImpactBurst m)       onWandImpactBurst(m);
+            else if (ev instanceof GameEvent.PotionBurst m)           onPotionBurst(m);
+            else if (ev instanceof GameEvent.MobSpawned m)            onMobSpawned(level, m);
+            else if (ev instanceof GameEvent.SurfaceChanged m)        onSurfaceChanged(level, m);
+            else if (ev instanceof GameEvent.VegetationChanged m)     onVegetationChanged(level, m);
+            else if (ev instanceof GameEvent.RainbowBurst m)          onRainbowBurst(level, m);
             else if (ev instanceof GameEvent.PeriodicBuffDamage m)    onPeriodicBuffDamage(level, m);
+            else if (ev instanceof GameEvent.LootDropped m)           onLootDropped(m);
+            else if (ev instanceof GameEvent.ItemPickedUp m)          onItemPickedUp(m);
+            else if (ev instanceof GameEvent.MobKnockedBack m)        onMobKnockedBack(level, m);
+            else if (ev instanceof GameEvent.ItemFallingIntoChasm m)  onItemFallingIntoChasm(m);
             // MobIgnited / MobExtinguished / MobSlept / MobWoke are polled instead of
             // event-driven (the Animator scans BuffSystem and StateOfMind each tick).
         }
@@ -262,10 +278,11 @@ public final class Animator {
         stage.add(missile);
         Mob caster = m.caster();
         Point target = m.to();
-        Item.WandElement element = m.element();
-        int wandLevel = m.wandLevel();
+        Item.ItemEffect element = m.element();
+        Item wand = m.wand();
+        int effLvl = m.effectiveLevel();
         pendingImpacts.add(new PendingImpact(missile,
-                () -> com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wandLevel)));
+                () -> com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wand, effLvl)));
     }
 
     private void onWandRayFired(Level level, GameEvent.WandRayFired m) {
@@ -273,10 +290,11 @@ public final class Animator {
         stage.add(ray);
         Mob caster = m.caster();
         Point target = m.to();
-        Item.WandElement element = m.element();
-        int wandLevel = m.wandLevel();
+        Item.ItemEffect element = m.element();
+        Item wand = m.wand();
+        int effLvl = m.effectiveLevel();
         pendingImpacts.add(new PendingImpact(ray,
-                () -> com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wandLevel)));
+                () -> com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wand, effLvl)));
     }
 
     private void onItemThrown(Level level, GameEvent.ItemThrown m) {
@@ -285,11 +303,57 @@ public final class Animator {
         // Throw resolution happens in rlib at fire time; no PendingImpact needed.
     }
 
+    /** Loot tossed off a dying mob — arc the item from the corpse to its
+     *  landing tile. Non-blocking (LOOT_TOSS is excluded from the freeze tally). */
+    private void onLootDropped(GameEvent.LootDropped m) {
+        if (m.item() == null || m.from() == null || m.to() == null) return;
+        stage.add(Effect.lootToss(m.from(), m.to(), m.item()));
+    }
+
+    /** Item picked up by a mob — arc the item off its tile toward the bottom-
+     *  right of the screen so it reads as flying into the inventory.
+     *  Non-blocking. Skipped when the picker isn't visible. */
+    private void onItemPickedUp(GameEvent.ItemPickedUp m) {
+        if (m.item() == null || m.from() == null) return;
+        stage.add(Effect.pickupToss(m.from(), m.item()));
+    }
+
+    /** Mob was knocked back — slide the sprite from {@code start} to {@code end},
+     *  gated as a blocking sequential animation. A small particle burst fires at
+     *  the start tile to signal the impact. Off-screen knockbacks are skipped. */
+    private void onMobKnockedBack(Level level, GameEvent.MobKnockedBack m) {
+        Mob mob = m.mob();
+        if (mob == null) return;
+        Point start = m.start(), end = m.end();
+        if (start == null || end == null) return;
+        boolean visible = MobSystem.isVisibleToPlayer(level, mob)
+                || visibleAt(level, start) || visibleAt(level, end);
+        if (!visible) return;
+        int ddx = start.tileX() - end.tileX();
+        int ddy = start.tileY() - end.tileY();
+        int dist = Math.max(Math.abs(ddx), Math.abs(ddy));
+        if (dist == 0) return;
+        int frames = Math.max(STEP_FRAMES_MIN, stepFramesFor(mob) * dist);
+        MobAnimState s = stateOf(mob);
+        s.stepFromDx = (float) ddx;
+        s.stepFromDy = (float) ddy;
+        s.stepFrame  = 0;
+        s.stepTotal  = frames;
+        s.delayFrames = queue.sequential(frames);
+        stage.add(Effect.particleBurst(start, Effect.EffectTint.WHITE, 10, RNG));
+    }
+
+    /** Item fell into a chasm — revolve-shrink-fade at its tile. Non-blocking. */
+    private void onItemFallingIntoChasm(GameEvent.ItemFallingIntoChasm m) {
+        if (m.item() == null || m.position() == null) return;
+        stage.add(Effect.fallingItem(m.position(), m.item()));
+    }
+
     private void onDamageDealt(Level level, GameEvent.DamageDealt m) {
         Mob target = m.target();
         if (target == null || target.position == null) return;
         if (!MobSystem.isVisibleToPlayer(level, target)) return;
-        switch (m.kind()) {
+        switch (m.message()) {
             case HIT   -> stage.add(Effect.floatingText(target.position, "-" + m.amount(), Effect.EffectTint.RED));
             case MISS  -> stage.add(Effect.floatingText(target.position, "miss", Effect.EffectTint.YELLOW));
             case BLUNT -> stage.add(Effect.floatingText(target.position, "blunt", Effect.EffectTint.WHITE));
@@ -326,16 +390,133 @@ public final class Animator {
 
     private void onWandImpactBurst(GameEvent.WandImpactBurst m) {
         Effect.EffectTint tint = switch (m.element()) {
-            case WATER     -> Effect.EffectTint.BLUE;
-            case OIL       -> Effect.EffectTint.YELLOW;
-            case GRASS     -> Effect.EffectTint.GREEN;
-            case FUNGUS    -> Effect.EffectTint.RED;
-            case FIRE      -> Effect.EffectTint.RED;
-            case LIGHTNING -> Effect.EffectTint.YELLOW;
+            case WATER                -> Effect.EffectTint.BLUE;
+            case OIL                  -> Effect.EffectTint.YELLOW;
+            case GRASS                -> Effect.EffectTint.GREEN;
+            case FUNGUS, FIRE         -> Effect.EffectTint.RED;
+            case LIGHTNING            -> Effect.EffectTint.YELLOW;
+            case FREEZE               -> Effect.EffectTint.BLUE;
+            case BLAST, DAMAGE        -> Effect.EffectTint.WHITE;
             case DETONATION,
-                 BANISHMENT -> Effect.EffectTint.WHITE;
+                 BANISHMENT,
+                 MISSILE             -> Effect.EffectTint.WHITE;
         };
         stage.add(Effect.particleBurst(m.pos(), tint, 18, RNG));
+    }
+
+    /** Swirling rising particles in the potion's colour. Triggered when a
+     *  potion is drunk or thrown. Colour is derived from the potion's
+     *  {@code appliesBuff} (so any future buff-bearing potion picks up a
+     *  sensible tint without code changes), with a fall-through on the item's
+     *  {@code type} string for the special-cased POTION_INSIGHT (which carries
+     *  no buff). */
+    private void onPotionBurst(GameEvent.PotionBurst m) {
+        Item item = m.item();
+        if (item == null) return;
+        Effect.EffectTint tint = potionTint(item);
+        stage.add(Effect.particleBurst(m.pos(), tint, 18, RNG));
+    }
+
+    /** Mob just spawned — blocking grow-from-zero animation while a fountain
+     *  of upward-drifting particles plays at the spawn tile. Skipped (and
+     *  doesn't block) when the spawn tile isn't currently visible to the
+     *  player, so off-screen ant-hill blooms etc. don't freeze the game. */
+    private void onMobSpawned(Level level, GameEvent.MobSpawned m) {
+        Mob mob = m.mob();
+        if (mob == null || mob.position == null) return;
+        Point at = m.at();
+        if (at == null) return;
+        // Reset the per-mob spawn-grow counter regardless of visibility so the
+        // sprite always starts at full size for off-camera spawns (no scale
+        // hangover when the player later walks into the room).
+        MobAnimState s = stateOf(mob);
+        s.spawnFrame = 0;
+        s.spawnTotalFrames = MobAnimState.SPAWN_GROW_FRAMES;
+        if (!visibleAt(level, at)) {
+            // Off-screen: skip particles AND skip the blocking freeze. Set
+            // spawnFrame to the end so the sprite is full-size by the time
+            // the player ever sees it.
+            s.spawnFrame = s.spawnTotalFrames;
+            return;
+        }
+        stage.add(Effect.particleBurst(at, Effect.EffectTint.WHITE, 14, RNG));
+        if (queue.freezeFrames < MobAnimState.SPAWN_GROW_FRAMES) {
+            queue.freezeFrames = MobAnimState.SPAWN_GROW_FRAMES;
+        }
+    }
+
+    /** Surface (water/oil/blood/ice) just appeared on a tile — non-blocking
+     *  fountain of particles in the surface's colour. Skipped when the tile
+     *  is currently off-screen. */
+    private void onSurfaceChanged(Level level, GameEvent.SurfaceChanged m) {
+        if (m.pos() == null || !visibleAt(level, m.pos())) return;
+        Effect.EffectTint tint = switch (m.surface()) {
+            case WATER -> Effect.EffectTint.BLUE;
+            case OIL   -> Effect.EffectTint.YELLOW;
+            case BLOOD -> Effect.EffectTint.RED;
+            case ICE   -> Effect.EffectTint.WHITE;
+        };
+        stage.add(Effect.particleBurst(m.pos(), tint, 8, RNG));
+    }
+
+    /** Vegetation just changed on a tile (grass / mushrooms / fire / trees) —
+     *  non-blocking fountain of particles in the vegetation's colour. */
+    private void onVegetationChanged(Level level, GameEvent.VegetationChanged m) {
+        if (m.pos() == null || m.vegetation() == null || !visibleAt(level, m.pos())) return;
+        Effect.EffectTint tint = switch (m.vegetation()) {
+            case GRASS     -> Effect.EffectTint.GREEN;
+            case MUSHROOMS -> Effect.EffectTint.RED;
+            case FIRE      -> Effect.EffectTint.ORANGE;
+            case TREES     -> Effect.EffectTint.GREEN;
+        };
+        stage.add(Effect.particleBurst(m.pos(), tint, 8, RNG));
+    }
+
+    /** Multi-coloured rainbow burst (power-orb absorb, level-up). Blocking —
+     *  six per-colour bursts stacked at the same tile so the player visually
+     *  reads "many colours flying out". */
+    private void onRainbowBurst(Level level, GameEvent.RainbowBurst m) {
+        if (m.pos() == null || !visibleAt(level, m.pos())) return;
+        Effect.EffectTint[] palette = {
+                Effect.EffectTint.RED, Effect.EffectTint.YELLOW,
+                Effect.EffectTint.GREEN, Effect.EffectTint.BLUE,
+                Effect.EffectTint.ORANGE, Effect.EffectTint.WHITE };
+        for (Effect.EffectTint t : palette) {
+            stage.add(Effect.particleBurst(m.pos(), t, 8, RNG));
+        }
+        int frames = 30;
+        if (queue.freezeFrames < frames) queue.freezeFrames = frames;
+    }
+
+    /** True when {@code at} is currently visible to the player. Used by the
+     *  spawn / fountain / rainbow handlers so off-screen events don't burn
+     *  particle budget or freeze the game. */
+    private static boolean visibleAt(Level level, Point at) {
+        if (level == null || level.visible == null || at == null) return false;
+        int x = at.tileX(), y = at.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        return level.visible[x][y];
+    }
+
+    /** Pick a particle palette for a potion. The mapping is by {@code appliesBuff}
+     *  first (so HEALING_POTION's REGENERATION → green works regardless of
+     *  the potion's display name), with a special case for POTION_INSIGHT
+     *  which carries no buff. Constrained to the seven existing
+     *  {@link Effect.EffectTint} values; new tints would also need a
+     *  {@code FxRenderer.tintToColor} entry, which isn't worth it for these
+     *  one-off potions. */
+    private static Effect.EffectTint potionTint(Item item) {
+        if ("POTION_INSIGHT".equals(item.type)) return Effect.EffectTint.YELLOW;
+        if (item.appliesBuff == null) return Effect.EffectTint.WHITE;
+        return switch (item.appliesBuff) {
+            case REGENERATION -> Effect.EffectTint.GREEN;
+            case POISONED     -> Effect.EffectTint.BROWN;
+            case SORCERY      -> Effect.EffectTint.BLUE;
+            case GHOSTLY      -> Effect.EffectTint.WHITE;
+            case INVISIBLE    -> Effect.EffectTint.BLUE;
+            case HOPE, ESP    -> Effect.EffectTint.YELLOW;
+            default           -> Effect.EffectTint.WHITE;
+        };
     }
 
     private void onPeriodicBuffDamage(Level level, GameEvent.PeriodicBuffDamage m) {
@@ -352,6 +533,19 @@ public final class Animator {
 
     // ── Pending-impact resolution ──────────────────────────────────────────────────
 
+    /** A deferred game-state mutation tied to a visible projectile's completion.
+     *  When the effect's frame counter reaches its lifetime the {@code onComplete}
+     *  runnable fires, calling back into rlib to apply damage, banish a ghost,
+     *  etc. Held alongside the in-flight effect list so the animator owns both. */
+    private static final class PendingImpact {
+        final Effect effect;
+        final Runnable onComplete;
+        PendingImpact(Effect effect, Runnable onComplete) {
+            this.effect = effect;
+            this.onComplete = onComplete;
+        }
+    }
+
     /** Fire impact callbacks for any projectile whose visual is one frame from removal. */
     private void firePendingImpacts() {
         for (Iterator<PendingImpact> it = pendingImpacts.iterator(); it.hasNext(); ) {
@@ -367,15 +561,22 @@ public final class Animator {
     private static void applyMissileImpact(Level level, Mob caster, Point target, int damage) {
         Mob victim = MobSystem.mobAt(level, target);
         if (victim == null) return;
-        int afterResist = Math.max(0,
-                damage - MobSystem.rollRange(MobSystem.magicResistRange(victim)));
-        int dealt = com.bjsp123.rl2.logic.BuffSystem.mitigateMagicDamage(victim, afterResist);
+        // Stat-based magic resist (analogous to physical armor) is applied here; the
+        // ANTI_MAGIC buff is applied centrally inside processAttack via DamageElement.MAGIC.
+        int magicResist = MobSystem.rollRange(MobSystem.magicResistRange(victim));
+        int afterResist = Math.max(0, damage - magicResist);
+        MobSystem.DamageBreakdown bk =
+                new MobSystem.DamageBreakdown(MobSystem.DamageElement.MAGIC, damage)
+                        .add("magicResist", Math.min(magicResist, damage));
         Mob speaker = caster != null ? caster : com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
         String casterName = speaker != null && speaker.name != null ? speaker.name : "Adventurer";
         String victimName = MobSystem.nameForLog(level, victim);
+        double hpBefore = victim.hp;
+        MobSystem.processAttack(level, speaker, victim, afterResist,
+                MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC, bk);
+        int dealt = Math.max(0, (int) Math.round(hpBefore - victim.hp));
         com.bjsp123.rl2.logic.EventLog.add(
                 com.bjsp123.rl2.logic.Messages.playerHit(casterName, victimName, dealt));
-        MobSystem.processAttack(level, speaker, victim, dealt, MobSystem.AttackType.MAGIC);
     }
 
     // ── Real-time particle drains ──────────────────────────────────────────────────
@@ -480,7 +681,7 @@ public final class Animator {
 
     /** Build a coloured wand missile with palette / gravity / brightness picked from the
      *  element. Mirrors the legacy {@code PlayScreen.buildWandMissile}. */
-    private static Effect buildWandMissile(Point from, Point to, Item.WandElement element) {
+    private static Effect buildWandMissile(Point from, Point to, Item.ItemEffect element) {
         Effect.EffectTint head;
         Effect.EffectTint[] palette;
         float gravity;
@@ -517,6 +718,11 @@ public final class Animator {
                 head    = Effect.EffectTint.YELLOW;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.RED, Effect.EffectTint.YELLOW };
                 gravity = 0f; size = baseSize + 0.4f;
+            }
+            case MISSILE -> {
+                head    = Effect.EffectTint.WHITE;
+                palette = new Effect.EffectTint[] { Effect.EffectTint.WHITE };
+                gravity = 0.30f; size = baseSize;
             }
             default -> {
                 head    = Effect.EffectTint.WHITE;

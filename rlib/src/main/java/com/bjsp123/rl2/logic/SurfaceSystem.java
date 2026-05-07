@@ -41,6 +41,7 @@ public final class SurfaceSystem {
         // Simple case: target cell is empty (or has a different surface) — write it and done.
         if (level.surface[x][y] != surface) {
             level.surface[x][y] = surface;
+            emitSurfaceChanged(level, x, y, surface);
             return;
         }
 
@@ -76,6 +77,7 @@ public final class SurfaceSystem {
             if (!candidates.isEmpty()) {
                 int[] chosen = candidates.get(RANDOM.nextInt(candidates.size()));
                 level.surface[chosen[0]][chosen[1]] = surface;
+                emitSurfaceChanged(level, chosen[0], chosen[1], surface);
                 return;
             }
         }
@@ -85,5 +87,14 @@ public final class SurfaceSystem {
     private static boolean canHoldSurface(Level level, int x, int y) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
         return level.tiles[x][y].isFloorLike();
+    }
+
+    /** Post a {@link com.bjsp123.rl2.event.GameEvent.SurfaceChanged} event for
+     *  the renderer to emit a coloured fountain at the changed tile. Skipped
+     *  silently when the level has no event sink (level-gen). */
+    private static void emitSurfaceChanged(Level level, int x, int y, Surface surface) {
+        if (level.events == null) return;
+        level.events.add(new com.bjsp123.rl2.event.GameEvent.SurfaceChanged(
+                new Point(x, y), surface));
     }
 }

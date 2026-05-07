@@ -285,8 +285,11 @@ public class EncyclopediaRenderer extends Group {
             if (sel != null && sel.icon != null) {
                 w = sel.icon.getRegionWidth();
                 h = sel.icon.getRegionHeight();
-                // Buffs ship as 7×7 in the source — too small to read at native size.
-                if (cat == Category.BUFFS) { w *= 2; h *= 2; }
+                // Buffs ship as 7×7 and creatures as 16×16 (or 16×32) — both
+                // render at 2× source so they read clearly in the detail header.
+                if (cat == Category.BUFFS || cat == Category.CREATURES) {
+                    w *= 2; h *= 2;
+                }
             }
             cell.size(w, h);
             if (header != null) header.invalidateHierarchy();
@@ -311,10 +314,14 @@ public class EncyclopediaRenderer extends Group {
                 icon.setDrawable(new TextureRegionDrawable(entry.icon));
                 int srcW = entry.icon.getRegionWidth();
                 int srcH = entry.icon.getRegionHeight();
+                // Mobs render at 2× source so the silhouette reads at glance —
+                // single-cell species are 16×16 in the atlas which is too small
+                // to identify next to the descriptive name.
+                if (cat == Category.CREATURES) { dispW = srcW * 2; dispH = srcH * 2; }
                 // Halve the displayed size if the source sprite is taller than 32 px,
-                // so a 64-tall mob doesn't dwarf a 16-tall item in the same list.
-                if (srcH > 32) { dispW = srcW / 2; dispH = srcH / 2; }
-                else           { dispW = srcW;     dispH = srcH; }
+                // so an oversized item doesn't dwarf its row.
+                else if (srcH > 32) { dispW = srcW / 2; dispH = srcH / 2; }
+                else                { dispW = srcW;     dispH = srcH; }
             }
             row.add(icon).size(dispW, dispH).padRight(8);
             Label nameLbl = new Label(entry.name, skin, "default");
@@ -386,15 +393,26 @@ public class EncyclopediaRenderer extends Group {
         if (it.description != null && !it.description.isEmpty()) {
             sb.append(it.description).append('\n').append('\n');
         }
-        if (it.slot != null)        sb.append("Equippable as ").append(it.slot.name().toLowerCase()).append('\n');
+        if (it.inventoryCategory != null && it.inventoryCategory.isEquipment())
+            sb.append("Equippable as ").append(it.inventoryCategory.name().toLowerCase()).append('\n');
         if (it.material != null)    sb.append("Made of ").append(it.material.name().toLowerCase()).append('\n');
-        if (it.damageMax > 0)       sb.append("Inflicts ").append(it.damageMin).append('-').append(it.damageMax).append(" damage\n");
-        if (it.armorMax > 0)        sb.append("Protects from ").append(it.armorMin).append('-').append(it.armorMax).append(" damage\n");
+        // Damage / armor reflect the item's plusses via ItemSystem so a +N
+        // entry in the encyclopaedia shows the level-scaled numbers, not the
+        // bare items.csv baseline.
+        if (it.damage.max() > 0) {
+            com.bjsp123.rl2.model.MinMax r =
+                    com.bjsp123.rl2.logic.ItemSystem.effectiveDamageRange(it);
+            sb.append("Inflicts ").append(r.min()).append('-').append(r.max()).append(" damage\n");
+        }
+        if (it.armor.max() > 0) {
+            com.bjsp123.rl2.model.MinMax r =
+                    com.bjsp123.rl2.logic.ItemSystem.effectiveArmorRange(it);
+            sb.append("Protects from ").append(r.min()).append('-').append(r.max()).append(" damage\n");
+        }
         if (it.lightRadius > 0)     sb.append("Casts light over ").append((int) it.lightRadius).append(" tiles\n");
         if (it.foodValue > 0)       sb.append("Food value of ").append(it.foodValue).append('\n');
-        if (it.healAmount > 0)      sb.append("Heals ").append(it.healAmount).append(" HP").append(" damage\n");
-        if (it.thrownBehavior != null && it.thrownBehavior != Item.ThrownBehavior.NOTHING) {
-            sb.append("When thrown: ").append(it.thrownBehavior.name().toLowerCase()).append('\n');
+        if (it.throwEffect != null) {
+            sb.append("When thrown: ").append(it.throwEffect.name().toLowerCase()).append('\n');
         }
         return sb.toString().trim();
     }
@@ -553,17 +571,20 @@ public class EncyclopediaRenderer extends Group {
 
     private static String prettyTileName(Tile t) {
         return switch (t) {
-            case FLOOR        -> "Floor.";
-            case FLOOR_WOOD   -> "Wood floor.";
-            case WALL         -> "Wall.";
-            case DOOR         -> "Door (closed).";
-            case DOOR_OPEN    -> "Door (open).";
-            case CHASM        -> "Chasm.";
-            case LAMP         -> "Lamp .";
-            case STAIRS_UP    -> "Stairs up";
-            case STAIRS_DOWN  -> "Stairs down";
+            case FLOOR         -> "Floor.";
+            case FLOOR_WOOD    -> "Wood floor.";
+            case FLOOR_SPECIAL -> "Special floor.";
+            case WALL          -> "Wall.";
+            case DOOR          -> "Door (closed).";
+            case DOOR_OPEN     -> "Door (open).";
+            case CHASM         -> "Chasm.";
+            case LAMP          -> "Lamp .";
+            case STAIRS_UP     -> "Stairs up";
+            case STAIRS_DOWN   -> "Stairs down";
             case STATUE_SMALL_L, STATUE_SMALL_R -> "Small statue.";
             case STATUE_LARGE_L, STATUE_LARGE_R -> "Large statue.";
+            case ALTAR         -> "Altar.";
+            case THRONE_L, THRONE_R -> "Throne.";
         };
     }
 
@@ -572,19 +593,22 @@ public class EncyclopediaRenderer extends Group {
         sb.append(t.isFloorLike()      ? "Walkable.\n" : "Blocks movement.\n");
         sb.append(t.blocksSight()      ? "Blocks sight.\n" : "See-through.\n");
         return switch (t) {
-            case FLOOR       -> sb + "\nGood for standing on..";
-            case FLOOR_WOOD  -> sb + "\nGood for standing on..";
-            case WALL        -> sb + "\nSolid wall, blocks movement and sight.";
-            case DOOR        -> sb + "\nA closed door — bumping it opens it.";
-            case DOOR_OPEN   -> sb + "\nAn open door — lets sight and movement through.";
-            case CHASM       -> sb + "\nA chasm. Non-flying mobs that step in fall to the next level.";
-            case LAMP        -> sb + "\nA lit lamp — emits light.";
-            case STAIRS_UP   -> sb + "\nStairs leading up to the previous level.";
-            case STAIRS_DOWN -> sb + "\nStairs leading down to the next level.";
+            case FLOOR         -> sb + "\nGood for standing on..";
+            case FLOOR_WOOD    -> sb + "\nGood for standing on..";
+            case FLOOR_SPECIAL -> sb + "\nA decoratively-tiled patch of floor.";
+            case WALL          -> sb + "\nSolid wall, blocks movement and sight.";
+            case DOOR          -> sb + "\nA closed door — bumping it opens it.";
+            case DOOR_OPEN     -> sb + "\nAn open door — lets sight and movement through.";
+            case CHASM         -> sb + "\nA chasm. Non-flying mobs that step in fall to the next level.";
+            case LAMP          -> sb + "\nA lit lamp — emits light.";
+            case STAIRS_UP     -> sb + "\nStairs leading up to the previous level.";
+            case STAIRS_DOWN   -> sb + "\nStairs leading down to the next level.";
             case STATUE_SMALL_L, STATUE_SMALL_R ->
                     sb + "\nA small decorative statue. Blocks movement but you can see past it.";
             case STATUE_LARGE_L, STATUE_LARGE_R ->
                     sb + "\nA tall decorative statue. Blocks movement and sight.";
+            case ALTAR         -> sb + "\nA stone altar.";
+            case THRONE_L, THRONE_R -> sb + "\nA carved throne. Sized for a single occupant.";
         };
     }
 }

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs basename *)",
+      "Bash(./gradlew :rlib:compileJava :rgame:compileJava)",
+      "Bash(./gradlew :rlib:test)",
+      "Bash(./gradlew :rlib:compileJava)",
+      "Bash(awk *)"
+    ]
+  },
+  "disabledMcpjsonServers": [
+    "pixellab"
+  ]
+}

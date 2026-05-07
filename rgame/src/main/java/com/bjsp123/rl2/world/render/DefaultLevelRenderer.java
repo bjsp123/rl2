@@ -176,6 +176,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private TextureRegion currentLampOrnament;
     private TextureRegion currentStairsUp;
     private TextureRegion currentStairsDown;
+    private TextureRegion currentAltar;
+    private TextureRegion currentThrone;
     /** Mob the player is currently inspecting via look mode. When non-null, the renderer
      *  overlays its state-of-mind above its tile and draws this mob's attitude toward
      *  every other visible mob. {@link com.bjsp123.rl2.screen.PlayScreen} updates it each
@@ -442,6 +444,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         currentLampOrnament = TileSprites.lampOrnament(level.theme);
         currentStairsUp     = TileSprites.stairsUp(level.theme);
         currentStairsDown   = TileSprites.stairsDown(level.theme);
+        currentAltar        = TileSprites.altar(level.theme);
+        currentThrone       = TileSprites.throne(level.theme);
 
         // Bucket every item / mob / effect into the cell it will draw in. Items and mobs
         // only shift on ticks (pickup / drop / throw / step), so their indexes are cached
@@ -500,6 +504,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
                     drawLampAt(level, x, y);
                     drawStairsAt(level, x, y);
                     drawStatueAt(level, x, y);
+                    drawAltarAt(level, x, y);
+                    drawThroneAt(level, x, y);
                     drawItemsAt(level, x, y, itemsByCell);
                     drawMobsAt(level, x, y, mobsByCell);
                     drawFrontVegetationAt(level, x, y);
@@ -673,6 +679,34 @@ public class DefaultLevelRenderer implements LevelRenderer {
         int visual = terrainVisual(level, x, y);
         if (visual < 0) return;
         drawTile(visual, x, y);
+        // Regular FLOOR cells get an extra overlay pass for any cardinal /
+        // diagonal neighbour that's FLOOR_SPECIAL — the overlays paint a
+        // decorative seam on the base floor's edge facing the special patch.
+        if (t == Tile.FLOOR) drawSpecialFloorEdges(level, x, y);
+    }
+
+    /** Overlay edge / corner sprites on top of a regular FLOOR cell when any
+     *  of its 8 neighbours is FLOOR_SPECIAL. Cardinals draw "edge" overlays;
+     *  diagonals draw "corner" overlays. Multiple overlays compose — a tile
+     *  with both N and W special-floor neighbours plus the NW diagonal gets
+     *  all three. {@link Tile#FLOOR_SPECIAL} cells themselves don't run this
+     *  pass since their own sprite already carries the styled centre. */
+    private void drawSpecialFloorEdges(Level level, int x, int y) {
+        // Cardinals — y-up world: +y is north, +x is east.
+        if (isSpecialFloor(level, x - 1, y    )) drawTile(TileSprites.specialFloorEdge(TileSprites.Edge.W), x, y);
+        if (isSpecialFloor(level, x + 1, y    )) drawTile(TileSprites.specialFloorEdge(TileSprites.Edge.E), x, y);
+        if (isSpecialFloor(level, x,     y - 1)) drawTile(TileSprites.specialFloorEdge(TileSprites.Edge.S), x, y);
+        if (isSpecialFloor(level, x,     y + 1)) drawTile(TileSprites.specialFloorEdge(TileSprites.Edge.N), x, y);
+        // Diagonals.
+        if (isSpecialFloor(level, x + 1, y - 1)) drawTile(TileSprites.specialFloorCorner(TileSprites.Corner.SE), x, y);
+        if (isSpecialFloor(level, x - 1, y - 1)) drawTile(TileSprites.specialFloorCorner(TileSprites.Corner.SW), x, y);
+        if (isSpecialFloor(level, x + 1, y + 1)) drawTile(TileSprites.specialFloorCorner(TileSprites.Corner.NE), x, y);
+        if (isSpecialFloor(level, x - 1, y + 1)) drawTile(TileSprites.specialFloorCorner(TileSprites.Corner.NW), x, y);
+    }
+
+    private boolean isSpecialFloor(Level level, int x, int y) {
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        return level.tiles[x][y] == Tile.FLOOR_SPECIAL;
     }
 
     /** Floor sprite that the cell at (x, y) would render — used by the door-underlay
@@ -1286,6 +1320,54 @@ public class DefaultLevelRenderer implements LevelRenderer {
     }
 
     /**
+     * Altar overlay for one cell. The altar tile sits at the centre of a 3-wide
+     * sprite — the source spans cols 12..14 of the atlas, drawn anchored so the
+     * sprite extends one cell west and one cell east from the anchor cell.
+     * No L/R flip — the altar reads the same from either side.
+     */
+    private void drawAltarAt(Level level, int x, int y) {
+        if (level.tiles[x][y] != Tile.ALTAR) return;
+        if (currentAltar == null) return;
+        float dx = (x - 1) * (float) CELL;
+        float dy = y * (float) CELL;
+        float dw = 3f * CELL;
+        float dh = CELL;
+        drawRegionOutline(currentAltar, dx, dy, dw, dh);
+        batch.setColor(Color.WHITE);
+        batch.draw(currentAltar, dx, dy, dw, dh);
+    }
+
+    /**
+     * Throne overlay for one cell. 1-wide × 2-tall sprite anchored at the floor
+     * cell with the upper half overhanging into the cell to the north (same
+     * convention as the lamp / large statue). Source art faces west; the
+     * {@code THRONE_R} variant is drawn with negative width so one sprite covers
+     * both facings.
+     */
+    private void drawThroneAt(Level level, int x, int y) {
+        Tile t = level.tiles[x][y];
+        if (t != Tile.THRONE_L && t != Tile.THRONE_R) return;
+        if (currentThrone == null) return;
+        boolean flip = (t == Tile.THRONE_R);
+        // Reuse the statue contact shadow (small variant: only one cell of shadow).
+        drawStatueShadow(x, y, /* large= */ false);
+        batch.setColor(Color.WHITE);
+        float dx = x * (float) CELL;
+        float dy = y * (float) CELL;
+        float dw = CELL;
+        float dh = 2f * CELL;
+        if (flip) {
+            drawRegionOutline(currentThrone, dx + dw, dy, -dw, dh);
+            batch.setColor(Color.WHITE);
+            batch.draw(currentThrone, dx + dw, dy, -dw, dh);
+        } else {
+            drawRegionOutline(currentThrone, dx, dy, dw, dh);
+            batch.setColor(Color.WHITE);
+            batch.draw(currentThrone, dx, dy, dw, dh);
+        }
+    }
+
+    /**
      * Statue overlay for one cell. Paints a soft floor shadow first so the figure reads as
      * planted on the floor, then the sprite. The small-statue source is one cell tall and
      * draws into just the floor cell; the large-statue source is two cells tall and is
@@ -1415,9 +1497,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         Tile t = level.tiles[x][y];
         int hash = TileSprites.variantHash(x, y);
         return switch (t) {
-            case FLOOR       -> TileSprites.floorVariant(hash);
-            case FLOOR_WOOD  -> TileSprites.floorWoodVariant(hash);
-            case LAMP        -> TileSprites.floorVariant(hash); // base; lamp sprite drawn in drawLampAt
+            case FLOOR         -> TileSprites.floorVariant(hash);
+            case FLOOR_WOOD    -> TileSprites.floorWoodVariant(hash);
+            case FLOOR_SPECIAL -> TileSprites.specialFloor();
+            case LAMP          -> TileSprites.floorVariant(hash); // base; lamp sprite drawn in drawLampAt
             // Stairs render their floor underlay in drawFloorAt and the 2×2 ladder sprite
             // in the per-cell content pass (drawStairsAt). Returning -1 here skips the
             // legacy 1×1 glyph draw.
@@ -1425,10 +1508,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
             case CHASM       -> -1; // handled inline
             case WALL        -> raisedWall(level, x, y);
             case DOOR, DOOR_OPEN -> raisedDoor(level, x, y);
-            // Statues sit on a regular floor base; the statue sprite itself is layered on
-            // top in drawStatueAt so the L/R facing flip can be applied at draw time.
+            // Statues / altar / throne all sit on a regular floor base; the ornament
+            // sprite itself is layered on top in the per-cell content pass (drawStatueAt /
+            // drawAltarAt / drawThroneAt) so any L/R facing flip can be applied at draw.
             case STATUE_SMALL_L, STATUE_SMALL_R,
-                 STATUE_LARGE_L, STATUE_LARGE_R -> TileSprites.floorVariant(hash);
+                 STATUE_LARGE_L, STATUE_LARGE_R,
+                 ALTAR,
+                 THRONE_L, THRONE_R -> TileSprites.floorVariant(hash);
         };
     }
 
@@ -1641,9 +1727,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Teleport fade still multiplies in.
         float alpha = teleportAlpha;
         if (alpha <= 0f) return;
+        // Spawn-grow: scale from 0 to 1 over the spawn animation's lifetime,
+        // anchored at the tile's bottom edge so the mob reads as rising out
+        // of the floor. Defaults to 1.0 when no spawn anim is active.
+        float spawnScale = 1f;
+        if (as.spawnTotalFrames > 0) {
+            spawnScale = Math.min(1f, as.spawnFrame / (float) as.spawnTotalFrames);
+        }
         Sprite s = spriteForMob(mob);
         if (s != null) {
-            drawMobSprite(s, mx, my, ox, oy, alpha);
+            drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale);
         } else {
             System.err.println("No sprite for mob " + mob.mobType + " at (" + mx + ", " + my + ")");
             //placeholder drawn here?
@@ -1665,19 +1758,15 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
     }
 
-    /** Render any of the three gem slots (GEM1/GEM2/GEM3) that are filled, orbiting +
-     *  bobbing above the player's head. Each gem occupies a fixed slot on a horizontal
-     *  arc with a sine offset in y. The clock is the renderer's own real-time
-     *  accumulator so motion is wall-clock smooth (independent of game ticks). */
+    /** Render any equipped gem slots that are filled, orbiting + bobbing above the player's
+     *  head. Each gem occupies a fixed slot on a horizontal arc with a sine offset in y. */
     private void drawPlayerGems(Mob mob, int mx, int my, float ox, float oy, float alpha) {
-        com.bjsp123.rl2.model.Item.ItemSlot[] gemSlots = {
-                com.bjsp123.rl2.model.Item.ItemSlot.GEM1,
-                com.bjsp123.rl2.model.Item.ItemSlot.GEM2,
-                com.bjsp123.rl2.model.Item.ItemSlot.GEM3
-        };
-        java.util.List<com.bjsp123.rl2.model.Item> gems = new java.util.ArrayList<>(3);
-        for (com.bjsp123.rl2.model.Item.ItemSlot s : gemSlots) {
-            com.bjsp123.rl2.model.Item g = mob.inventory.equipped(s);
+        int gemCount = com.bjsp123.rl2.model.Inventory.positionCount(
+                com.bjsp123.rl2.model.Item.InventoryCategory.GEM);
+        java.util.List<com.bjsp123.rl2.model.Item> gems = new java.util.ArrayList<>(gemCount);
+        for (int i = 0; i < gemCount; i++) {
+            com.bjsp123.rl2.model.Item g = mob.inventory.equipped(
+                    com.bjsp123.rl2.model.Item.InventoryCategory.GEM, i);
             if (g != null) gems.add(g);
         }
         int n = gems.size();
@@ -1743,10 +1832,19 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * shadow is drawn first, anchored at the baseline.
      */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY, float alpha) {
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f);
+    }
+
+    /** Spawn-scale variant: {@code spawnScale} 0..1 multiplies both x and y
+     *  scale, with the sprite anchored to the tile's bottom edge so the mob
+     *  reads as rising out of the floor during a spawn animation. {@code 1f}
+     *  is the no-op default for normal rendering. */
+    private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
+                               float alpha, float spawnScale) {
         // "Natural" sprites (large blobs etc.) draw at source scale; everything else gets
         // normalised to MOB_VISIBLE_W × MOB_VISIBLE_H so silhouettes read consistently.
-        float scaleX = s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW;
-        float scaleY = s.natural ? 1f : MOB_VISIBLE_H / (float) s.visibleH;
+        float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * spawnScale;
+        float scaleY = (s.natural ? 1f : MOB_VISIBLE_H / (float) s.visibleH) * spawnScale;
         float dw = s.w * scaleX;
         float dh = s.h * scaleY;
         float yAdj = s.yAdjust * scaleY;

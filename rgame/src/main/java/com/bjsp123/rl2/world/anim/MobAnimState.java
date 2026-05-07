@@ -33,6 +33,18 @@ public final class MobAnimState {
     public int fireParticleCountdownMs;
     public int sleepZCountdownMs;
 
+    // ── Spawn-grow ─────────────────────────────────────────────────────────
+    /** Frames elapsed in the spawn-grow animation. {@code 0} when no spawn anim
+     *  is active. The renderer scales the mob's sprite from {@code 0} to {@code 1}
+     *  over {@link #spawnTotalFrames}, anchored to the tile's bottom edge so the
+     *  mob reads as "rising up out of nothing". Set by the Animator on a
+     *  {@code MobSpawned} event; advanced by the per-frame tick loop. */
+    public int spawnFrame;
+    public int spawnTotalFrames;
+    /** Total spawn-grow duration in frames. ~half a second at the default
+     *  framesPerRender=1 cadence. */
+    public static final int SPAWN_GROW_FRAMES = 30;
+
     /** Death-animation timing — flicker twice (4 phases × 6 frames = 24 frames),
      *  then linear fade over 30 frames (~half a second at 60fps). */
     public static final int   DEATH_FLICKER_HALF_FRAMES = 6;

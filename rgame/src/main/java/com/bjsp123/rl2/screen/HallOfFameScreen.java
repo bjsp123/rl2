@@ -26,7 +26,7 @@ public class HallOfFameScreen extends MenuScreen {
 
         Table list = new Table();
         list.defaults().left().pad(2);
-        List<HallOfFameEntry> entries = game.hallOfFame.entries();
+        List<HallOfFameEntry> entries = game.hallOfFame.entries;
         if (entries.isEmpty()) {
             list.add(label("No entries yet — die first.", "dim", 1f));
         } else {

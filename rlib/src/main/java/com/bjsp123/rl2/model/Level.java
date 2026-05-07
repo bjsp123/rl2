@@ -197,6 +197,44 @@ public class Level {
      *  levels show a question mark. Default false. */
     public boolean visited;
 
+    /** Rectangles that themed-room generation has reserved on this level. Random-scatter
+     *  passes (items / mobs in {@link com.bjsp123.rl2.logic.LevelFactoryPopulate}) skip
+     *  any tile inside one of these so the themed room's contents stand alone. Transient:
+     *  generated as a side-effect of {@code LevelFactory.createDungeonLevel}, not used
+     *  after the level is populated. */
+    public transient java.util.List<int[]> reservedRects = new java.util.ArrayList<>();
+
+    /** Snapshot of a single room rectangle plus its themed-room kind, if any.
+     *  {@code kind} is the {@code ThemedRoomDefinition.type} string (e.g.
+     *  {@code "POTION_ROOM"}, {@code "KOBOLD_FORTRESS"}) when stamping claimed
+     *  the rectangle, else {@code null} for plain layout-builder rooms. */
+    public static final class RoomSnapshot {
+        public int x, y, w, h;
+        public String kind;
+        public RoomSnapshot() {}
+        public RoomSnapshot(int x, int y, int w, int h) {
+            this.x = x; this.y = y; this.w = w; this.h = h;
+        }
+    }
+
+    /** Snapshot of room rectangles produced by the layout builder, captured in
+     *  {@code LevelFactory.createDungeonLevel} after carving + corridor-connect
+     *  but before themed-room stamping starts removing rooms from the working
+     *  list. Themed-room stamping back-fills each entry's {@code kind}.
+     *  Diagnostic / dump-only — runtime systems read tiles directly. Transient
+     *  (regenerated per session). */
+    public transient java.util.List<RoomSnapshot> rooms = new java.util.ArrayList<>();
+
+    /** True iff (x, y) sits inside any of {@link #reservedRects}. Cheap linear scan —
+     *  the list is at most a couple of entries per level. */
+    public boolean isReserved(int x, int y) {
+        if (reservedRects == null) return false;
+        for (int[] r : reservedRects) {
+            if (x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]) return true;
+        }
+        return false;
+    }
+
     /** No-arg constructor for JSON deserialization — does not allocate arrays. */
     public Level() {}
 
@@ -237,5 +275,7 @@ public class Level {
         if (theme      == null) theme      = VisualTheme.CRYSTAL;
         if (layout     == null) layout     = Layout.BSP;
         if (side       == null) side       = Side.CENTER;
+        if (reservedRects == null) reservedRects = new ArrayList<>();
+        if (rooms == null) rooms = new ArrayList<>();
     }
 }

@@ -31,6 +31,21 @@ import java.util.Map;
  *                     the canonical slot; cols 1 and 2 are alternates.
  *   (cols 0..2, row 2) — FLOOR_WOOD variants, picked randomly per tile. Col 0 is
  *                     the canonical slot; cols 1 and 2 are alternates.
+ *   (col 6, row  1) — FLOOR_SPECIAL base (decorative floor variant).
+ *   (col 7, row  1) — FLOOR_SPECIAL edge overlay drawn on top of a regular FLOOR
+ *                     whose neighbour to the WEST is FLOOR_SPECIAL.
+ *   (col 7, row  2) — FLOOR_SPECIAL edge overlay, neighbour-to-EAST is special.
+ *   (col 8, row  1) — FLOOR_SPECIAL edge overlay, neighbour-to-SOUTH is special.
+ *   (col 8, row  2) — FLOOR_SPECIAL edge overlay, neighbour-to-NORTH is special.
+ *   (col 9, row  1) — FLOOR_SPECIAL corner overlay, diagonal-SE is special.
+ *   (col 10, row 1) — FLOOR_SPECIAL corner overlay, diagonal-SW is special.
+ *   (col 9, row  2) — FLOOR_SPECIAL corner overlay, diagonal-NE is special.
+ *   (col 10, row 2) — FLOOR_SPECIAL corner overlay, diagonal-NW is special.
+ *   (cols 12..14, row 4) — ALTAR (3×1 sprite); the centre cell is the anchor and
+ *                     the sprite extends one cell west and one cell east of it.
+ *   (col 15, rows 0..1) — THRONE (1×2 sprite, west-facing source); same overhang
+ *                     anchoring as the lamp / large statue. {@code _R} variant
+ *                     produced by horizontal flip at draw time.
  *   (col 0, row  3) — WALLS_OVERHANG (top cap of a raised wall, drawn one cell
  *                     NORTH of the wall so it overhangs entities behind it).
  *   (col 1, row  3) — WALLS_OVERHANG, right-south-open variant   (+1)
@@ -150,6 +165,40 @@ public final class TileSprites {
     private static final int STAIRS_W_CELLS   = 2;
     private static final int STAIRS_H_CELLS   = 2;
 
+    private static final int SPECIAL_FLOOR_COL = 6;
+    private static final int SPECIAL_FLOOR_ROW = 1;
+    /** {@code SPECIAL_FLOOR_EDGE[direction]} = atlas (col, row) for the overlay
+     *  drawn on a regular FLOOR cell whose adjacent neighbour in that cardinal
+     *  direction is FLOOR_SPECIAL. Direction order matches {@link Edge}. */
+    private static final int[][] SPECIAL_FLOOR_EDGE = {
+            {7, 1},  // W neighbour is special
+            {7, 2},  // E neighbour is special
+            {8, 1},  // S neighbour is special
+            {8, 2},  // N neighbour is special
+    };
+    /** {@code SPECIAL_FLOOR_CORNER[corner]} — overlay for a regular FLOOR cell
+     *  whose diagonal neighbour is FLOOR_SPECIAL. Order matches {@link Corner}. */
+    private static final int[][] SPECIAL_FLOOR_CORNER = {
+            {9,  1},  // SE
+            {10, 1},  // SW
+            {9,  2},  // NE
+            {10, 2},  // NW
+    };
+    private static final int ALTAR_COL  = 12;   // leftmost cell — sprite spans cols 12..14
+    private static final int ALTAR_ROW  = 4;
+    private static final int ALTAR_W_CELLS = 3;
+    private static final int THRONE_COL = 15;
+    private static final int THRONE_ROW = 0;
+    private static final int THRONE_H_CELLS = 2;
+
+    /** Cardinal direction for {@link #SPECIAL_FLOOR_EDGE} and the public
+     *  {@link #specialFloorEdge} accessor. */
+    public enum Edge { W, E, S, N }
+
+    /** Diagonal corner for {@link #SPECIAL_FLOOR_CORNER} and the public
+     *  {@link #specialFloorCorner} accessor. */
+    public enum Corner { SE, SW, NE, NW }
+
     private static final Map<VisualTheme, String> PATHS = new EnumMap<>(VisualTheme.class);
     static {
         PATHS.put(VisualTheme.CRYSTAL,         "sprites/terrain_crystal.png");
@@ -165,6 +214,13 @@ public final class TileSprites {
     private static Map<VisualTheme, TextureRegion> lampByTheme;
     private static Map<VisualTheme, TextureRegion> stairsUpByTheme;
     private static Map<VisualTheme, TextureRegion> stairsDownByTheme;
+    private static Map<VisualTheme, TextureRegion> altarByTheme;
+    private static Map<VisualTheme, TextureRegion> throneByTheme;
+    /** Per-theme average floor + wall colours, sampled from the terrain atlas
+     *  during {@link #load}. Used by the world map to tint level cards by
+     *  theme. RGBA-packed via {@link com.badlogic.gdx.graphics.Color#toIntBits}. */
+    private static Map<VisualTheme, com.badlogic.gdx.graphics.Color> floorTintByTheme;
+    private static Map<VisualTheme, com.badlogic.gdx.graphics.Color> wallTintByTheme;
 
     private TileSprites() {}
 
@@ -217,6 +273,63 @@ public final class TileSprites {
         return ornament(stairsDownByTheme, theme);
     }
 
+    /** Altar ornament region (3×1 cells, anchored at the central tile so the
+     *  sprite extends one cell west and one cell east). */
+    public static TextureRegion altar(VisualTheme theme) {
+        if (altarByTheme == null) load();
+        return ornament(altarByTheme, theme);
+    }
+
+    /** Throne ornament region (1×2 cells, west-facing source — east-facing
+     *  variant produced by horizontal flip at draw time, like statues). */
+    public static TextureRegion throne(VisualTheme theme) {
+        if (throneByTheme == null) load();
+        return ornament(throneByTheme, theme);
+    }
+
+    /** Flat region-index for the FLOOR_SPECIAL base sprite. The renderer adds
+     *  the same per-cell index lookup used for FLOOR variants on top of the
+     *  per-theme {@link #regionsFor} array. */
+    public static int specialFloor() {
+        return SPECIAL_FLOOR_ROW * TERRAIN_COLS + SPECIAL_FLOOR_COL;
+    }
+
+    /** Flat region-index for the edge overlay drawn on top of a regular FLOOR
+     *  whose neighbour in {@code edge} is FLOOR_SPECIAL. */
+    public static int specialFloorEdge(Edge edge) {
+        int[] cr = SPECIAL_FLOOR_EDGE[edge.ordinal()];
+        return cr[1] * TERRAIN_COLS + cr[0];
+    }
+
+    /** Flat region-index for the corner overlay drawn on top of a regular FLOOR
+     *  whose diagonal neighbour in {@code corner} is FLOOR_SPECIAL. */
+    public static int specialFloorCorner(Corner corner) {
+        int[] cr = SPECIAL_FLOOR_CORNER[corner.ordinal()];
+        return cr[1] * TERRAIN_COLS + cr[0];
+    }
+
+    /** Average floor-tile colour for {@code theme}, sampled from the terrain
+     *  atlas at startup. Falls back to CRYSTAL's tint if {@code theme} didn't
+     *  load. Used by the world map to colour level cards by theme. */
+    public static com.badlogic.gdx.graphics.Color floorTint(VisualTheme theme) {
+        if (floorTintByTheme == null) load();
+        return tintLookup(floorTintByTheme, theme);
+    }
+
+    /** Average wall-tile colour for {@code theme}; companion to {@link #floorTint}. */
+    public static com.badlogic.gdx.graphics.Color wallTint(VisualTheme theme) {
+        if (wallTintByTheme == null) load();
+        return tintLookup(wallTintByTheme, theme);
+    }
+
+    private static com.badlogic.gdx.graphics.Color tintLookup(
+            Map<VisualTheme, com.badlogic.gdx.graphics.Color> map, VisualTheme theme) {
+        if (map == null) return com.badlogic.gdx.graphics.Color.GRAY;
+        com.badlogic.gdx.graphics.Color c = map.get(theme);
+        if (c == null) c = map.get(VisualTheme.CRYSTAL);
+        return c != null ? c : com.badlogic.gdx.graphics.Color.GRAY;
+    }
+
     private static TextureRegion ornament(Map<VisualTheme, TextureRegion> map, VisualTheme theme) {
         if (map == null) return null;
         TextureRegion r = map.get(theme);
@@ -239,17 +352,20 @@ public final class TileSprites {
 
     private static int[] canonicalCell(Tile tile) {
         return switch (tile) {
-            case FLOOR        -> new int[]{0, 1, 1, 1};
-            case FLOOR_WOOD   -> new int[]{0, 2, 1, 1};
-            case WALL         -> new int[]{0, 4, 1, 1};
-            case DOOR         -> new int[]{0, 8, 1, 1};
-            case DOOR_OPEN    -> new int[]{0, 9, 1, 1};
-            case CHASM        -> new int[]{0, 12, 1, 1};
-            case LAMP         -> new int[]{LAMP_COL, LAMP_ROW, 1, 2};
-            case STAIRS_UP    -> new int[]{STAIRS_UP_COL,   STAIRS_UP_ROW,   STAIRS_W_CELLS, STAIRS_H_CELLS};
-            case STAIRS_DOWN  -> new int[]{STAIRS_DOWN_COL, STAIRS_DOWN_ROW, STAIRS_W_CELLS, STAIRS_H_CELLS};
+            case FLOOR         -> new int[]{0, 1, 1, 1};
+            case FLOOR_WOOD    -> new int[]{0, 2, 1, 1};
+            case FLOOR_SPECIAL -> new int[]{SPECIAL_FLOOR_COL, SPECIAL_FLOOR_ROW, 1, 1};
+            case WALL          -> new int[]{0, 4, 1, 1};
+            case DOOR          -> new int[]{0, 8, 1, 1};
+            case DOOR_OPEN     -> new int[]{0, 9, 1, 1};
+            case CHASM         -> new int[]{0, 12, 1, 1};
+            case LAMP          -> new int[]{LAMP_COL, LAMP_ROW, 1, 2};
+            case STAIRS_UP     -> new int[]{STAIRS_UP_COL,   STAIRS_UP_ROW,   STAIRS_W_CELLS, STAIRS_H_CELLS};
+            case STAIRS_DOWN   -> new int[]{STAIRS_DOWN_COL, STAIRS_DOWN_ROW, STAIRS_W_CELLS, STAIRS_H_CELLS};
             case STATUE_SMALL_L, STATUE_SMALL_R -> new int[]{STATUE_SMALL_COL, STATUE_SMALL_ROW, 1, 1};
             case STATUE_LARGE_L, STATUE_LARGE_R -> new int[]{STATUE_LARGE_COL, STATUE_LARGE_ROW, 1, 2};
+            case ALTAR         -> new int[]{ALTAR_COL, ALTAR_ROW, ALTAR_W_CELLS, 1};
+            case THRONE_L, THRONE_R -> new int[]{THRONE_COL, THRONE_ROW, 1, THRONE_H_CELLS};
         };
     }
 
@@ -305,18 +421,59 @@ public final class TileSprites {
         lampByTheme        = new EnumMap<>(VisualTheme.class);
         stairsUpByTheme    = new EnumMap<>(VisualTheme.class);
         stairsDownByTheme  = new EnumMap<>(VisualTheme.class);
+        altarByTheme       = new EnumMap<>(VisualTheme.class);
+        throneByTheme      = new EnumMap<>(VisualTheme.class);
+        floorTintByTheme   = new EnumMap<>(VisualTheme.class);
+        wallTintByTheme    = new EnumMap<>(VisualTheme.class);
         for (Map.Entry<VisualTheme, String> e : PATHS.entrySet()) {
             try {
-                Texture tex = new Texture(Gdx.files.internal(e.getValue()));
+                // Read the atlas as a Pixmap first so we can sample floor/wall
+                // pixel averages for the world-map theme tint, then upload it as
+                // the renderer's Texture.
+                com.badlogic.gdx.graphics.Pixmap pm =
+                        new com.badlogic.gdx.graphics.Pixmap(Gdx.files.internal(e.getValue()));
+                Texture tex = new Texture(pm);
                 tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
                 textures.put(e.getKey(), tex);
-                int srcCell = Math.max(1, tex.getWidth() / TERRAIN_COLS);
+                int srcCell = Math.max(1, pm.getWidth() / TERRAIN_COLS);
                 cellSizes.put(e.getKey(), srcCell);
                 buildRegions(e.getKey(), tex, srcCell);
+                floorTintByTheme.put(e.getKey(), sampleAverage(pm, srcCell, 1, 6, 2));
+                wallTintByTheme .put(e.getKey(), sampleAverage(pm, srcCell, 4, 6, 1));
+                pm.dispose();
             } catch (Exception ignored) {
                 // Skip missing/broken atlases — accessors return null for that theme.
             }
         }
+    }
+
+    /** Average opaque-pixel colour over {@code cols} × {@code rows} cells starting
+     *  at atlas grid position {@code (0, startRow)}, in {@code srcCell}-pixel units.
+     *  Transparent pixels are ignored so the variant cells (which often have alpha
+     *  edges) don't bleed black into the average. */
+    private static com.badlogic.gdx.graphics.Color sampleAverage(
+            com.badlogic.gdx.graphics.Pixmap pm, int srcCell,
+            int startRow, int cols, int rows) {
+        long rSum = 0, gSum = 0, bSum = 0, n = 0;
+        int x0 = 0;
+        int y0 = startRow * srcCell;
+        int w  = Math.min(cols * srcCell, pm.getWidth()  - x0);
+        int h  = Math.min(rows * srcCell, pm.getHeight() - y0);
+        if (w <= 0 || h <= 0) return new com.badlogic.gdx.graphics.Color(0.5f, 0.5f, 0.5f, 1f);
+        for (int y = y0; y < y0 + h; y++) {
+            for (int x = x0; x < x0 + w; x++) {
+                int rgba = pm.getPixel(x, y);
+                int a = rgba & 0xff;
+                if (a < 16) continue;
+                rSum += (rgba >>> 24) & 0xff;
+                gSum += (rgba >>> 16) & 0xff;
+                bSum += (rgba >>>  8) & 0xff;
+                n++;
+            }
+        }
+        if (n == 0) return new com.badlogic.gdx.graphics.Color(0.5f, 0.5f, 0.5f, 1f);
+        return new com.badlogic.gdx.graphics.Color(
+                rSum / 255f / n, gSum / 255f / n, bSum / 255f / n, 1f);
     }
 
     /** Slice {@code tex} into per-cell regions and pull out the 1×2 / 2×2 ornaments
@@ -367,6 +524,18 @@ public final class TileSprites {
             stairsDownByTheme.put(theme,
                     new TextureRegion(tex, stairsDownX, stairsDownY, stairsWPx, stairsHPx));
         }
+        int altarX = ALTAR_COL * srcCell;
+        int altarY = ALTAR_ROW * srcCell;
+        int altarWPx = ALTAR_W_CELLS * srcCell;
+        if (altarX + altarWPx <= tex.getWidth() && altarY + srcCell <= tex.getHeight()) {
+            altarByTheme.put(theme, new TextureRegion(tex, altarX, altarY, altarWPx, srcCell));
+        }
+        int throneX = THRONE_COL * srcCell;
+        int throneY = THRONE_ROW * srcCell;
+        int throneHPx = THRONE_H_CELLS * srcCell;
+        if (throneX + srcCell <= tex.getWidth() && throneY + throneHPx <= tex.getHeight()) {
+            throneByTheme.put(theme, new TextureRegion(tex, throneX, throneY, srcCell, throneHPx));
+        }
     }
 
     /** Release the cached terrain atlases. Subsequent accessors reload. */
@@ -382,5 +551,9 @@ public final class TileSprites {
         lampByTheme        = null;
         stairsUpByTheme    = null;
         stairsDownByTheme  = null;
+        altarByTheme       = null;
+        throneByTheme      = null;
+        floorTintByTheme   = null;
+        wallTintByTheme    = null;
     }
 }

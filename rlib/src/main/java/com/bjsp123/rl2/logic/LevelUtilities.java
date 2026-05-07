@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.logic;
 
-import com.bjsp123.rl2.logic.MobSystem.Attitude;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
@@ -61,18 +60,6 @@ public final class LevelUtilities {
     private static final int MAX_REACHABLE_ATTEMPTS = 24;
 
     private LevelUtilities() {}
-
-    // ── pathfinding ─────────────────────────────────────────────────────────
-
-    /**
-     * Next tile {@code mob} should step onto when pathing toward {@code target}, or null if
-     * {@code mob} is already there or no path exists. Thin wrapper over {@link Pathfinder}
-     * so callers don't have to know that class exists.
-     */
-    public static Point getNextStepTo(Level level, Mob mob, Point target) {
-        if (level == null || mob == null || target == null) return null;
-        return Pathfinder.nextStep(level, mob, target);
-    }
 
     // ── neighbor sampling ───────────────────────────────────────────────────
 
@@ -141,16 +128,6 @@ public final class LevelUtilities {
             }
         }
         return null;
-    }
-
-    // ── attitude ────────────────────────────────────────────────────────────
-
-    /**
-     * What {@code a} wants to do with {@code b}. One-sided — a dog may ATTACK a cat while
-     * the cat's attitude toward the dog is FLEE. Delegates to {@link MobSystem}.
-     */
-    public static Attitude getAttitude(Mob a, Mob b) {
-        return MobSystem.getAttitudeToMob(a, b);
     }
 
     // ── random reachable point ──────────────────────────────────────────────

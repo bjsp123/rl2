@@ -581,12 +581,11 @@ public class LookRenderer extends Group {
 
         StringBuilder inv = new StringBuilder();
         if (t.inventory != null) {
-            for (Item.ItemSlot slot : Item.ItemSlot.values()) {
-                Item eq = t.inventory.equipped(slot);
-                if (eq != null) {
-                    if (inv.length() > 0) inv.append('\n');
-                    inv.append(slot.name().toLowerCase()).append(": ").append(eq.describe());
-                }
+            for (Item eq : t.inventory.allEquipped()) {
+                if (inv.length() > 0) inv.append('\n');
+                String cat = eq.inventoryCategory != null
+                        ? eq.inventoryCategory.name().toLowerCase() : "equipped";
+                inv.append(cat).append(": ").append(eq.describe());
             }
             if (t.inventory.bag != null) {
                 for (Item bagIt : t.inventory.bag) {

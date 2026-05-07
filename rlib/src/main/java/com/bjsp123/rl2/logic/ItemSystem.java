@@ -40,43 +40,72 @@ public final class ItemSystem {
      */
     public static void contributeInto(StatBlock dst, Item item) {
         if (item == null || dst == null) return;
-        int lvl = Math.max(0, item.level);
-        if (item.damageMax > 0) {
-            int min = item.damageMin + lvl * GameBalance.WEAPON_INCREMENT_MIN;
-            int max = item.damageMax + lvl * GameBalance.WEAPON_INCREMENT_MAX;
-            dst.damage = dst.damage.plus(new MinMax(Math.max(0, min), Math.max(0, max)));
-        }
-        if (item.armorMax > 0) {
-            int min = item.armorMin + lvl * GameBalance.ARMOR_INCREMENT_MIN;
-            int max = item.armorMax + lvl * GameBalance.ARMOR_INCREMENT_MAX;
-            dst.armor = dst.armor.plus(new MinMax(Math.max(0, min), Math.max(0, max)));
-        }
+        if (item.damage.max() > 0) dst.damage = dst.damage.plus(effectiveDamageRange(item));
+        if (item.armor.max()  > 0) dst.armor  = dst.armor .plus(effectiveArmorRange(item));
         if (item.lightRadius > dst.lightRadius) dst.lightRadius = item.lightRadius;
-        // Future per-species gem effects, AP/magic-resist on rings/amulets, accuracy
-        // bonuses, etc. all plug in here — they touch dst directly with the same shape.
+        dst.knockbackSquares += item.knockbackSquares;
     }
 
-    // ── Damage / armour / AP / magic-resist contributions ────────────────────
+    // ── Level-scaling primitives ─────────────────────────────────────────────
+
+    /** Min-max linear level scale: {@code [baseMin + lvl*incMin, baseMax + lvl*incMax]}.
+     *  Null items / negative levels clamp the level to 0. Used by every per-item
+     *  stat that scales linearly per plus (damage, armor). */
+    private static MinMax levelScaledRange(Item item,
+                                           int baseMin, int baseMax,
+                                           int incMin, int incMax) {
+        int lvl = clampedLevel(item);
+        int min = baseMin + lvl * incMin;
+        int max = baseMax + lvl * incMax;
+        return new MinMax(Math.max(0, min), Math.max(min, max));
+    }
+
+    private static int clampedLevel(Item item) {
+        return item == null ? 0 : Math.max(0, item.level);
+    }
 
     // ── Use-time effects ─────────────────────────────────────────────────────
 
-    /** Effective melee damage range of a thrown weapon — the contribution it would make
-     *  to a wielder's melee, applied as the standalone roll for thrown impact. Used by
-     *  {@code MobSystem.throwItem}. Items without a damage range return {@link MinMax#ZERO}. */
+    /** Effective damage range on this item, level-scaled by the item's own
+     *  {@code damagePerLevel} column. Used unchanged for melee weapons (via
+     *  {@link #contributeInto}), thrown weapons (via {@code MobSystem.throwItem}),
+     *  damage-dealing wands (MISSILE, LIGHTNING — via {@code applyWandImpact}),
+     *  and damage-dealing bombs (via the bomb impact path). Items with no
+     *  damage range return {@link MinMax#ZERO}. */
     public static MinMax effectiveDamageRange(Item item) {
-        if (item == null || item.damageMax <= 0) return MinMax.ZERO;
-        int lvl = Math.max(0, item.level);
-        int min = item.damageMin + lvl * GameBalance.WEAPON_INCREMENT_MIN;
-        int max = item.damageMax + lvl * GameBalance.WEAPON_INCREMENT_MAX;
-        return new MinMax(Math.max(0, min), Math.max(0, max));
+        return effectiveDamageRange(item, clampedLevel(item));
     }
 
-    /** Effective HP restored when this item is drunk / used as a heal. Returns 0 for
-     *  items that don't heal so the call is unconditional from drink-paths. */
-    public static int effectiveHealAmount(Item item) {
-        if (item == null || item.healAmount <= 0) return 0;
-        int lvl = Math.max(0, item.level);
-        return item.healAmount + lvl * GameBalance.HEAL_VALUE_INCREMENT;
+    /** Level-explicit overload — used by paths where the effective level
+     *  differs from {@code item.level} (currently the WANDMASTER perk bumps
+     *  the wand by +1 at fire time). */
+    public static MinMax effectiveDamageRange(Item item, int level) {
+        if (item == null || item.damage.max() <= 0) return MinMax.ZERO;
+        return levelScaledRangeAt(level,
+                item.damage.min(),         item.damage.max(),
+                item.damagePerLevel.min(), item.damagePerLevel.max());
+    }
+
+    /** Effective armor range on this item, level-scaled by the item's own
+     *  {@code armorPerLevel}. Items with no armor value return
+     *  {@link MinMax#ZERO}. */
+    public static MinMax effectiveArmorRange(Item item) {
+        if (item == null || item.armor.max() <= 0) return MinMax.ZERO;
+        return levelScaledRange(item,
+                item.armor.min(),         item.armor.max(),
+                item.armorPerLevel.min(), item.armorPerLevel.max());
+    }
+
+    /** Linear-scale primitive parameterised on level rather than item — used
+     *  by callers that need to bump the level (perks, future buffs that
+     *  amplify item effects). */
+    private static MinMax levelScaledRangeAt(int level,
+                                             int baseMin, int baseMax,
+                                             int incMin, int incMax) {
+        int lvl = Math.max(0, level);
+        int min = baseMin + lvl * incMin;
+        int max = baseMax + lvl * incMax;
+        return new MinMax(Math.max(0, min), Math.max(min, max));
     }
 
     /** Effective food value when eaten. Food is always level 0, but this helper still
@@ -89,8 +118,7 @@ public final class ItemSystem {
     /** Effective buff level applied by a buff-bestowing item. {@code 1 + item.level}
      *  so a level-0 starter potion still applies a level-1 buff. */
     public static int effectiveBuffLevel(Item item) {
-        if (item == null) return 1;
-        return 1 + Math.max(0, item.level);
+        return 1 + clampedLevel(item);
     }
 
     /** Effective buff duration in turns: {@code (1 + item.level) * item.buffDuration}.
@@ -103,52 +131,20 @@ public final class ItemSystem {
         return effectiveBuffLevel(item) * base;
     }
 
-    /** Effective self-damage on use (poison potion). Returns 0 for items that
-     *  don't carry a self-damage base. */
-    public static int effectiveSelfDamage(Item item) {
-        if (item == null || item.selfDamageBase <= 0) return 0;
-        return item.selfDamageBase + Math.max(0, item.level);
+    /** Effective tile count for a wand or bomb area effect. Converted to a
+     *  Euclidean disc radius via {@code MobSystem.radiusForTileCount} at the
+     *  use-site. Reads {@link Item#tilesAffected} + {@code tilesAffectedPerLevel}
+     *  off the source item; items with no AOE columns return 0. Replaces the
+     *  separate wand-tiles / bomb-tiles helpers — the formula is the same and
+     *  the per-item columns now carry the per-kind values. */
+    public static int effectiveTilesAffected(Item item) {
+        return effectiveTilesAffected(item, clampedLevel(item));
     }
 
-    /** Effective wand impact damage range. Used by the wand of magic missile and any
-     *  future damage-on-impact wand. */
-    public static MinMax effectiveWandDamageRange(Item item) {
-        return effectiveWandDamageRange(item == null ? 0 : item.level);
-    }
-
-    /** Int-level overload — used by impact callbacks (wand of lightning) that
-     *  carry the wand level forward without a reference to the source item. */
-    public static MinMax effectiveWandDamageRange(int wandLevel) {
-        int lvl = Math.max(0, wandLevel);
-        int min = GameBalance.BASIC_WAND_DAMAGE_MIN + lvl * GameBalance.WAND_DAMAGE_INCREMENT_MIN;
-        int max = GameBalance.BASIC_WAND_DAMAGE_MAX + lvl * GameBalance.WAND_DAMAGE_INCREMENT_MAX;
-        return new MinMax(min, Math.max(min, max));
-    }
-
-    /** Effective tile count for a wand area effect. Converted to a Euclidean disc
-     *  radius via {@link MobSystem#radiusForTileCount} at the use-site. */
-    public static int effectiveWandEffectTiles(Item item) {
-        return effectiveWandEffectTiles(item == null ? 0 : item.level);
-    }
-
-    /** Int-level overload for the wand-effect-tiles helper. Used by the missile
-     *  pipeline, which carries the wand's level forward as an int on the in-flight
-     *  Effect and no longer has a reference to the source Item by impact time. */
-    public static int effectiveWandEffectTiles(int wandLevel) {
-        int lvl = Math.max(0, wandLevel);
-        return GameBalance.WAND_EFFECT_TILES + lvl * GameBalance.WAND_EFFECT_TILE_INCREMENT;
-    }
-
-    /** Effective bomb impact damage. */
-    public static int effectiveBombDamage(Item item) {
-        int lvl = item == null ? 0 : Math.max(0, item.level);
-        return GameBalance.BOMB_DAMAGE_BASE + lvl * GameBalance.BOMB_DAMAGE_INCREMENT;
-    }
-
-    /** Effective bomb area-of-effect tile count. */
-    public static int effectiveBombEffectTiles(Item item) {
-        int lvl = item == null ? 0 : Math.max(0, item.level);
-        return GameBalance.BOMB_EFFECT_TILES + lvl * GameBalance.BOMB_EFFECT_TILE_INCREMENT;
+    /** Level-explicit overload (WANDMASTER bumps wand level at fire time). */
+    public static int effectiveTilesAffected(Item item, int level) {
+        if (item == null || item.tilesAffected <= 0) return 0;
+        return item.tilesAffected + Math.max(0, level) * item.tilesAffectedPerLevel;
     }
 
     // ── Use-time effect dispatchers ──────────────────────────────────────────
@@ -174,22 +170,96 @@ public final class ItemSystem {
 
     /**
      * Drink a potion. Applies the item's {@link Item#appliesBuff} (level and
-     * duration from the item-level helpers) and any {@link Item#selfDamageBase}
-     * self-damage (poison potion). Item is consumed.
+     * duration from the item-level helpers). When the potion carries a
+     * non-zero {@link Item#damage} range, the drinker takes that damage
+     * (level-scaled via {@link #effectiveDamageRange}) — drinking a poison
+     * potion now uses the same damage column as throwing it. Item is consumed.
      */
     public static void drinkPotion(Level level, Mob drinker, Item item) {
         if (drinker == null || item == null) return;
-        applyConsumableBuff(level, drinker, item);
-        int selfDmg = effectiveSelfDamage(item);
-        if (selfDmg > 0) {
-            MobSystem.processAttack(level, null, drinker, selfDmg,
-                    MobSystem.AttackType.ENVIRONMENTAL);
-        }
+        applyPotionEffect(level, drinker, item, drinker);
+        emitPotionBurst(level, drinker.position, item);
         MobSystem.removeFromInventory(drinker, item);
         if (drinker.behavior == Behavior.PLAYER) {
             String name = drinker.name != null ? drinker.name : "Adventurer";
             EventLog.add(Messages.playerUses(name,
                     item.useVerb != null ? item.useVerb : "drink", item.name));
+        }
+    }
+
+    /**
+     * Resolve a potion landing — the same effect that drinking the potion has
+     * is applied to every mob on or adjacent to {@code at} (Chebyshev distance
+     * 1). Called from {@code MobSystem.throwItem} for items whose
+     * {@link Item#useBehavior} is {@link Item.UseBehavior#DRINK}: drinking and
+     * throwing are mirror operations, the only difference being who's affected
+     * (drinker vs. mobs in the splash radius).
+     *
+     * <p>The {@link Item.UseBehavior#DRINK} preflight check in
+     * {@code throwItem} routes potions here instead of the standard DAMAGE /
+     * bomb-AOE branches, so a thrown POTION_POISON splashes its damage AND
+     * applies the POISONED buff to every mob in the disc, not just the
+     * single mob on the target tile.
+     */
+    public static void applyPotionImpact(Level level, Point at, Item item, Mob source) {
+        if (level == null || at == null || item == null) return;
+        int cx = at.tileX(), cy = at.tileY();
+        // Snapshot the affected mobs so an in-loop death doesn't ConcurrentModification.
+        java.util.List<Mob> victims = new java.util.ArrayList<>();
+        if (level.mobs != null) {
+            for (Mob m : level.mobs) {
+                if (m == null || m.position == null || m.hp <= 0) continue;
+                int d = Math.max(Math.abs(m.position.tileX() - cx),
+                                 Math.abs(m.position.tileY() - cy));
+                if (d <= 1) victims.add(m);
+            }
+        }
+        for (Mob v : victims) {
+            applyPotionEffect(level, v, item, source);
+        }
+        emitPotionBurst(level, at, item);
+    }
+
+    /** Apply the potion's drink-time effect to a single mob: appliesBuff plus
+     *  the rolled damage range (if non-zero). POTION_INSIGHT additionally
+     *  reveals the whole level when the affected mob is the player — that's
+     *  the only player-only side-effect, and it's expressed as a hard-coded
+     *  type check because revealing the explored map can't be modelled as a
+     *  Buff. Other potion specials should add a similar branch here rather
+     *  than reaching into drinkPotion / throwItem. */
+    private static void applyPotionEffect(Level level, Mob mob, Item item, Mob source) {
+        if (mob == null || item == null) return;
+        applyConsumableBuff(level, mob, item);
+        if (item.damage.max() > 0) {
+            int dmg = MobSystem.rollRange(effectiveDamageRange(item));
+            if (dmg > 0) {
+                MobSystem.processAttack(level, source, mob, dmg,
+                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON);
+            }
+        }
+        if ("POTION_INSIGHT".equals(item.type) && mob.behavior == Behavior.PLAYER) {
+            revealLevel(level);
+        }
+    }
+
+    /** Post a potion-burst visual at {@code at}. The renderer reads
+     *  {@code item.appliesBuff} / {@code item.type} to pick the particle
+     *  colour, so this method only needs to forward the location and item
+     *  reference. Skipped silently when the level has no event sink. */
+    private static void emitPotionBurst(Level level, Point at, Item item) {
+        if (level == null || level.events == null || at == null || item == null) return;
+        level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(at, item));
+    }
+
+    /** Stamp every tile of {@code level} as explored, so the renderer paints the
+     *  whole map (in remembered-but-not-currently-visible state). Player still
+     *  sees only currently-lit tiles in full colour — vision is unchanged. */
+    private static void revealLevel(Level level) {
+        if (level == null || level.explored == null) return;
+        for (int x = 0; x < level.width; x++) {
+            for (int y = 0; y < level.height; y++) {
+                level.explored[x][y] = true;
+            }
         }
     }
 
@@ -211,6 +281,9 @@ public final class ItemSystem {
         if (user == null || item == null) return;
         user.perkPoints++;
         MobSystem.removeFromInventory(user, item);
+        if (level != null && level.events != null && user.position != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.RainbowBurst(user.position));
+        }
         if (user.behavior == Behavior.PLAYER) {
             String name = user.name != null ? user.name : "Adventurer";
             EventLog.add(Messages.playerUses(name,
@@ -220,16 +293,21 @@ public final class ItemSystem {
 
     /**
      * Apply a wand's element to a target tile. Effect strength scales with
-     * {@code wandLevel} via {@link #effectiveWandEffectTiles}. Called from rgame's
-     * {@code Animator} as the {@code PendingImpact} callback once the wand-missile
-     * or ray visual completes.
+     * the wand's own per-item columns ({@link Item#tilesAffected},
+     * {@link Item#damage}, plus their per-level increments). Called from
+     * rgame's {@code Animator} as the {@code PendingImpact} callback once the
+     * wand-missile or ray visual completes — the wand instance is carried
+     * through the event so the impact site has access to its data-driven
+     * scaling. {@code wand} may be {@code null} (defensive); element only
+     * dispatches that need its damage / AOE columns then short-circuit.
      */
     public static void applyWandImpact(Level level, Mob caster, Point target,
-                                       Item.WandElement element, int wandLevel) {
+                                       Item.ItemEffect element, Item wand,
+                                       int effectiveLevel) {
         if (level == null || target == null || element == null) return;
         int tx = target.tileX(), ty = target.tileY();
         if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
-        int targetTiles = effectiveWandEffectTiles(wandLevel);
+        int targetTiles = effectiveTilesAffected(wand, effectiveLevel);
         int areaRadius  = radiusForTileCount(targetTiles);
         switch (element) {
             case WATER -> {
@@ -249,6 +327,20 @@ public final class ItemSystem {
                 if (level.events != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.ExplosionEffect(target, radius));
                 }
+                int kb = wand != null ? wand.knockbackSquares : 0;
+                if (kb > 0) {
+                    int r2det = radius * radius;
+                    java.util.List<com.bjsp123.rl2.model.Mob> inBlast =
+                            new java.util.ArrayList<>(level.mobs);
+                    for (com.bjsp123.rl2.model.Mob m : inBlast) {
+                        if (m == caster || m.position == null) continue;
+                        int mdx = m.position.tileX() - tx;
+                        int mdy = m.position.tileY() - ty;
+                        if (mdx * mdx + mdy * mdy <= r2det) {
+                            MobSystem.knockBack(level, m, kb, target);
+                        }
+                    }
+                }
             }
             case BANISHMENT -> {
                 Mob victim = MobSystem.mobAt(level, target);
@@ -256,25 +348,109 @@ public final class ItemSystem {
                     MobSystem.killMob(level, victim, caster);
                 }
             }
-            case LIGHTNING -> {
+            case LIGHTNING -> applyLightningChain(level, caster, target, wand, effectiveLevel);
+            case MISSILE -> {
                 Mob victim = MobSystem.mobAt(level, target);
                 if (victim != null) {
-                    int dmg = MobSystem.rollRange(effectiveWandDamageRange(wandLevel));
-                    Level.Surface here = level.surface[tx][ty];
-                    boolean conductive = BuffSystem.hasBuff(victim, Buff.BuffType.WET)
-                            || here == Level.Surface.WATER
-                            || here == Level.Surface.ICE;
-                    if (conductive) dmg *= 2;
+                    int dmg = MobSystem.rollRange(effectiveDamageRange(wand, effectiveLevel));
                     MobSystem.processAttack(level, caster, victim, dmg,
-                            MobSystem.AttackType.MAGIC);
+                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
                 }
             }
         }
-        if (element != Item.WandElement.DETONATION
-                && element != Item.WandElement.BANISHMENT
+        if (element != Item.ItemEffect.DETONATION
+                && element != Item.ItemEffect.BANISHMENT
+                && element != Item.ItemEffect.MISSILE
                 && level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(target, element));
         }
+    }
+
+    /**
+     * Wand-of-lightning chain. Lightning hits the mob on {@code target} (if any),
+     * then jumps to any other mob within Chebyshev range {@code jumpRadius}
+     * that hasn't already been hit, repeating until the chain runs out of
+     * eligible neighbours. Each victim takes the wand's rolled damage,
+     * doubled if the victim is WET (the {@link Buff.BuffType#WET} buff or
+     * standing on a {@link Level.Surface#WATER} / {@link Level.Surface#ICE}
+     * tile).
+     *
+     * <p>Jump radius is normally {@code 2} tiles, but bumps to {@code 4} when
+     * the impact tile carries a {@link Level.Surface#WATER} or
+     * {@link Level.Surface#BLOOD} surface — those puddles act as electrical
+     * conductors so the arc carries further. The {@code caster} itself is an
+     * eligible chain target, so a careless lightning shot in a puddled room
+     * can fry the wand-user along with everyone else.
+     */
+    private static void applyLightningChain(Level level, Mob caster, Point target,
+                                            Item wand, int effectiveLevel) {
+        int tx = target.tileX(), ty = target.tileY();
+        Mob first = MobSystem.mobAt(level, target);
+        if (first == null) return;
+
+        Level.Surface impactSurf = level.surface[tx][ty];
+        int jumpRadius = (impactSurf == Level.Surface.WATER
+                       || impactSurf == Level.Surface.BLOOD) ? 4 : 2;
+
+        java.util.Set<Mob> hit = new java.util.HashSet<>();
+        java.util.ArrayDeque<Mob> frontier = new java.util.ArrayDeque<>();
+        frontier.add(first);
+        hit.add(first);
+
+        while (!frontier.isEmpty()) {
+            Mob v = frontier.poll();
+            int dmg = MobSystem.rollRange(effectiveDamageRange(wand, effectiveLevel));
+            if (isWet(level, v)) dmg *= 2;
+            MobSystem.processAttack(level, caster, v, dmg,
+                    MobSystem.AttackType.MAGIC, MobSystem.DamageElement.SHOCK);
+            // Per-victim arc burst so the renderer marks every hit, not just
+            // the original target tile.
+            if (level.events != null && v.position != null) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(
+                        v.position, Item.ItemEffect.LIGHTNING));
+            }
+
+            // Find the next chain target: any unhit mob within jumpRadius of v
+            // (Chebyshev). The caster is in the candidate pool, so a backfire
+            // is possible. We pick a single nearest candidate per step so the
+            // chain looks coherent rather than fanning out into every nearby
+            // mob simultaneously.
+            Mob next = nearestChainCandidate(level, v, hit, jumpRadius);
+            if (next != null) {
+                hit.add(next);
+                frontier.add(next);
+            }
+        }
+    }
+
+    /** True if {@code m} is electrically conductive — carries the WET buff or
+     *  stands on a water / ice tile. Pulled out of the lightning case so the
+     *  chain step can reuse it without duplicating the surface read. */
+    private static boolean isWet(Level level, Mob m) {
+        if (m == null || m.position == null) return false;
+        if (BuffSystem.hasBuff(m, Buff.BuffType.WET)) return true;
+        int x = m.position.tileX(), y = m.position.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        Level.Surface s = level.surface[x][y];
+        return s == Level.Surface.WATER || s == Level.Surface.ICE;
+    }
+
+    /** Closest unhit mob within Chebyshev range {@code radius} of {@code from}.
+     *  Returns null when no eligible candidate exists. */
+    private static Mob nearestChainCandidate(Level level, Mob from,
+                                             java.util.Set<Mob> hit, int radius) {
+        if (level.mobs == null || from.position == null) return null;
+        Mob best = null;
+        int bestDist = Integer.MAX_VALUE;
+        for (Mob m : level.mobs) {
+            if (m == from || m == null || m.position == null) continue;
+            if (hit.contains(m)) continue;
+            if (m.hp <= 0) continue;
+            int d = com.bjsp123.rl2.logic.LevelFactoryUtils.chebyshev(from.position, m.position);
+            if (d > radius) continue;
+            if (d < bestDist) { best = m; bestDist = d; }
+        }
+        return best;
     }
 
     /**
@@ -298,6 +474,9 @@ public final class ItemSystem {
         int petLevel = 1 + Math.max(0, wand.level);
         MobProgression.setSpawnLevel(pet, petLevel);
         level.mobs.add(pet);
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(pet, spot));
+        }
         return true;
     }
 

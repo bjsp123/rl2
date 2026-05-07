@@ -51,6 +51,11 @@ public class PlayScreen implements Screen {
     private final World preloadedWorld;
     public final int saveSlot;
 
+    /** Player-supplied world seed for new runs. {@code null} ⇒ pick a random
+     *  seed inside the {@link com.bjsp123.rl2.util.SeedCode} window. Ignored
+     *  when {@link #preloadedWorld} is non-null (load preserves the saved seed). */
+    private final Long requestedSeed;
+
     private World            world;
     private OrthographicCamera camera;
     private CameraController cameraController;
@@ -88,10 +93,15 @@ public class PlayScreen implements Screen {
     private PlayController controller;
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls) {
+        this(game, slot, cls, null);
+    }
+
+    public PlayScreen(Rl2Game game, int slot, CharacterClass cls, Long seed) {
         this.game = game;
         this.saveSlot = slot;
         this.charClass = cls;
         this.preloadedWorld = null;
+        this.requestedSeed = seed;
     }
 
     public PlayScreen(Rl2Game game, int slot, World loadedWorld) {
@@ -99,6 +109,7 @@ public class PlayScreen implements Screen {
         this.saveSlot = slot;
         this.charClass = null;
         this.preloadedWorld = loadedWorld;
+        this.requestedSeed = null;
     }
 
     @Override
@@ -134,14 +145,28 @@ public class PlayScreen implements Screen {
             for (Level l : world.levels) if (l != null) l.initTransients();
         } else {
             EventLog.clear();
-            // Default world is the diamond-shaped 8-level layout — see WorldTopology. The
-            // builder generates the levels, places extra stairs on the branching boundary
-            // levels, and wires every level's stairs(Up|Down)(Alt)Target so the runtime
-            // topology is fully encoded in per-level data.
-            Level[] levels = WorldTopology.buildDiamond(
+            // World is procedurally generated — see WorldTopology.build. Depth and the
+            // side-branch / crosslink probabilities come from GameBalance; every level's
+            // stairs(Up|Down)(Alt)Target fields fully encode the resulting graph.
+            // Allocate the World first so build() and every createDungeonLevel call
+            // share the same UniqueTracker — that's how unique themed rooms only
+            // appear once per game.
+            world = new World();
+            // Honour an explicit user-supplied seed if there is one; otherwise
+            // pick a random seed inside the {@link com.bjsp123.rl2.util.SeedCode}
+            // window so the printed code is always typeable. Storing on World
+            // lets the map screen show it and lets the dump reproduce the run.
+            world.seed = (requestedSeed != null)
+                    ? requestedSeed
+                    : new java.util.Random().nextLong()
+                            % com.bjsp123.rl2.util.SeedCode.SPACE;
+            Level[] levels = WorldTopology.build(
                     com.bjsp123.rl2.logic.GameBalance.LEVEL_BASE_W,
-                    com.bjsp123.rl2.logic.GameBalance.LEVEL_BASE_H);
-            world = new World(levels);
+                    com.bjsp123.rl2.logic.GameBalance.LEVEL_BASE_H,
+                    new java.util.Random(world.seed),
+                    world.unique);
+            world.levels = levels;
+            world.currentLevelIndex = 0;
             Point spawn = levels[0].spawnPoint != null ? levels[0].spawnPoint : new Point(2, 2);
             Mob player  = MobFactory.player(spawn, charClass);
             levels[0].mobs.add(player);
@@ -367,6 +392,7 @@ public class PlayScreen implements Screen {
         Mob playerAfter = TurnSystem.findPlayer(level);
         if (player != null && playerAfter == null && lastSnapshot != null) {
             game.hallOfFame.add(lastSnapshot);
+            com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
             game.saveSystem.clear(saveSlot);
             game.currentPlay = null;
             dispose();

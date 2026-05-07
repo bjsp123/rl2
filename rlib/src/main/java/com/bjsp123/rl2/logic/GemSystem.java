@@ -2,7 +2,7 @@ package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.GemSpecies;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemSlot;
+import com.bjsp123.rl2.model.Item.InventoryCategory;
 import com.bjsp123.rl2.model.Level.VisualTheme;
 
 import java.util.ArrayList;
@@ -11,8 +11,7 @@ import java.util.Random;
 
 /**
  * Gem spawn helpers — theme-gated species draw and the factory used by {@code placeGems}
- * and the recipe engine. Equip/unequip live on {@link com.bjsp123.rl2.model.Inventory}
- * (gems are just regular slot-bound items in {@link ItemSlot#GEM1}/{@code GEM2}/{@code GEM3});
+ * and the recipe engine. Equip/unequip live on {@link com.bjsp123.rl2.model.Inventory};
  * stat bonuses from equipped gems will plug into {@link ItemSystem#contributeInto} when
  * designed, with no separate dispatch path needed.
  */
@@ -64,7 +63,7 @@ public final class GemSystem {
         Item it = new Item();
         // Procedural item — null type. Identity is carried by gemSpecies + gemSize,
         // and Item.isGem reads the species field rather than checking the type.
-        it.slot = ItemSlot.GEM1;
+        it.inventoryCategory = InventoryCategory.GEM;
         it.gemSpecies = species;
         it.gemSize = Math.max(1, size);
         it.name = ItemSystem.gemDisplayName(it);

@@ -84,8 +84,11 @@ final class FxRenderer {
             float yOffset = effect.frame / 5f;
             font.setColor(tintToColor(effect.tint, Color.YELLOW));
             font.draw(batch, effect.text, ex * CELL, ey * CELL + CELL * 2 + yOffset);
-        } else if (effect.type == EffectType.THROWN_ITEM) {
+        } else if (effect.type == EffectType.THROWN_ITEM
+                || effect.type == EffectType.LOOT_TOSS) {
             drawThrownItem(effect);
+        } else if (effect.type == EffectType.PICKUP_TOSS) {
+            drawPickupToss(effect);
         } else if (effect.type == EffectType.PARTICLE_BURST) {
             if (!level.visible[ex][ey]) return;
             drawParticleBurst(effect);
@@ -120,6 +123,9 @@ final class FxRenderer {
         } else if (effect.type == EffectType.BUFF_ICON) {
             if (!level.visible[ex][ey]) return;
             drawBuffIcon(effect);
+        } else if (effect.type == EffectType.FALLING_ITEM) {
+            if (!level.visible[ex][ey]) return;
+            drawFallingItem(effect);
         }
     }
 
@@ -495,6 +501,56 @@ final class FxRenderer {
         } else {
             batch.draw(region, drawX, yBase, drawSize, drawSize);
         }
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Pickup toss — the item flies off the source tile toward the bottom-right
+     *  of the screen while shrinking and fading. Drawn entirely in world coords:
+     *  the destination is a fixed offset (+8 tiles right, -6 tiles down) from
+     *  the source, which is roughly off-screen for a player-centred camera and
+     *  reads as "into the inventory". The arc rises briefly so the item appears
+     *  to leap off the floor before drifting away. */
+    private void drawPickupToss(Effect e) {
+        if (e.thrownItem == null) return;
+        TextureRegion region = ItemSprites.regionFor(e.thrownItem);
+        if (region == null) return;
+        int frames = e.totalFrames();
+        float t = frames <= 1 ? 1f : e.frame / (float) (frames - 1);
+        float sx = (e.location.tileX() + 0.5f) * CELL;
+        float sy = (e.location.tileY() + 0.5f) * CELL;
+        float dxTotal =  8f * CELL;   // right
+        float dyTotal = -6f * CELL;   // down (y-up world → bottom-of-screen)
+        float px = sx + dxTotal * t;
+        float py = sy + dyTotal * t + (float) Math.sin(Math.PI * t * 0.5f) * (CELL * 0.6f);
+        float scale = 1f - 0.6f * t;
+        float alpha = 1f - t * 0.7f;
+        float drawW = CELL * scale, drawH = CELL * scale;
+        batch.setColor(1f, 1f, 1f, alpha);
+        batch.draw(region, px - drawW / 2f, py - drawH / 2f, drawW, drawH);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Item falling into a chasm — spins in place while shrinking and fading out. */
+    private void drawFallingItem(Effect e) {
+        if (e.thrownItem == null) return;
+        TextureRegion region = ItemSprites.regionFor(e.thrownItem);
+        if (region == null) return;
+        int frames = e.totalFrames();
+        float t = frames <= 1 ? 1f : e.frame / (float) (frames - 1);
+        float scale = 1f - t;
+        float alpha = 1f - t;
+        if (alpha <= 0f) return;
+        float rotation = t * 720f;
+        float cx = (e.location.tileX() + 0.5f) * CELL;
+        float cy = (e.location.tileY() + 0.5f) * CELL;
+        float drawW = CELL * scale, drawH = CELL * scale;
+        batch.setColor(1f, 1f, 1f, alpha);
+        batch.draw(region,
+                cx - drawW / 2f, cy - drawH / 2f,
+                drawW / 2f, drawH / 2f,
+                drawW, drawH,
+                1f, 1f,
+                rotation);
         batch.setColor(Color.WHITE);
     }
 

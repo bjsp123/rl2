@@ -53,10 +53,6 @@ public final class LevelFactory {
          *  into a rectangle of random size, then a minimum-spanning-tree of L-corridors
          *  connects them. Looks more "organic" — rooms can be small islands far apart. */
         POISSON,
-        /** SPD-style loop: rooms placed around a circle, connected end-to-end so the level
-         *  is a single navigable cycle with no dead ends. Walking far enough in either
-         *  direction always brings you back. */
-        LOOP,
         /** SPD-style figure-eight: two loops of rooms sharing a single pivot room in the
          *  middle. Reads as a horizontal "8" — the player can pick either side of the cross
          *  and orbit it before threading through the pivot to the other side. */
@@ -89,13 +85,22 @@ public final class LevelFactory {
     // -------------------------------------------------------------------------
 
     /** Generate a level with a freshly-rolled seed. The player is not placed by this method —
-     *  the caller positions the player on the appropriate stair on entry. */
-    public static Level createDungeonLevel(int w, int h, boolean hasUp, boolean hasDown) {
-        return createDungeonLevel(w, h, hasUp, hasDown, ROOT_RNG.nextLong());
+     *  the caller positions the player on the appropriate stair on entry. The
+     *  {@code unique} tracker, when non-null, is consulted at themed-room generation time
+     *  so unique rooms only appear once per game. {@code depth} is stamped on the new
+     *  level <em>before</em> population so themed-room / unique-mob picks see the correct
+     *  depth-fraction (passing it as a parameter rather than via post-mutation closes a
+     *  bug where every level looked like depth 1 to the stamping code). */
+    public static Level createDungeonLevel(int w, int h, int depth,
+                                           boolean hasUp, boolean hasDown,
+                                           com.bjsp123.rl2.model.UniqueTracker unique) {
+        return createDungeonLevel(w, h, depth, hasUp, hasDown, unique, ROOT_RNG.nextLong());
     }
 
     /** Seeded variant — same seed → same level, modulo class-loaded factory state. */
-    public static Level createDungeonLevel(int w, int h, boolean hasUp, boolean hasDown,
+    public static Level createDungeonLevel(int w, int h, int depth,
+                                           boolean hasUp, boolean hasDown,
+                                           com.bjsp123.rl2.model.UniqueTracker unique,
                                            long seed) {
         Random rng = new Random(seed);
 
@@ -107,6 +112,7 @@ public final class LevelFactory {
             h = (int) Math.round(h * 1.5);
         }
         Level level = new Level(w, h);
+        level.depth = depth;        // before population — populate reads depth-fraction.
         level.flags.addAll(flags);
 
         level.layout = Layout.values()[rng.nextInt(Layout.values().length)];
@@ -114,20 +120,20 @@ public final class LevelFactory {
         // distribution so adding a fourth theme will rebalance automatically.
         VisualTheme[] themes = VisualTheme.values();
         level.theme = themes[rng.nextInt(themes.length)];
-        System.out.println("[rl2] generated level seed=" + seed
-                + " size=" + w + "x" + h
-                + " theme=" + level.theme + " layout=" + level.layout
-                + " flags=" + level.flags);
 
         List<int[]> rooms = switch (level.layout) {
             case BSP          -> buildBsp(level, rng);
             case POISSON      -> buildPoisson(level, rng);
-            case LOOP         -> buildLoop(level, rng);
             case FIGURE_EIGHT -> buildFigureEight(level, rng);
             case VILLAGE      -> buildVillage(level, rng);
             case TWO_SIDES    -> buildTwoSides(level, rng);
             case PACKED       -> buildPacked(level, rng);
         };
+        System.out.println("[rl2] generated level seed=" + seed
+                + " size=" + w + "x" + h
+                + " theme=" + level.theme + " layout=" + level.layout
+                + " rooms=" + rooms.size()
+                + " flags=" + level.flags);
         if (rooms.isEmpty()) {
             // Degenerate fallback — every layout had a bad roll. Carve the whole interior.
             LevelFactoryUtils.carveRect(level, 1, 1, w - 2, h - 2);
@@ -150,10 +156,19 @@ public final class LevelFactory {
 
         // Walls and doors first — interiors paint AFTER, so decorative chasms (CHASM,
         // WALKWAY) aren't eaten by wallInFloors and walkway plank-painting can rely on the
-        // doors already being placed.
+        // doors already being placed. Every decorative variant — round rooms, walkways,
+        // chasm/light/imp temples, galleries, etc. — is now expressed as a non-unique
+        // themed room in {@code assets/data/themedrooms.csv}; the orchestrator below picks
+        // and stamps them. VILLAGE-layout levels finalise their own buildings inside the
+        // builder, so themed-room stamping is skipped on VILLAGE inside the orchestrator.
         LevelFactoryUtils.wallInFloors(level);
         placeDoors(level, rooms);
-        paintRoomInteriors(level, rooms, rng);
+        // Snapshot the room rectangles for diagnostic dumps (WorldYamlDump etc.) —
+        // stamping below mutates the working list (claimed unique rooms get
+        // removed), but the snapshot preserves the full layout.
+        for (int[] r : rooms) level.rooms.add(new Level.RoomSnapshot(r[0], r[1], r[2], r[3]));
+        LevelFactoryThemedRooms.stampUniqueRoom(level, rooms, unique, rng);
+        LevelFactoryThemedRooms.stampRegularThemedRooms(level, rooms, rng);
         LevelFactoryUtils.pruneOrphanDoors(level);
 
         placeStairs(level, rooms, hasUp, hasDown, rng);
@@ -162,7 +177,7 @@ public final class LevelFactory {
         LevelFactoryPopulate.placeVegetation(level, rng);
         LevelFactoryPopulate.placeItems(level, rng);
         LevelFactoryPopulate.placeGems(level, rng);
-        LevelFactoryPopulate.placeMobs(level, rng);
+        LevelFactoryPopulate.placeMobs(level, rng, unique);
         return level;
     }
 
@@ -188,6 +203,15 @@ public final class LevelFactory {
      * Connects with an MST plus a few extra random edges for loops. Produces dense,
      * mostly-orthogonal dungeons where every leaf hosts a chamber.
      */
+    /** Per-level room target. Picks a value in {@code [TARGET-1, TARGET+1]} so
+     *  no two adjacent levels feel mechanically identical, but every level stays
+     *  within ±1 of the configured target. Used as the {@code targetCount} arg
+     *  to {@link #topUpPackedRooms} and as the placement cap in
+     *  {@link #buildPoisson}. */
+    private static int perLevelRoomTarget(Random rng) {
+        return Math.max(2, GameBalance.LEVEL_TARGET_ROOMS + rng.nextInt(3) - 1);
+    }
+
     private static List<int[]> buildBsp(Level level, Random rng) {
         int w = level.width, h = level.height;
         // Room size driven by the global ROOM_MIN/MAX_SIZE pair; leaf size is the
@@ -196,7 +220,8 @@ public final class LevelFactory {
         // ways regardless of level size.
         int minRoom = GameBalance.ROOM_MIN_SIZE;
         int maxRoom = GameBalance.ROOM_MAX_SIZE;
-        int minLeaf = leafSizeForTarget(w, h, maxRoom, GameBalance.LEVEL_TARGET_ROOMS);
+        int target = perLevelRoomTarget(rng);
+        int minLeaf = leafSizeForTarget(w, h, maxRoom, target);
         List<int[]> leaves = LevelFactoryUtils.bspPartition(1, 1, w - 2, h - 2, minLeaf, rng);
         List<int[]> rooms = new ArrayList<>();
         for (int[] leaf : leaves) {
@@ -212,6 +237,10 @@ public final class LevelFactory {
             rooms.add(new int[]{rx, ry, rw, rh});
         }
         connectMst(level, rooms, rng);
+        // BSP's leaf-size floor caps room count well below the target on smaller
+        // levels; top up with packed rooms in the gaps so every level lands at
+        // the per-level target.
+        topUpPackedRooms(level, rooms, rng, target);
         return rooms;
     }
 
@@ -227,13 +256,18 @@ public final class LevelFactory {
         // how far apart rooms sit, and therefore how long the MST corridors between them
         // are. Derived from area / target (with a 2.0 fudge factor for centres-per-room
         // empirically — many candidate centres fail the overlap check) so room count
-        // stays near LEVEL_TARGET_ROOMS regardless of level dimensions.
-        double minDist = poissonSpacingForTarget(w, h, GameBalance.LEVEL_TARGET_ROOMS);
+        // stays near the target regardless of level dimensions.
+        int target = perLevelRoomTarget(rng);
+        double minDist = poissonSpacingForTarget(w, h, target);
         int minSize = GameBalance.ROOM_MIN_SIZE;
         int maxSize = GameBalance.ROOM_MAX_SIZE;
         List<Point> centres = LevelFactoryUtils.poissonDiskPoints(w, h, minDist, rng);
         List<int[]> rooms = new ArrayList<>();
         for (Point c : centres) {
+            // Cap placement at the per-level target — Poisson without this cap
+            // happily over-shoots when the disc-sampler is generous, and the
+            // user wants every level inside the target ± 1 band.
+            if (rooms.size() >= target) break;
             int rw = minSize + rng.nextInt(maxSize - minSize + 1);
             int rh = minSize + rng.nextInt(maxSize - minSize + 1);
             int rx = c.tileX() - rw / 2;
@@ -248,48 +282,9 @@ public final class LevelFactory {
             rooms.add(new int[]{rx, ry, rw, rh});
         }
         connectMst(level, rooms, rng);
-        return rooms;
-    }
-
-    /**
-     * Loop layout: place rooms at evenly spaced angles around a circle inscribed in the
-     * level, then connect each to its clockwise neighbour. The result is a single ring
-     * with no branches — every room has exactly two corridor exits. Borrowed from SPD's
-     * LoopBuilder.
-     */
-    private static List<int[]> buildLoop(Level level, Random rng) {
-        int w = level.width, h = level.height;
-        int minSize = GameBalance.ROOM_MIN_SIZE;
-        int maxSize = GameBalance.ROOM_MAX_SIZE;
-        // n centred on LEVEL_TARGET_ROOMS with ±1 jitter so two LOOP levels feel
-        // similar in density without being mechanically identical.
-        int n = Math.max(3, GameBalance.LEVEL_TARGET_ROOMS + rng.nextInt(3) - 1);
-        // Pull the loop radius inward so rooms cluster nearer the centre — was -6
-        // (rooms hugging the level perimeter), -10 brings the chord between
-        // adjacent rooms down so corridors are short hops rather than long arcs.
-        int radius = Math.min(w, h) / 2 - 10;
-        if (radius < 4) radius = Math.min(w, h) / 2 - 3;
-        int cx = w / 2, cy = h / 2;
-        double phase = rng.nextDouble() * Math.PI * 2;
-
-        List<int[]> rooms = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
-            double a = phase + 2 * Math.PI * i / n;
-            int rcx = cx + (int) Math.round(Math.cos(a) * radius);
-            int rcy = cy + (int) Math.round(Math.sin(a) * radius);
-            int rw = minSize + rng.nextInt(maxSize - minSize + 1);
-            int rh = minSize + rng.nextInt(maxSize - minSize + 1);
-            int rx = rcx - rw / 2, ry = rcy - rh / 2;
-            if (rx < 1 || ry < 1 || rx + rw >= w - 1 || ry + rh >= h - 1) continue;
-            boolean overlap = false;
-            for (int[] r : rooms) {
-                if (rectsOverlap(r, rx, ry, rw, rh, 1)) { overlap = true; break; }
-            }
-            if (overlap) continue;
-            LevelFactoryUtils.carveRect(level, rx, ry, rw, rh);
-            rooms.add(new int[]{rx, ry, rw, rh});
-        }
-        connectCycle(level, rooms, rng);
+        // Bottom side too — Poisson sometimes under-shoots if the disc sampler
+        // happens to place few centres; top up so every level lands at target.
+        topUpPackedRooms(level, rooms, rng, target);
         return rooms;
     }
 
@@ -324,9 +319,12 @@ public final class LevelFactory {
         final int pivot = 0;
 
         // Left and right loops — each places n rooms on a half-circle, then connects in a
-        // cycle that goes pivot → first → … → last → pivot. Total rooms = 2n + 1 (pivot),
-        // so target = 8 → n = 3 (7 rooms total), target = 9 → n = 4 (9 rooms total).
-        int n = Math.max(2, (GameBalance.LEVEL_TARGET_ROOMS - 1) / 2);
+        // cycle that goes pivot → first → … → last → pivot. The arc radius is small (~9
+        // cells on a 48×48 level), so cramming 6+ rooms per arc forces them to overlap
+        // and fail placement. Cap n at 4 — total rooms = 2*4 + 1 = 9 — which is what
+        // 9-radius arcs of 5×5..10×10 rooms can host without collisions. Lower target
+        // counts shrink linearly with a floor of 2.
+        int n = Math.max(2, Math.min(4, (GameBalance.LEVEL_TARGET_ROOMS - 1) / 2));
         List<Integer> leftIdx  = placeArc(level, rooms, rng, aCx, cy, radius,
                                           Math.PI / 2, 3 * Math.PI / 2, n,
                                           minSize, maxSize);
@@ -337,6 +335,11 @@ public final class LevelFactory {
         // Stitch each arc into a cycle through the pivot.
         connectArcCycle(level, rooms, leftIdx,  pivot, rng);
         connectArcCycle(level, rooms, rightIdx, pivot, rng);
+        // The arc radius is small (~9 cells on 48×48), capping each lobe at 4
+        // rooms before they start overlapping. Top up with packed rooms in the
+        // remaining empty space (mostly along the level's top + bottom edges)
+        // so the per-level target is reliably reached.
+        topUpPackedRooms(level, rooms, rng, perLevelRoomTarget(rng));
         return rooms;
     }
 
@@ -498,16 +501,29 @@ public final class LevelFactory {
         int gapL = w / 3, gapR = 2 * w / 3;
 
         List<int[]> rooms = new ArrayList<>();
+        // Each end of the central walkway gets a tightly-packed cluster — the same
+        // greedy growth as {@link Layout#PACKED}, just confined to one half of the
+        // level. The packed connector inside each cluster keeps corridors short
+        // (rooms share walls; connectPacked punches doors through the shared wall
+        // first, falling back to a short L-corridor only for orphans). Per-side
+        // target is half the level's room target, with a floor of 3 so even very
+        // small target counts produce a recognisable cluster on each end.
+        int sideTarget = Math.max(3, GameBalance.LEVEL_TARGET_ROOMS / 2);
         int leftStart  = rooms.size();
-        placeBspRooms(level, rooms, rng, 1,        1, gapL - 1,        h - 2);
+        growPackedRooms(level, rooms, rng,
+                /*x0=*/1, /*y0=*/1,
+                /*regionW=*/gapL - 1, /*regionH=*/h - 2, sideTarget);
         int leftEnd    = rooms.size();
         int rightStart = rooms.size();
-        placeBspRooms(level, rooms, rng, gapR + 1, 1, w - gapR - 2,    h - 2);
+        growPackedRooms(level, rooms, rng,
+                /*x0=*/gapR + 1, /*y0=*/1,
+                /*regionW=*/w - gapR - 2, /*regionH=*/h - 2, sideTarget);
         int rightEnd   = rooms.size();
 
-        // MST inside each cluster.
-        connectMst(level, rooms.subList(leftStart,  leftEnd),  rng);
-        connectMst(level, rooms.subList(rightStart, rightEnd), rng);
+        // Packed-style connector inside each cluster (door-through-wall first, short
+        // L-corridor only as a fallback for orphan groups).
+        connectPacked(level, rooms.subList(leftStart,  leftEnd),  rng);
+        connectPacked(level, rooms.subList(rightStart, rightEnd), rng);
 
         // Bridge: pick the rightmost left-room and the leftmost right-room, carve a single
         // FLOOR_WOOD line straight across at a y near the level centre. Plank corridors
@@ -527,32 +543,6 @@ public final class LevelFactory {
                     Tile.FLOOR_WOOD, rng);
         }
         return rooms;
-    }
-
-    /** Internal helper: BSP-partition the rect, drop a 4–10-tile room into each leaf, and
-     *  append all of them to {@code rooms}. Mirrors {@link #buildBsp} but takes an explicit
-     *  sub-rect so the {@link Layout#TWO_SIDES} builder can re-use it for each half. */
-    private static void placeBspRooms(Level level, List<int[]> rooms, Random rng,
-                                      int x0, int y0, int rw, int rh) {
-        int minRoom = GameBalance.ROOM_MIN_SIZE;
-        int maxRoom = GameBalance.ROOM_MAX_SIZE;
-        // Target is half the level's rooms per side (TWO_SIDES is two BSP clusters).
-        int sideTarget = Math.max(2, GameBalance.LEVEL_TARGET_ROOMS / 2);
-        int minLeaf = leafSizeForTarget(rw, rh, maxRoom, sideTarget);
-        if (rw < minLeaf || rh < minLeaf) return;
-        List<int[]> leaves = LevelFactoryUtils.bspPartition(x0, y0, rw, rh, minLeaf, rng);
-        for (int[] leaf : leaves) {
-            int margin = 1;
-            int maxRW = Math.min(maxRoom, leaf[2] - 2 * margin);
-            int maxRH = Math.min(maxRoom, leaf[3] - 2 * margin);
-            if (maxRW < minRoom || maxRH < minRoom) continue;
-            int roomW = minRoom + rng.nextInt(maxRW - minRoom + 1);
-            int roomH = minRoom + rng.nextInt(maxRH - minRoom + 1);
-            int rx = leaf[0] + margin + rng.nextInt(leaf[2] - 2 * margin - roomW + 1);
-            int ry = leaf[1] + margin + rng.nextInt(leaf[3] - 2 * margin - roomH + 1);
-            LevelFactoryUtils.carveRect(level, rx, ry, roomW, roomH);
-            rooms.add(new int[]{rx, ry, roomW, roomH});
-        }
     }
 
     private static boolean rectsOverlap(int[] r, int x, int y, int w, int h, int pad) {
@@ -590,35 +580,152 @@ public final class LevelFactory {
      * tile inside a room.
      */
     private static List<int[]> buildPacked(Level level, Random rng) {
-        int w = level.width, h = level.height;
+        List<int[]> rooms = new ArrayList<>();
+        growPackedRooms(level, rooms, rng,
+                /*x0=*/0, /*y0=*/0,
+                /*regionW=*/level.width, /*regionH=*/level.height,
+                /*targetCount=*/GameBalance.LEVEL_TARGET_ROOMS
+                        + GameBalance.LEVEL_ROOM_TOLERANCE);
+        connectPacked(level, rooms, rng);
+        return rooms;
+    }
+
+    /**
+     * Top up an already-laid-out room list with extra packed rooms until
+     * {@code targetCount} is reached. Anchors off any existing room (no seed
+     * needed), respects level bounds, and connects each new room to its
+     * nearest existing neighbour with a short L-corridor (or a wall-door
+     * when they happen to share a wall).
+     *
+     * <p>Used as a post-pass on {@link #buildBsp}, {@link #buildPoisson}, and
+     * {@link #buildFigureEight} — those builders place rooms with their own
+     * geometric constraints (BSP partition, Poisson spacing, half-circle arcs)
+     * and frequently produce fewer rooms than {@link GameBalance#LEVEL_TARGET_ROOMS}.
+     * This helper closes the gap without requiring a redesign of those layouts.
+     */
+    private static void topUpPackedRooms(Level level, List<int[]> rooms,
+                                         Random rng, int targetCount) {
+        if (rooms.size() >= targetCount) return;
         int minSize = GameBalance.ROOM_MIN_SIZE;
         int maxSize = GameBalance.ROOM_MAX_SIZE;
-        // Cap greedy growth at target + tolerance so a busy 48×48 doesn't end up
-        // with 14 rooms when every other layout is producing ~8.
-        int roomCap = GameBalance.LEVEL_TARGET_ROOMS + GameBalance.LEVEL_ROOM_TOLERANCE;
+        int xMin = 1, yMin = 1;
+        int xMax = level.width  - 1;
+        int yMax = level.height - 1;
+        if (xMax - xMin < minSize + 2 || yMax - yMin < minSize + 2) return;
+        if (rooms.isEmpty()) return;   // nothing to anchor off
 
-        List<int[]> rooms = new ArrayList<>();
+        int failuresInARow = 0;
+        final int MAX_FAILURES = 200;
+        while (failuresInARow < MAX_FAILURES && rooms.size() < targetCount) {
+            int[] anchor = rooms.get(rng.nextInt(rooms.size()));
+            int side = rng.nextInt(4); // 0=N, 1=E, 2=S, 3=W
+            int newW = minSize + rng.nextInt(maxSize - minSize + 1);
+            int newH = minSize + rng.nextInt(maxSize - minSize + 1);
+            int nx, ny;
+            switch (side) {
+                case 0 -> {
+                    ny = anchor[1] + anchor[3] + 1;
+                    int slack = anchor[2] + newW - 2;
+                    nx = anchor[0] - newW + 1 + (slack > 0 ? rng.nextInt(slack) : 0);
+                }
+                case 1 -> {
+                    nx = anchor[0] + anchor[2] + 1;
+                    int slack = anchor[3] + newH - 2;
+                    ny = anchor[1] - newH + 1 + (slack > 0 ? rng.nextInt(slack) : 0);
+                }
+                case 2 -> {
+                    ny = anchor[1] - newH - 1;
+                    int slack = anchor[2] + newW - 2;
+                    nx = anchor[0] - newW + 1 + (slack > 0 ? rng.nextInt(slack) : 0);
+                }
+                default -> {
+                    nx = anchor[0] - newW - 1;
+                    int slack = anchor[3] + newH - 2;
+                    ny = anchor[1] - newH + 1 + (slack > 0 ? rng.nextInt(slack) : 0);
+                }
+            }
+            if (nx < xMin || ny < yMin || nx + newW > xMax || ny + newH > yMax) {
+                failuresInARow++;
+                continue;
+            }
+            boolean overlap = false;
+            for (int[] r : rooms) {
+                if (rectsOverlap(r, nx, ny, newW, newH, 1)) { overlap = true; break; }
+            }
+            if (overlap) {
+                failuresInARow++;
+                continue;
+            }
+            LevelFactoryUtils.carveRect(level, nx, ny, newW, newH);
+            int[] newRoom = new int[]{nx, ny, newW, newH};
+            // Connect the new room to its nearest existing neighbour: a wall-door
+            // if they happen to share a wall (carveDoorBetween succeeds), otherwise
+            // a single L-corridor through whatever's between them. The closest
+            // neighbour is usually the anchor itself but isn't always — picking
+            // the truly-nearest avoids weird zig-zags when the anchor sits on the
+            // far side of a room.
+            int best = -1;
+            long bestD = Long.MAX_VALUE;
+            for (int[] other : rooms) {
+                long d = roomCenterDistSq(newRoom, other);
+                if (d < bestD) { bestD = d; best = rooms.indexOf(other); }
+            }
+            int[] near = rooms.get(best);
+            if (areWallAdjacent(newRoom, near)) {
+                carveDoorBetween(level, newRoom, near, rng);
+            } else {
+                connectTwo(level, newRoom, near, rng);
+            }
+            rooms.add(newRoom);
+            failuresInARow = 0;
+        }
+    }
 
-        // Seed room — randomly sized, planted near the centre so growth has space to
-        // expand in every direction. Bail to the empty-rooms fallback for too-small levels.
+    /**
+     * Greedy packed-room growth confined to {@code [x0, x0+regionW) × [y0, y0+regionH)}
+     * of the level. Drops a randomly-sized seed near the region's centre, then keeps
+     * extending random anchors with a 1-tile gap until {@code targetCount} rooms have
+     * landed or the failure budget is exhausted. Used by {@link #buildPacked} for
+     * whole-level packing and by {@link #buildTwoSides} to pack each end of the central
+     * walkway.
+     */
+    private static void growPackedRooms(Level level, List<int[]> rooms, Random rng,
+                                        int x0, int y0, int regionW, int regionH,
+                                        int targetCount) {
+        int minSize = GameBalance.ROOM_MIN_SIZE;
+        int maxSize = GameBalance.ROOM_MAX_SIZE;
+        int xEnd = x0 + regionW;        // exclusive right edge
+        int yEnd = y0 + regionH;        // exclusive top edge (y-up)
+        int xMin = Math.max(1, x0);
+        int yMin = Math.max(1, y0);
+        int xMax = Math.min(level.width  - 1, xEnd);
+        int yMax = Math.min(level.height - 1, yEnd);
+        if (xMax - xMin < minSize + 2 || yMax - yMin < minSize + 2) return;
+
+        int countBefore = rooms.size();
+
+        // Seed room — randomly sized, planted near the region's centre so growth has
+        // space to expand in every direction.
         int seedW = minSize + rng.nextInt(maxSize - minSize + 1);
         int seedH = minSize + rng.nextInt(maxSize - minSize + 1);
-        if (seedW + 2 > w || seedH + 2 > h) return rooms;
-        int seedX = (w - seedW) / 2;
-        int seedY = (h - seedH) / 2;
+        if (seedW > xMax - xMin - 2 || seedH > yMax - yMin - 2) return;
+        int seedX = xMin + ((xMax - xMin) - seedW) / 2;
+        int seedY = yMin + ((yMax - yMin) - seedH) / 2;
+        // If a previous call placed rooms that overlap our seed, skip seeding.
+        for (int[] r : rooms) {
+            if (rectsOverlap(r, seedX, seedY, seedW, seedH, 1)) return;
+        }
         LevelFactoryUtils.carveRect(level, seedX, seedY, seedW, seedH);
         rooms.add(new int[]{seedX, seedY, seedW, seedH});
 
-        // Greedy growth: pick a random anchor + side, drop a candidate alongside with a
-        // 1-tile gap (the shared wall), accept if it stays in bounds and doesn't collide.
-        // Failure budget governs density — bumping this up packs more tightly at the cost
-        // of generation time. 150 was 400; the higher value produced too many rooms per
-        // level for the player to navigate comfortably, halving it reads as a normal-
-        // sized packed dungeon.
+        // Greedy growth: pick a random anchor (only from rooms we placed in THIS region —
+        // anchors from other regions would walk the candidate out of bounds), pick a
+        // side, drop a candidate alongside with a 1-tile gap, accept if it stays in
+        // the region and doesn't collide. The failure budget governs density.
         int failuresInARow = 0;
         final int MAX_FAILURES = 150;
-        while (failuresInARow < MAX_FAILURES && rooms.size() < roomCap) {
-            int[] anchor = rooms.get(rng.nextInt(rooms.size()));
+        while (failuresInARow < MAX_FAILURES && rooms.size() < countBefore + targetCount) {
+            int[] anchor = rooms.get(countBefore + rng.nextInt(rooms.size() - countBefore));
             int side = rng.nextInt(4); // 0=N, 1=E, 2=S, 3=W
             int newW = minSize + rng.nextInt(maxSize - minSize + 1);
             int newH = minSize + rng.nextInt(maxSize - minSize + 1);
@@ -645,7 +752,7 @@ public final class LevelFactory {
                     ny = anchor[1] - newH + 1 + (slack > 0 ? rng.nextInt(slack) : 0);
                 }
             }
-            if (nx < 1 || ny < 1 || nx + newW > w - 1 || ny + newH > h - 1) {
+            if (nx < xMin || ny < yMin || nx + newW > xMax || ny + newH > yMax) {
                 failuresInARow++;
                 continue;
             }
@@ -661,9 +768,6 @@ public final class LevelFactory {
             rooms.add(new int[]{nx, ny, newW, newH});
             failuresInARow = 0;
         }
-
-        connectPacked(level, rooms, rng);
-        return rooms;
     }
 
     /**
@@ -800,15 +904,6 @@ public final class LevelFactory {
     // Corridors
     // -------------------------------------------------------------------------
 
-    /** Connect rooms in a cycle: 0→1→2→…→n-1→0. Used by {@link #buildLoop}. */
-    private static void connectCycle(Level level, List<int[]> rooms, Random rng) {
-        int n = rooms.size();
-        if (n < 2) return;
-        for (int i = 0; i < n; i++) {
-            connectTwo(level, rooms.get(i), rooms.get((i + 1) % n), rng);
-        }
-    }
-
     /**
      * Connect every pair of rooms in the MST of their centres (Prim's), then sprinkle
      * {@code n/4} extra random edges to introduce loops. Each edge is carved as an
@@ -869,61 +964,6 @@ public final class LevelFactory {
     // -------------------------------------------------------------------------
     // Room kinds + interiors
     // -------------------------------------------------------------------------
-
-    /**
-     * Pick a {@link LevelFactoryRooms.RoomKind} per room and apply it. The first and last
-     * rooms (which receive stairs-up and stairs-down) are forced to REGULAR so the stair
-     * placement always finds a clean floor tile. Other rooms roll uniformly across the
-     * non-regular kinds, with a one-third chance of REGULAR mixed in for variety.
-     */
-    private static void paintRoomInteriors(Level level, List<int[]> rooms, Random rng) {
-        // VILLAGE finalises its buildings (walls + door) inside the builder; rolling a kind
-        // here would carve walls into the open green or scribble a chasm patch through a
-        // building wall.
-        if (level.layout == Layout.VILLAGE) return;
-
-        // WALKWAY_LEVEL paints the corridors as planks over chasm. Rolling extra walkway-kind
-        // rooms on top would be redundant — the level is already plank-themed. Exclude
-        // WALKWAY from the kind pool so the flag's only effect is on corridor painting.
-        boolean walkwayLevel = level.flags.contains(LevelFlag.WALKWAY_LEVEL);
-        LevelFactoryRooms.RoomKind[] varied = walkwayLevel
-                ? new LevelFactoryRooms.RoomKind[] {
-                        LevelFactoryRooms.RoomKind.ROUND,
-                        LevelFactoryRooms.RoomKind.GRASS_FARM,
-                        LevelFactoryRooms.RoomKind.SHROOM_FARM,
-                        LevelFactoryRooms.RoomKind.CHASM,
-                        LevelFactoryRooms.RoomKind.SUBROOM,
-                        LevelFactoryRooms.RoomKind.CHASM_TEMPLE,
-                        LevelFactoryRooms.RoomKind.LIGHT_TEMPLE,
-                        LevelFactoryRooms.RoomKind.GALLERY,
-                        LevelFactoryRooms.RoomKind.AVENUE,
-                        LevelFactoryRooms.RoomKind.SMALL_STATUE_ROOM
-                }
-                : new LevelFactoryRooms.RoomKind[] {
-                        LevelFactoryRooms.RoomKind.ROUND,
-                        LevelFactoryRooms.RoomKind.WALKWAY,
-                        LevelFactoryRooms.RoomKind.GRASS_FARM,
-                        LevelFactoryRooms.RoomKind.SHROOM_FARM,
-                        LevelFactoryRooms.RoomKind.CHASM,
-                        LevelFactoryRooms.RoomKind.SUBROOM,
-                        LevelFactoryRooms.RoomKind.CHASM_TEMPLE,
-                        LevelFactoryRooms.RoomKind.LIGHT_TEMPLE,
-                        LevelFactoryRooms.RoomKind.GALLERY,
-                        LevelFactoryRooms.RoomKind.AVENUE,
-                        LevelFactoryRooms.RoomKind.SMALL_STATUE_ROOM
-                };
-        int last = rooms.size() - 1;
-        for (int i = 0; i < rooms.size(); i++) {
-            int[] r = rooms.get(i);
-            LevelFactoryRooms.RoomKind kind;
-            if (i == 0 || i == last || rng.nextInt(3) == 0) {
-                kind = LevelFactoryRooms.RoomKind.REGULAR;
-            } else {
-                kind = varied[rng.nextInt(varied.length)];
-            }
-            LevelFactoryRooms.paint(level, kind, r[0], r[1], r[2], r[3], rng);
-        }
-    }
 
     // -------------------------------------------------------------------------
     // Doors

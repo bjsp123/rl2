@@ -7,14 +7,17 @@ import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.ui.Container;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.Widget;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.bjsp123.rl2.model.Level;
-import com.bjsp123.rl2.model.Level.LevelFlag;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.World;
+import com.bjsp123.rl2.world.render.TileSprites;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -57,6 +60,12 @@ public class MapScreen extends MenuScreen {
      *  scroll on the map's middle column for the first frame. */
     private ScrollPane scroll;
 
+    /** World index of the level whose info panel is currently displayed; {@code -1}
+     *  means "no selection" and the info panel shows hint text. Updated by clicks
+     *  on a level box. */
+    private int selectedIndex = -1;
+    private Label infoLabel;
+
     public MapScreen(Runnable onBack, World world) {
         this.onBack = onBack;
         this.world  = world;
@@ -72,12 +81,25 @@ public class MapScreen extends MenuScreen {
 
         Table panel = new Table();
         panel.pad(16);
-        panel.add(label("Dungeon Map", "title", 1.6f)).padBottom(10).row();
+        panel.add(label("Dungeon Map", "title", 1.6f)).padBottom(2).row();
+        // Seed code under the title — six-letter handle the player can jot down
+        // / paste into character creation to regenerate this exact dungeon.
+        panel.add(label("seed: " + com.bjsp123.rl2.util.SeedCode.encode(world.seed),
+                        "dim", 0.9f)).padBottom(10).row();
 
         // ScrollPane around the map body — the body declares its preferred size via the
         // bounding box of every level's (depth, mapColumn), so taller worlds (more depths)
         // or wider worlds (more parallel columns) just get a longer scroll region.
         MapBodyActor body = new MapBodyActor();
+        body.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent event, float x, float y) {
+                int idx = body.levelIndexAt(x, y);
+                if (idx >= 0) {
+                    selectedIndex = idx;
+                    refreshInfoPanel();
+                }
+            }
+        });
         scroll = new ScrollPane(body);
         scroll.setFadeScrollBars(false);
         scroll.setScrollingDisabled(false, false);
@@ -90,10 +112,23 @@ public class MapScreen extends MenuScreen {
         mapFrame.add(scroll).expand().fill();
         panel.add(mapFrame).expand().fill().row();
 
-        panel.add(button("Back", onBack)).width(180).height(36).padTop(12);
+        // Bottom row: Back button on the left, level-info panel on the right.
+        infoLabel = new Label("", skin, "default");
+        infoLabel.setWrap(true);
+        Table infoPanel = new Table();
+        infoPanel.setBackground(skin.getDrawable("simple-panel"));
+        infoPanel.pad(8);
+        infoPanel.add(infoLabel).width(220).left();
+        refreshInfoPanel();
+
+        Table bottomRow = new Table();
+        bottomRow.add(button("Back", onBack)).width(180).height(36).left();
+        bottomRow.add().expandX();   // spacer
+        bottomRow.add(infoPanel).right();
+        panel.add(bottomRow).fillX().padTop(12);
 
         // Fixed-size outer panel — does not resize with map dimensions.
-        Container<Table> framed = fixedPanel(panel, 520, 660);
+        Container<Table> framed = fixedPanel(panel, 580, 700);
         root.center().add(framed);
 
         // Force a layout pass so the ScrollPane knows its scroll bounds, then centre
@@ -116,20 +151,67 @@ public class MapScreen extends MenuScreen {
     @Override
     protected void onEscape() { onBack.run(); }
 
+    // ── info panel ──────────────────────────────────────────────────────────
+
+    /** Recompute the info-panel text for the currently selected level. */
+    private void refreshInfoPanel() {
+        if (infoLabel == null) return;
+        if (selectedIndex < 0 || world == null || world.levels == null
+                || selectedIndex >= world.levels.length
+                || world.levels[selectedIndex] == null) {
+            infoLabel.setText("Click a level for details.");
+            return;
+        }
+        Level lvl = world.levels[selectedIndex];
+        String sideTag = switch (lvl.side) {
+            case WEST   -> "West";
+            case EAST   -> "East";
+            case CENTER -> "Center";
+        };
+        String themeName = lvl.theme == null ? "—" : titleCase(lvl.theme.name());
+        infoLabel.setText(
+                "Depth " + lvl.depth + " " + sideTag + "\n" +
+                "Theme: " + themeName + "\n" +
+                "Explored: " + percentExplored(lvl) + "%");
+    }
+
+    /** Fraction of the level's tile grid the player has seen, rounded to a
+     *  whole percent. {@code 0} when {@code lvl.explored} hasn't been allocated
+     *  (unvisited level). */
+    private static int percentExplored(Level lvl) {
+        if (lvl == null || lvl.explored == null) return 0;
+        long total = (long) lvl.width * lvl.height;
+        if (total <= 0) return 0;
+        long seen = 0;
+        for (int x = 0; x < lvl.width; x++)
+            for (int y = 0; y < lvl.height; y++)
+                if (lvl.explored[x][y]) seen++;
+        return (int) Math.round(100.0 * seen / total);
+    }
+
+    private static String titleCase(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return s.charAt(0) + s.substring(1).toLowerCase();
+    }
+
     // ── mini-map texture cache ──────────────────────────────────────────────
 
     /** Build a {@code level.width × level.height} pixmap where each pixel encodes what the
-     *  player knows about that tile. Cached on first request; disposed with the screen.
-     *  We don't invalidate while the screen is open — the player can't move or explore
-     *  more cells while the map is in front of them. */
+     *  player knows about that tile, tinted by the level's theme so each card reads as
+     *  visibly different. Cached on first request; disposed with the screen. We don't
+     *  invalidate while the screen is open — the player can't move or explore more cells
+     *  while the map is in front of them. */
     private Texture miniTextureFor(int idx, Level lvl) {
         Texture tex = miniTextures.get(idx);
         if (tex != null) return tex;
         Pixmap pm = new Pixmap(lvl.width, lvl.height, Pixmap.Format.RGBA8888);
         Color cChasm   = new Color(0.05f, 0.05f, 0.05f, 1f);
-        Color cWall    = new Color(0.95f, 0.95f, 0.95f, 1f);
-        Color cFloor   = new Color(0.65f, 0.65f, 0.65f, 1f);
-        Color cUnknown = new Color(0.22f, 0.22f, 0.22f, 1f);
+        Color cWall    = TileSprites.wallTint(lvl.theme);
+        Color cFloor   = TileSprites.floorTint(lvl.theme);
+        // Unexplored: a dim tint of the theme's floor colour so unvisited terrain
+        // still hints at the level's flavour without revealing detail.
+        Color cUnknown = new Color(cFloor.r * 0.35f, cFloor.g * 0.35f,
+                                   cFloor.b * 0.35f, 1f);
         for (int x = 0; x < lvl.width; x++) {
             for (int y = 0; y < lvl.height; y++) {
                 Color c;
@@ -163,18 +245,6 @@ public class MapScreen extends MenuScreen {
         Texture t = new Texture(pm);
         pm.dispose();
         return t;
-    }
-
-    // ── flag glyph mapping (kept ASCII so the default bitmap font handles it) ──────
-
-    private static String flagGlyph(LevelFlag f) {
-        return switch (f) {
-            case WATER          -> "~";
-            case WALKWAY_LEVEL  -> "=";
-            case PLANTS         -> "\"";
-            case BIGLEVEL       -> "+";
-            case ROUGH          -> "&";
-        };
     }
 
     // ── custom-drawn body ──────────────────────────────────────────────────
@@ -243,6 +313,29 @@ public class MapScreen extends MenuScreen {
             return getY() + getHeight() - BOX_H - MARGIN - depthOffset;
         }
 
+        /** Hit-test in actor-local coords. Returns the world-index of the level whose
+         *  box (rectangular bounds — perspective skew is ignored for picking) contains
+         *  {@code (lx, ly)}, or {@code -1} when no box is hit. The actor-local origin
+         *  is the actor's lower-left corner; click coords from {@link ClickListener}
+         *  are already in this space. */
+        int levelIndexAt(float lx, float ly) {
+            if (world == null || world.levels == null) return -1;
+            computeBounds();
+            // boxX/boxY return stage coords; subtract the actor origin so the math
+            // lines up with click coords.
+            float ox = getX(), oy = getY();
+            for (int i = 0; i < world.levels.length; i++) {
+                Level lvl = world.levels[i];
+                if (lvl == null) continue;
+                float bx = boxX(lvl) - ox;
+                float by = boxY(lvl) - oy;
+                if (lx >= bx && lx <= bx + BOX_W && ly >= by && ly <= by + BOX_H) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         @Override
         public void draw(Batch batch, float parentAlpha) {
             if (world == null || world.levels == null) return;
@@ -285,8 +378,13 @@ public class MapScreen extends MenuScreen {
                     tex  = miniTextureFor(i, lvl);
                     tint = Color.WHITE;
                 } else {
+                    // Dim version of the theme's floor tint so unvisited cards are
+                    // still recognisable by theme — about 30% brightness keeps the
+                    // "?" glyph readable against them.
+                    Color floor = TileSprites.floorTint(lvl.theme);
                     tex  = whitePixel;
-                    tint = new Color(0.12f, 0.12f, 0.16f, 1f);
+                    tint = new Color(floor.r * 0.30f, floor.g * 0.30f,
+                                     floor.b * 0.30f, 1f);
                 }
                 drawTrapezoid(batch, tex, tint, xs[i], ys[i], BOX_W, BOX_H, BOX_PERSPECTIVE);
             }
@@ -308,24 +406,15 @@ public class MapScreen extends MenuScreen {
             font.getData().setScale(prevScale);
             font.setColor(Color.WHITE);
 
-            // ── 4. flag glyphs on the gutter side of each box ─────────────
-            font.getData().setScale(1.3f);
-            font.setColor(0.95f, 0.85f, 0.55f, 1f);
-            for (int i = 0; i < n; i++) {
-                Level lvl = world.levels[i];
-                if (lvl == null || lvl.flags == null || lvl.flags.isEmpty()) continue;
-                drawFlagColumn(batch, font, layout, lvl, xs[i], ys[i]);
-            }
-            font.getData().setScale(prevScale);
-            font.setColor(Color.WHITE);
-
-            // ── 5. box outlines (current level highlighted) ──────────────
+            // ── 4. box outlines (current level highlighted) ──────────────
             batch.end();
             shapes.begin(ShapeRenderer.ShapeType.Line);
             for (int i = 0; i < n; i++) {
                 if (world.levels[i] == null) continue;
                 if (i == world.currentLevelIndex) {
-                    shapes.setColor(1f, 0.85f, 0.3f, 1f);
+                    shapes.setColor(1f, 0.85f, 0.3f, 1f);   // amber: where the player stands
+                } else if (i == selectedIndex) {
+                    shapes.setColor(0.5f, 0.85f, 1f, 1f);   // cyan: clicked / inspected
                 } else {
                     shapes.setColor(0.75f, 0.7f, 0.55f, 1f);
                 }
@@ -372,28 +461,6 @@ public class MapScreen extends MenuScreen {
             shapes.line(x + w,        y,     x + w - skew, y + h);
             shapes.line(x + w - skew, y + h, x + skew,     y + h);
             shapes.line(x + skew,     y + h, x,            y);
-        }
-
-        /** Stack {@link Level#flags} on the side appropriate for {@link Level#side} — west
-         *  boxes get glyphs on the left, every other side puts them on the right (so flags
-         *  never overlap arrows running through the centre column). */
-        private void drawFlagColumn(Batch batch, BitmapFont font, GlyphLayout layout,
-                                    Level lvl, float boxX, float boxY) {
-            boolean rightSide = lvl.side != Level.Side.WEST;
-            float lineH = font.getLineHeight();
-            int   count = lvl.flags.size();
-            float startY = boxY + (BOX_H + (count - 1) * lineH) * 0.5f;
-
-            for (LevelFlag flag : LevelFlag.values()) {
-                if (!lvl.flags.contains(flag)) continue;
-                String g = flagGlyph(flag);
-                layout.setText(font, g);
-                float gx = rightSide
-                        ? boxX + BOX_W + FLAG_GUTTER
-                        : boxX - FLAG_GUTTER - layout.width;
-                font.draw(batch, g, gx, startY);
-                startY -= lineH;
-            }
         }
 
         /** Draw a thick segment from {@code (x1,y1)} to {@code (x2,y2)} with a triangular

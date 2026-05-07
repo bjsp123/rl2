@@ -92,6 +92,9 @@ public class TurnSystem {
             if (bud == null) continue;
             level.mobs.add(bud);
             MobHooks.onSpawn(level, bud);
+            if (level.events != null) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(bud, spawnPos));
+            }
         }
         // Snapshot the mob list — advanceSatiety can starve the player (which routes
         // through processAttack → killMob → level.mobs.remove now), so iterating the

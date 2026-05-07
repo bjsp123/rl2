@@ -94,6 +94,10 @@ public final class StatBlock {
      *  OR-merged so an item or buff that grants "poisoned weapon" composes with a
      *  species (e.g. spider) that already has it. */
     public boolean poisonsOnAttack = false;;
+    /** Squares to knock the target back on a successful melee hit. Composes by sum
+     *  (weapon + intrinsic both contribute). */
+    public int knockbackSquares = 0;
+
     /** "Especially frightening" — terrifiable observers always flee. OR-merged. */
     public boolean terrifying = false;
     /** Susceptible to terrifying mobs. OR-merged so a "ring of fearlessness" can clear
@@ -133,6 +137,7 @@ public final class StatBlock {
         fireImmune = false;
         fireSpreadOnAttack = false;
         poisonsOnAttack    = false;
+        knockbackSquares = 0;
         terrifying  = false;
         terrifiable = false;
         return this;
@@ -168,6 +173,7 @@ public final class StatBlock {
         fireImmune = src.fireImmune;
         fireSpreadOnAttack = src.fireSpreadOnAttack;
         poisonsOnAttack    = src.poisonsOnAttack;
+        knockbackSquares = src.knockbackSquares;
         terrifying  = src.terrifying;
         terrifiable = src.terrifiable;
         return this;
@@ -212,6 +218,7 @@ public final class StatBlock {
         if (other.fireImmune)         fireImmune         = true;
         if (other.fireSpreadOnAttack) fireSpreadOnAttack = true;
         if (other.poisonsOnAttack)    poisonsOnAttack    = true;
+        knockbackSquares += other.knockbackSquares;
         if (other.terrifying)         terrifying         = true;
         if (other.terrifiable)        terrifiable        = true;
         return this;

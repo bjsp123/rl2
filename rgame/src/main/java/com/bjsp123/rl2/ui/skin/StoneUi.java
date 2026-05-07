@@ -9,6 +9,8 @@ import com.badlogic.gdx.scenes.scene2d.ui.Button;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.ui.TextField;
+import com.badlogic.gdx.scenes.scene2d.utils.BaseDrawable;
 import com.badlogic.gdx.scenes.scene2d.utils.NinePatchDrawable;
 import com.badlogic.gdx.utils.Disposable;
 
@@ -349,7 +351,53 @@ public class StoneUi implements Disposable {
         actIcon.checked = down;
         skin.add("action-icon", actIcon);
 
+        // TextField — reuses the small panel's 9-patch as the inset background and
+        // a 1-px white-pixel block for both cursor and text-selection highlight.
+        // Built here once so any screen needing text input ({@code TextField text =
+        // new TextField("", skin)}) gets a consistent look without inlining a style.
+        TextField.TextFieldStyle tfStyle = new TextField.TextFieldStyle();
+        tfStyle.font          = font;
+        tfStyle.fontColor     = textDefault;
+        tfStyle.background    = new NinePatchDrawable(simplePanel);
+        tfStyle.cursor        = new SolidColorDrawable(textAccent, 1f, 14f);
+        tfStyle.selection     = new SolidColorDrawable(textAccent, 1f, 14f);
+        skin.add("default", tfStyle);
+
         return skin;
+    }
+
+    /** Tiny solid-fill drawable used as the TextField cursor + selection highlight.
+     *  Sized so the cursor reads as a thin caret rather than a thick block. */
+    private static final class SolidColorDrawable extends BaseDrawable {
+        private final Color color;
+        SolidColorDrawable(Color c, float w, float h) {
+            this.color = new Color(c);
+            setMinWidth(w); setMinHeight(h);
+        }
+        @Override
+        public void draw(com.badlogic.gdx.graphics.g2d.Batch batch,
+                         float x, float y, float w, float h) {
+            Color prev = batch.getColor();
+            batch.setColor(color);
+            batch.draw(StoneUiHolder.get(), x, y, w, h);
+            batch.setColor(prev);
+        }
+    }
+
+    /** Lazy-init holder for the 1×1 white texture so SolidColorDrawable can stay
+     *  static (otherwise we'd need a per-Skin {@code whitePixel()} call which
+     *  would create N copies). */
+    private static final class StoneUiHolder {
+        private static Texture whiteTex;
+        static Texture get() {
+            if (whiteTex == null) {
+                Pixmap p = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+                p.setColor(1, 1, 1, 1); p.fill();
+                whiteTex = new Texture(p);
+                p.dispose();
+            }
+            return whiteTex;
+        }
     }
 
     /** Build a {@link CornerDecoratedDrawable} wrapping the given 9-patch. Seeded from the

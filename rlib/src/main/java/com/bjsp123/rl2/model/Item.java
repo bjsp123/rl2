@@ -1,85 +1,80 @@
 package com.bjsp123.rl2.model;
 
 public class Item {
-    /** Element a wand applies on impact. Summon-style wands (wand of dog) carry a
-     *  null {@code wandElement} and instead set {@link Item#summonsWhenUsed} — they
-     *  bypass the targeting overlay and never emit a missile / impact event. */
-    public enum WandElement {
-        WATER, OIL, GRASS, FUNGUS, FIRE,
-        /** Wand of detonation — ignites a Euclidean disc around the impact tile and
-         *  spawns a radial particle burst for the visual. Radius scales with item level. */
+    /**
+     * What an item does when thrown or when a wand fires. Shared by both
+     * {@link #throwEffect} and {@link #wandEffect} so values like {@code FIRE}
+     * mean the same thing whether the source is a fire bomb or a fire wand.
+     *
+     * <p>Null on either field means "no special effect" — thrown items with a
+     * null {@code throwEffect} just land on the floor; summon-style wands carry
+     * a null {@code wandEffect} and route through {@link #summonsWhenUsed}
+     * instead.
+     */
+    public enum ItemEffect {
+        /** Physical projectile: deals damage using the item's damage range. */
+        DAMAGE,
+        /** Fire / ignition: sets the impact area on fire. */
+        FIRE,
+        /** Oil splash: coats the impact area with oil. */
+        OIL,
+        /** Concussive blast: radial damage to all mobs in the blast disc. */
+        BLAST,
+        /** Freeze: applies CHILLED to mobs in the effect disc; douses fires. */
+        FREEZE,
+        /** Water (wand): pools water on the target tile. */
+        WATER,
+        /** Vegetation (wand): grows grass and trees at the target. */
+        GRASS,
+        /** Fungus (wand): coaxes mushrooms up from the target. */
+        FUNGUS,
+        /** Detonation (wand): ignites a radial disc with a fireball visual. */
         DETONATION,
-        /** Wand of banishment — fires a ray (new effect type) along the line of sight;
-         *  any ghost the ray touches is instantly destroyed. */
+        /** Magic missile (wand): single-target direct damage. */
+        MISSILE,
+        /** Banishment (wand): ray that destroys ghosts on contact. */
         BANISHMENT,
-        /** Wand of lightning — direct-damage strike on the target tile. Damage doubles
-         *  if the target carries the {@link Buff.BuffType#WET} buff or is standing on
-         *  a {@link Level.Surface#WATER} or {@link Level.Surface#ICE} surface. */
+        /** Lightning (wand): direct damage, doubled on wet / water targets. */
         LIGHTNING
     }
 
     /**
-     * Equipment slots. The first six (weapon → offhand → armor → ring1 → ring2 → amulet)
-     * make up the gear strip rendered across the top of the inventory; the trailing three
-     * gem slots aren't shown there — equipped gems bob around the player's head in the
-     * world view instead and live in their own inventory tab.
+     * Single source of truth for "what kind of item is this?". Drives equip-slot
+     * routing, inventory tab grouping, and item-generation bucketing — formerly
+     * spread across {@code slot}, {@code useBehavior}, and {@code thrownBehavior}
+     * heuristics. Set per row in {@code items.csv}.
      *
-     * <p>Order matters: callers iterating {@code values()} get the rendered order for the
-     * gear strip, then the gem slots appended after. Rendering code that wants
-     * "gear-strip slots only" stops at {@link #AMULET}.
+     * <p>Equipment categories ({@link #WEAPON}, {@link #OFFHAND}, {@link #ARMOR},
+     * {@link #AMULET}, {@link #GEM}) are the ones {@link Item#isEquippable} returns
+     * true for. {@code AMULET} items fill one of two amulet positions in the
+     * {@link Inventory}; {@code GEM} items fill one of three gem positions; the
+     * single-position equipment categories occupy their named field directly.
+     *
+     * <p>Non-equipment categories ({@link #POTION}, {@link #WAND}, {@link #FOOD},
+     * {@link #ORB}, {@link #BOMB}) live in the bag only; their behavior is driven
+     * by {@code useBehavior} (potions, food, orbs, wands) and {@code throwEffect} /
+     * {@code wandEffect} ({@link ItemEffect}) as orthogonal sub-axes.
      */
-    public enum ItemSlot {
-        WEAPON, OFFHAND, ARMOR, RING1, RING2, AMULET,
-        GEM1, GEM2, GEM3;
+    public enum InventoryCategory {
+        WEAPON, OFFHAND, ARMOR, AMULET, GEM,
+        POTION, WAND, FOOD, ORB, BOMB;
 
-        /** True if an item with slot tag {@code itemSlot} can occupy this equipment slot.
-         *  Rings fit either ring slot; gems fit any of the three gem slots. */
-        public boolean accepts(ItemSlot itemSlot) {
-            if (itemSlot == null) return false;
-            if (itemSlot == this) return true;
-            if (isRing(this) && isRing(itemSlot)) return true;
-            if (isGem(this)  && isGem(itemSlot))  return true;
-            return false;
+        /** True if items in this category go into a gear strip equipment slot. */
+        public boolean isEquipment() {
+            return this == WEAPON || this == OFFHAND || this == ARMOR
+                    || this == AMULET || this == GEM;
         }
-
-        public static boolean isRing(ItemSlot s) { return s == RING1 || s == RING2; }
-        public static boolean isGem(ItemSlot s)  { return s == GEM1 || s == GEM2 || s == GEM3; }
-    }
-
-    /** What happens when a thrown item lands on a target tile. */
-    public enum ThrownBehavior {
-        /** Just lands on the floor where thrown; no effect on mobs. */
-        NOTHING,
-        /** Applies direct damage (using the item's damage range) to any mob on the target square. */
-        DAMAGE,
-        /** Sets the target tile (and any mob standing on it) on fire. Item is consumed. */
-        IGNITE,
-        /** Splashes oil onto the target tile multiple times, spreading via {@code SurfaceSystem}. */
-        OIL_SPLASH,
-        /** Blast bomb — radial damage to every mob inside the blast disc (plus the
-         *  target tile itself), with a "blast" particle burst per affected square.
-         *  Pushback is documented but not yet implemented. */
-        BLAST,
-        /** Freeze bomb — damage on the target tile, applies CHILLED to mobs in the
-         *  freeze disc, turns water surfaces to ice (TODO: ICE surface type), removes
-         *  fire vegetation. */
-        FREEZE
     }
 
     /** What the "Use" action does for an item. Non-usable items get UI disabled in the menu. */
     public enum UseBehavior {
         /** No use action; the "Use" button is grayed out. */
         NONE,
-        /** Fires a magic missile at a target square (resolved via the targeting overlay). */
-        MAGIC_MISSILE,
         /** Consume the item to raise the user's satiety by {@code foodValue}. */
         EAT,
-        /** Restore HP to the user (up to {@link #healAmount}) and consume the item. */
-        HEAL,
-        /** Element wand: fires a magic-missile-style projectile that, on impact,
-         *  applies {@link Item#wandElement} to the target tile. Summon-style wands
-         *  (non-null {@link Item#summonsWhenUsed}) bypass targeting and spawn the
-         *  named mob on a free adjacent tile. */
+        /** Element wand: fires a projectile that applies {@link Item#wandEffect} on
+         *  impact. Summon-style wands (non-null {@link Item#summonsWhenUsed}) bypass
+         *  targeting and spawn the named mob on a free adjacent tile. */
         WAND,
         /** Drink a buff-bestowing potion. The potion's effect is dispatched on
          *  {@link Item#type} and applied via {@code BuffSystem}; level and duration
@@ -94,23 +89,38 @@ public class Item {
      *  (gems) that aren't catalogued in the CSV. Used as the registry lookup
      *  key and as the stack-merge identity. */
     public String type;
-    public ItemSlot slot;
     public Mob.Material material;
     public String name;
     /** Free-form flavor text / description shown in the item detail dialog. */
     public String description = "";
-    public int damageMin, damageMax;
-    public int armorMin, armorMax;
+    public MinMax damage = MinMax.ZERO;
+    /** Per-level damage range increment. Each {@code +N} on this item adds
+     *  {@code N * damagePerLevel} to {@link #damage}. Used by weapons (melee
+     *  + thrown), wands that deal direct damage (MISSILE, LIGHTNING), and
+     *  bombs whose impact deals direct damage. Zero for items that don't
+     *  scale damage per level. */
+    public MinMax damagePerLevel = MinMax.ZERO;
+    public MinMax armor  = MinMax.ZERO;
+    /** Per-level armor range increment. Mirrors {@link #damagePerLevel} but
+     *  for {@link #armor}. */
+    public MinMax armorPerLevel  = MinMax.ZERO;
     public double lightRadius;
+    /** Number of tiles affected on use, for wands and bombs with an
+     *  area-of-effect impact (water, oil, grass, fungus, fire, detonation,
+     *  bombs). Element wands convert this through
+     *  {@code MobSystem.radiusForTileCount} into a Euclidean disc radius;
+     *  bombs use it directly. Zero for items without an AOE component. */
+    public int tilesAffected;
+    /** Per-level increment to {@link #tilesAffected}. */
+    public int tilesAffectedPerLevel;
     /** Satiety restored when the item is eaten. Zero for non-food. */
     public int foodValue;
     public Point location; // null when in an inventory
-    public ThrownBehavior thrownBehavior = ThrownBehavior.NOTHING;
-    public UseBehavior    useBehavior    = UseBehavior.NONE;
-    /** HP restored by a {@link UseBehavior#HEAL} use. Zero for non-healing items. */
-    public int healAmount;
-    /** Element a {@link UseBehavior#WAND} use applies on impact. Ignored otherwise. */
-    public WandElement wandElement;
+    /** What happens when this item is thrown; null means it just lands on the floor. */
+    public ItemEffect throwEffect;
+    public UseBehavior useBehavior = UseBehavior.NONE;
+    /** Element a {@link UseBehavior#WAND} use applies on impact. Null for summon-style wands. */
+    public ItemEffect wandEffect;
     /** Verb the UI shows on the Use button and in event-log messages for this item's use
      *  action — "eat" for a pear, "zap" for a staff, "drink" for a potion, etc. Null/empty
      *  for items with no use action. */
@@ -144,27 +154,25 @@ public class Item {
      *  {@link #appliesBuff} is null. */
     public int buffDuration;
 
-    /** Base self-damage dealt to the user when this item is consumed (poison potion).
-     *  Effective damage = {@code selfDamageBase + item.level}. Zero for items that
-     *  don't hurt the user on use. */
-    public int selfDamageBase;
+    /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
+    public int knockbackSquares;
 
     /** When true, an item lying on the floor emits an attention-catching twinkle
      *  particle stream so the player notices it. Power orbs use it; future
      *  glowing items just set the flag. */
     public boolean glows;
 
-    /** Slot for which this item is the "empty-slot silhouette" art shown in the
-     *  inventory. Set per item in {@code items.csv} via the
-     *  {@code silhouetteForSlot} column; null for items that aren't a slot's
+    /** Category for which this item is the "empty-slot silhouette" art shown in
+     *  the inventory's gear strip. Set per item in {@code items.csv} via the
+     *  {@code silhouetteForCategory} column; null for items that aren't a
      *  placeholder. */
-    public ItemSlot silhouetteForSlot;
+    public InventoryCategory silhouetteForCategory;
 
-    /** Tab the inventory popup files this item under (rgame-side string tag —
-     *  recognised values match the {@code InventoryRenderer.Category} enum:
-     *  {@code GEAR}/{@code FOOD}/{@code ITEMS}/{@code GEMS}). Null falls back
-     *  to the default tab. */
-    public String inventoryCategory;
+    /** Authoritative item-kind tag — see {@link InventoryCategory}. Drives
+     *  equip routing, inventory tab grouping, and {@code ItemGenerator}
+     *  bucketing. Null only for procedural items (gems) which set the
+     *  category in {@code GemSystem.createGem}. */
+    public InventoryCategory inventoryCategory;
 
     /** Gem species — non-null iff this item is a gem. Drives icon colour, theme
      *  shape (triangle for crystal, square for concrete), and same-kind recipe matching.
@@ -183,7 +191,9 @@ public class Item {
     public int count = 1;
 
     public boolean isGem() { return gemSpecies != null; }
-    public boolean isEquippable() { return slot != null; }
+    public boolean isEquippable() {
+        return inventoryCategory != null && inventoryCategory.isEquipment();
+    }
     public boolean isUsable()     { return useBehavior != null && useBehavior != UseBehavior.NONE; }
 
     /** True if {@code other} is "exactly identical" for stacking purposes — same type,
@@ -202,8 +212,8 @@ public class Item {
     public String describe() {
         StringBuilder sb = new StringBuilder(name);
         if (level > 1)       sb.append(" +").append(level - 1);
-        if (damageMax > 0)   sb.append(" (").append(damageMin).append("-").append(damageMax).append(" dmg)");
-        if (armorMax > 0)    sb.append(" (").append(armorMin).append("-").append(armorMax).append(" armor)");
+        if (damage.max() > 0) sb.append(" (").append(damage.min()).append("-").append(damage.max()).append(" dmg)");
+        if (armor.max()  > 0) sb.append(" (").append(armor.min()).append("-").append(armor.max()).append(" armor)");
         if (lightRadius > 0) sb.append(" (light ").append((int) lightRadius).append(")");
         return sb.toString();
     }

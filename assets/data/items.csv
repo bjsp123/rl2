@@ -1,31 +1,40 @@
-type,name,description,material,slot,inventoryCategory,silhouetteForSlot,minDepth,maxDepth,theme,guaranteedPerLevel,damageMin,damageMax,armorMin,armorMax,lightRadius,thrownBehavior,tameOnThrow,useBehavior,useVerb,foodValue,healAmount,appliesBuff,buffDuration,selfDamageBase,wandElement,summonsWhenUsed,glows,spriteCol,spriteRow
-SWORD,sword,A plain iron blade. Heavy enough to bludgeon a goblin with if thrown.,METAL,WEAPON,GEAR,WEAPON,1,10,,false,2,5,0,0,0,DAMAGE,,NONE,,0,0,,0,0,,,false,0,7
-SHIELD,shield,"A round wooden shield. Blocks blows, but too light to bruise anyone.",WOOD,OFFHAND,GEAR,OFFHAND,1,10,,false,0,0,1,2,0,NOTHING,,NONE,,0,0,,0,0,,,false,0,5
-SCALE_MAIL,scale mail,Overlapping iron scales on a leather backing. Painful to be hit by.,METAL,ARMOR,GEAR,ARMOR,1,10,,false,0,0,5,6,0,DAMAGE,,NONE,,0,0,,0,0,,,false,0,4
-DAGGER,dagger,A short bladed dagger. Quicker to wield than a sword but less punishing on a hit.,METAL,WEAPON,GEAR,,1,10,,false,1,3,0,0,0,DAMAGE,,NONE,,0,0,,0,0,,,false,1,7
-AMULET_OF_LIGHT,amulet of light,A pale gem on a leather cord. Sheds a wide radius of soft light.,MAGIC,AMULET,GEAR,AMULET,1,10,,false,0,0,0,0,10,NOTHING,,NONE,,0,0,,0,0,,,false,0,6
-FIRE_BOMB,fire bomb,"A flask of unstable alchemy. On impact, deals 1+level damage and ignites 2+level tiles around the target.",MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,IGNITE,,NONE,,0,0,,0,0,,,false,0,3
-BLAST_BOMB,blast bomb,"A heavy iron sphere that detonates concussively, hurting everything around the impact point.",MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,BLAST,,NONE,,0,0,,0,0,,,false,2,3
-FREEZE_BOMB,freeze bomb,A frosted vial that shatters into a freezing burst — chills nearby creatures and douses any flames.,MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,FREEZE,,NONE,,0,0,,0,0,,,false,3,3
-OIL_BOMB,oil bomb,A glass sphere of dark oil. Shatters and slicks the floor on impact.,MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,OIL_SPLASH,,NONE,,0,0,,0,0,,,false,1,3
-HEALING_POTION,healing potion,A vial of bluish elixir. Restores HP on a draught — more at higher potion levels.,MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,HEAL,drink,0,20,,0,0,,,false,2,2
-POWER_ORB,power orb,A glowing magical sphere. Absorbing it grants you a perk point.,MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,GRANT_PERK,absorb,0,0,,0,0,,,true,0,8
-WAND_WATER,wand of water,A pale blue wand. Pools water on the target tile.,WOOD,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,zap,0,0,,0,0,WATER,,false,4,0
-WAND_OIL,wand of oil,A dark wand slick to the touch. Slicks oil onto the target tile.,WOOD,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,zap,0,0,,0,0,OIL,,false,1,0
-WAND_GRASS,wand of vegetation,A green wand bound with vine. Sprouts grass and trees at the target.,WOOD,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,zap,0,0,,0,0,GRASS,,false,5,0
-WAND_FUNGUS,wand of fungus,A spongy red-brown wand. Coaxes mushrooms up from the target.,WOOD,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,zap,0,0,,0,0,FUNGUS,,false,5,0
-WAND_FIRE,wand of fire,A blackened wand crackling with embers. Ignites the target.,METAL,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,zap,0,0,,0,0,FIRE,,false,2,0
-WAND_DOG,wand of dog,"A wand carved from antler. On a zap, summons a loyal dog beside you.",WOOD,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,summon,0,0,,0,0,,DOG,false,3,0
-WAND_DETONATION,wand of detonation,A blackened iron wand inlaid with red runes. Detonates the target tile in a ball of fire.,WOOD,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,zap,0,0,,0,0,DETONATION,,false,2,0
-WAND_MAGIC_MISSILE,wand of magic missile,A short wand topped with a pale chip. Fires a magic missile.,WOOD,,ITEMS,,1,10,,false,3,6,0,0,0,NOTHING,,MAGIC_MISSILE,zap,0,0,,0,0,,,false,0,0
-WAND_BANISHMENT,wand of banishment,A wand bound in tarnished silver. A bright beam of light leaves a banished ghost as a wisp of memory.,WOOD,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,WAND,zap,0,0,,0,0,BANISHMENT,,false,6,0
-WAND_LIGHTNING,wand of lightning,A wand that crackles with energy.  Bad news to those who are conductive.,METAL,,ITEMS,,1,10,,false,4,10,0,0,0,BLAST,,WAND,zap,0,0,,0,0,LIGHTNING,,false,7,0
-PEAR,pear,A ripe green pear. Juicy enough to take the edge off a hungry belly.,FLESH,,FOOD,,1,10,,true,0,0,0,0,0,NOTHING,,EAT,eat,10000,0,,0,0,,,false,0,1
-FISH,delicious fish,A small fresh fish. So tasty that a stray cat or dog hit by it will follow you for the rest of its life.,FLESH,,FOOD,,1,10,,false,0,0,0,0,0,NOTHING,CAT|DOG,EAT,eat,30000,0,,0,0,,,false,1,1
-PEAR_SCRUMPTIOUS,scrumptious pear,"A specially ripe pear, dripping with juice. Five times more filling than the ordinary kind.",FLESH,,FOOD,,1,10,,false,0,0,0,0,0,NOTHING,,EAT,eat,50000,0,,0,0,,,false,2,1
-PEAR_SILVERY,silvery pear,A pear with skin that shimmers like polished silver. Mysterious.,FLESH,,FOOD,,1,10,,false,0,0,0,0,0,NOTHING,,EAT,eat,10000,0,HOPE,1,0,,,false,3,1
-PEAR_CONFERENCE,conference pear,"A long elegant pear, reportedly the kind eaten at high meetings.",FLESH,,FOOD,,1,10,,false,0,0,0,0,0,NOTHING,,EAT,eat,10000,0,ESP,1,0,,,false,4,1
-POTION_SORCERY,potion of sorcery,A glittering blue brew. Empowers every wand the drinker carries.,MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,DRINK,drink,0,0,SORCERY,1,0,,,false,0,2
-POTION_GHOSTLINESS,potion of ghostliness,A swirling pearl-grey liquid. The drinker temporarily becomes ethereal — flies and slips through walls.,MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,DRINK,drink,0,0,GHOSTLY,1,0,,,false,1,2
-POTION_INVISIBILITY,potion of invisibility,A clear potion that hides the imbiber from sight for a short while.,MAGIC,,ITEMS,,1,10,,false,0,0,0,0,0,NOTHING,,DRINK,drink,0,0,INVISIBLE,2,0,,,false,3,2
-POTION_POISON,potion of poison,"A sickly green elixir. Vile to drink, devastating to throw.",MAGIC,,ITEMS,,1,10,,false,4,8,0,0,0,DAMAGE,,DRINK,drink,0,0,POISONED,3,4,,,false,4,2
+type,name,description,material,inventoryCategory,silhouetteForCategory,powerLevel,clusterSize,theme,guaranteedPerLevel,damage,damagePerLevel,armor,armorPerLevel,tilesAffected,tilesAffectedPerLevel,lightRadius,throwEffect,tameOnThrow,useBehavior,useVerb,foodValue,appliesBuff,buffDuration,wandEffect,summonsWhenUsed,knockbackSquares,glows,spriteCol,spriteRow
+SWORD,sword,A plain iron blade. Heavy enough to bludgeon a goblin with if thrown.,METAL,WEAPON,WEAPON,0.2_0.6,1,STRAIGHTFORWARD,FALSE,2_5,1,0,0_0,0,0,0,DAMAGE,,NONE,,0,,0,,,4,FALSE,0,7
+RAPIER,rapier,"A well-made blade, expertly balanced.",METAL,WEAPON,,0.4_0.8,1,STRAIGHTFORWARD,FALSE,3_7,2,0,0_0,0,0,0,DAMAGE,,NONE,,0,,0,,,0,FALSE,2,7
+KATANA,katana,"A well-made blade, expertly balanced.",METAL,WEAPON,,0.6_1.0,1,STRAIGHTFORWARD,FALSE,4_8,3,0,0_0,0,0,0,DAMAGE,,NONE,,0,,0,,,0,FALSE,3,7
+SHIELD,round shield,"A round wooden shield. Blocks blows, but too light to bruise anyone.",WOOD,OFFHAND,OFFHAND,0.1_0.5,1,STRAIGHTFORWARD,FALSE,0,0_0,1_2,1_1,0,0,0,,,NONE,,0,,0,,,0,FALSE,0,5
+KITE_SHIELD,kite shield,A sturdy kite shield offering good protection.,WOOD,OFFHAND,,0.3_1.0,1,STRAIGHTFORWARD,FALSE,0,0_0,3_4,1_2,0,0,0,,,NONE,,0,,0,,,0,FALSE,1,5
+TORCH,torch,A blazing torch that casts bright light all around.,WOOD,OFFHAND,,0.2_0.6,1,STRAIGHTFORWARD,FALSE,0,0_0,0,0_0,0,0,8,,,NONE,,0,,0,,,0,FALSE,0,5
+CHAIN_MAIL,chain mail,Mail made of rings.,METAL,ARMOR,ARMOR,0_0.4,1,STRAIGHTFORWARD,FALSE,0,0_0,2_3,1_1,0,0,0,,,NONE,,0,,0,,,0,FALSE,0,4
+SCALE_MAIL,scale mail,Overlapping iron scales on a leather backing. Painful to be hit by.,METAL,ARMOR,,0.3_0.7,1,STRAIGHTFORWARD,FALSE,0,0_0,5_6,1_2,0,0,0,,,NONE,,0,,0,,,0,FALSE,0,4
+DAGGER,dagger,A short bladed dagger. Quicker to wield than a sword but less punishing on a hit.,METAL,WEAPON,,0_0.3,1,STRAIGHTFORWARD,FALSE,1_3,1,0,0_0,0,0,0,DAMAGE,,NONE,,0,,0,,,0,FALSE,1,7
+PUNCH_DAGGER,punch dagger,A fine dagger capable of slicing a foe to ribbons.,METAL,WEAPON,,0.4_1.0,1,STRAIGHTFORWARD,FALSE,1_3,2,0,0_0,0,0,0,DAMAGE,,NONE,,0,,0,,,0,FALSE,1,7
+AMULET_OF_NIMBLENESS,amulet of nimbleness,A complex magical token that helps you move faster.,MAGIC,AMULET,AMULET,0.3_0.7,1,,FALSE,0,0_0,0,0_0,0,0,10,,,NONE,,0,,0,,,0,FALSE,2,6
+AMULET_OF_FINESSE,amulet of finesse,"An intricate sign traced in silver, it seems to aid your precision in combat.",MAGIC,AMULET,,0.1_0.4,1,,FALSE,0,0_0,0,0_0,0,0,10,,,NONE,,0,,0,,,0,FALSE,1,6
+AMULET_OF_LIGHT,amulet of light,A pale gem on a leather cord. Sheds a wide radius of soft light.,MAGIC,AMULET,,0.3_0.7,1,,FALSE,0,0_0,0,0_0,0,0,10,,,NONE,,0,,0,,,0,FALSE,0,6
+FIRE_BOMB,fire bomb,"A flask of unstable alchemy. On impact, deals damage and ignites tiles around the target.",MAGIC,BOMB,,0.3_0.7,1,CONCRETE,FALSE,3,2,0,0_0,5,4,0,FIRE,,NONE,,0,,0,,,0,FALSE,0,3
+BLAST_BOMB,blast bomb,"A heavy iron sphere that detonates concussively, hurting everything around the impact point.",MAGIC,BOMB,,0.4_0.8,1,CONCRETE,FALSE,6,4,0,0_0,5,4,0,BLAST,,NONE,,0,,0,,,1,FALSE,2,3
+FREEZE_BOMB,freeze bomb,A frosted vial that shatters into a freezing burst â€” chills nearby creatures and douses any flames.,MAGIC,BOMB,,0.5_0.9,1,CONCRETE,FALSE,3,2,0,0_0,5,4,0,FREEZE,,NONE,,0,,0,,,0,FALSE,3,3
+OIL_BOMB,oil bomb,A glass sphere of dark oil. Shatters and slicks the floor on impact.,MAGIC,BOMB,,0.1_0.5,1,CONCRETE,FALSE,3,2,0,0_0,5,4,0,OIL,,NONE,,0,,0,,,0,FALSE,1,3
+HEALING_POTION,healing potion,A vial of bluish elixir. Drinking it knits wounds gradually over the next several turns.,MAGIC,POTION,,0_1.0,1,STRAIGHTFORWARD,FALSE,0,0_0,0,0_0,0,0,0,,,DRINK,drink,0,REGENERATION,4,,,0,FALSE,2,2
+POWER_ORB,power orb,A glowing magical sphere. Absorbing it grants you a perk point.,MAGIC,ORB,,0_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,GRANT_PERK,absorb,0,,0,,,0,TRUE,0,8
+WAND_WATER,wand of water,A pale blue wand. Pools water on the target tile.,WOOD,WAND,,0.1_1.0,1,CRYSTAL,FALSE,0,0_0,0,0_0,5,4,0,,,WAND,zap,0,,0,WATER,,0,FALSE,4,0
+WAND_OIL,wand of oil,A dark wand slick to the touch. Slicks oil onto the target tile.,WOOD,WAND,,0.2_1.0,1,CRYSTAL,FALSE,0,0_0,0,0_0,5,4,0,,,WAND,zap,0,,0,OIL,,0,FALSE,1,0
+WAND_GRASS,wand of vegetation,A green wand bound with vine. Sprouts grass and trees at the target.,WOOD,WAND,,0.2_1.0,1,CRYSTAL,FALSE,0,0_0,0,0_0,5,4,0,,,WAND,zap,0,,0,GRASS,,0,FALSE,5,0
+WAND_FUNGUS,wand of fungus,A spongy red-brown wand. Coaxes mushrooms up from the target.,WOOD,WAND,,0.4_1.0,1,CRYSTAL,FALSE,0,0_0,0,0_0,5,4,0,,,WAND,zap,0,,0,FUNGUS,,0,FALSE,6,0
+WAND_FIRE,wand of fire,A blackened wand crackling with embers. Ignites the target.,METAL,WAND,,0.4_1.0,1,CRYSTAL,FALSE,0,0_0,0,0_0,5,4,0,,,WAND,zap,0,,0,FIRE,,0,FALSE,2,0
+WAND_DOG,wand of dog,"A wand carved from antler. On a zap, summons a loyal dog beside you.",WOOD,WAND,,0.1_0.4,1,CRYSTAL,FALSE,0,0_0,0,0_0,0,0,0,,,WAND,summon,0,,0,,DOG,0,FALSE,3,0
+WAND_DETONATION,wand of detonation,A blackened iron wand inlaid with red runes. Detonates the target tile in a ball of fire.,WOOD,WAND,,0.5_1.0,1,CRYSTAL,FALSE,0,0_0,0,0_0,5,4,0,,,WAND,zap,0,,0,DETONATION,,1,FALSE,2,0
+WAND_MAGIC_MISSILE,wand of magic missile,A short wand topped with a pale chip. Fires a magic missile.,WOOD,WAND,,0_1.0,1,CRYSTAL,FALSE,3_6,1_2,0,0_0,0,0,0,,,WAND,zap,0,,0,MISSILE,,0,FALSE,0,0
+WAND_BANISHMENT,wand of banishment,A wand bound in tarnished silver. A bright beam of light leaves a banished ghost as a wisp of memory.,WOOD,WAND,,0.6_1.0,1,CRYSTAL,FALSE,0,0_0,0,0_0,0,0,0,,,WAND,zap,0,,0,BANISHMENT,,0,FALSE,7,0
+WAND_LIGHTNING,wand of lightning,A wand that crackles with energy.  Bad news to those who are conductive.,METAL,WAND,,0.2_1.0,1,CRYSTAL,FALSE,4_10,1_2,0,0_0,0,0,0,BLAST,,WAND,zap,0,,0,LIGHTNING,,0,FALSE,8,0
+PEAR,pear,A ripe green pear. Juicy enough to take the edge off a hungry belly.,FLESH,FOOD,,0_1.0,1,,TRUE,0,0_0,0,0_0,0,0,0,,,EAT,eat,10000,,0,,,0,FALSE,0,1
+FISH,delicious fish,A small fresh fish. So tasty that a stray cat or dog hit by it will follow you for the rest of its life.,FLESH,FOOD,,0_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,CAT|DOG,EAT,eat,30000,,0,,,0,FALSE,1,1
+PEAR_SCRUMPTIOUS,scrumptious pear,"A specially ripe pear, dripping with juice. Five times more filling than the ordinary kind.",FLESH,FOOD,,0.2_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,EAT,eat,50000,,0,,,0,FALSE,2,1
+PEAR_SILVERY,silvery pear,A pear with skin that shimmers like polished silver. Mysterious.,FLESH,FOOD,,0.4_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,EAT,eat,10000,HOPE,1,,,0,FALSE,3,1
+PEAR_CONFERENCE,conference pear,"A long elegant pear, reportedly the kind eaten at high meetings.",FLESH,FOOD,,0.3_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,EAT,eat,10000,ESP,1,,,0,FALSE,4,1
+POTION_SORCERY,potion of sorcery,A glittering blue brew. Empowers every wand the drinker carries.,MAGIC,POTION,,0_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,DRINK,drink,0,SORCERY,1,,,0,FALSE,0,2
+POTION_GHOSTLINESS,potion of ghostliness,A swirling pearl-grey liquid. The drinker temporarily becomes ethereal â€” flies and slips through walls.,MAGIC,POTION,,0.3_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,DRINK,drink,0,GHOSTLY,1,,,0,FALSE,1,2
+POTION_INVISIBILITY,potion of invisibility,A clear potion that hides the imbiber from sight for a short while.,MAGIC,POTION,,0_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,DRINK,drink,0,INVISIBLE,2,,,0,FALSE,3,2
+POTION_POISON,potion of poison,"A sickly green elixir. Vile to drink, devastating to throw.",MAGIC,POTION,,0_1.0,1,,FALSE,4_8,1_2,0,0_0,0,0,0,DAMAGE,,DRINK,drink,0,POISONED,3,,,0,FALSE,4,2
+POTION_INSIGHT,potion of insight,A clear potion that crackles faintly. Reveals the layout of the entire level on a draught.,MAGIC,POTION,,0_1.0,1,,FALSE,0,0_0,0,0_0,0,0,0,,,DRINK,drink,0,,0,,,0,FALSE,5,2

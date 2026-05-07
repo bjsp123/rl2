@@ -2,7 +2,9 @@ package com.bjsp123.rl2;
 
 import com.badlogic.gdx.Game;
 import com.bjsp123.rl2.save.ArenaHallOfFame;
+import com.bjsp123.rl2.save.ArenaHallOfFameStore;
 import com.bjsp123.rl2.save.HallOfFame;
+import com.bjsp123.rl2.save.HallOfFameStore;
 import com.bjsp123.rl2.save.SaveSystem;
 import com.bjsp123.rl2.persistence.Persistence;
 import com.bjsp123.rl2.screen.PlayScreen;
@@ -41,6 +43,7 @@ public class Rl2Game extends Game {
         loadGameBalance();
         loadMobConfig();
         loadItemConfig();
+        loadThemedRoomConfig();
         UiScale.init(persistence);
         UiPixelScale.init(persistence);
         UiStyleChoice.init(persistence);
@@ -57,8 +60,8 @@ public class Rl2Game extends Game {
         // 2×, 4×) shortens authored durations uniformly.
         com.bjsp123.rl2.world.anim.Animator.setAnimationSpeedSupplier(
                 com.bjsp123.rl2.ui.skin.AnimationSpeed::framesPerRender);
-        hallOfFame      = new HallOfFame(persistence);
-        arenaHallOfFame = new ArenaHallOfFame(persistence);
+        hallOfFame      = HallOfFameStore.load(persistence);
+        arenaHallOfFame = ArenaHallOfFameStore.load(persistence);
         saveSystem = new SaveSystem(persistence);
         setScreen(new TitleScreen(this));
     }
@@ -89,6 +92,16 @@ public class Rl2Game extends Game {
     private void loadItemConfig() {
         String csv = com.badlogic.gdx.Gdx.files.internal("data/items.csv").readString();
         com.bjsp123.rl2.logic.ItemRegistry.load(csv);
+    }
+
+    /** Read {@code assets/data/themedrooms.csv} into
+     *  {@link com.bjsp123.rl2.logic.ThemedRoomRegistry}. Missing file is non-fatal —
+     *  the registry stays empty and themed-room stamping silently no-ops. */
+    private void loadThemedRoomConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/themedrooms.csv");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.logic.ThemedRoomRegistry.load(fh.readString());
     }
 
     @Override

@@ -1,8 +1,6 @@
 package com.bjsp123.rl2.ui.popup;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.Pixmap;
-import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
@@ -20,7 +18,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemSlot;
+import com.bjsp123.rl2.model.Item.InventoryCategory;
 import com.bjsp123.rl2.model.Mob;
 
 import java.util.function.BiConsumer;
@@ -37,17 +35,17 @@ import com.bjsp123.rl2.ui.skin.UiTheme;
  */
 public class InventoryRenderer extends Group {
 
-    /** Slots in slot-index order. The first {@link #GEAR_COUNT} are rendered in the
-     *  upper equipment strip; the trailing three are gem slots, rendered in a smaller
-     *  row below. Indices 0..{@code SLOTS.length-1} are equipment cells; indices
-     *  {@code SLOTS.length}..{@code SLOTS.length + BAG_SIZE - 1} are bag cells. */
-    private static final ItemSlot[] SLOTS = {
-            ItemSlot.WEAPON, ItemSlot.OFFHAND, ItemSlot.ARMOR,
-            ItemSlot.RING1,  ItemSlot.RING2,   ItemSlot.AMULET,
-            ItemSlot.GEM1,   ItemSlot.GEM2,    ItemSlot.GEM3
+    /** Equipment cell categories in display order. The first {@link #GEAR_COUNT} are
+     *  rendered in the upper equipment strip; the trailing three are gem slots. Paired
+     *  with {@link #SLOT_INDICES} to address multi-slot families (AMULET, GEM). */
+    private static final InventoryCategory[] SLOT_CATS = {
+            InventoryCategory.WEAPON, InventoryCategory.OFFHAND, InventoryCategory.ARMOR,
+            InventoryCategory.AMULET, InventoryCategory.AMULET,
+            InventoryCategory.GEM,    InventoryCategory.GEM,     InventoryCategory.GEM
     };
-    /** Number of leading gear slots (the rest are gem slots). */
-    private static final int GEAR_COUNT = 6;
+    private static final int[] SLOT_INDICES = { 0, 0, 0, 0, 1, 0, 1, 2 };
+    /** Number of leading gear cells (the rest are gem cells). */
+    private static final int GEAR_COUNT = 5;
     private static final int BAG_COLS = 6;
     private static final int BAG_ROWS = 6;
     private static final float CELL = 32f;
@@ -55,7 +53,7 @@ public class InventoryRenderer extends Group {
     private final Skin skin;
 
     private final Container<Table> framed;
-    private final Stack[] equipCells = new Stack[SLOTS.length];
+    private final Stack[] equipCells = new Stack[SLOT_CATS.length];
     private final Stack[] bagCells   = new Stack[BAG_COLS * BAG_ROWS];
 
     private final Container<Table> popupFramed;
@@ -70,13 +68,6 @@ public class InventoryRenderer extends Group {
     /** Keyboard focus index inside the popup: 0=Equip, 1=Throw, 2=Use. */
     private int popupFocus = 0;
 
-    /** Legacy 32×32-cell composite sheet (sword/shield/armor/amulet etc.) — still used
-     *  for the few items that don't yet live on the per-row sai/items.png grid. */
-    /** Procedurally-generated silhouette for the empty ring slots — the only texture
-     *  this renderer owns directly; everything else (sword/shield/armor/amulet/staff,
-     *  the sai/items.png grid) is loaded once by {@link ItemSprites} and shared.
-     *  See {@link #buildRingTexture}. */
-    private final Texture ringSilhouetteTex;
     /** Per-item-type sheet at {@code sprites/items.png} — 32×32 tiles, three rows of
      *  themed art:
      *  <ul>
@@ -120,9 +111,6 @@ public class InventoryRenderer extends Group {
 
         // Item textures (legacy spd strip + sai/items.png grid + staff) are loaded once
         // by ItemSprites and shared with the world-floor and HUD action-bar renderers.
-        // The only sprite this class still owns is the procedural ring silhouette for
-        // empty ring slots.
-        ringSilhouetteTex = buildRingTexture();
 
         // ── Layout: outer modal panel containing three labeled sub-panels ─────
         // The whole inventory screen sits inside one big panel (the outer chrome).
@@ -140,7 +128,7 @@ public class InventoryRenderer extends Group {
         // 1. Equipped Gems — bare row, centred, no panel chrome.
         Table gemRow = new Table();
         gemRow.defaults().pad(2);
-        for (int i = GEAR_COUNT; i < SLOTS.length; i++) {
+        for (int i = GEAR_COUNT; i < SLOT_CATS.length; i++) {
             equipCells[i] = makeCell(i);
             gemRow.add(equipCells[i]).size(CELL);
         }
@@ -150,7 +138,7 @@ public class InventoryRenderer extends Group {
         // 2. Equipment — bordered panel with the six gear slots centred.
         Table equipRow = new Table();
         equipRow.defaults().pad(2);
-        for (int i = 0; i < GEAR_COUNT; i++) {
+        for (int i = 0; i < GEAR_COUNT; i++) {  // gear strip
             equipCells[i] = makeCell(i);
             equipRow.add(equipCells[i]).size(CELL);
         }
@@ -180,7 +168,7 @@ public class InventoryRenderer extends Group {
         bagGrid.defaults().pad(2);
         for (int r = 0; r < BAG_ROWS; r++) {
             for (int c = 0; c < BAG_COLS; c++) {
-                int idx = SLOTS.length + r * BAG_COLS + c;
+                int idx = SLOT_CATS.length + r * BAG_COLS + c;
                 bagCells[r * BAG_COLS + c] = makeCell(idx);
                 bagGrid.add(bagCells[r * BAG_COLS + c]).size(CELL);
             }
@@ -412,7 +400,7 @@ public class InventoryRenderer extends Group {
         // get the {@code equip-slot} drawable so the worn-gear row reads as visually
         // distinct from the carried-bag grid below it. Bag cells (index ≥ SLOTS.length)
         // use the plain {@code item-slot} drawable.
-        String bgKey = (index < SLOTS.length) ? "equip-slot" : "item-slot";
+        String bgKey = (index < SLOT_CATS.length) ? "equip-slot" : "item-slot";
         Image bg = new Image(skin.getDrawable(bgKey));
         Image content = new Image();
         content.setScaling(com.badlogic.gdx.utils.Scaling.fit);
@@ -492,10 +480,11 @@ public class InventoryRenderer extends Group {
         if (!open) return;
         if (player == null) { close(); return; }
 
-        for (int i = 0; i < SLOTS.length; i++) {
-            Item eq = player.inventory.equipped(SLOTS[i]);
-            setCellIcon(equipCells[i], eq != null ? regionFor(eq) : silhouetteRegionFor(SLOTS[i]),
-                        eq == null);
+        for (int i = 0; i < SLOT_CATS.length; i++) {
+            Item eq = player.inventory.equipped(SLOT_CATS[i], SLOT_INDICES[i]);
+            setCellIcon(equipCells[i],
+                    eq != null ? regionFor(eq) : silhouetteRegionFor(SLOT_CATS[i]),
+                    eq == null);
         }
         // Build the visible bag list for the active tab. Sorted by items.csv row
         // order first (the registry's insertion order), then by display name within
@@ -531,16 +520,16 @@ public class InventoryRenderer extends Group {
         if (popupSlot >= 0) updatePopup();
     }
 
-    /** Map an item to one of the four bag tabs. Procedural items (gems) always
-     *  go to {@link Category#GEMS}; everything else reads its CSV-tagged
-     *  {@link Item#inventoryCategory}, defaulting to {@link Category#ITEMS}. */
+    /** Map an item to one of the four bag tabs via {@link Item#inventoryCategory}. */
     private static Category categorize(Item it) {
         if (it.isGem()) return Category.GEMS;
-        if (it.inventoryCategory != null && !it.inventoryCategory.isEmpty()) {
-            try { return Category.valueOf(it.inventoryCategory); }
-            catch (IllegalArgumentException ignored) { /* unknown tag → default */ }
-        }
-        return Category.ITEMS;
+        if (it.inventoryCategory == null) return Category.ITEMS;
+        return switch (it.inventoryCategory) {
+            case WEAPON, OFFHAND, ARMOR, AMULET -> Category.GEAR;
+            case GEM                             -> Category.GEMS;
+            case FOOD                            -> Category.FOOD;
+            default                              -> Category.ITEMS;
+        };
     }
 
     /** Sort key — items.csv row order via {@link com.bjsp123.rl2.logic.ItemRegistry#typeOrder}. */
@@ -699,7 +688,7 @@ public class InventoryRenderer extends Group {
     private void tryEquip() {
         Item it = itemAtSlot(popupSlot);
         if (it == null || !canEquip(it)) return;
-        player.inventory.equip(it);
+        com.bjsp123.rl2.logic.InventorySystem.equip(player.inventory, it);
         popupSlot = -1;
         popupFramed.setVisible(false);
     }
@@ -754,11 +743,9 @@ public class InventoryRenderer extends Group {
 
     private Item itemAtSlot(int slot) {
         if (slot < 0 || player == null) return null;
-        if (slot < SLOTS.length) return player.inventory.equipped(SLOTS[slot]);
-        // Bag cells live in the visible-cell index space, not the raw bag-list index
-        // space — tabs filter the displayed set. Resolve through {@link
-        // #currentTabBagIndices}, populated each {@link #refresh()}.
-        int cellIdx = slot - SLOTS.length;
+        if (slot < SLOT_CATS.length)
+            return player.inventory.equipped(SLOT_CATS[slot], SLOT_INDICES[slot]);
+        int cellIdx = slot - SLOT_CATS.length;
         if (cellIdx < 0 || cellIdx >= currentTabBagIndices.length) return null;
         int bagIdx = currentTabBagIndices[cellIdx];
         if (bagIdx < 0 || bagIdx >= player.inventory.bag.size()) return null;
@@ -767,10 +754,8 @@ public class InventoryRenderer extends Group {
 
     private boolean canEquip(Item it) {
         if (!it.isEquippable()) return false;
-        // Iterate every ItemSlot (not just the gear-strip subset in SLOTS) so a popup on
-        // an already-equipped gem in GEM1/2/3 disables the Equip button correctly.
-        for (ItemSlot s : ItemSlot.values()) {
-            if (player.inventory.equipped(s) == it) return false;
+        for (Item eq : player.inventory.allEquipped()) {
+            if (eq == it) return false;
         }
         return true;
     }
@@ -784,28 +769,33 @@ public class InventoryRenderer extends Group {
         return ItemSprites.regionFor(it);
     }
 
-    /** Empty-equipment-slot silhouette: a faded archetype sprite for the slot type.
-     *  Rings get the procedural ring outline; gem slots show no silhouette; every
-     *  other slot uses whichever item carries {@code silhouetteForSlot} on its
-     *  items.csv row. */
-    private TextureRegion silhouetteRegionFor(ItemSlot slot) {
-        if (slot == ItemSlot.RING1 || slot == ItemSlot.RING2) {
-            return new TextureRegion(ringSilhouetteTex);
-        }
+    /** Empty-equipment-slot silhouette: a faded archetype sprite for the category.
+     *  Gem slots show no silhouette (gems are procedural — no items.csv type to look up). */
+    private TextureRegion silhouetteRegionFor(InventoryCategory cat) {
+        if (cat == InventoryCategory.GEM) return null;
         com.bjsp123.rl2.logic.ItemDefinition def =
-                com.bjsp123.rl2.logic.ItemRegistry.silhouetteFor(slot);
+                com.bjsp123.rl2.logic.ItemRegistry.silhouetteFor(cat);
         return def == null ? null : ItemSprites.regionFor(def.type);
     }
 
     private static java.util.List<String> statLines(Item it) {
         java.util.List<String> out = new java.util.ArrayList<>();
-        if (it.slot != null) out.add("Slot: " + slotLabel(it.slot));
+        if (it.inventoryCategory != null) out.add("Type: " + slotLabel(it.inventoryCategory));
         if (it.material != null) out.add("Material: " + it.material.name().toLowerCase());
-        if (it.damageMax > 0) out.add("Damage: " + it.damageMin + "-" + it.damageMax);
-        if (it.armorMax  > 0) out.add("Armor: "  + it.armorMin  + "-" + it.armorMax);
+        // Damage / armor route through ItemSystem so a +N item shows the
+        // level-scaled range its plusses actually contribute, not the base
+        // values from items.csv.
+        if (it.damage.max() > 0) {
+            com.bjsp123.rl2.model.MinMax r = com.bjsp123.rl2.logic.ItemSystem.effectiveDamageRange(it);
+            out.add("Damage: " + r.min() + "-" + r.max());
+        }
+        if (it.armor.max() > 0) {
+            com.bjsp123.rl2.model.MinMax r = com.bjsp123.rl2.logic.ItemSystem.effectiveArmorRange(it);
+            out.add("Armor: " + r.min() + "-" + r.max());
+        }
         if (it.lightRadius > 0) out.add("Light radius: " + (int) it.lightRadius);
-        if (it.thrownBehavior != null && it.thrownBehavior != com.bjsp123.rl2.model.Item.ThrownBehavior.NOTHING) {
-            out.add("Thrown: " + it.thrownBehavior.name().toLowerCase());
+        if (it.throwEffect != null) {
+            out.add("Thrown: " + it.throwEffect.name().toLowerCase());
         }
         return out;
     }
@@ -815,35 +805,19 @@ public class InventoryRenderer extends Group {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
-    private static String slotLabel(ItemSlot s) {
-        return switch (s) {
+    private static String slotLabel(InventoryCategory c) {
+        return switch (c) {
             case WEAPON  -> "weapon";
             case OFFHAND -> "off-hand";
             case ARMOR   -> "armor";
-            case RING1, RING2 -> "ring";
             case AMULET  -> "amulet";
-            case GEM1, GEM2, GEM3 -> "gem";
+            case GEM     -> "gem";
+            case POTION  -> "potion";
+            case WAND    -> "wand";
+            case FOOD    -> "food";
+            case ORB     -> "orb";
+            case BOMB    -> "bomb";
         };
-    }
-
-    private static Texture buildRingTexture() {
-        int size = 16;
-        Pixmap p = new Pixmap(size, size, Pixmap.Format.RGBA8888);
-        p.setBlending(Pixmap.Blending.None);
-        p.setColor(0, 0, 0, 0); p.fill();
-        float cx = (size - 1) / 2f, cy = (size - 1) / 2f;
-        float outer = 6f, inner = 3.5f;
-        for (int y = 0; y < size; y++) {
-            for (int x = 0; x < size; x++) {
-                float dx = x - cx, dy = y - cy;
-                float d = (float) Math.sqrt(dx * dx + dy * dy);
-                if (d <= outer && d >= inner) p.drawPixel(x, y, 0xFFFFFFFF);
-            }
-        }
-        Texture t = new Texture(p);
-        p.dispose();
-        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        return t;
     }
 
     /** Source-compat shims with the old API. */
@@ -851,7 +825,6 @@ public class InventoryRenderer extends Group {
     public void resize(int w, int h) { }
     public void render() { /* drawn by stage */ }
     public void dispose() {
-        if (ringSilhouetteTex != null) ringSilhouetteTex.dispose();
         // The shared item textures live on {@link ItemSprites}; whoever owns the
         // application lifecycle calls {@link ItemSprites#disposeShared} on shutdown.
     }

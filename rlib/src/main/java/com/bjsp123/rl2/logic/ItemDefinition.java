@@ -2,10 +2,10 @@ package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemSlot;
-import com.bjsp123.rl2.model.Item.ThrownBehavior;
+import com.bjsp123.rl2.model.Item.InventoryCategory;
+import com.bjsp123.rl2.model.Item.ItemEffect;
 import com.bjsp123.rl2.model.Item.UseBehavior;
-import com.bjsp123.rl2.model.Item.WandElement;
+import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob.Material;
 import com.bjsp123.rl2.util.CsvTable;
 
@@ -25,23 +25,26 @@ import java.util.Map;
 public final class ItemDefinition {
 
     public String type;
-    public ItemSlot slot;
     public Material material;
     public String   name;
     public String   description;
 
-    public int    damageMin;
-    public int    damageMax;
-    public int    armorMin;
-    public int    armorMax;
+    public MinMax damage = MinMax.ZERO;
+    public MinMax damagePerLevel = MinMax.ZERO;
+    public MinMax armor  = MinMax.ZERO;
+    public MinMax armorPerLevel  = MinMax.ZERO;
     public double lightRadius;
     public int    foodValue;
-    public int    healAmount;
+    /** Base AOE tile count for wands and bombs. See {@link Item#tilesAffected}. */
+    public int    tilesAffected;
+    public int    tilesAffectedPerLevel;
 
-    public ThrownBehavior thrownBehavior = ThrownBehavior.NOTHING;
-    public UseBehavior    useBehavior    = UseBehavior.NONE;
-    public String         useVerb;
-    public WandElement    wandElement;
+    /** What happens when this item is thrown; null means it just lands on the floor. */
+    public ItemEffect throwEffect;
+    public UseBehavior useBehavior = UseBehavior.NONE;
+    public String      useVerb;
+    /** Element a wand applies on impact. Null for summon-style wands. */
+    public ItemEffect  wandEffect;
 
     public java.util.List<String> tameOnThrow = new java.util.ArrayList<>();
 
@@ -56,24 +59,32 @@ public final class ItemDefinition {
      *  {@code (1 + item.level) * buffDuration}. */
     public int buffDuration;
 
-    /** Base self-damage on use (poison potion). Effective = base + item.level. */
-    public int selfDamageBase;
+    /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
+    public int knockbackSquares;
 
     /** Floor-twinkle flag — see {@link Item#glows}. */
     public boolean glows;
 
-    /** Slot this item silhouettes for when the slot is empty — see
-     *  {@link Item#silhouetteForSlot}. */
-    public ItemSlot silhouetteForSlot;
+    /** Category this item silhouettes for when its slot is empty — see
+     *  {@link Item#silhouetteForCategory}. */
+    public InventoryCategory silhouetteForCategory;
 
-    /** Inventory tab tag — see {@link Item#inventoryCategory}. */
-    public String inventoryCategory;
+    /** Authoritative item-kind tag — see {@link Item#inventoryCategory}. */
+    public InventoryCategory inventoryCategory;
 
-    /** Inclusive dungeon-depth window in which the level populator considers
-     *  this item eligible for random scatter. {@code minDepth = maxDepth = 0}
-     *  takes the item out of the random pool entirely. */
-    public int minDepth = 1;
-    public int maxDepth = 10;
+    /** Where in the dungeon this item is meant to appear. Expressed as a
+     *  fraction-of-depth window (0 = depth 1, 1 = {@code DUNGEON_DEPTH}); the
+     *  populator filters out levels whose depth-fraction falls outside
+     *  {@code [powerMin, powerMax]} and weights survivors by closeness to the
+     *  midpoint, so an item with {@code 0.3_0.7} peaks at mid-dungeon and
+     *  fades away at the band's edges. */
+    public double powerMin = 0.3;
+    public double powerMax = 0.7;
+    /** Cluster size when this item shows up: when picked, the populator drops
+     *  this many copies on adjacent floor tiles. {@code 1_1} (or {@code 1}) is
+     *  a single-item placement; bombs / oil flasks tend to cluster, so they
+     *  use higher ranges. */
+    public MinMax clusterSize = MinMax.of(1);
     /** Optional theme gate. When non-null, the item is only eligible on levels
      *  whose {@code theme} matches; null means "any theme". */
     public com.bjsp123.rl2.model.Level.VisualTheme theme;
@@ -101,38 +112,37 @@ public final class ItemDefinition {
         d.type        = CsvTable.str(row, "type", null);
         d.name        = CsvTable.str(row, "name", null);
         d.description = CsvTable.str(row, "description", "");
-        d.slot        = CsvTable.enumCell(row, "slot", ItemSlot.class, null);
         d.material    = CsvTable.enumCell(row, "material", Material.class, Material.MAGIC);
 
-        d.damageMin   = CsvTable.intCell(row, "damageMin", 0);
-        d.damageMax   = CsvTable.intCell(row, "damageMax", 0);
-        d.armorMin    = CsvTable.intCell(row, "armorMin", 0);
-        d.armorMax    = CsvTable.intCell(row, "armorMax", 0);
-        d.lightRadius = CsvTable.dblCell(row, "lightRadius", 0);
-        d.foodValue   = CsvTable.intCell(row, "foodValue", 0);
-        d.healAmount  = CsvTable.intCell(row, "healAmount", 0);
+        d.damage         = CsvTable.minMaxCell(row, "damage", MinMax.ZERO);
+        d.damagePerLevel = CsvTable.minMaxCell(row, "damagePerLevel", MinMax.ZERO);
+        d.armor          = CsvTable.minMaxCell(row, "armor", MinMax.ZERO);
+        d.armorPerLevel  = CsvTable.minMaxCell(row, "armorPerLevel", MinMax.ZERO);
+        d.lightRadius    = CsvTable.dblCell(row, "lightRadius", 0);
+        d.foodValue      = CsvTable.intCell(row, "foodValue", 0);
+        d.tilesAffected         = CsvTable.intCell(row, "tilesAffected", 0);
+        d.tilesAffectedPerLevel = CsvTable.intCell(row, "tilesAffectedPerLevel", 0);
 
-        d.thrownBehavior = CsvTable.enumCell(row, "thrownBehavior",
-                ThrownBehavior.class, ThrownBehavior.NOTHING);
-        d.useBehavior    = CsvTable.enumCell(row, "useBehavior",
-                UseBehavior.class, UseBehavior.NONE);
-        d.useVerb        = CsvTable.str(row, "useVerb", null);
-        d.wandElement    = CsvTable.enumCell(row, "wandElement",
-                WandElement.class, null);
-        d.tameOnThrow    = new java.util.ArrayList<>(CsvTable.listCell(row, "tameOnThrow"));
+        d.throwEffect = CsvTable.enumCell(row, "throwEffect", ItemEffect.class, null);
+        d.useBehavior = CsvTable.enumCell(row, "useBehavior", UseBehavior.class, UseBehavior.NONE);
+        d.useVerb     = CsvTable.str(row, "useVerb", null);
+        d.wandEffect  = CsvTable.enumCell(row, "wandEffect", ItemEffect.class, null);
+        d.tameOnThrow = new java.util.ArrayList<>(CsvTable.listCell(row, "tameOnThrow"));
         d.summonsWhenUsed = CsvTable.str(row, "summonsWhenUsed", null);
 
-        d.appliesBuff   = CsvTable.enumCell(row, "appliesBuff",
-                Buff.BuffType.class, null);
+        d.appliesBuff   = CsvTable.enumCell(row, "appliesBuff", Buff.BuffType.class, null);
         d.buffDuration  = CsvTable.intCell(row, "buffDuration", 0);
-        d.selfDamageBase = CsvTable.intCell(row, "selfDamageBase", 0);
 
-        d.glows             = CsvTable.boolCell(row, "glows", false);
-        d.silhouetteForSlot = CsvTable.enumCell(row, "silhouetteForSlot",
-                ItemSlot.class, null);
-        d.inventoryCategory = CsvTable.str(row, "inventoryCategory", null);
-        d.minDepth          = CsvTable.intCell(row, "minDepth", 1);
-        d.maxDepth          = CsvTable.intCell(row, "maxDepth", 10);
+        d.knockbackSquares      = CsvTable.intCell(row, "knockbackSquares", 0);
+        d.glows                 = CsvTable.boolCell(row, "glows", false);
+        d.silhouetteForCategory = CsvTable.enumCell(row, "silhouetteForCategory",
+                InventoryCategory.class, null);
+        d.inventoryCategory     = CsvTable.enumCell(row, "inventoryCategory",
+                InventoryCategory.class, null);
+        double[] power      = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
+        d.powerMin          = power[0];
+        d.powerMax          = power[1];
+        d.clusterSize       = CsvTable.minMaxCell(row, "clusterSize", MinMax.of(1));
         d.theme             = CsvTable.enumCell(row, "theme",
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
         d.guaranteedPerLevel = CsvTable.boolCell(row, "guaranteedPerLevel", false);
@@ -146,31 +156,31 @@ public final class ItemDefinition {
     /** Stamp this definition's fields onto a fresh {@link Item}. */
     public void apply(Item it) {
         it.type        = type;
-        it.slot        = slot;
         it.material    = material;
         it.name        = name;
         it.description = description == null ? "" : description;
 
-        it.damageMin   = damageMin;
-        it.damageMax   = damageMax;
-        it.armorMin    = armorMin;
-        it.armorMax    = armorMax;
-        it.lightRadius = lightRadius;
-        it.foodValue   = foodValue;
-        it.healAmount  = healAmount;
+        it.damage         = damage;
+        it.damagePerLevel = damagePerLevel;
+        it.armor          = armor;
+        it.armorPerLevel  = armorPerLevel;
+        it.lightRadius    = lightRadius;
+        it.foodValue      = foodValue;
+        it.tilesAffected         = tilesAffected;
+        it.tilesAffectedPerLevel = tilesAffectedPerLevel;
 
-        it.thrownBehavior = thrownBehavior;
+        it.throwEffect    = throwEffect;
         it.useBehavior    = useBehavior;
         it.useVerb        = useVerb;
-        it.wandElement    = wandElement;
+        it.wandEffect     = wandEffect;
         it.tameOnThrow    = tameOnThrow;
         it.summonsWhenUsed = summonsWhenUsed;
 
         it.appliesBuff    = appliesBuff;
         it.buffDuration   = buffDuration;
-        it.selfDamageBase = selfDamageBase;
-        it.glows          = glows;
-        it.silhouetteForSlot = silhouetteForSlot;
-        it.inventoryCategory = inventoryCategory;
+        it.knockbackSquares = knockbackSquares;
+        it.glows                 = glows;
+        it.silhouetteForCategory = silhouetteForCategory;
+        it.inventoryCategory     = inventoryCategory;
     }
 }

@@ -23,6 +23,15 @@ public class Effect {
         SMOKE_PUFF(5),
         FLOATING_TEXT(60),
         THROWN_ITEM(8),
+        /** Same arc-and-spin visual as {@link #THROWN_ITEM} but explicitly
+         *  non-blocking — used by the loot-on-death drop animation, which
+         *  shouldn't gate any subsequent action. The Animator's freeze-frames
+         *  tally excludes this type. */
+        LOOT_TOSS(12),
+        /** Item flies off the player's tile toward the bottom-right corner of
+         *  the screen — used for the pickup acknowledgement animation. Shrinks
+         *  + fades over its lifetime so it reads as "flying into the inventory". */
+        PICKUP_TOSS(24),
         PARTICLE_BURST(28),
         MAGIC_MISSILE(36),
         FIRE_PARTICLE(36),
@@ -32,7 +41,10 @@ public class Effect {
         RAY(24),
         BLAST(20),
         BUFF_ICON(60),
-        ATTACK_FLASH(17);
+        ATTACK_FLASH(17),
+        /** Item falls into a chasm — revolves, shrinks, and fades at its origin tile.
+         *  Non-blocking so the game continues while the item disappears. */
+        FALLING_ITEM(40);
 
         public final int frameCount;
 
@@ -114,6 +126,25 @@ public class Effect {
         e.endLocation = to;
         e.thrownItem = item;
         e.frameCount = framesForDistance(from, to, THROWN_ITEM_PX_PER_FRAME);
+        return e;
+    }
+
+    /** Loot-on-death toss — same shape as {@link #thrownItem} (arc + spin) but
+     *  uses the non-blocking {@link EffectType#LOOT_TOSS} type so the death
+     *  animation doesn't gate the next mob's turn. */
+    public static Effect lootToss(Point from, Point to, Item item) {
+        Effect e = new Effect(from, EffectType.LOOT_TOSS);
+        e.endLocation = to;
+        e.thrownItem = item;
+        e.frameCount = framesForDistance(from, to, THROWN_ITEM_PX_PER_FRAME);
+        return e;
+    }
+
+    /** Pickup toss — item flies off {@code from}'s tile toward the screen's
+     *  bottom-right corner, shrinking and fading as it goes. Non-blocking. */
+    public static Effect pickupToss(Point from, Item item) {
+        Effect e = new Effect(from, EffectType.PICKUP_TOSS);
+        e.thrownItem = item;
         return e;
     }
 
@@ -264,6 +295,14 @@ public class Effect {
             e.particleVX[i] = (rng.nextFloat() - 0.5f) * 4.5f;
             e.particleVY[i] = 1.6f + rng.nextFloat() * 2.0f;
         }
+        return e;
+    }
+
+    /** Item falling into a chasm — revolves, shrinks, and fades at {@code location}.
+     *  Non-blocking (excluded from the Animator's freeze-frames tally). */
+    public static Effect fallingItem(Point location, Item item) {
+        Effect e = new Effect(location, EffectType.FALLING_ITEM);
+        e.thrownItem = item;
         return e;
     }
 

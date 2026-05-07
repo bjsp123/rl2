@@ -98,6 +98,12 @@ public final class MobProgression {
             mob.history.add(HistoricalRecord.levelUp(
                     level.currentTurn, level.depth, mob.characterLevel));
         }
+        // Multi-coloured rainbow burst at the leveller's tile so the player
+        // gets a celebratory visual cue alongside the +N stats. Skipped at
+        // level-gen when level.events isn't bound yet.
+        if (level != null && level.events != null && mob.position != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.RainbowBurst(mob.position));
+        }
     }
 
     /** Add one tier's worth of {@code *PerLevel} deltas to the mob's intrinsic stats.

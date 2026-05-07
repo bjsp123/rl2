@@ -172,12 +172,15 @@ public final class BuffSystem {
             case ON_FIRE -> {
                 int raw = takesDoubleFireDamage(m) ? FIRE_DAMAGE_PER_TURN * 2
                                                    : FIRE_DAMAGE_PER_TURN;
-                int dmg = Math.max(0, raw
-                        - MobSystem.rollRange(MobSystem.magicResistRange(m)));
+                int magicResist = MobSystem.rollRange(MobSystem.magicResistRange(m));
+                int dmg = Math.max(0, raw - magicResist);
                 if (dmg > 0) {
                     emitPeriodicDamage(level, m, BuffType.ON_FIRE, dmg);
+                    MobSystem.DamageBreakdown bk =
+                            new MobSystem.DamageBreakdown(MobSystem.DamageElement.FIRE, raw)
+                                    .add("magicResist", Math.min(magicResist, raw));
                     boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
-                            MobSystem.AttackType.ENVIRONMENTAL);
+                            MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.FIRE, bk);
                     if (killed) logDotDeath(m, "burns to a cinder");
                 }
             }
@@ -185,7 +188,7 @@ public final class BuffSystem {
                 int dmg = 1 + b.level / 2;
                 emitPeriodicDamage(level, m, BuffType.POISONED, dmg);
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
-                        MobSystem.AttackType.ENVIRONMENTAL);
+                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON);
                 if (killed) logDotDeath(m, "succumbs to poison");
             }
             case REGENERATION -> {
@@ -203,14 +206,17 @@ public final class BuffSystem {
 
     /** ─── Damage mitigation ──────────────────────────────────────────────── */
 
-    /** Anti-magic divides incoming non-physical damage by {@code 2^level}, floored at 1
-     *  if the original was positive. Returns {@code (mitigated, mitigatedBuff?)} as a
-     *  small struct so callers can apply a "dim" damage VFX when mitigation kicked in. */
+    /** Anti-magic divides incoming damage by {@code 2^level}, floored at 1 if the
+     *  original was positive. Routed via {@link MobSystem#processAttack} for damage
+     *  with {@link MobSystem.DamageElement#MAGIC} or {@link MobSystem.DamageElement#FIRE}.
+     *  Don't call directly from new sites — pass the right element to processAttack. */
     public static int mitigateMagicDamage(Mob target, int dmg) {
         return mitigate(target, dmg, BuffType.ANTI_MAGIC);
     }
 
-    /** Protection divides incoming physical damage by {@code 2^level}. */
+    /** Protection divides incoming damage by {@code 2^level}. Routed via
+     *  {@link MobSystem#processAttack} for {@link MobSystem.DamageElement#PHYSICAL}
+     *  damage. Don't call directly from new sites. */
     public static int mitigatePhysicalDamage(Mob target, int dmg) {
         return mitigate(target, dmg, BuffType.PROTECTION);
     }
@@ -373,7 +379,7 @@ public final class BuffSystem {
             case INVISIBLE -> "Harder to hit, but attacking cancels the effect.";
             case GHOSTLY -> "Harder to hit, but attacking cancels the effect.";
             case LEVITATING -> "Unaffected by ground hazards and pits.";
-            case ANTI_MAGIC -> "Incoming magic damage is reduced.";
+            case ANTI_MAGIC -> "Incoming magic and fire damage is reduced.";
             case PROTECTION -> "Incoming physical damage is reduced.";
             case REGENERATION -> "Regenerating HP each turn.";
             case POISONED -> "Losing HP each turn until the poison wears off.";

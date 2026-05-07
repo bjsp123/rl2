@@ -61,6 +61,34 @@ public final class Messages {
                             EventPriority.LOW, true);
     }
 
+    /** Verbose per-attack tuning line. Format:
+     *  {@code "Goblin -> Player: PHYSICAL 8 [armor -3, PROTECTION -1] -> 4"}.
+     *  When {@code rolled == 0} (a miss), the body collapses to {@code "miss"}. */
+    public static LogEvent damageRoll(String attackerName, String targetName,
+                                      String element, int rolled, int dealt,
+                                      java.util.List<String> mitigations,
+                                      boolean playerInvolved) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(attackerName == null ? "?" : attackerName).append(" -> ");
+        sb.append(targetName   == null ? "?" : targetName);
+        sb.append(": ").append(element);
+        if (rolled <= 0 && (mitigations == null || mitigations.isEmpty())) {
+            sb.append(" miss");
+        } else {
+            sb.append(' ').append(rolled);
+            if (mitigations != null && !mitigations.isEmpty()) {
+                sb.append(" [");
+                for (int i = 0; i < mitigations.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(mitigations.get(i));
+                }
+                sb.append(']');
+            }
+            sb.append(" -> ").append(dealt);
+        }
+        return new LogEvent(sb.toString(), EventPriority.LOW, playerInvolved);
+    }
+
     public static LogEvent playerMiss(String playerName, String target) {
         return new LogEvent(playerName + " misses the " + target + ".",
                             EventPriority.LOW, true);

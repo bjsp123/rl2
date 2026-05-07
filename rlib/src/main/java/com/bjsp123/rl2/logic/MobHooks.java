@@ -49,6 +49,9 @@ public final class MobHooks {
             if (bud != null) {
                 level.mobs.add(bud);
                 onSpawn(level, bud);
+                if (level.events != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(bud, spawnPos));
+                }
                 if (killer.history != null) {
                     killer.history.add(HistoricalRecord.spawned(
                             level.currentTurn, level.depth,

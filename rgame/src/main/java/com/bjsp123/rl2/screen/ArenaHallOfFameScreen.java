@@ -38,7 +38,7 @@ public class ArenaHallOfFameScreen extends MenuScreen {
 
         Table list = new Table();
         list.defaults().left().pad(2);
-        List<ArenaHallOfFameEntry> entries = game.arenaHallOfFame.entries();
+        List<ArenaHallOfFameEntry> entries = game.arenaHallOfFame.entries;
         if (entries.isEmpty()) {
             list.add(label("No matchups recorded yet.", "dim", 1f));
         } else {

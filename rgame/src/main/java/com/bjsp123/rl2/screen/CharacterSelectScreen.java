@@ -4,8 +4,10 @@ import com.badlogic.gdx.scenes.scene2d.ui.Container;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
+import com.bjsp123.rl2.util.SeedCode;
 
 public class CharacterSelectScreen extends MenuScreen {
 
@@ -51,21 +53,43 @@ public class CharacterSelectScreen extends MenuScreen {
         blurb.setWrap(true);
         panel.add(blurb).width(340).height(80).padTop(16).padBottom(16).row();
 
+        // Optional seed input. Six letters reproduce the dungeon exactly; empty =
+        // pick a random seed at world-gen time. The hint label sits above the
+        // field so the constraint (six letters) is visible before the user types.
+        panel.add(label("Seed (optional, 6 letters)", "dim", 0.9f)).padTop(4).row();
+        TextField seedField = new TextField("", skin);
+        seedField.setMaxLength(6);
+        seedField.setMessageText("ABCDEF");
+        panel.add(seedField).width(220).height(36).padBottom(12).row();
+
         panel.add(button("Begin", () -> {
             if (game.currentPlay != null) {
                 game.currentPlay.dispose();
                 game.currentPlay = null;
             }
             game.saveSystem.clear(slot);
-            game.setScreen(new PlayScreen(game, slot, selected));
+            Long seed = parseSeedField(seedField.getText());
+            game.setScreen(new PlayScreen(game, slot, selected, seed));
         })).width(220).height(44).row();
         panel.add(button("Back", () -> game.setScreen(new SavesScreen(game))))
              .width(220).height(44);
 
         // Fixed-size panel — the blurb text changes with the selected class, but the
         // window dimensions stay the same so the layout doesn't jump on selection.
-        Container<Table> framed = fixedPanel(panel, 420, 520);
+        Container<Table> framed = fixedPanel(panel, 420, 600);
         root.center().add(framed);
+    }
+
+    /** Empty / whitespace ⇒ {@code null} (random seed). Six letters ⇒ decoded
+     *  seed. Anything else (wrong length, bad chars) ⇒ {@code null} so we fall
+     *  back to random rather than refusing to start the game; rejecting silently
+     *  is friendlier than a modal error for an optional input. */
+    private static Long parseSeedField(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (s.isEmpty()) return null;
+        if (!SeedCode.isValid(s)) return null;
+        return SeedCode.decode(s);
     }
 
     private void refreshSelection() {

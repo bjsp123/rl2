@@ -2,6 +2,7 @@ package com.bjsp123.rl2.event;
 
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
+import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 
@@ -42,7 +43,16 @@ public sealed interface GameEvent permits
         GameEvent.HealApplied,
         GameEvent.MobTamed,
         GameEvent.WandImpactBurst,
-        GameEvent.PeriodicBuffDamage {
+        GameEvent.PotionBurst,
+        GameEvent.MobSpawned,
+        GameEvent.SurfaceChanged,
+        GameEvent.VegetationChanged,
+        GameEvent.RainbowBurst,
+        GameEvent.PeriodicBuffDamage,
+        GameEvent.LootDropped,
+        GameEvent.ItemPickedUp,
+        GameEvent.MobKnockedBack,
+        GameEvent.ItemFallingIntoChasm {
 
     /** Mob took a single tile step. The animator translates this into a step interpolation. */
     record MobMoved(Mob mob, int fromX, int fromY, int toX, int toY) implements GameEvent {}
@@ -79,21 +89,32 @@ public sealed interface GameEvent permits
                              boolean trajectoryVisible) implements GameEvent {}
 
     /** Wand-cast missile carrying an element to apply at impact. Consumer chooses palette
-     *  + gravity + brightness from the element. */
-    record WandMissileFired(Mob caster, Point from, Point to, Item.WandElement element,
-                            int wandLevel, boolean trajectoryVisible) implements GameEvent {}
+     *  + gravity + brightness from the element. The {@code wand} reference is
+     *  carried so the impact site can read per-item scaling columns
+     *  ({@code damage}, {@code damagePerLevel}, {@code tilesAffected}, etc.).
+     *  {@code effectiveLevel} is the level used for scaling — typically
+     *  {@code wand.level} but bumped by +1 when the caster has the WANDMASTER
+     *  perk, captured at fire time so the impact callback sees the right
+     *  number even though the perk lives on the player. */
+    record WandMissileFired(Mob caster, Point from, Point to, Item.ItemEffect element,
+                            Item wand, int effectiveLevel,
+                            boolean trajectoryVisible) implements GameEvent {}
 
     /** Wand-cast straight beam (currently only banishment). */
-    record WandRayFired(Mob caster, Point from, Point to, Item.WandElement element,
-                        int wandLevel, boolean trajectoryVisible) implements GameEvent {}
+    record WandRayFired(Mob caster, Point from, Point to, Item.ItemEffect element,
+                        Item wand, int effectiveLevel,
+                        boolean trajectoryVisible) implements GameEvent {}
 
     /** Mob threw an item at a target tile. */
     record ItemThrown(Mob thrower, Item item, Point from, Point to,
                       boolean trajectoryVisible) implements GameEvent {}
 
-    /** Per-hit damage record (renders floating "5"/"miss"/"blunt" text near {@code target}). */
-    record DamageDealt(Mob target, int amount, DamageKind kind, Mob source) implements GameEvent {}
-    enum DamageKind { HIT, MISS, BLUNT, ENVIRONMENTAL }
+    /** Per-hit damage record (renders floating "5"/"miss"/"blunt" text near {@code target}).
+     *  {@code message} is the renderer-side flavor of the floater; the underlying
+     *  damage element ({@link com.bjsp123.rl2.logic.MobSystem.DamageElement}) is not
+     *  carried in this event because the renderer keys off the floater style alone. */
+    record DamageDealt(Mob target, int amount, DamageMessage message, Mob source) implements GameEvent {}
+    enum DamageMessage { HIT, MISS, BLUNT, ENVIRONMENTAL }
 
     /** Buff applied / removed (drives floating buff icon or text). */
     record BuffApplied(Mob mob, Buff.BuffType type, String displayName) implements GameEvent {}
@@ -116,9 +137,58 @@ public sealed interface GameEvent permits
 
     /** Coloured particle burst at a wand impact tile. The renderer maps {@code element}
      *  to the corresponding palette (water → blue, fire → red, …). */
-    record WandImpactBurst(Point pos, Item.WandElement element) implements GameEvent {}
+    record WandImpactBurst(Point pos, Item.ItemEffect element) implements GameEvent {}
+
+    /** Particle burst at a potion-drink or potion-throw landing tile. The
+     *  renderer maps the {@link Item}'s {@code appliesBuff} (and falls back
+     *  to {@code type}) to the swirling-rising particle palette. */
+    record PotionBurst(Point pos, Item item) implements GameEvent {}
+
+    /** A new mob has been spawned into the live level (wand-of-dog summon,
+     *  ant-hill turn-spawn, mob-eats-vegetation spawn). The Animator plays
+     *  a blocking grow-from-zero animation on the mob with rising particles
+     *  if the spawn tile is currently visible to the player. */
+    record MobSpawned(Mob mob, Point at) implements GameEvent {}
+
+    /** A tile's surface layer just changed to {@code surface} (water/oil/blood
+     *  /ice spreading from a wand or thrown bomb). Non-blocking; the renderer
+     *  emits a small fountain of particles tinted to the surface element.
+     *  Skipped when the new value matches the previous one (no actual change). */
+    record SurfaceChanged(Point pos, Level.Surface surface) implements GameEvent {}
+
+    /** A tile's vegetation layer just changed to {@code vegetation}
+     *  (grass/mushrooms/fire/trees grew or were painted in). Non-blocking;
+     *  the renderer emits a fountain of particles tinted to the vegetation
+     *  kind. Skipped when the new value matches the previous one. */
+    record VegetationChanged(Point pos, Level.Vegetation vegetation) implements GameEvent {}
+
+    /** Multi-coloured radial particle burst at {@code pos}. Used for the
+     *  power-orb absorb celebration and on character level-up. Blocking — the
+     *  Animator parks the freeze gate for the burst's duration so the
+     *  player notices the level-up before the next turn ticks. */
+    record RainbowBurst(Point pos) implements GameEvent {}
 
     /** Per-turn HP loss from a buff DOT (fire, poison, …). The renderer picks the
      *  floating-text tint from {@code buff} (orange for fire, green for poison, …). */
     record PeriodicBuffDamage(Mob mob, Buff.BuffType buff, int amount) implements GameEvent {}
+
+    /** A single item was dropped on death — the renderer plays a brief arcing toss
+     *  from the dying mob's tile to the item's resting spot. The animation is
+     *  non-blocking (runs in parallel with whatever animation comes next). */
+    record LootDropped(Item item, Point from, Point to) implements GameEvent {}
+
+    /** A single item was just picked up by a mob — the renderer plays a brief
+     *  arc from the item's tile toward the bottom-right of the screen (where the
+     *  inventory tab lives). Non-blocking. */
+    record ItemPickedUp(Mob picker, Item item, Point from) implements GameEvent {}
+
+    /** Mob was knocked back from {@code start} to {@code end}. The animator slides
+     *  the mob sprite across the intervening tiles. Blocking. A burst is drawn at
+     *  {@code start} to signal the impact. */
+    record MobKnockedBack(Mob mob, Point start, Point end) implements GameEvent {}
+
+    /** An item fell into a chasm after its owner was knocked in. The animator
+     *  plays a revolve-shrink-fade on the item sprite at {@code position}.
+     *  Non-blocking. */
+    record ItemFallingIntoChasm(Item item, Point position) implements GameEvent {}
 }

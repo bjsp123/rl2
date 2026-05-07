@@ -349,11 +349,6 @@ public class Mob {
     public String turnSpawnType;
 
     // ── CSV-driven species flags ────────────────────────────────────────────
-    /** Mob-type string of the offspring this species spawns alongside itself at
-     *  level-population time (cats spawn kittens). The level populator iterates
-     *  mobs whose {@code kittenType != null}, so any species opting in just sets
-     *  the column. */
-    public String kittenType;
     /** When {@code true}, this mob can be one-shot by the wand-of-banishment. */
     public boolean banishable;
 

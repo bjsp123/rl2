@@ -98,9 +98,13 @@ public final class FireSystem {
         // Trees burn much longer than other fuel, so check what was on the cell BEFORE we
         // overwrite vegetation with FIRE.
         boolean wasTree = level.vegetation[x][y] == Vegetation.TREES;
+        boolean wasFire = level.vegetation[x][y] == Vegetation.FIRE;
         // Oil is consumed by the flame.
         if (level.surface[x][y] == Surface.OIL) level.surface[x][y] = null;
         level.vegetation[x][y]  = Vegetation.FIRE;
+        // Only fountain particles on a fresh ignition — refueling an already-
+        // burning tile shouldn't double-stamp the visual.
+        if (!wasFire) VegetationSystem.emitVegetationChanged(level, x, y, Vegetation.FIRE);
         // Re-roll lifetime even if the tile was already on fire — refueling.
         int durMin = wasTree ? FIRE_DURATION_TREE_MIN_TICKS : FIRE_DURATION_MIN_TICKS;
         int durMax = wasTree ? FIRE_DURATION_TREE_MAX_TICKS : FIRE_DURATION_MAX_TICKS;

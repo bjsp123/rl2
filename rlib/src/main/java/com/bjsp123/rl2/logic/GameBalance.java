@@ -138,56 +138,21 @@ public final class GameBalance {
      *  per-mob — see the {@code *PerLevel} columns of {@code mobs.csv}.) */
     public static int PERK_POINTS_PER_LEVEL = 1;
 
-    // ───────────────────────── Combat effects ────────────────────────────────
-    /** Damage dealt by a magic missile hit. Legacy fallback for the staff's vanilla
-     *  missile path; the wand-of-magic-missile and other level-scaling sources use
-     *  {@link #BASIC_WAND_DAMAGE_MIN} / {@link #BASIC_WAND_DAMAGE_MAX} instead. */
-    public static int MAGIC_MISSILE_DAMAGE = 3;
+    /** Maximum number of distinct stack entries an {@link com.bjsp123.rl2.model.Inventory}
+     *  bag can hold. Stacks (count &gt; 1) occupy a single entry. The inventory UI
+     *  expects a 6×6 = 36 grid by default; widening the column / row count and bumping
+     *  this number lets a designer offer larger bags without code changes. */
+    public static int INVENTORY_BAG_SIZE = 36;
 
     // ───────────────────────── Item-level scaling ────────────────────────────
     // Items carry a {@code level} field. Level 0 is baseline; every level above adds
-    // a fixed increment to the relevant stat. Player starter items are always level 0.
-    // Dungeon-generated items roll a random level in {@code [0, dungeonDepth]}. Food
-    // is always level 0.
-
-    /** Baseline damage range for a level-0 wand attack (wand of magic missile, etc.). */
-    public static int BASIC_WAND_DAMAGE_MIN = 2;
-    public static int BASIC_WAND_DAMAGE_MAX = 4;
-    /** Per-level damage increment for wand attacks. */
-    public static int WAND_DAMAGE_INCREMENT_MIN = 1;
-    public static int WAND_DAMAGE_INCREMENT_MAX = 2;
-
-    /** Baseline area-of-effect (in tiles affected) for level-0 wand spells with an
-     *  area component (vegetation / fungus / fire / oil / water). */
-    public static int WAND_EFFECT_TILES = 5;
-    /** Extra tiles affected per wand level. */
-    public static int WAND_EFFECT_TILE_INCREMENT = 4;
+    // a fixed increment to the relevant stat. Per-level scaling values are now per-item
+    // ({@code damagePerLevel}, {@code armorPerLevel}, {@code tilesAffectedPerLevel} columns
+    // on items.csv) — there are no kind-wide scaling globals here.
 
     /** Baseline food value of a level-0 food item. Food doesn't scale with level — it's
      *  always level 0 — so this is the only food number that matters. */
     public static int BASIC_FOOD_VALUE = 10_000;
-
-    /** Per-level armour-range bump applied to any armour-slot or shield-slot item that
-     *  has a non-zero level. Stacks additively on top of the item's base armour range. */
-    public static int ARMOR_INCREMENT_MIN = 1;
-    public static int ARMOR_INCREMENT_MAX = 1;
-
-    /** Per-level damage-range bump for any weapon-slot item with a non-zero level. */
-    public static int WEAPON_INCREMENT_MIN = 1;
-    public static int WEAPON_INCREMENT_MAX = 2;
-
-    /** Healing amount on a level-0 healing potion. Higher-level potions add
-     *  {@link #HEAL_VALUE_INCREMENT} per level. */
-    public static int BASIC_HEAL_VALUE     = 20;
-    public static int HEAL_VALUE_INCREMENT = 10;
-
-    /** Bomb base damage (level 0) and per-level increment. Used by the fire / oil /
-     *  blast / freeze bomb thrown effects. */
-    public static int BOMB_DAMAGE_BASE      = 3;
-    public static int BOMB_DAMAGE_INCREMENT = 2;
-    /** Bomb base AOE (tiles affected at level 0) and per-level increment. */
-    public static int BOMB_EFFECT_TILES          = 5;
-    public static int BOMB_EFFECT_TILE_INCREMENT = 4;
 
     // ───────────────────────── Level dimensions / density ───────────────────
     /** Default base dimensions for every dungeon level. The {@code BIGLEVEL}
@@ -209,6 +174,19 @@ public final class GameBalance {
      *  thematically smaller and intentionally use their own narrower range.) */
     public static int ROOM_MIN_SIZE = 4;
     public static int ROOM_MAX_SIZE = 10;
+
+    // ───────────────────────── World generation ─────────────────────────────
+    /** Number of dungeon depths the world generator builds. Depth 1 (top) and
+     *  {@code DUNGEON_DEPTH} (bottom) are CENTER-side single-level rows; the
+     *  intermediate depths each carry one WEST + one EAST level. */
+    public static int DUNGEON_DEPTH = 5;
+    /** Per-roll probability that a given E or W level grows a dead-end side
+     *  branch (a single extra level at column ±2 of the parent's depth). */
+    public static double SIDE_BRANCH_PROBABILITY = 0.4;
+    /** Per-roll probability that a given E or W level (where a sibling exists
+     *  at depth+1) gets a second downstairs cross-linking it to the opposite
+     *  side, in addition to its same-side downstairs. */
+    public static double CROSSLINK_PROBABILITY = 0.4;
 
     // ───────────────────────── Mob population caps ───────────────────────────
     /** Hard cap on mobs alive on a level — magical / scripted spawn effects

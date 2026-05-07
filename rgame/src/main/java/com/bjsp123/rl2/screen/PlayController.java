@@ -2,7 +2,6 @@ package com.bjsp123.rl2.screen;
 
 import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.logic.EventLog;
-import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.Messages;
@@ -10,11 +9,9 @@ import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Item.ItemSlot;
 import com.bjsp123.rl2.model.Item.UseBehavior;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.LogEvent;
-import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
 import com.bjsp123.rl2.model.Perk;
@@ -30,13 +27,12 @@ import com.bjsp123.rl2.world.render.LevelRenderer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 
 /**
  * Gameplay action layer for {@link PlayScreen}. Owns everything between "user pressed
  * a button" and "an event lands in {@code level.events}": the per-tick advance loop,
- * the action-slot dispatcher, ability-firing flows (magic missile / wand / throw),
+ * the action-slot dispatcher, ability-firing flows (wand / throw),
  * inventory item use, stair traversal, the wait/pickup/interact tile action, the
  * auto-move snapshot + interrupt gate, action-bar bookkeeping (audit + auto-assign +
  * default seeding), and the player snapshot used for hall-of-fame entries.
@@ -53,8 +49,6 @@ final class PlayController {
     private final TargetingOverlay targetingOverlay;
     private final LevelRenderer levelRenderer;
     private final Runnable recenterCamera;
-
-    private static final Random MISSILE_RNG = new Random();
 
     /** Auto-move interrupt — set of hostile mobs visible at the start of the current
      *  auto-path. While auto-pathing, any newly-visible hostile (not in this set) aborts
@@ -147,15 +141,8 @@ final class PlayController {
             return;
         }
         switch (ub) {
-            case MAGIC_MISSILE -> beginMagicMissile(level, player, bound);
             case EAT -> {
                 ItemSystem.eat(level, player, bound);
-                TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
-                afterMove(level);
-            }
-            case HEAL -> {
-                MobSystem.heal(level, player, bound.healAmount);
-                MobSystem.removeFromInventoryPublic(player, bound);
                 TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
                 afterMove(level);
             }
@@ -164,41 +151,7 @@ final class PlayController {
         }
     }
 
-    private void beginMagicMissile(Level level, Mob caster, Item source) {
-        targetingOverlay.setPlayer(caster);
-        targetingOverlay.setLevel(level);
-        targetingOverlay.activate(target -> fireMagicMissile(level, caster, target, source),
-                                  source);
-    }
-
-    private void fireMagicMissile(Level level, Mob caster, Point target, Item source) {
-        int dmg;
-        if (source != null) {
-            // WANDMASTER perk bumps the source's effective level by 1 for damage rolls.
-            boolean wandmaster = caster.perks != null
-                    && caster.perks.getOrDefault(Perk.WANDMASTER, 0) > 0;
-            MinMax r;
-            if (wandmaster) {
-                int origLvl = source.level;
-                source.level = origLvl + 1;
-                r = ItemSystem.effectiveWandDamageRange(source);
-                source.level = origLvl;
-            } else {
-                r = ItemSystem.effectiveWandDamageRange(source);
-            }
-            dmg = r.max() > r.min()
-                    ? r.min() + MISSILE_RNG.nextInt(r.max() - r.min() + 1)
-                    : r.min();
-        } else {
-            dmg = GameBalance.MAGIC_MISSILE_DAMAGE;
-        }
-        boolean trajectoryVisible = MobSystem.trajectoryTouchesVisible(level, caster.position, target);
-        level.events.add(new GameEvent.MagicMissileFired(
-                caster, caster.position, target, dmg, trajectoryVisible));
-        TurnSystem.applyMoveCost(caster, caster.effectiveStats().moveCost);
-    }
-
-    /** Apply the inventory popup's "Use" action. EAT resolves immediately; MAGIC_MISSILE
+    /** Apply the inventory popup's "Use" action. EAT resolves immediately; WAND
      *  hands off to the targeting overlay (which is now visible because tryUse closed the
      *  inventory before invoking this callback). */
     void useItemFromInventory(Mob user, Item item) {
@@ -208,14 +161,6 @@ final class PlayController {
         switch (item.useBehavior) {
             case EAT -> {
                 ItemSystem.eat(level, user, item);
-                TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
-                afterMove(level);
-            }
-            case MAGIC_MISSILE -> beginMagicMissile(level, user, item);
-            case HEAL -> {
-                int amount = ItemSystem.effectiveHealAmount(item);
-                MobSystem.heal(level, user, amount);
-                MobSystem.removeFromInventoryPublic(user, item);
                 TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
                 afterMove(level);
             }
@@ -258,13 +203,13 @@ final class PlayController {
                     + (user.perks != null
                             && user.perks.getOrDefault(Perk.WANDMASTER, 0) > 0
                             ? 1 : 0);
-            if (wand.wandElement == Item.WandElement.BANISHMENT) {
+            if (wand.wandEffect == Item.ItemEffect.BANISHMENT) {
                 cur.events.add(new GameEvent.WandRayFired(
-                        user, user.position, target, wand.wandElement, effLvl,
+                        user, user.position, target, wand.wandEffect, wand, effLvl,
                         trajectoryVisible));
             } else {
                 cur.events.add(new GameEvent.WandMissileFired(
-                        user, user.position, target, wand.wandElement, effLvl,
+                        user, user.position, target, wand.wandEffect, wand, effLvl,
                         trajectoryVisible));
             }
             TurnSystem.applyMoveCost(user, user.effectiveStats().attackCost);
@@ -289,9 +234,9 @@ final class PlayController {
 
     HallOfFameEntry snapshotOf(Mob p) {
         List<String> equipment = new ArrayList<>();
-        for (ItemSlot s : ItemSlot.values()) {
-            Item it = p.inventory.equipped(s);
-            if (it != null) equipment.add(s.name() + ": " + it.describe());
+        for (Item it : p.inventory.allEquipped()) {
+            String cat = it.inventoryCategory != null ? it.inventoryCategory.name() : "equipped";
+            equipment.add(cat + ": " + it.describe());
         }
         return new HallOfFameEntry(
                 p.characterClass != null ? p.characterClass.displayName : "Adventurer",
@@ -364,9 +309,8 @@ final class PlayController {
     private static Item firstByType(Mob player, String type) {
         if (type == null) return null;
         // Equipped items first so an equipped sword binds over a bag duplicate.
-        for (ItemSlot s : ItemSlot.values()) {
-            Item eq = player.inventory.equipped(s);
-            if (eq != null && type.equals(eq.type)) return eq;
+        for (Item eq : player.inventory.allEquipped()) {
+            if (type.equals(eq.type)) return eq;
         }
         for (Item it : player.inventory.bag) if (type.equals(it.type)) return it;
         return null;
@@ -410,8 +354,7 @@ final class PlayController {
             Item it = bag.get(i);
             if (it == null) continue;
             boolean usable = it.useBehavior != null && it.useBehavior != UseBehavior.NONE;
-            boolean throwable = it.thrownBehavior != null
-                    && it.thrownBehavior != Item.ThrownBehavior.NOTHING;
+            boolean throwable = it.throwEffect != null;
             if (!usable && !throwable) continue;
             boolean alreadyBound = false;
             for (int s = 0; s < actionBar.size(); s++) {

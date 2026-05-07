@@ -101,7 +101,20 @@ public final class VegetationSystem {
         if (chance <= 0) return;
         if (RANDOM.nextDouble() < chance) {
             level.vegetation[target[0]][target[1]] = v;
+            emitVegetationChanged(level, target[0], target[1], v);
         }
+    }
+
+    /** Post a {@link com.bjsp123.rl2.event.GameEvent.VegetationChanged} event
+     *  for the renderer to emit a coloured fountain at {@code (x, y)}. Public so
+     *  every other vegetation writer (wand paint discs, fire ignition) can
+     *  share the same emit path. Skipped silently when the level has no event
+     *  sink (level-gen). */
+    public static void emitVegetationChanged(Level level, int x, int y,
+                                             Level.Vegetation v) {
+        if (level == null || level.events == null || v == null) return;
+        level.events.add(new com.bjsp123.rl2.event.GameEvent.VegetationChanged(
+                new com.bjsp123.rl2.model.Point(x, y), v));
     }
 
     /** Chance for {@code v} to take root at the target cell, given the target's conditions. */

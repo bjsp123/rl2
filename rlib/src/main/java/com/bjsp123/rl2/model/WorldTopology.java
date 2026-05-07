@@ -1,149 +1,169 @@
 package com.bjsp123.rl2.model;
 
+import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.LevelFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
 /**
- * Builders for pre-baked dungeon graph shapes. The runtime no longer has a single
- * "the topology is this" table — every level instead carries its own
- * {@code stairs(Up|Down)(Alt)Target} indices plus a {@link Level#mapColumn}, and the
- * stair-transition + map-rendering code reads those fields directly. So the world graph
- * can be any layered DAG (any number of levels per depth, any branching shape) as long
- * as the generator wires the per-level edge fields consistently.
+ * Procedural world generator. Reads {@link GameBalance#DUNGEON_DEPTH},
+ * {@link GameBalance#SIDE_BRANCH_PROBABILITY}, and
+ * {@link GameBalance#CROSSLINK_PROBABILITY} to build a layered DAG of
+ * {@link Level}s and wires the per-level {@code stairs(Up|Down)(Alt)Target}
+ * indices that drive both inter-level transitions and {@code MapScreen}.
  *
- * <p>This class' role is reduced to: pick a shape, generate the levels, and wire the
- * fields. {@link #buildDiamond} is the only shape we ship today.
+ * <p>Shape: depth 1 and {@code DUNGEON_DEPTH} are single CENTER levels. Every
+ * intermediate depth carries one WEST + one EAST level. From each E/W level at
+ * depth {@code d}:
+ * <ul>
+ *   <li>The default downstair always reaches the same-side level at {@code d+1}
+ *       (or the bottom CENTER if {@code d+1 == DUNGEON_DEPTH}).</li>
+ *   <li>With probability {@code CROSSLINK_PROBABILITY}, a second downstair
+ *       reaches the opposite-side level at {@code d+1} — only relevant when
+ *       both sides exist there ({@code d+1 < DUNGEON_DEPTH}).</li>
+ *   <li>With probability {@code SIDE_BRANCH_PROBABILITY}, a second downstair
+ *       reaches a fresh dead-end "side branch" level at the same depth, column
+ *       ±2 of the parent. Mutually exclusive with the crosslink — a level can
+ *       grow at most one extra downstair.</li>
+ * </ul>
+ *
+ * <p>Top + bottom CENTER levels reach all surviving {@code d=2} / {@code d=N-1}
+ * E/W rows via their primary + alt stair pair. {@code DUNGEON_DEPTH = 2}
+ * collapses to a CENTER-CENTER pair with a single edge between them.
  */
 public final class WorldTopology {
 
     private WorldTopology() {}
 
-    /**
-     * Generate the default 10-level world: a base diamond with two "cross" connections
-     * weaving the two branches together, plus two dead-end side levels.
-     *
-     * <pre>
-     *                        [0]                    depth 1, CENTER
-     *                       /   \
-     *                    [1]     [2]                depth 2, WEST / EAST
-     *                   / | \     |
-     *                  /  |  \    |
-     *               [3] [side8] [4]                 depth 3 (and side W at column −2)
-     *                |    ↑    /|\
-     *                |    └──[3] (side hangs off 3W)
-     *                |       / | \
-     *               [5]    [6] |  \
-     *                | \   /|  |   \
-     *                |  \ / |  |    \
-     *               [7]    [side9] (side hangs off 4E)
-     * </pre>
-     *
-     * <p>The cross connections: 2W (idx 1) reaches both 3W <em>and</em> 3E; 3E (idx 4)
-     * reaches both 4W <em>and</em> 4E. The side levels (idx 8, 9) are dead-end branches
-     * accessible only from their parent main-line level; the player can wander into one
-     * and must come back the way they came.
-     *
-     * <p>Per-level wiring:
-     * <table>
-     *   <tr><th>idx</th><th>depth</th><th>side</th><th>mapColumn</th>
-     *       <th>stairsUp / Alt → ?</th><th>stairsDown / Alt → ?</th></tr>
-     *   <tr><td>0</td><td>1</td><td>CENTER</td><td>0</td>     <td>—</td>          <td>1 / 2</td></tr>
-     *   <tr><td>1</td><td>2</td><td>WEST</td>  <td>−1</td>    <td>0 / —</td>      <td>3 / 4</td></tr>
-     *   <tr><td>2</td><td>2</td><td>EAST</td>  <td>+1</td>    <td>0 / —</td>      <td>4 / —</td></tr>
-     *   <tr><td>3</td><td>3</td><td>WEST</td>  <td>−1</td>    <td>1 / —</td>      <td>5 / 8</td></tr>
-     *   <tr><td>4</td><td>3</td><td>EAST</td>  <td>+1</td>    <td>2 / 1</td>      <td>6 / 5</td></tr>
-     *   <tr><td>5</td><td>4</td><td>WEST</td>  <td>−1</td>    <td>3 / 4</td>      <td>7 / —</td></tr>
-     *   <tr><td>6</td><td>4</td><td>EAST</td>  <td>+1</td>    <td>4 / —</td>      <td>7 / 9</td></tr>
-     *   <tr><td>7</td><td>5</td><td>CENTER</td><td>0</td>     <td>5 / 6</td>      <td>—</td></tr>
-     *   <tr><td>8</td><td>4</td><td>WEST</td>  <td>−2</td>    <td>3 / —</td>      <td>—</td></tr>
-     *   <tr><td>9</td><td>5</td><td>EAST</td>  <td>+2</td>    <td>6 / —</td>      <td>—</td></tr>
-     * </table>
-     */
-    public static Level[] buildDiamond(int width, int height) {
-        Level[] lv = new Level[10];
+    /** Build a fresh world. {@code rng} drives every probability roll; pass a
+     *  reproducible seed to get a deterministic dungeon. The {@code unique}
+     *  tracker is threaded through to {@link LevelFactory#createDungeonLevel} so
+     *  unique themed rooms only spawn once across the whole world. */
+    public static Level[] build(int width, int height, Random rng, UniqueTracker unique) {
+        int depth = Math.max(2, GameBalance.DUNGEON_DEPTH);
+        double pBranch = clamp01(GameBalance.SIDE_BRANCH_PROBABILITY);
+        double pCross  = clamp01(GameBalance.CROSSLINK_PROBABILITY);
 
-        // 1. Generate ten raw levels. Each main-line level (0..7) follows the diamond depth
-        //    convention; the two side levels (8, 9) are generated with hasUp=true / hasDown=false
-        //    so they end up as dead-end branches.
-        int[] depths      = {1, 2, 2, 3, 3, 4, 4, 5, 4, 5};
-        Level.Side[] sides = {
-            Level.Side.CENTER, Level.Side.WEST, Level.Side.EAST,
-            Level.Side.WEST,   Level.Side.EAST,
-            Level.Side.WEST,   Level.Side.EAST,
-            Level.Side.CENTER,
-            Level.Side.WEST,   Level.Side.EAST     // side W, side E
-        };
-        float[] columns   = {0f, -1f, +1f, -1f, +1f, -1f, +1f, 0f, -2f, +2f};
-        boolean[] hasUp   = {false, true,  true,  true,  true,  true,  true,  true,  true,  true};
-        boolean[] hasDown = {true,  true,  true,  true,  true,  true,  true,  false, false, false};
+        List<Level> out = new ArrayList<>();
 
-        for (int i = 0; i < lv.length; i++) {
-            lv[i] = LevelFactory.createDungeonLevel(width, height, hasUp[i], hasDown[i]);
-            lv[i].depth     = depths[i];
-            lv[i].side      = sides[i];
-            lv[i].mapColumn = columns[i];
+        // 1. Allocate the main spine. mainW[d] / mainE[d] hold the level index
+        //    at depth d on the WEST / EAST side; -1 where the slot doesn't exist.
+        int[] mainW = new int[depth + 1];   // index by depth
+        int[] mainE = new int[depth + 1];
+        int[] mainC = new int[depth + 1];   // for top + bottom CENTER
+        for (int d = 0; d <= depth; d++) { mainW[d] = mainE[d] = mainC[d] = -1; }
+
+        // Top CENTER (depth 1).
+        mainC[1] = addLevel(out, width, height, /*hasUp=*/false, /*hasDown=*/true,
+                /*depth=*/1, Level.Side.CENTER, /*column=*/0f, unique, rng);
+
+        // Intermediate depths: one W + one E each.
+        for (int d = 2; d < depth; d++) {
+            mainW[d] = addLevel(out, width, height, true, true, d, Level.Side.WEST, -1f, unique, rng);
+            mainE[d] = addLevel(out, width, height, true, true, d, Level.Side.EAST, +1f, unique, rng);
         }
 
-        // 2. Graft extra staircases onto every main-line level that needs more than one stair
-        //    in some direction. The W/E orient swap on the boundary levels (idx 0 and 7) is the
-        //    only place we still try to align a stair's room position with its destination —
-        //    elsewhere the labels render the destination so the position doesn't matter.
-        LevelFactory.addAltStairsDown(lv[0]);  orientWestEastDownStairs(lv[0]);
-        LevelFactory.addAltStairsDown(lv[1]);  // 2W needs a 2nd downstair for the cross
-        LevelFactory.addAltStairsDown(lv[3]);  // 3W needs a 2nd downstair for side level 8
-        LevelFactory.addAltStairsUp  (lv[4]);  // 3E receives a cross from 2W
-        LevelFactory.addAltStairsDown(lv[4]);  // 3E sends a cross to 4W
-        LevelFactory.addAltStairsUp  (lv[5]);  // 4W receives a cross from 3E
-        LevelFactory.addAltStairsDown(lv[6]);  // 4E needs a 2nd downstair for side level 9
-        LevelFactory.addAltStairsUp  (lv[7]);  orientWestEastUpStairs  (lv[7]);
+        // Bottom CENTER (depth = DUNGEON_DEPTH).
+        mainC[depth] = addLevel(out, width, height, true, false, depth, Level.Side.CENTER, 0f, unique, rng);
 
-        // 3. Wire per-level edge targets. Each pair is symmetric — A.stairsDownTarget = B
-        //    iff exactly one of B.stairsUpTarget / B.stairsUpAltTarget is A. The arrival-
-        //    point lookup at transition time scans these fields, so this wiring IS the graph.
-        // depth 1 → depth 2
-        lv[0].stairsDownTarget    = 1;
-        lv[0].stairsDownAltTarget = 2;
-        lv[1].stairsUpTarget      = 0;
-        lv[2].stairsUpTarget      = 0;
-        // depth 2 → depth 3 (with cross from 2W reaching both 3W and 3E)
-        lv[1].stairsDownTarget    = 3;   lv[3].stairsUpTarget    = 1;
-        lv[1].stairsDownAltTarget = 4;   lv[4].stairsUpAltTarget = 1;   // cross
-        lv[2].stairsDownTarget    = 4;   lv[4].stairsUpTarget    = 2;
-        // depth 3 → depth 4 (with cross from 3E reaching both 4W and 4E)
-        lv[3].stairsDownTarget    = 5;   lv[5].stairsUpTarget    = 3;
-        lv[4].stairsDownTarget    = 6;   lv[6].stairsUpTarget    = 4;
-        lv[4].stairsDownAltTarget = 5;   lv[5].stairsUpAltTarget = 4;   // cross
-        // depth 3 → side W (dead-end)
-        lv[3].stairsDownAltTarget = 8;   lv[8].stairsUpTarget    = 3;
-        // depth 4 → depth 5
-        lv[5].stairsDownTarget    = 7;
-        lv[6].stairsDownTarget    = 7;
-        lv[7].stairsUpTarget      = 5;
-        lv[7].stairsUpAltTarget   = 6;
-        // depth 4 → side E (dead-end)
-        lv[6].stairsDownAltTarget = 9;   lv[9].stairsUpTarget    = 6;
+        // 2. Wire the spine — same-side downstairs at every depth d ∈ [2, N-1].
+        //    Top CENTER feeds 2W + 2E; bottom CENTER receives from (N-1)W + (N-1)E.
+        if (depth == 2) {
+            // Degenerate world: top CENTER → bottom CENTER, single edge.
+            connectDown(out, mainC[1], mainC[2], /*alt=*/false);
+        } else {
+            connectDown(out, mainC[1], mainW[2], false);
+            // Top CENTER's alt-down points at 2E.
+            LevelFactory.addAltStairsDown(out.get(mainC[1]));
+            connectDown(out, mainC[1], mainE[2], true);
 
-        return lv;
+            for (int d = 2; d < depth - 1; d++) {
+                connectDown(out, mainW[d], mainW[d + 1], false);
+                connectDown(out, mainE[d], mainE[d + 1], false);
+            }
+            // (N-1)W and (N-1)E both feed the bottom CENTER, which uses up + upAlt.
+            connectDown(out, mainW[depth - 1], mainC[depth], false);
+            LevelFactory.addAltStairsUp(out.get(mainC[depth]));
+            connectDown(out, mainE[depth - 1], mainC[depth], true);
+        }
+
+        // 3. Per-E/W roll: at most one extra downstair (crosslink OR side branch).
+        for (int d = 2; d < depth; d++) {
+            for (int idx : new int[]{mainW[d], mainE[d]}) {
+                if (idx < 0) continue;
+                Level lvl = out.get(idx);
+                boolean amWest = lvl.side == Level.Side.WEST;
+
+                // Crosslink: requires both sides to exist at depth d+1.
+                boolean canCross = (d + 1 < depth);
+                int crossTarget  = canCross ? (amWest ? mainE[d + 1] : mainW[d + 1]) : -1;
+                if (canCross && crossTarget >= 0 && rng.nextDouble() < pCross) {
+                    LevelFactory.addAltStairsDown(lvl);
+                    connectDown(out, idx, crossTarget, true);
+                    LevelFactory.addAltStairsUp(out.get(crossTarget));
+                    Level dst = out.get(crossTarget);
+                    if (dst.stairsUpTarget == idx) {
+                        // Already wired as primary; skip alt wiring.
+                    } else {
+                        dst.stairsUpAltTarget = idx;
+                    }
+                    continue;
+                }
+
+                // Side branch: dead-end at parent depth, column ±2.
+                if (rng.nextDouble() < pBranch) {
+                    int sideIdx = addLevel(out, width, height, true, false,
+                            d, lvl.side, amWest ? -2f : +2f, unique, rng);
+                    LevelFactory.addAltStairsDown(lvl);
+                    connectDown(out, idx, sideIdx, true);
+                }
+            }
+        }
+
+        return out.toArray(new Level[0]);
     }
 
-    /** Swap the two down-stairs on a level so that the smaller-X tile lives in
-     *  {@code stairsDown} (the "primary" / west-pointing stair). Used only on the
-     *  boundary levels (idx 0 of the diamond) where W/E semantics are unambiguous;
-     *  for cross-connection levels the stair labels disambiguate destinations. */
-    private static void orientWestEastDownStairs(Level lvl) {
-        if (lvl.stairsDown == null || lvl.stairsDownAlt == null) return;
-        if (lvl.stairsDown.tileX() <= lvl.stairsDownAlt.tileX()) return;
-        Point tmp = lvl.stairsDown;
-        lvl.stairsDown    = lvl.stairsDownAlt;
-        lvl.stairsDownAlt = tmp;
+    /** Allocate one fresh level, append it to {@code out}, and stamp the supplied
+     *  metadata. Returns its index. The per-level seed is drawn from the world
+     *  rng so the same world seed regenerates the same dungeon every time —
+     *  using {@code LevelFactory}'s built-in {@code ROOT_RNG} would leak fresh
+     *  randomness into every run and break determinism. */
+    private static int addLevel(List<Level> out, int width, int height,
+                                boolean hasUp, boolean hasDown,
+                                int depth, Level.Side side, float mapColumn,
+                                UniqueTracker unique, Random rng) {
+        // Pass depth into createDungeonLevel up front — population reads
+        // {@code level.depth} for power-level / unique-mob eligibility, so
+        // setting it after construction would be too late and every level
+        // would generate as if it were depth 1.
+        long levelSeed = rng.nextLong();
+        Level lvl = LevelFactory.createDungeonLevel(width, height, depth, hasUp, hasDown,
+                                                    unique, levelSeed);
+        lvl.side      = side;
+        lvl.mapColumn = mapColumn;
+        out.add(lvl);
+        return out.size() - 1;
     }
 
-    /** Sibling of {@link #orientWestEastDownStairs} for the deepest level's two upstairs. */
-    private static void orientWestEastUpStairs(Level lvl) {
-        if (lvl.stairsUp == null || lvl.stairsUpAlt == null) return;
-        if (lvl.stairsUp.tileX() <= lvl.stairsUpAlt.tileX()) return;
-        Point tmp = lvl.stairsUp;
-        lvl.stairsUp    = lvl.stairsUpAlt;
-        lvl.stairsUpAlt = tmp;
+    /** Wire a downward edge from {@code srcIdx} to {@code dstIdx}. {@code alt = true}
+     *  uses the source's alt downstair (must already exist via
+     *  {@link LevelFactory#addAltStairsDown}); the destination side picks its
+     *  primary upstair if free, else its alt upstair. */
+    private static void connectDown(List<Level> out, int srcIdx, int dstIdx, boolean alt) {
+        Level src = out.get(srcIdx);
+        Level dst = out.get(dstIdx);
+        if (alt) src.stairsDownAltTarget = dstIdx;
+        else      src.stairsDownTarget    = dstIdx;
+        if (dst.stairsUpTarget == -1)         dst.stairsUpTarget    = srcIdx;
+        else if (dst.stairsUpAltTarget == -1) dst.stairsUpAltTarget = srcIdx;
+    }
+
+    private static double clamp01(double v) {
+        if (v < 0) return 0;
+        if (v > 1) return 1;
+        return v;
     }
 
     /**

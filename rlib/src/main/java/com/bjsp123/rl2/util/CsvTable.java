@@ -149,6 +149,77 @@ public final class CsvTable {
         return new MinMax(min, max);
     }
 
+    /** Float-range counterpart of {@link #minMaxCell}. Parses {@code N} or
+     *  {@code MIN_MAX} (e.g. {@code 0.5} or {@code 0.3_0.7}) into a
+     *  {@code [min, max]} double pair. Single-value cells degenerate to
+     *  {@code min = max}. Returns the supplied defaults on empty cell. */
+    public static double[] dblRangeCell(Map<String, String> row, String key,
+                                        double defMin, double defMax) {
+        String v = row.get(key);
+        if (v == null || v.isEmpty()) return new double[]{defMin, defMax};
+        int sep = v.indexOf('_');
+        if (sep < 0) {
+            double n = Double.parseDouble(v);
+            return new double[]{n, n};
+        }
+        return new double[]{
+            Double.parseDouble(v.substring(0, sep)),
+            Double.parseDouble(v.substring(sep + 1))
+        };
+    }
+
+    /** Parsed entry from a spawn-spec list cell — a reference (mob type, item
+     *  type, or {@code @category}) plus an optional {@code [min, max]} count
+     *  range. Used by both {@code MobDefinition.startingInventory} and the
+     *  themed-room mob/item columns; the syntax is the same across all of them. */
+    public static final class SpawnSpec {
+        public final String ref;
+        public final int    min;
+        public final int    max;
+        public SpawnSpec(String ref, int min, int max) {
+            this.ref = ref;
+            this.min = min;
+            this.max = max;
+        }
+    }
+
+    /** Parse a pipe-separated spawn-spec cell. Each entry takes the form
+     *  {@code <ref>}, {@code <ref>*<count>}, or {@code <ref>*<min>_<max>}. The
+     *  reference may be a literal mob/item type or an {@code @category} token —
+     *  this parser treats it as opaque text. Examples:
+     *  <pre>
+     *  DAGGER                                  → ref=DAGGER,         min=1, max=1
+     *  KOBOLD_GENERAL*3                        → ref=KOBOLD_GENERAL, min=3, max=3
+     *  LOATHESOME_BUG*2_3                      → ref=LOATHESOME_BUG, min=2, max=3
+     *  &#64;potion*1                           → ref=&#64;potion,    min=1, max=1
+     *  </pre>
+     *  Empty / null cells return an empty list. */
+    public static List<SpawnSpec> parseSpawnSpecList(String cell) {
+        List<SpawnSpec> out = new ArrayList<>();
+        if (cell == null || cell.isEmpty()) return out;
+        for (String entry : cell.split("\\|")) {
+            String e = entry.trim();
+            if (e.isEmpty()) continue;
+            int star = e.indexOf('*');
+            if (star < 0) {
+                out.add(new SpawnSpec(e, 1, 1));
+                continue;
+            }
+            String ref = e.substring(0, star).trim();
+            String countPart = e.substring(star + 1).trim();
+            int sep = countPart.indexOf('_');
+            if (sep < 0) {
+                int n = Integer.parseInt(countPart);
+                out.add(new SpawnSpec(ref, n, n));
+            } else {
+                int lo = Integer.parseInt(countPart.substring(0, sep));
+                int hi = Integer.parseInt(countPart.substring(sep + 1));
+                out.add(new SpawnSpec(ref, lo, hi));
+            }
+        }
+        return out;
+    }
+
     /** Sub-list cells use {@code |} as the separator. {@code MOUSE|CAT|RAT}
      *  → {@code [MOUSE, CAT, RAT]}. Empty cell → empty list. */
     public static List<String> listCell(Map<String, String> row, String key) {

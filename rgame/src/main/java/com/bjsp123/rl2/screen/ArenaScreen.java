@@ -224,16 +224,15 @@ public class ArenaScreen implements Screen {
     private static void seedMageRangedStats(Mob mage) {
         com.bjsp123.rl2.model.Item wand = null;
         for (com.bjsp123.rl2.model.Item it : mage.inventory.bag) {
-            if (it != null && it.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.MAGIC_MISSILE) {
+            if (it != null && it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
                 wand = it; break;
             }
         }
         if (wand == null) return;
-        int min = com.bjsp123.rl2.logic.GameBalance.BASIC_WAND_DAMAGE_MIN
-                + wand.level * com.bjsp123.rl2.logic.GameBalance.WAND_DAMAGE_INCREMENT_MIN;
-        int max = com.bjsp123.rl2.logic.GameBalance.BASIC_WAND_DAMAGE_MAX
-                + wand.level * com.bjsp123.rl2.logic.GameBalance.WAND_DAMAGE_INCREMENT_MAX;
-        mage.intrinsic.rangedDamage     = new com.bjsp123.rl2.model.MinMax(min, max);
+        // Damage range is now per-item (damage + damagePerLevel columns on
+        // items.csv) — route through ItemSystem so the arena mob's ranged
+        // stats track whatever items.csv says about the wand.
+        mage.intrinsic.rangedDamage = com.bjsp123.rl2.logic.ItemSystem.effectiveDamageRange(wand);
         mage.intrinsic.rangedDistance   = 6;
         mage.intrinsic.rangedRateOfFire = 1;
         mage.intrinsic.rangedCost       = mage.intrinsic.attackCost;
@@ -373,6 +372,7 @@ public class ArenaScreen implements Screen {
                 describeSurvivors(teamB),
                 decideWinner(),
                 System.currentTimeMillis()));
+        com.bjsp123.rl2.save.ArenaHallOfFameStore.save(game.persistence, game.arenaHallOfFame);
     }
 
     private static String describeTeamSpec(ArenaSetupScreen.TeamSpec spec) {

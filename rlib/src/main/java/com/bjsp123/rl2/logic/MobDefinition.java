@@ -75,13 +75,27 @@ public final class MobDefinition {
     public String faction;
     /** Faction tags this mob is hostile to — see {@link Mob#enemyFactions}. */
     public Set<String> enemyFactions = new HashSet<>();
-    /** Inclusive dungeon-depth window in which the level populator considers
-     *  this mob eligible for random spawn. {@code minDepth = maxDepth = 0} takes
-     *  the species out of the random pool entirely (used by player-class rows,
-     *  scripted set-pieces, summon-only mobs, etc. — though today every CSV row
-     *  is open at 1..10). */
-    public int minDepth = 1;
-    public int maxDepth = 10;
+    /** When true, this species can spawn at most once per run. Generation code
+     *  checks {@code World.unique.mobs} and adds the type-name on spawn so
+     *  subsequent levels skip it. Used by the elder-* boss variants. */
+    public boolean unique;
+    /** Drop-quality multiplier on whatever the mob drops (today an opaque integer
+     *  parsed from the CSV; consumed by future loot logic). Ordinary mobs use
+     *  {@code 1}; unique bosses use {@code 3}. */
+    public int dropQuality = 1;
+    /** Where in the dungeon this species is meant to appear. Expressed as a
+     *  fraction-of-depth window (0 = depth 1, 1 = {@code DUNGEON_DEPTH}); the
+     *  populator filters out levels whose depth-fraction falls outside
+     *  {@code [powerMin, powerMax]} and weights survivors by closeness to the
+     *  midpoint, so a species with {@code 0.3_0.7} peaks at mid-dungeon and
+     *  fades away at the band's edges. */
+    public double powerMin = 0.3;
+    public double powerMax = 0.7;
+    /** Cluster size when this mob shows up: when picked, the populator spawns
+     *  this many of the same species on adjacent floor tiles. {@code 1_1} (or
+     *  {@code 1}) is a solo encounter; ant workers, blob spawns, etc. roll
+     *  higher ranges. */
+    public MinMax clusterSize = MinMax.of(1);
     /** Optional theme gate. When non-null, the species is only eligible on
      *  levels whose {@code theme} matches; null means "any theme". */
     public com.bjsp123.rl2.model.Level.VisualTheme theme;
@@ -90,9 +104,19 @@ public final class MobDefinition {
      *  itself. */
     public List<String> attackAllExcept = new ArrayList<>();
 
+    // ── Retainers (entourage species spawned alongside this mob) ────────────
+    /** How many retainers spawn with each instance of this mob (rolled per
+     *  spawn). {@code 0_0} = no retainers; cats roll {@code 0_2} kittens, the
+     *  kobold general rolls {@code 2_3} fighters/spearmen/cleavers. */
+    public MinMax numRetainers = MinMax.ZERO;
+    /** Mob types eligible to be picked as retainers; one entry per retainer
+     *  is drawn (with replacement) from this list. Empty when
+     *  {@link #numRetainers} is zero. */
+    public List<String> retainerTypes = new ArrayList<>();
+
     // ── Special-case flags (replace hardcoded mob-type checks) ──────────────
-    public String  kittenType;       // non-null => spawns kittens at level-pop time
     public boolean banishable;
+    public int knockbackSquares;
 
     // ── Per-level scaling deltas (applied by MobProgression on each level up
     //    or pre-roll). MinMax columns use the {@code MIN_MAX} cell format.
@@ -235,14 +259,20 @@ public final class MobDefinition {
         d.fleeTypes  .addAll(CsvTable.listCell(row, "fleeTypes"));
         d.faction         = CsvTable.str(row, "faction", null);
         d.enemyFactions.addAll(CsvTable.listCell(row, "enemyFactions"));
-        d.minDepth        = CsvTable.intCell(row, "minDepth", 1);
-        d.maxDepth        = CsvTable.intCell(row, "maxDepth", 10);
+        d.unique          = CsvTable.boolCell(row, "unique", false);
+        d.dropQuality     = CsvTable.intCell(row, "dropQuality", 1);
+        double[] power    = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
+        d.powerMin        = power[0];
+        d.powerMax        = power[1];
+        d.clusterSize     = CsvTable.minMaxCell(row, "clusterSize", MinMax.of(1));
+        d.numRetainers    = CsvTable.minMaxCell(row, "numRetainers", MinMax.ZERO);
+        d.retainerTypes   = new ArrayList<>(CsvTable.listCell(row, "retainerTypes"));
         d.theme           = CsvTable.enumCell(row, "theme",
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
         d.attackAllExcept = new ArrayList<>(CsvTable.listCell(row, "attackAllExcept"));
 
-        d.kittenType     = CsvTable.str(row, "kittenType", null);
-        d.banishable     = CsvTable.boolCell(row, "banishable", false);
+        d.banishable         = CsvTable.boolCell(row, "banishable", false);
+        d.knockbackSquares   = CsvTable.intCell(row, "knockbackSquares", 0);
 
         d.hpPerLevel             = CsvTable.intCell(row, "hpPerLevel", 2);
         d.accuracyPerLevel       = CsvTable.intCell(row, "accuracyPerLevel", 1);
@@ -301,24 +331,15 @@ public final class MobDefinition {
         return out;
     }
 
-    /** Parse the {@code startingInventory} cell. Format: pipe-separated
-     *  item-type strings, optionally with {@code *<count>} suffix. e.g.
-     *  {@code DAGGER | FIRE_BOMB*5 | OIL_BOMB*5}. */
+    /** Parse the {@code startingInventory} cell — pipe-separated item-type
+     *  strings, optionally with a {@code *<count>} suffix. e.g.
+     *  {@code DAGGER | FIRE_BOMB*5 | OIL_BOMB*5}. Range syntax ({@code *N_M}) is
+     *  parsed but only the minimum is used here, since starting inventories
+     *  aren't randomized. */
     private static List<StartItem> parseStartingInventory(String cell) {
         List<StartItem> out = new ArrayList<>();
-        if (cell == null || cell.isEmpty()) return out;
-        for (String entry : cell.split("\\|")) {
-            String e = entry.trim();
-            if (e.isEmpty()) continue;
-            int star = e.indexOf('*');
-            String typeName;
-            int count;
-            if (star < 0) { typeName = e; count = 1; }
-            else {
-                typeName = e.substring(0, star).trim();
-                count = Integer.parseInt(e.substring(star + 1).trim());
-            }
-            out.add(new StartItem(typeName, Math.max(1, count)));
+        for (CsvTable.SpawnSpec s : CsvTable.parseSpawnSpecList(cell)) {
+            out.add(new StartItem(s.ref, Math.max(1, s.min)));
         }
         return out;
     }
@@ -412,8 +433,8 @@ public final class MobDefinition {
         m.mushroomEatSpawnType = mushroomEatSpawnType;
         m.turnSpawnType        = turnSpawnType;
 
-        m.kittenType     = kittenType;
-        m.banishable     = banishable;
+        m.banishable              = banishable;
+        m.intrinsic.knockbackSquares = knockbackSquares;
 
         m.hpPerLevel             = hpPerLevel;
         m.accuracyPerLevel       = accuracyPerLevel;
@@ -459,7 +480,7 @@ public final class MobDefinition {
             for (int i = 0; i < s.count; i++) {
                 com.bjsp123.rl2.model.Item it = ItemFactory.build(s.type);
                 m.inventory.bag.add(it);
-                if (it.slot != null) m.inventory.equip(it);
+                if (it.isEquippable()) InventorySystem.equip(m.inventory, it);
             }
         }
         // Starting perks: each entry awarded at level 1.
