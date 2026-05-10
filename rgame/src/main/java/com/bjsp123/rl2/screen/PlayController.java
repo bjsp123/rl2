@@ -83,10 +83,24 @@ final class PlayController {
             MobSystem.stepTowardTarget(player, level);
         }
         int safety = TurnSystem.STANDARD_TURN_TICKS * 4;
+        // Drain any pre-existing sequential flag so the loop's break test
+        // only reflects what THIS loop's ticks queue.
+        animator.queue.consumeSequentialFlag();
         while (safety-- > 0 && !TurnSystem.isPlayerTurn(level)) {
             if (!TurnSystem.tick(level)) break;
             world.tick++;
-            if (animator.queue.freezeFrames > 0) break;
+            // Drain events into the animator after every game tick so
+            // the sequential flag reflects animations queued by THIS
+            // tick — not just whatever was in flight at the start of
+            // the render frame.
+            animator.consume(level);
+            // Only a SEQUENTIAL animation (lunge, knockback slide,
+            // chained death-fade) breaks the loop — a pile of concurrent
+            // mob slides should NOT, since they're meant to play
+            // simultaneously with the player's slide. This lets many
+            // mobs move on a single render frame and eliminates the
+            // jerky one-mob-per-render-frame autotravel cadence.
+            if (animator.queue.consumeSequentialFlag()) break;
         }
         afterMove(level);
         Mob player = TurnSystem.findPlayer(level);
@@ -143,7 +157,8 @@ final class PlayController {
                 ItemSystem.useItem(level, player, bound);
                 afterMove(level);
             }
-            case WAND -> beginWand(level, player, bound);
+            case WAND    -> beginWand(level, player, bound);
+            case GRAPPLE -> beginGrapple(level, player, bound);
             case NONE -> { /* handled above */ }
         }
     }
@@ -162,7 +177,8 @@ final class PlayController {
                 ItemSystem.useItem(level, user, item);
                 afterMove(level);
             }
-            case WAND -> beginWand(level, user, item);
+            case WAND    -> beginWand(level, user, item);
+            case GRAPPLE -> beginGrapple(level, user, item);
             case NONE -> { /* unreachable — the popup gates Use on isUsable() */ }
         }
     }
@@ -201,6 +217,24 @@ final class PlayController {
             // in the same consume() pass and animate concurrently.
             animator.consume(cur);
         }, wand);
+    }
+
+    /** Grappling-rope use entry point. Opens the targeting overlay (default
+     *  reticle on the nearest hostile, same as wands), then routes the
+     *  confirmed tile through {@link ItemSystem#castGrapple}. The animator
+     *  drains the resulting {@link com.bjsp123.rl2.event.GameEvent.GrappleFired}
+     *  and {@link com.bjsp123.rl2.event.GameEvent.MobKnockedBack} events
+     *  immediately so the rope's extend phase queues before the next AI
+     *  catch-up tick can run. */
+    private void beginGrapple(Level level, Mob user, Item item) {
+        targetingOverlay.setPlayer(user);
+        targetingOverlay.setLevel(level);
+        targetingOverlay.activate(target -> {
+            Level cur = world.currentLevel();
+            ItemSystem.castGrapple(cur, user, item, target);
+            animator.consume(cur);
+            afterMove(cur);
+        }, item);
     }
 
     /** Kick off target-picking for a throw action from the inventory popup. */
@@ -265,7 +299,10 @@ final class PlayController {
             int mx = m.position.tileX(), my = m.position.tileY();
             if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
             if (!level.visible[mx][my]) continue;
-            if (MobSystem.getAttitudeToMob(player, m) == MobSystem.Attitude.ALLY) continue;
+            // Only true hostiles (ATTACK attitude) interrupt auto-move.
+            // Neutrals (NOTHING, FLEE) and allies are ignored — wandering
+            // past a passive mob shouldn't break a long path.
+            if (MobSystem.getAttitudeToMob(player, m) != MobSystem.Attitude.ATTACK) continue;
             out.add(m);
         }
         return out;

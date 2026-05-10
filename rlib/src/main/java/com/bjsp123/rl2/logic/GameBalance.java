@@ -142,7 +142,7 @@ public final class GameBalance {
      *  bag can hold. Stacks (count &gt; 1) occupy a single entry. The inventory UI
      *  expects a 6×6 = 36 grid by default; widening the column / row count and bumping
      *  this number lets a designer offer larger bags without code changes. */
-    public static int INVENTORY_BAG_SIZE = 36;
+    public static int INVENTORY_BAG_SIZE = 100;
 
     // ───────────────────────── Item-level scaling ────────────────────────────
     // Items carry a {@code level} field. Level 0 is baseline; every level above adds

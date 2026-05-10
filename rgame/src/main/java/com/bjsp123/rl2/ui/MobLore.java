@@ -21,29 +21,38 @@ public final class MobLore {
 
     private MobLore() {}
 
-    /** Multi-section description of {@code m}. Includes the species blurb,
-     *  combat numbers, ranged stats, perception / lighting, body / movement,
-     *  knockback, immunities + special behaviours, abilities, per-level scaling
-     *  deltas, and faction tags. Each section is omitted entirely when its
-     *  values are all defaults / zero. */
-    public static String describe(Mob m) {
+    /** Flavor paragraph(s) for {@code m} — the unique-mob banner (when the
+     *  species is flagged unique in mobs.csv) plus the free-form
+     *  {@link Mob#description} blurb. Used as the bright-text portion above
+     *  the divider rule on the encyclopedia and look-popup detail panels.
+     *  Returns {@code ""} when there is nothing to show. */
+    public static String describeFlavor(Mob m) {
         if (m == null) return "";
-        StatBlock s = m.effectiveStats();
         StringBuilder sb = new StringBuilder();
-        // Unique-mob banner — set on the species via the {@code unique} CSV
-        // column on mobs.csv. Read from the registry rather than off the
-        // {@link Mob} instance because the property is intrinsic to the
-        // species, not the instance.
         if (m.mobType != null) {
             com.bjsp123.rl2.logic.MobDefinition def =
                     com.bjsp123.rl2.logic.MobRegistry.get(m.mobType);
             if (def != null && def.unique) {
-                sb.append("Unique foe\n\n");
+                sb.append("Unique foe");
             }
         }
         if (m.description != null && !m.description.isEmpty()) {
-            sb.append(m.description).append("\n\n");
+            if (sb.length() > 0) sb.append("\n\n");
+            sb.append(m.description);
         }
+        return sb.toString();
+    }
+
+    /** Mechanical details of {@code m}: combat numbers, ranged stats,
+     *  perception / lighting, body / movement, knockback, immunities +
+     *  special behaviours, abilities, per-level scaling deltas, and faction
+     *  tags. Each section is omitted when its values are all defaults / zero.
+     *  Rendered in dim text below a horizontal rule beneath
+     *  {@link #describeFlavor}. */
+    public static String describeDetails(Mob m) {
+        if (m == null) return "";
+        StatBlock s = m.effectiveStats();
+        StringBuilder sb = new StringBuilder();
 
         // ── Combat ──────────────────────────────────────────────────────────
         line(sb, "Max HP: ",       Integer.toString((int) Math.round(s.maxHp)), m.hpPerLevel>0, " plus " + m.hpPerLevel + " per level");
@@ -66,8 +75,7 @@ public final class MobLore {
 
         // ── Perception + lighting ───────────────────────────────────────────
         sb.append('\n');
-        line(sb, "This creature can see for ", trim(s.visionRadius) + " tiles in any direction.");
-        line(sb, "This creature awakes when a foes is within ",   trim(s.wakeRadius)   + " tiles.");
+        flag(sb, "Sees for " + trim(s.visionRadius) + " tiles, may wake if foe within " + s.wakeRadius + " tiles.");
         if (s.lightRadius > 0) 
             flag(sb, "This creature glows with light!");
 
@@ -146,6 +154,10 @@ public final class MobLore {
         if (m.attackTypes != null && !m.attackTypes.isEmpty()) {
             fac.append("Hostile to: ").append(joinSorted(m.attackTypes)).append('\n');
         }
+
+        if (!m.enemyFactions.contains("PLAYER")) {
+            fac.append("This is not necessarily a hostile creature.  ");
+        }
         if (m.enemyFactions != null && !m.enemyFactions.isEmpty()) {
             fac.append("Enemy of: ").append(joinSorted(m.enemyFactions)).append('\n');
         }
@@ -156,7 +168,44 @@ public final class MobLore {
             sb.append('\n').append(fac);
         }
 
+        // ── Carried inventory ───────────────────────────────────────────────
+        // Equipped gear and bag contents — useful at a glance when the
+        // player is debating whether to engage. Skipped for empty
+        // inventories so vanilla mobs don't get a "carries: nothing" line.
+        StringBuilder inv = new StringBuilder();
+        if (m.inventory != null) {
+            java.util.List<com.bjsp123.rl2.model.Item> equipped = m.inventory.allEquipped();
+            if (!equipped.isEmpty()) {
+                inv.append("Equipped: ").append(joinItemNames(equipped)).append('\n');
+            }
+            if (m.inventory.bag != null && !m.inventory.bag.isEmpty()) {
+                inv.append("Carries:  ").append(joinItemNames(m.inventory.bag)).append('\n');
+            }
+        }
+        if (inv.length() > 0) {
+            sb.append('\n').append(inv);
+        }
+
         return sb.toString().trim();
+    }
+
+    /** Render a comma-separated list of item names with " +N" enchantment
+     *  badges for items above the design baseline level. Stack counts
+     *  ({@code count > 1}) print as "name ×N". */
+    private static String joinItemNames(java.util.List<com.bjsp123.rl2.model.Item> items) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (com.bjsp123.rl2.model.Item it : items) {
+            if (it == null) continue;
+            if (!first) sb.append(", ");
+            first = false;
+            String name = it.name != null ? it.name
+                    : (it.type != null ? it.type.toLowerCase() : "item");
+            sb.append(name);
+            if (it.level > 1) sb.append(" +").append(it.level - 1);
+            if (it.count > 1) sb.append(" ×").append(it.count);
+        }
+        return sb.toString();
     }
 
     private static String describeAbility(Mob.MobAbility a) {

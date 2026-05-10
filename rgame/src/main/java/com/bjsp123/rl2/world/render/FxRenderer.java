@@ -8,7 +8,10 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.world.render.Effect.EffectTint;
+// MobSprites is in this same package, no explicit import needed but
+// referenced by drawFallingMob.
 import com.bjsp123.rl2.world.render.Effect.EffectType;
 
 /**
@@ -49,6 +52,9 @@ final class FxRenderer {
     private static final Color TINT_BLUE   = new Color(0.4f, 0.6f, 1f, 1f);
     private static final Color TINT_BROWN  = new Color(0.55f, 0.34f, 0.16f, 1f);
     private static final Color TINT_ORANGE = new Color(1f, 0.55f, 0.1f, 1f);
+    /** POWERUP_FLASH cycle: dim grey → bright white → warm gold. */
+    private static final Color TINT_GREY   = new Color(0.55f, 0.55f, 0.55f, 1f);
+    private static final Color TINT_GOLD   = new Color(1.0f, 0.85f, 0.25f, 1f);
 
     private final SpriteBatch batch;
     private final BitmapFont font;
@@ -112,11 +118,24 @@ final class FxRenderer {
         } else if (effect.type == EffectType.ATTACK_FLASH) {
             if (!level.visible[ex][ey]) return;
             drawAttackFlash(effect);
+        } else if (effect.type == EffectType.KNOCKBACK_FLASH) {
+            if (!level.visible[ex][ey]) return;
+            drawKnockbackFlash(effect);
+        } else if (effect.type == EffectType.DUST_CLOUD) {
+            if (!level.visible[ex][ey]) return;
+            drawDustCloud(level, effect);
+        } else if (effect.type == EffectType.CLOUD_PUFF) {
+            if (!level.visible[ex][ey]) return;
+            drawCloudPuff(effect);
         } else if (effect.type == EffectType.RAY) {
             // Rays draw across the whole length regardless of FOV — the player should
             // always see their own beam clear out a ghost even if the destination tile
             // is at the edge of vision.
             drawRay(effect);
+        } else if (effect.type == EffectType.GRAPPLE_ROPE) {
+            // Same FOV rule as the player's own ray — the rope should
+            // always be visible to its caster.
+            drawGrappleRope(effect);
         } else if (effect.type == EffectType.BLAST) {
             if (!level.visible[ex][ey]) return;
             drawBlast(effect);
@@ -126,6 +145,15 @@ final class FxRenderer {
         } else if (effect.type == EffectType.FALLING_ITEM) {
             if (!level.visible[ex][ey]) return;
             drawFallingItem(effect);
+        } else if (effect.type == EffectType.FALLING_MOB) {
+            if (!level.visible[ex][ey]) return;
+            drawFallingMob(effect);
+        } else if (effect.type == EffectType.UP_ARROW) {
+            if (!level.visible[ex][ey]) return;
+            drawUpArrow(effect);
+        } else if (effect.type == EffectType.POWERUP_FLASH) {
+            if (!level.visible[ex][ey]) return;
+            drawPowerupFlash(effect);
         }
     }
 
@@ -329,6 +357,72 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
+    /** Render the grappling-rope effect — a thick brown line from caster to
+     *  target tile that grows during the extend phase, then either shrinks
+     *  back (success) or holds-flashes-fades (failure). The retract pairs
+     *  with the engine's {@link com.bjsp123.rl2.event.GameEvent.MobKnockedBack}
+     *  slide so the dragged subject's sprite glides home with the rope's
+     *  tip — set up at the rlib side, no synchronisation needed here. */
+    private void drawGrappleRope(Effect e) {
+        if (e.endLocation == null) return;
+        int extendFrames = Math.max(1, e.grappleExtendFrames);
+        int total        = e.totalFrames();
+        int tailFrames   = Math.max(1, total - extendFrames);
+        int frame        = e.frame;
+        float x1 = e.location.tileX()    * (float) CELL + CELL * 0.5f;
+        float y1 = e.location.tileY()    * (float) CELL + CELL * 0.5f;
+        float x2 = e.endLocation.tileX() * (float) CELL + CELL * 0.5f;
+        float y2 = e.endLocation.tileY() * (float) CELL + CELL * 0.5f;
+        float fdx = x2 - x1, fdy = y2 - y1;
+        float fullLen = (float) Math.sqrt(fdx * fdx + fdy * fdy);
+        if (fullLen < 1e-3f) return;
+        float angle = (float) Math.toDegrees(Math.atan2(fdy, fdx));
+
+        float reachT;     // 0..1 fraction of the line currently drawn (rope tip)
+        float alpha = 1f;
+        if (frame < extendFrames) {
+            reachT = (frame + 1) / (float) extendFrames;
+        } else if (e.grappleSuccess) {
+            // Retract — tip slides back to the caster.
+            float t = (frame - extendFrames + 1) / (float) tailFrames;
+            reachT = Math.max(0f, 1f - t);
+        } else {
+            // Failure — full extent, with a brief flash-then-fade.
+            reachT = 1f;
+            float t = (frame - extendFrames) / (float) tailFrames;
+            // First half is a held flash, second half fades to nothing.
+            if (t < 0.4f) {
+                // Pulse: 1.0 → 0.6 → 1.0 to read as "rope yanks taut".
+                alpha = 0.6f + 0.4f * (float) Math.cos(t * Math.PI / 0.4f);
+            } else {
+                alpha = Math.max(0f, 1f - (t - 0.4f) / 0.6f);
+            }
+        }
+        if (alpha <= 0f || reachT <= 0f) return;
+        float drawLen = fullLen * reachT;
+        // Brown rope on success, red-tinged on failure (so the heavy-target
+        // outcome reads distinct from a clean pull).
+        Color tint = e.grappleSuccess
+                ? tintToColor(EffectTint.BROWN, Color.WHITE)
+                : tintToColor(EffectTint.RED,   Color.WHITE);
+        // Soft outline (1.5× thickness, 35% alpha) under a crisp core line.
+        batch.setColor(tint.r * 0.4f, tint.g * 0.3f, tint.b * 0.25f, alpha * 0.5f);
+        batch.draw(whiteRegion,
+                x1, y1 - 2f, 0f, 2f,
+                drawLen, 4f, 1f, 1f, angle);
+        batch.setColor(tint.r, tint.g, tint.b, alpha);
+        batch.draw(whiteRegion,
+                x1, y1 - 1f, 0f, 1f,
+                drawLen, 2f, 1f, 1f, angle);
+        // Hook tip — small square at the rope's far end so the eye can
+        // follow the tip during the retract.
+        float tx = x1 + fdx * reachT;
+        float ty = y1 + fdy * reachT;
+        batch.setColor(tint.r, tint.g, tint.b, alpha);
+        batch.draw(whiteRegion, tx - 2f, ty - 2f, 4f, 4f);
+        batch.setColor(Color.WHITE);
+    }
+
     /** Render one LIGHT_MOTE — a soft pale spark drifting up from a light source. */
     private void drawLightMote(Effect e) {
         if (e.particleX0 == null || e.particleX0.length == 0) return;
@@ -478,6 +572,148 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
+    /** Per-floor dust-cloud tints — looked up from the tile under the
+     *  effect's spawn point so a wood floor kicks up sawdust-tan and a
+     *  stone floor kicks up pale grey. Tiles not in this map (walls,
+     *  doors, chasms) get a neutral tan default. */
+    private static final java.util.EnumMap<Tile, Color> DUST_TINT
+            = new java.util.EnumMap<>(Tile.class);
+    static {
+        DUST_TINT.put(Tile.FLOOR,         new Color(0.82f, 0.78f, 0.66f, 1f));
+        DUST_TINT.put(Tile.FLOOR_WOOD,    new Color(0.78f, 0.62f, 0.42f, 1f));
+        DUST_TINT.put(Tile.FLOOR_SPECIAL, new Color(0.78f, 0.78f, 0.86f, 1f));
+        DUST_TINT.put(Tile.STAIRS_UP,     new Color(0.78f, 0.74f, 0.66f, 1f));
+        DUST_TINT.put(Tile.STAIRS_DOWN,   new Color(0.78f, 0.74f, 0.66f, 1f));
+    }
+    private static final Color DUST_DEFAULT = new Color(0.82f, 0.78f, 0.66f, 1f);
+
+    /** Foot-dust ellipse — expands, rises, drifts in the spawning mob's
+     *  move direction, and fades. Drawn over the bottom of the mob's
+     *  tile so it obscures the sprite's feet for a few frames. The
+     *  ellipse is approximated with horizontal whitepixel bars (no
+     *  native ellipse primitive in the SpriteBatch path). */
+    /** Render one {@link Effect.EffectType#CLOUD_PUFF} ellipse — same
+     *  horizontal-bar approximation as {@link #drawDustCloud}, tinted by
+     *  the cloud type, expanding ~2× and rising / fading over its life.
+     *  Many puffs per tile per second compose into the visible cloud. */
+    private void drawCloudPuff(Effect e) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float t = Math.min(1f, e.frame / (float) total);
+        // Width: starts at the base random (5..9 px), grows ~100% over its
+        // life so peak ≈ 10..18 px.
+        float w = e.dustStartW * (1f + 1.0f * t);
+        float h = w * 0.7f;
+        // Independent rise atop the drift — stronger upward bias than
+        // dust clouds since smoke / steam / fumes float pretty actively.
+        float rise = 6f * t;
+        // Alpha: ramps in over the first 25% then linear-fades. Smoke
+        // gets a heavier peak so a thick plume actually obscures what's
+        // underneath — gameplay-wise smoke also blocks sight + light, so
+        // it should read as visually opaque too. Steam / poison stay at
+        // the lighter "wisps stack up" peak.
+        float baseAlpha;
+        float r, g, b;
+        if (e.cloudType == null) return;
+        switch (e.cloudType) {
+            case SMOKE  -> { r = 0.02f; g = 0.02f; b = 0.02f; baseAlpha = 0.85f; }
+            case STEAM  -> { r = 0.85f; g = 0.88f; b = 0.92f; baseAlpha = 0.55f; }
+            case POISON -> { r = 0.18f; g = 0.62f; b = 0.20f; baseAlpha = 0.55f; }
+            default     -> { return; }
+        }
+        float alpha;
+        if (t < 0.25f)  alpha = baseAlpha * (t / 0.25f);
+        else            alpha = baseAlpha * (1f - (t - 0.25f) / 0.75f);
+        if (alpha <= 0f) return;
+
+        float cx = e.dustPxX + e.dustVxPxPerFrame * e.frame;
+        float cy = e.dustPxY + e.dustVyPxPerFrame * e.frame + rise;
+
+        batch.setColor(r, g, b, alpha);
+        int rows = Math.max(2, Math.round(h));
+        for (int i = 0; i < rows; i++) {
+            float yRel = (i + 0.5f) / rows * 2f - 1f;
+            float halfW = (w * 0.5f)
+                    * (float) Math.sqrt(Math.max(0f, 1f - yRel * yRel));
+            float yPx = cy - h * 0.5f + i;
+            batch.draw(whiteRegion, cx - halfW, yPx, halfW * 2f, 1f);
+        }
+        batch.setColor(Color.WHITE);
+    }
+
+    private void drawDustCloud(Level level, Effect e) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float t = Math.min(1f, e.frame / (float) total);
+
+        // Width: starts at the cloud's randomised base (4..7 px), grows
+        // ~60% over its lifetime so peak ≈ 6..11 px. Height ≈ 0.75× width
+        // for a rounder, less squashed puff.
+        float w = e.dustStartW * (1f + 0.6f * t);
+        float h = w * 0.75f;
+        // Independent vertical rise (separate from drift): 0 → ~4 px up.
+        float rise = 4f * t;
+        // Alpha: held for the first 40% of life, then linear fade. Paler
+        // overall — the dust hints at footing rather than asserting it.
+        float baseAlpha = 0.45f;
+        float alpha = (t < 0.4f)
+                ? baseAlpha
+                : baseAlpha * (1f - (t - 0.4f) / 0.6f);
+        if (alpha <= 0f) return;
+
+        int tx = e.location.tileX(), ty = e.location.tileY();
+        Tile floor = (tx >= 0 && ty >= 0
+                && tx < level.width && ty < level.height)
+                ? level.tiles[tx][ty] : null;
+        Color tint = DUST_TINT.getOrDefault(floor, DUST_DEFAULT);
+        // Per-cloud shade variance — same hue, slightly lighter / darker.
+        float r = clamp01(tint.r * e.dustShade);
+        float g = clamp01(tint.g * e.dustShade);
+        float b = clamp01(tint.b * e.dustShade);
+
+        // Pixel anchor + drift in player's direction × frame count + rise.
+        float cx = e.dustPxX + e.dustVxPxPerFrame * e.frame;
+        float cy = e.dustPxY + e.dustVyPxPerFrame * e.frame + rise;
+
+        batch.setColor(r, g, b, alpha);
+        // Stacked horizontal bars to approximate the ellipse.
+        int rows = Math.max(2, Math.round(h));
+        for (int i = 0; i < rows; i++) {
+            float yRel = (i + 0.5f) / rows * 2f - 1f;
+            float halfW = (w * 0.5f)
+                    * (float) Math.sqrt(Math.max(0f, 1f - yRel * yRel));
+            float yPx = cy - h * 0.5f + i;
+            batch.draw(whiteRegion, cx - halfW, yPx, halfW * 2f, 1f);
+        }
+        batch.setColor(Color.WHITE);
+    }
+
+    private static float clamp01(float v) {
+        return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
+
+    /** Knockback flash centred on the impacted unit's tile — same fade
+     *  curve as the attack flash, but anchored to the centre rather than
+     *  offset to one side, so it reads as "hit on the unit". */
+    private void drawKnockbackFlash(Effect e) {
+        TextureRegion region = BuffIcons.knockbackRegion();
+        if (region == null) return;
+        int f = e.frame;
+        float alpha;
+        if (f <= 1) alpha = 1f;
+        else if (f == 2) alpha = 0f;
+        else if (f <= 4) alpha = 1f;
+        else if (f <= 16) alpha = 1f - (f - 5) / 12f;
+        else return;
+        if (alpha <= 0f) return;
+        float drawSize = CELL;
+        float drawX = e.location.tileX() * CELL;
+        float drawY = e.location.tileY() * CELL;
+        batch.setColor(1f, 1f, 1f, alpha);
+        batch.draw(region, drawX, drawY, drawSize, drawSize);
+        batch.setColor(Color.WHITE);
+    }
+
     /** Brief attack-flash sprite next to a swinging mob. */
     private void drawAttackFlash(Effect e) {
         TextureRegion region = BuffIcons.attackFlashRegion(e.spriteCol);
@@ -527,6 +763,79 @@ final class FxRenderer {
         float drawW = CELL * scale, drawH = CELL * scale;
         batch.setColor(1f, 1f, 1f, alpha);
         batch.draw(region, px - drawW / 2f, py - drawH / 2f, drawW, drawH);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Mob falling into a chasm — same revolve-shrink-fade as
+     *  {@link #drawFallingItem} but reads the mob's sprite from
+     *  {@link MobSprites}. */
+    private void drawFallingMob(Effect e) {
+        if (e.fallenMob == null) return;
+        TextureRegion region = MobSprites.regionFor(e.fallenMob);
+        if (region == null) return;
+        int frames = e.totalFrames();
+        float t = frames <= 1 ? 1f : e.frame / (float) (frames - 1);
+        float scale = 1f - t;
+        float alpha = 1f - t;
+        if (alpha <= 0f) return;
+        float rotation = t * 720f;
+        float cx = (e.location.tileX() + 0.5f) * CELL;
+        float cy = (e.location.tileY() + 0.5f) * CELL;
+        float drawW = CELL * scale, drawH = CELL * scale;
+        batch.setColor(1f, 1f, 1f, alpha);
+        batch.draw(region,
+                cx - drawW / 2f, cy - drawH / 2f,
+                drawW / 2f, drawH / 2f,
+                drawW, drawH,
+                1f, 1f,
+                rotation);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Single up-arrow glyph drifting upward and fading from the
+     *  effect's tile. Used by the powerup-pickup composites. */
+    private void drawUpArrow(Effect e) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float t = Math.min(1f, e.frame / (float) total);
+        float alpha = 1f - t;
+        if (alpha <= 0f) return;
+        float yOffset = e.frame * 0.7f;
+        float baseX = (e.location.tileX() + 0.5f) * CELL;
+        float baseY = e.location.tileY() * CELL + CELL * 0.6f + yOffset;
+        Color c = tintToColor(e.tint, Color.YELLOW);
+        font.setColor(c.r, c.g, c.b, alpha);
+        // GlyphLayout-centred so the arrow head sits on the tile centre
+        // regardless of font cap height; the y baseline is the line's top.
+        com.badlogic.gdx.graphics.g2d.GlyphLayout layout =
+                new com.badlogic.gdx.graphics.g2d.GlyphLayout(font, e.text);
+        font.draw(batch, e.text, baseX - layout.width * 0.5f, baseY);
+        font.setColor(Color.WHITE);
+    }
+
+    /** Tile-anchored sprite redraw, tinted on a grey → white → gold
+     *  cycle over the effect's lifetime. Stacks on top of the mob's
+     *  normal sprite to read as a celebratory pulse. */
+    private void drawPowerupFlash(Effect e) {
+        if (e.fallenMob == null) return;
+        TextureRegion region = MobSprites.regionFor(e.fallenMob);
+        if (region == null) return;
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float t = Math.min(1f, e.frame / (float) total);
+        // Color cycle in three equal phases.
+        Color base;
+        if      (t < 1f / 3f) base = TINT_GREY;
+        else if (t < 2f / 3f) base = Color.WHITE;
+        else                  base = TINT_GOLD;
+        // Pulse alpha — peak at the middle of each phase so the flash
+        // reads as a heartbeat rather than a static overlay.
+        float phaseT = (t * 3f) % 1f;
+        float alpha = 0.55f * (1f - Math.abs(phaseT - 0.5f) * 2f) + 0.15f;
+        float bx = e.location.tileX() * CELL;
+        float by = e.location.tileY() * CELL;
+        batch.setColor(base.r, base.g, base.b, alpha);
+        batch.draw(region, bx, by, CELL, CELL);
         batch.setColor(Color.WHITE);
     }
 

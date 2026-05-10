@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.world.render;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
+import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Point;
 
 import java.util.Random;
@@ -42,9 +43,47 @@ public class Effect {
         BLAST(20),
         BUFF_ICON(60),
         ATTACK_FLASH(17),
+        /** Knockback impact graphic — flash + fade on top of a unit that
+         *  was knocked back. Same fade curve as {@link #ATTACK_FLASH}. */
+        KNOCKBACK_FLASH(17),
+        /** Dust kicked up at a mob's feet when it steps. Small ellipse
+         *  that expands and rises, fading to nothing over ~400 ms (24
+         *  frames at the default render cadence). Tinted to a lighter
+         *  shade of the floor tile beneath the spawn point. Drawn on top
+         *  of the mob's lower edge so it visually obscures the sprite's
+         *  feet during a step. */
+        DUST_CLOUD(24),
         /** Item falls into a chasm — revolves, shrinks, and fades at its origin tile.
          *  Non-blocking so the game continues while the item disappears. */
-        FALLING_ITEM(40);
+        FALLING_ITEM(40),
+        /** Mob falls into a chasm — same revolve-shrink-fade visual as
+         *  {@link #FALLING_ITEM}, but the renderer pulls the sprite from
+         *  {@link com.bjsp123.rl2.world.render.MobSprites} via the
+         *  {@link Effect#fallenMob} reference. Non-blocking. */
+        FALLING_MOB(40),
+        /** One soft drifting ellipse spawned from a {@link Level#cloud} cell.
+         *  Many of these per tile per second add up to the visual "fog
+         *  hangs over a tile" effect. Per-instance lifetime jitter via
+         *  {@link Effect#frameCount}; tint comes from {@link Effect#cloudType}. */
+        CLOUD_PUFF(48),
+        /** Grappling-rope visual — a rope extends from the caster to the
+         *  target, then either retracts back (success) while a paired
+         *  {@link com.bjsp123.rl2.event.GameEvent.MobKnockedBack} slide
+         *  drags the target along, or holds briefly and flashes / fades at
+         *  full extent (failure — target too heavy). The instance carries
+         *  per-call frame counts via {@link Effect#frameCount} and the
+         *  extend / retract split via {@link Effect#grappleExtendFrames}. */
+        GRAPPLE_ROPE(28),
+        /** Powerup-pickup visual: a single up-arrow glyph drifting upward
+         *  and fading. The arrow's start delay (drives the level-up
+         *  staggered swarm) sits in {@link Effect#startDelay}. Tint comes
+         *  from {@link Effect#tint}. */
+        UP_ARROW(36),
+        /** Powerup-pickup visual: a tile-sized colored overlay that
+         *  redraws the player's sprite tinted, cycling grey → white →
+         *  gold over the effect's lifetime. The mob whose sprite to
+         *  redraw is carried in {@link Effect#fallenMob}. */
+        POWERUP_FLASH(36);
 
         public final int frameCount;
 
@@ -77,10 +116,33 @@ public class Effect {
     public String text;
     public EffectTint tint;
     public Item thrownItem;
+    /** Mob attached to the effect (FALLING_MOB sprite source;
+     *  POWERUP_FLASH tint target). Pulled from
+     *  {@link com.bjsp123.rl2.world.render.MobSprites} at draw time so
+     *  we don't capture a TextureRegion that the atlas might rebuild. */
+    public com.bjsp123.rl2.model.Mob fallenMob;
     /** ATTACK_FLASH only: which side of the attacker to draw on. */
     public boolean facesRight;
-    /** ATTACK_FLASH only: column on {@code buffs.png}'s lower row. */
+    /** ATTACK_FLASH only: column in the slash band of {@code buffs16.png}. */
     public int spriteCol;
+
+    /** DUST_CLOUD only: world pixel anchor (the foot-position of the
+     *  spawning mob at the moment of spawn). The cloud drifts from here
+     *  along {@link #dustVxPxPerFrame}, {@link #dustVyPxPerFrame}. */
+    public float dustPxX, dustPxY;
+    /** DUST_CLOUD per-frame drift velocity in world pixels — typically a
+     *  unit vector in the spawning mob's move direction times a small
+     *  factor, so the cloud trails the mob's feet for a beat then lingers
+     *  behind. */
+    public float dustVxPxPerFrame, dustVyPxPerFrame;
+    /** DUST_CLOUD randomised starting width (px). Each cloud is a
+     *  slightly different size for visual variety; the per-frame draw
+     *  expands from this value linearly. */
+    public float dustStartW;
+    /** DUST_CLOUD randomised tint multiplier (~0.85..1.15) applied on top
+     *  of the floor's base dust colour, so successive clouds read as
+     *  varying shades of the same warm grey. */
+    public float dustShade;
 
     public float[] particleX0;
     public float[] particleY0;
@@ -94,6 +156,19 @@ public class Effect {
     public boolean particleBright;
     /** BUFF_ICON only: which buff to render the icon for. */
     public Buff.BuffType buffType;
+
+    /** CLOUD_PUFF only: which {@link Level.Cloud} type tinted the puff.
+     *  Drives the colour switch in {@link FxRenderer#drawCloudPuff}. */
+    public Level.Cloud cloudType;
+
+    /** GRAPPLE_ROPE only: number of frames the extend phase takes. The rest
+     *  of the effect's lifetime is the retract / hold-and-fade phase, sized
+     *  by {@link #frameCount} minus this value. */
+    public int grappleExtendFrames;
+    /** GRAPPLE_ROPE only: {@code true} when the grapple succeeded and the
+     *  rope retracts; {@code false} when the target was too heavy and the
+     *  rope holds at full extent then fades. */
+    public boolean grappleSuccess;
 
     public Effect() {}
 
@@ -162,6 +237,64 @@ public class Effect {
         e.spriteCol = isPlayer ? 0 : 1;
         e.facesRight = facesRight;
         e.startDelay = Math.max(0, startDelay);
+        return e;
+    }
+
+    /** Knockback flash on a unit's tile. {@code startDelay} parks the
+     *  effect at frame 0 for that many render frames before the flash
+     *  begins — used to wait until a knockback slide finishes so the
+     *  graphic appears ON the unit at its destination, not at the
+     *  midpoint of the slide. */
+    public static Effect knockbackFlash(Point at, int startDelay) {
+        Effect e = new Effect(at, EffectType.KNOCKBACK_FLASH);
+        e.startDelay = Math.max(0, startDelay);
+        return e;
+    }
+
+    /** Foot-dust cloud — anchored to the spawning mob's foot in world
+     *  pixel coords with a per-frame drift in the mob's move direction.
+     *  Each cloud randomises its starting size and grey-shade for
+     *  visual variety. {@code tileX/tileY} is the tile under the spawn
+     *  point — used by the renderer's per-tile dust-tint lookup and the
+     *  level-visibility cull. */
+    public static Effect dustCloud(int tileX, int tileY,
+                                   float pxX, float pxY,
+                                   float vxPxPerFrame, float vyPxPerFrame,
+                                   Random rng) {
+        Effect e = new Effect(new Point(tileX, tileY), EffectType.DUST_CLOUD);
+        e.dustPxX = pxX;
+        e.dustPxY = pxY;
+        e.dustVxPxPerFrame = vxPxPerFrame;
+        e.dustVyPxPerFrame = vyPxPerFrame;
+        e.dustStartW = 4f + rng.nextFloat() * 3f;       // 4..7 px
+        e.dustShade  = 1.0f + rng.nextFloat() * 0.30f;  // 1.0..1.3 (paler)
+        // Per-cloud duration jitter — overrides EffectType.DUST_CLOUD's
+        // default so a batch of clouds doesn't all fade out on the same
+        // beat. ≈ 333..600 ms at the default render cadence.
+        e.frameCount = 20 + rng.nextInt(17);             // 20..36 frames
+        return e;
+    }
+
+    /** One soft tinted ellipse spawned from a cloud-layer cell. The puff
+     *  appears at ({@code pxX}, {@code pxY}) within the cell, expands to
+     *  ~2× its starting width over its lifetime, drifts at the supplied
+     *  per-frame velocity, and fades out. Use many per tile per second
+     *  (rate driven by the cell's duration) to read as a body of gas. */
+    public static Effect cloudPuff(int tileX, int tileY,
+                                   float pxX, float pxY,
+                                   float vxPxPerFrame, float vyPxPerFrame,
+                                   Level.Cloud type, Random rng) {
+        Effect e = new Effect(new Point(tileX, tileY), EffectType.CLOUD_PUFF);
+        e.dustPxX = pxX;
+        e.dustPxY = pxY;
+        e.dustVxPxPerFrame = vxPxPerFrame;
+        e.dustVyPxPerFrame = vyPxPerFrame;
+        e.dustStartW = 5f + rng.nextFloat() * 4f;       // 5..9 px base
+        e.cloudType  = type;
+        // Lifetime jitter so a batch of puffs from the same tile doesn't
+        // all fade on the same beat — ≈ 600..900 ms at the default render
+        // cadence.
+        e.frameCount = 36 + rng.nextInt(18);            // 36..53 frames
         return e;
     }
 
@@ -264,6 +397,23 @@ public class Effect {
         return e;
     }
 
+    /** Build a grappling-rope effect from {@code from} to {@code to}.
+     *  {@code success == true} → the rope extends then retracts over the
+     *  paired total of {@code extendFrames + retractFrames}; the dragged
+     *  mob's {@link com.bjsp123.rl2.event.GameEvent.MobKnockedBack} slide
+     *  is queued to start at frame {@code extendFrames} so it visually
+     *  rides the retract. {@code success == false} → the rope holds at
+     *  full extent for the second phase then flashes and fades. */
+    public static Effect grappleRope(Point from, Point to, boolean success,
+                                     int extendFrames, int tailFrames) {
+        Effect e = new Effect(from, EffectType.GRAPPLE_ROPE);
+        e.endLocation = to;
+        e.grappleSuccess = success;
+        e.grappleExtendFrames = Math.max(1, extendFrames);
+        e.frameCount = Math.max(1, extendFrames + tailFrames);
+        return e;
+    }
+
     public static Effect ray(Point from, Point to, EffectTint tint) {
         Effect e = new Effect(from, EffectType.RAY);
         e.endLocation = to;
@@ -306,6 +456,15 @@ public class Effect {
         return e;
     }
 
+    /** Mob falling into a chasm — revolves, shrinks, and fades at
+     *  {@code location} using the mob's sprite. Non-blocking. */
+    public static Effect fallingMob(Point location,
+                                    com.bjsp123.rl2.model.Mob mob) {
+        Effect e = new Effect(location, EffectType.FALLING_MOB);
+        e.fallenMob = mob;
+        return e;
+    }
+
     public static Effect teleportStreaks(Point location, boolean up, Random rng) {
         int count = 12;
         Effect e = new Effect(location, EffectType.TELEPORT_STREAKS);
@@ -326,6 +485,26 @@ public class Effect {
             }
             e.particleVX[i] = 0f;
         }
+        return e;
+    }
+
+    /** Single floating "↑" glyph drifting upward and fading from the
+     *  given tile. {@code startDelay} is in render frames so a swarm of
+     *  arrows can be staggered (level-up uses 10 arrows over ~600 ms). */
+    public static Effect upArrow(Point at, EffectTint tint, int startDelay) {
+        Effect e = new Effect(at, EffectType.UP_ARROW);
+        e.tint       = tint;
+        e.text       = "↑";   // ↑
+        e.startDelay = Math.max(0, startDelay);
+        return e;
+    }
+
+    /** Mob-tinted overlay: redraws {@code mob}'s sprite layered on top
+     *  of its tile, with tint cycling grey → white → gold over the
+     *  effect's lifetime. Used by the LEVEL_UP powerup pickup. */
+    public static Effect powerupFlash(com.bjsp123.rl2.model.Mob mob, Point at) {
+        Effect e = new Effect(at, EffectType.POWERUP_FLASH);
+        e.fallenMob = mob;
         return e;
     }
 }

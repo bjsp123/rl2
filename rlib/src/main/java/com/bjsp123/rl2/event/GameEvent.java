@@ -52,7 +52,10 @@ public sealed interface GameEvent permits
         GameEvent.LootDropped,
         GameEvent.ItemPickedUp,
         GameEvent.MobKnockedBack,
-        GameEvent.ItemFallingIntoChasm {
+        GameEvent.ItemFallingIntoChasm,
+        GameEvent.MobFellThroughChasm,
+        GameEvent.GrappleFired,
+        GameEvent.MobAbilityUsed {
 
     /** Mob took a single tile step. The animator translates this into a step interpolation. */
     record MobMoved(Mob mob, int fromX, int fromY, int toX, int toY) implements GameEvent {}
@@ -184,11 +187,41 @@ public sealed interface GameEvent permits
 
     /** Mob was knocked back from {@code start} to {@code end}. The animator slides
      *  the mob sprite across the intervening tiles. Blocking. A burst is drawn at
-     *  {@code start} to signal the impact. */
-    record MobKnockedBack(Mob mob, Point start, Point end) implements GameEvent {}
+     *  {@code start} to signal the impact. {@code blocked} is {@code true} when
+     *  the slide stopped because of an obstacle (wall, edge, or another mob);
+     *  {@code false} when the mob travelled the full distance unimpeded. */
+    record MobKnockedBack(Mob mob, Point start, Point end, boolean blocked) implements GameEvent {}
 
     /** An item fell into a chasm after its owner was knocked in. The animator
      *  plays a revolve-shrink-fade on the item sprite at {@code position}.
      *  Non-blocking. */
     record ItemFallingIntoChasm(Item item, Point position) implements GameEvent {}
+
+    /** Non-flying mob fell into a chasm. The animator plays a
+     *  revolve-shrink-fade on the mob's sprite at {@code fromTile}. The
+     *  engine has either applied half-max-HP fall damage (and possibly
+     *  killed the mob), or moved the survivor to the next dungeon level
+     *  via the source level's down-stairs link. The renderer doesn't
+     *  need to know which — the sprite animation is the same. */
+    record MobFellThroughChasm(Mob mob, Point fromTile) implements GameEvent {}
+
+    /** Player (or future AI) fired a grappling rope from {@code from} to
+     *  {@code target}. {@code success == true} → the rope retracts and the
+     *  animator slides whatever was on the target tile back via a paired
+     *  {@link MobKnockedBack} event the engine emitted alongside this one;
+     *  {@code success == false} → the target was too heavy and the rope
+     *  flashes / fades at full extent without pulling anything. Blocking
+     *  during the rope's extend phase so the dragged-mob slide that
+     *  follows lines up with the retract. */
+    record GrappleFired(Mob caster, Point from, Point target,
+                        boolean success) implements GameEvent {}
+
+    /** Mob cast a non-projectile ability on another mob (buff, heal,
+     *  or any other targeted special). The renderer paints a green ray
+     *  from {@code from} to {@code to} plus a green-spark burst at the
+     *  target so the cast reads visually even though no missile flies.
+     *  Teleports have their own dedicated visual and don't fire this
+     *  event. */
+    record MobAbilityUsed(Mob caster, Mob target,
+                          Point from, Point to) implements GameEvent {}
 }

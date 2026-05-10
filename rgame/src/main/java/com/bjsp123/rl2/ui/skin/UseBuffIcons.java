@@ -4,7 +4,7 @@ import com.bjsp123.rl2.persistence.Persistence;
 /**
  * Persistent boolean preference: when true, the HUD portrait sidebar, look-mode info
  * panel, and the floating "buff applied" effect render the buff as a small sprite from
- * {@code sprites/buffs.png} instead of the buff's display name. When false, every
+ * {@code sprites/buffs16.png} instead of the buff's display name. When false, every
  * buff surface falls back to plain text.
  *
  * <p>Defaults to {@link #DEFAULT} (ON) per the user's spec — the icons are the intended

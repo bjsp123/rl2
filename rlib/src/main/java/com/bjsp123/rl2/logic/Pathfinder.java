@@ -80,22 +80,28 @@ public class Pathfinder {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
         if (level.tiles[x][y].blocksMovement()) return false;
         if (level.tiles[x][y] == Tile.CHASM && !mover.effectiveStats().flying) return false;
-        // Player-only constraint: the player can't path into tiles they haven't explored
-        // yet. AI mobs ignore this check — they're omniscient about the geometry. Without
-        // this gate, a tap on a remote tile would let the player auto-walk through fog
-        // toward an enemy/trap they don't actually know is there.
+        // Player-only constraint: the player can only path into tiles they've
+        // either explored OR that are 8-adjacent to an explored tile, so a
+        // tap can step ONE tile into the fog (peeking around a corner) but
+        // can't auto-walk a full corridor through territory they've never
+        // seen. AI mobs ignore this check — they're omniscient about the
+        // geometry.
         if (mover.behavior == Behavior.PLAYER
                 && level.explored != null
-                && !level.explored[x][y]) {
+                && !level.explored[x][y]
+                && !hasExploredNeighbour(level, x, y)) {
             return false;
         }
         for (Mob m : level.mobs) {
             if (m.position.tileX() != x || m.position.tileY() != y) continue;
             if (m == mover) continue;
-            if (m.behavior == Behavior.INANIMATE) return false;
             // Hostile target — pathing through the tile is fine; the movement system
-            // resolves arrival as an attack via stepTowardTarget.
+            // resolves arrival as an attack via stepTowardTarget. Inanimate
+            // occupants follow the same rule (so anthills + other hostile
+            // inanimates can be melee'd by stepping into them); otherwise
+            // they remain impassable furniture.
             if (MobSystem.getAttitudeToMob(mover, m) == Attitude.ATTACK) continue;
+            if (m.behavior == Behavior.INANIMATE) return false;
             // Player movers keep their old gate: the player can step onto a non-hostile
             // mob's tile (for things like wand-of-dog summon adjacency) — swap-places is
             // a non-player AI behaviour. We only special-case the player→player case
@@ -108,6 +114,21 @@ public class Pathfinder {
             return false;
         }
         return true;
+    }
+
+    /** True when any of the 8 neighbours of {@code (x, y)} is in-bounds and
+     *  flagged explored. Used to relax the player-pathing gate so the
+     *  player can step ONE tile into the fog from any explored cell — a
+     *  peek around the corner — without being able to auto-travel through
+     *  unseen territory. */
+    private static boolean hasExploredNeighbour(Level level, int x, int y) {
+        if (level.explored == null) return false;
+        for (int[] d : DIRS) {
+            int nx = x + d[0], ny = y + d[1];
+            if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+            if (level.explored[nx][ny]) return true;
+        }
+        return false;
     }
 
     private static int chebyshev(int x1, int y1, int x2, int y2) {

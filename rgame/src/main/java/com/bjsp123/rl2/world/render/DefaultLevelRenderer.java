@@ -7,6 +7,8 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
@@ -290,10 +292,31 @@ public class DefaultLevelRenderer implements LevelRenderer {
     /** Extra pixels a flying mob hovers above the shared ground baseline. */
     private static final int FLYING_HOVER_PX = 4;
 
+    /** Pixel Operator at 16 px with a 1-px black FreeType outline — used for
+     *  in-world floating text (damage numbers, mob name labels). Held
+     *  separately from the V2 UI fonts in {@link com.bjsp123.rl2.ui.v2.UiCtx}
+     *  because the renderer destructively rescales it per-callsite, which
+     *  would corrupt a shared font. */
+    private static BitmapFont newWorldFont() {
+        FreeTypeFontGenerator gen = new FreeTypeFontGenerator(
+                Gdx.files.internal("ui/fonts/PixelOperator.ttf"));
+        FreeTypeFontParameter p = new FreeTypeFontParameter();
+        p.size           = 16;
+        p.borderWidth    = 1f;
+        p.borderColor    = Color.BLACK;
+        p.borderStraight = true;
+        p.minFilter      = Texture.TextureFilter.Nearest;
+        p.magFilter      = Texture.TextureFilter.Nearest;
+        BitmapFont f = gen.generateFont(p);
+        gen.dispose();
+        f.setUseIntegerPositions(true);
+        return f;
+    }
+
     @Override
     public void create() {
         batch = new SpriteBatch();
-        font  = com.bjsp123.rl2.ui.skin.StoneUi.newDefaultFont();
+        font  = newWorldFont();
 
         // Player class poses.
         warriorFacing          = mobsFacingPair(CharacterClass.WARRIOR);
@@ -514,6 +537,22 @@ public class DefaultLevelRenderer implements LevelRenderer {
             }
         }
 
+        // Ghost pass — dying mobs (already removed from level.mobs by
+        // killMob) still need a render path so their queued knockback
+        // slide and death flicker / fade are visible. Each ghost holds
+        // its kill-tile (gx, gy); the slide pulls it back toward start
+        // via the same per-mob anim state the live mob render path uses.
+        drawGhosts(level);
+
+        // Foot-dust pass — drawn AFTER every mob and ghost so each cloud
+        // lands on top of the player's sprite, obscuring its lower edge.
+        drawAllDustClouds(level);
+
+        // The Level#cloud layer renders as a swarm of CLOUD_PUFF particles
+        // emitted per render frame from {@link Animator#emitCloudPuffs};
+        // those flow through the normal effect pipeline, so there's no
+        // dedicated cloud-tint pass here.
+
         for (int y = level.height - 1; y >= 0; y--) {
             for (int x = 0; x < level.width; x++) {
                 if (!level.explored[x][y]) continue;
@@ -629,6 +668,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         Map<Long, List<Effect>> out = new HashMap<>();
         for (Effect e : stage.active) {
             if (e.location == null) continue;
+            // Foot-dust is rendered in a separate top-of-stack pass so
+            // every cloud lands ON TOP of the player sprite — see
+            // {@link #drawAllDustClouds}. Skip here to avoid double-draws.
+            if (e.type == com.bjsp123.rl2.world.render.Effect.EffectType.DUST_CLOUD) continue;
             int ax = e.location.tileX();
             int ay = e.location.tileY();
             if (e.endLocation != null && e.endLocation.tileY() < ay) {
@@ -1623,6 +1666,69 @@ public class DefaultLevelRenderer implements LevelRenderer {
         List<Mob> list = mobsByCell.get(cellKey(x, y));
         if (list == null) return;
         for (Mob mob : list) drawMob(level, mob);
+    }
+
+    /** Draw every ghost in the {@link com.bjsp123.rl2.world.anim.Animator}'s
+     *  list. Ghosts are dying mobs that have been removed from
+     *  {@code level.mobs} by {@code killMob} but still owe the player a
+     *  visual — typically the death flicker / fade, but also the queued
+     *  knockback slide when the mob was knocked back into a fatal
+     *  collision. The slide offset is read from the mob's
+     *  {@link com.bjsp123.rl2.world.anim.MobAnimState} just like the live
+     *  mob render path uses. */
+    /** Iterate every active dust-cloud effect and hand it to
+     *  {@link FxRenderer#drawEffect} for rendering. Called from
+     *  {@link #render} AFTER mobs, items, and ghosts have been drawn so
+     *  each cloud sits on top of whatever it was kicked up next to —
+     *  including the player sprite, whose feet the dust is meant to
+     *  obscure. */
+    private void drawAllDustClouds(Level level) {
+        if (animator == null) return;
+        for (Effect e : animator.stage.active) {
+            if (e.type != Effect.EffectType.DUST_CLOUD) continue;
+            fxRenderer.drawEffect(level, e);
+        }
+    }
+
+
+    private void drawGhosts(Level level) {
+        if (animator == null) return;
+        for (com.bjsp123.rl2.world.anim.Ghost g : animator.ghosts()) {
+            if (g.mob == null) continue;
+            int gx = g.x, gy = g.y;
+            if (!inBounds(level, gx, gy) || !level.visible[gx][gy]) continue;
+            com.bjsp123.rl2.world.anim.MobAnimState as = animator.stateOf(g.mob);
+            // Slide offset, identical to drawMob's: at t=0 the sprite is
+            // pulled back by stepFromDx tiles, ramping to zero by t=1.
+            float ox = 0f, oy = 0f;
+            if (as != null && as.stepTotal > 0) {
+                float t = Math.min(1f, as.stepFrame / (float) as.stepTotal);
+                ox = as.stepFromDx * (1f - t) * CELL;
+                oy = as.stepFromDy * (1f - t) * CELL;
+            }
+            // Death-fade alpha (Animator parks ghost.frame while a slide
+            // is queued, so this stays at 1 during the slide and only
+            // begins fading once the slide finishes).
+            float alpha = g.alpha();
+            if (alpha <= 0f) continue;
+            Sprite s = spriteForGhost(g);
+            if (s != null) {
+                drawMobSprite(s, gx, gy, ox, oy, alpha);
+            }
+        }
+    }
+
+    /** Sprite lookup for a ghost — same as {@link #spriteForMob} but uses
+     *  the ghost's saved {@code facingEast} so a mob that died facing east
+     *  doesn't flip mid-fade if its kill-time facing differs from whatever
+     *  the dead Mob field still holds. */
+    private Sprite spriteForGhost(com.bjsp123.rl2.world.anim.Ghost g) {
+        Mob mob = g.mob;
+        int f = g.facingEast ? 1 : 0;
+        if (mob.characterClass != null) return playerSprite(mob, f);
+        if (mob.mobType == null) return null;
+        Sprite[] pair = speciesFacing.get(mob.mobType);
+        return pair == null ? null : pair[f];
     }
 
     private void drawFxAt(Level level, int x, int y, Map<Long, List<Effect>> fxByCell) {

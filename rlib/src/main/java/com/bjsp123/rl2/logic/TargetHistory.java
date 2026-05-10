@@ -45,9 +45,11 @@ public final class TargetHistory {
     /** Starting cursor for a new activation. See class docs for priority. */
     public Point pickInitial(Level level, Mob player) {
         if (player == null || level == null) return null;
-        if (isMobStillValid(lastMob, level)) return lastMob.position;
-        if (isInBounds(lastFloor, level))    return lastFloor;
-        Mob hostile = MobSystem.nearestHostile(player, level);
+        if (isMobStillValid(lastMob, level) && LevelUtilities.getLineOfSight(level, player, lastMob.position)) 
+            return lastMob.position;
+        if (isInBounds(lastFloor, level) && LevelUtilities.getLineOfSight(level, player, lastFloor) ) 
+            return lastFloor;
+        Mob hostile = MobSystem.nearestHostile(player, level);              
         if (hostile != null) return hostile.position;
         return player.position;
     }

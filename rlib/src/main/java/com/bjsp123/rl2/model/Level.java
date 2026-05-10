@@ -60,12 +60,17 @@ public class Level {
     }
 
     /**
-     * Gaseous overlay on a tile, rendered as a bobbing semi-transparent oval on top of
-     * everything else. SMOKE is black, STEAM is white. Purely visual — doesn't block
-     * movement or sight.
+     * Gaseous overlay on a tile. Stored as part of the packed {@link Level#cloud}
+     * grid: each cell carries a {@link Cloud} type and a duration (in standard
+     * turns) capped at {@link com.bjsp123.rl2.logic.CloudSystem#MAX_DURATION}.
+     *
+     * <p>SMOKE is black and blocks sight + light (but not projectiles); STEAM is
+     * pale grey; POISON is green and applies the {@link Buff.BuffType#POISONED}
+     * buff to any mob standing in it. See {@link com.bjsp123.rl2.logic.CloudSystem}
+     * for the per-turn drift / spread / emission rules.
      */
     public enum Cloud {
-        SMOKE, STEAM
+        SMOKE, STEAM, POISON
     }
 
     /**
@@ -116,8 +121,13 @@ public class Level {
     public Tile[][] tiles;
     /** Liquid/slick overlay on a tile (water, blood, oil). {@code null} = none. */
     public Surface[][] surface;
-    /** Floating gas on a tile (smoke, steam). {@code null} = none. */
-    public Cloud[][] cloud;
+    /** Floating gas on a tile (smoke, steam, poison) packed into a single int per
+     *  cell — the high nybble carries the {@link Cloud} type ordinal + 1 (so
+     *  0 means "no cloud"), the low nybble carries the duration (turns until the
+     *  cloud dissipates, capped at {@link com.bjsp123.rl2.logic.CloudSystem#MAX_DURATION}).
+     *  Read / write through {@link com.bjsp123.rl2.logic.CloudSystem} helpers
+     *  rather than raw to keep the encoding contained. */
+    public int[][] cloud;
     /** Ground flora on a tile (grass, mushrooms, fire). {@code null} = none. */
     public Vegetation[][] vegetation;
     /** Remaining lifetime in ticks for a fire vegetation tile; 0 elsewhere. Ticked down by
@@ -137,6 +147,14 @@ public class Level {
      *  {@link com.bjsp123.rl2.logic.FireSystem}; on zero/negative, a particle Effect is
      *  spawned and the counter resets to ~50. Transient — emit cadence is purely visual. */
     public transient int[][] fireEmitCountdown;
+
+    /** Back-reference to the {@link World} that owns this level. Set by
+     *  {@link World#linkLevels} on construction and on save load (after
+     *  the transient is wiped by JSON deserialisation). Lets level-local
+     *  systems (e.g. the chasm-fall-to-next-level path) resolve their
+     *  staircase neighbours without threading a {@code World} parameter
+     *  through every call site. */
+    public transient World world;
 
     /** Generation-time flags that nudge overall level style (more water, void corridors, etc.).
      *  Stored as a plain {@link HashSet} rather than {@link java.util.EnumSet} because
@@ -243,7 +261,7 @@ public class Level {
         this.height = height;
         this.tiles      = new Tile[width][height];
         this.surface    = new Surface[width][height];
-        this.cloud      = new Cloud[width][height];
+        this.cloud      = new int[width][height];
         this.vegetation = new Vegetation[width][height];
         this.fireRemaining     = new int[width][height];
         this.fireEmitCountdown = new int[width][height];
@@ -267,7 +285,7 @@ public class Level {
         if (events  == null) events  = new ArrayList<>();
         // Older saved levels may predate the overlay arrays.
         if (surface    == null) surface    = new Surface[width][height];
-        if (cloud      == null) cloud      = new Cloud[width][height];
+        if (cloud      == null) cloud      = new int[width][height];
         if (vegetation == null) vegetation = new Vegetation[width][height];
         if (fireRemaining     == null) fireRemaining     = new int[width][height];
         if (fireEmitCountdown == null) fireEmitCountdown = new int[width][height];

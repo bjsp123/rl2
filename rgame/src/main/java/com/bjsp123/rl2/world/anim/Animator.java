@@ -30,10 +30,33 @@ public final class Animator {
     public final AnimQueue queue = new AnimQueue();
     public final EffectStage stage = new EffectStage();
 
+    /** Optional consumer of every drained {@link GameEvent}. PlayScreen
+     *  wires the AchievementSystem here so non-presentation observation
+     *  hooks into the same drain that drives visuals. {@code null} when
+     *  no observer is registered (headless tests, pre-init frames). */
+    public interface EventObserver {
+        void onEvent(GameEvent ev, Mob player, Level level);
+    }
+    private EventObserver eventObserver;
+    public void setEventObserver(EventObserver obs) { this.eventObserver = obs; }
+
     private final IdentityHashMap<Mob, MobAnimState> states = new IdentityHashMap<>();
     private final List<Ghost> ghosts = new ArrayList<>();
     private final List<PendingImpact> pendingImpacts = new ArrayList<>();
     private static final Random RNG = new Random();
+
+    /** Per-tick action-animation scale, computed at the start of every
+     *  {@link #consume} pass. {@code 1.0} (no compression) for ≤ 4
+     *  acting mobs; multiplied by 0.8 for each additional mob, with a
+     *  hard floor of 0.5 so a swarm doesn't shrink animations beyond
+     *  perceptibility. Read by {@link #scaleFrames} when queueing
+     *  per-mob action animations (lunge, step, knockback slide). */
+    private float actionScale = 1f;
+    /** Identity set of mobs counted as "acting" this tick — populated
+     *  at the start of {@link #consume} from the action-event types in
+     *  {@code level.events}. Held as a field so the count can drive the
+     *  {@link #actionScale} factor without re-walking the event list. */
+    private final IdentityHashMap<Mob, Boolean> actingMobsScratch = new IdentityHashMap<>();
 
     /** Wall-clock emit interval for fire-particle effects. Mirrors the legacy
      *  {@code FireSystem.FIRE_PARTICLE_INTERVAL_MS}. */
@@ -99,7 +122,18 @@ public final class Animator {
                     }
                 }
             }
-            ghosts.removeIf(g -> { g.frame++; return g.done(); });
+            // Advance ghosts — but if the dying mob has a queued slide
+            // animation (knockback), park the death-fade counter until
+            // the slide completes so the ghost slides first, then fades
+            // at the destination.
+            ghosts.removeIf(g -> {
+                MobAnimState gs = states.get(g.mob);
+                if (gs != null && (gs.delayFrames > 0 || gs.stepTotal > 0)) {
+                    return false;
+                }
+                g.frame++;
+                return g.done();
+            });
             // Fire pending impacts at the moment their carrier effect's NEXT advance would
             // remove it — mirrors PlayScreen.resolveCompletingMissiles' "frame + 1 ==
             // totalFrames" check. The impact runs before the effect itself ticks so the
@@ -110,11 +144,158 @@ public final class Animator {
             firePendingImpacts(level);
             stage.tick();
         }
+        // Environmental cadences run on REAL time — the user-facing
+        // animation-speed setting only compresses event-driven action
+        // animations (steps, flinches, missile trails, ghost fades).
+        // Fire crackle, sleep-Z drift, levitation puffs, and ambient
+        // cloud puffs all read the raw dt so a 4× anim-speed run still
+        // looks like a calm fire and a steady poison cloud.
+        if (level != null && dtMs > 0) {
+            tickBurningParticles(level, dtMs);
+            tickSleepZs(level, dtMs);
+            tickLevitatePuffs(level, dtMs);
+            // Cloud puffs are per-render-frame Poisson emission, not
+            // wall-clock; emit them once per render regardless of speed.
+            emitCloudPuffs(level);
+        }
+        // Teleport-fades are event-driven (the engine's MobTeleported
+        // event spawns them) so they share the speed multiplier with
+        // every other event animation.
         int scaledDtMs = dtMs * n;
         if (level != null && scaledDtMs > 0) {
             tickTeleportFades(level, scaledDtMs);
-            tickBurningParticles(level, scaledDtMs);
-            tickSleepZs(level, scaledDtMs);
+        }
+        // Foot dust — spawn one cloud per render frame at the player's
+        // current visual foot position, while the player is mid-step.
+        // The per-frame cadence (rather than per-game-tick) gives a dense
+        // trail that hides the bottom of the sprite.
+        spawnFootDust(level);
+    }
+
+    /** Per-tile size for converting MobAnimState slide deltas into world
+     *  pixels. Mirrors {@link com.bjsp123.rl2.world.render.LevelRenderer#TILE_SIZE}. */
+    private static final float DUST_CELL_PX = 16f;
+    /** Number of dust clouds to spawn each render frame the player is
+     *  mid-step. Each cloud is independently jittered, sized, shaded,
+     *  and given a randomised lifetime + drift for visual variety. */
+    private static final int DUST_CLOUDS_PER_FRAME = 2;
+    /** Drift speed magnitude (px/frame) for the small per-cloud random
+     *  motion — every cloud picks an independent random direction within
+     *  this magnitude so the puff disperses softly rather than sitting
+     *  perfectly still. */
+    private static final float DUST_DRIFT_PX_PER_FRAME = 0.25f;
+
+    /** Frame window over which cloud-puff spawn rate is expressed —
+     *  {@code 2 + duration/3} puffs per this many render frames. 12 is
+     *  ≈ 200 ms at the default render cadence, so the lowest-density
+     *  cell still breathes a couple of puffs every fifth of a second. */
+    private static final int   CLOUD_PUFF_FRAME_WINDOW = 12;
+    /** Random-direction drift speed for a freshly-spawned cloud puff. */
+    private static final float CLOUD_PUFF_DRIFT_PX_PER_FRAME = 0.10f;
+    /** Fixed upward bias on top of {@link #CLOUD_PUFF_DRIFT_PX_PER_FRAME}
+     *  so a body of gas overall floats up rather than diffusing equally. */
+    private static final float CLOUD_PUFF_UP_BIAS_PX_PER_FRAME = 0.08f;
+    /** Constant upward bias (px/frame) added to every cloud's drift, so
+     *  the random-direction component still tends to lift rather than
+     *  sit or sink. */
+    private static final float DUST_UP_BIAS_PX_PER_FRAME = 0.15f;
+    /** Vertical offset (px) applied to the dust spawn point so the puff
+     *  starts above the floor rather than at the floor edge — covers the
+     *  player sprite's calf / shin area, which is what we want to obscure. */
+    private static final float DUST_SPAWN_Y_OFFSET_PX = 4f;
+
+    /** Spawn the foot-dust clouds for the current render frame. Multiple
+     *  clouds per frame are emitted with independent random jitter,
+     *  starting size, and shade — they don't drift in any direction;
+     *  each just expands, rises, and fades in place. No-op when the
+     *  player isn't sliding or isn't visible. */
+    /** Per-frame cloud-puff emission. Each cell with active duration spawns
+     *  ellipse particles at a rate of {@code 2 + duration/3} per
+     *  {@link #CLOUD_PUFF_FRAME_WINDOW} render frames — i.e. denser clouds
+     *  emit more puffs, but every visible cell breathes at least 2 / window.
+     *  Out-of-FOV cells are skipped (no point burning effect slots on
+     *  particles the player can't see). Compresses cleanly with the
+     *  animation-speed multiplier — {@code framesPerRender} runs the loop
+     *  N× per render frame, so faster speeds emit proportionally more
+     *  particles per real-time second. */
+    private void emitCloudPuffs(Level level) {
+        if (level == null || level.cloud == null || level.visible == null) return;
+        int w = level.width, h = level.height;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int packed = level.cloud[x][y];
+                if (packed == 0) continue;
+                if (!level.visible[x][y]) continue;
+                int dur = com.bjsp123.rl2.logic.CloudSystem.duration(packed);
+                if (dur <= 0) continue;
+                com.bjsp123.rl2.model.Level.Cloud type =
+                        com.bjsp123.rl2.logic.CloudSystem.type(packed);
+                if (type == null) continue;
+                // Spawn count expressed as a per-frame expectation, with
+                // the integer part emitted deterministically and the
+                // fractional part rolled probabilistically — gives the
+                // exact long-run rate of (2 + dur/3) per CLOUD_PUFF_FRAME_WINDOW.
+                float perFrame = (2f + dur / 3f) / (float) CLOUD_PUFF_FRAME_WINDOW;
+                int whole = (int) Math.floor(perFrame);
+                for (int i = 0; i < whole; i++) emitOneCloudPuff(x, y, type);
+                float frac = perFrame - whole;
+                if (frac > 0f && RNG.nextFloat() < frac) emitOneCloudPuff(x, y, type);
+            }
+        }
+    }
+
+    /** Spawn a single cloud-puff ellipse for cell ({@code tileX}, {@code tileY}).
+     *  Pixel anchor is randomly placed inside the tile so the puffs don't
+     *  stack on the same column; drift is a small random unit vector with
+     *  an upward bias so the body of gas tends to lift over time. */
+    private void emitOneCloudPuff(int tileX, int tileY,
+                                  com.bjsp123.rl2.model.Level.Cloud type) {
+        float pxX = tileX * 16f + 1f + RNG.nextFloat() * 14f;
+        float pxY = tileY * 16f + 1f + RNG.nextFloat() * 14f;
+        double angle = RNG.nextDouble() * Math.PI * 2.0;
+        float vx = (float) Math.cos(angle) * CLOUD_PUFF_DRIFT_PX_PER_FRAME;
+        float vy = (float) Math.sin(angle) * CLOUD_PUFF_DRIFT_PX_PER_FRAME
+                + CLOUD_PUFF_UP_BIAS_PX_PER_FRAME;
+        stage.add(com.bjsp123.rl2.world.render.Effect.cloudPuff(
+                tileX, tileY, pxX, pxY, vx, vy, type, RNG));
+    }
+
+    private void spawnFootDust(Level level) {
+        if (level == null || level.mobs == null) return;
+        Mob player = null;
+        for (Mob m : level.mobs) {
+            if (m != null && m.behavior == Mob.Behavior.PLAYER) { player = m; break; }
+        }
+        if (player == null || player.position == null) return;
+        // Levitating / flying movers don't kick up dust.
+        if (player.effectiveStats().flying) return;
+        MobAnimState s = states.get(player);
+        if (s == null || s.stepTotal <= 0 || s.delayFrames > 0) return;
+        if (!MobSystem.isVisibleToPlayer(level, player)) return;
+
+        float t = Math.min(1f, s.stepFrame / (float) s.stepTotal);
+        float visualTX = player.position.tileX() + s.stepFromDx * (1f - t);
+        float visualTY = player.position.tileY() + s.stepFromDy * (1f - t);
+
+        for (int i = 0; i < DUST_CLOUDS_PER_FRAME; i++) {
+            // Independent ±3 px x-jitter and ±1 px y-jitter per cloud so
+            // the same render-frame's batch is a small spread rather
+            // than a stack at one point.
+            float jx = (RNG.nextFloat() - 0.5f) * 6f;
+            float jy = (RNG.nextFloat() - 0.5f) * 2f;
+            float pxX = (visualTX + 0.5f) * DUST_CELL_PX + jx;
+            float pxY = visualTY * DUST_CELL_PX
+                    + DUST_SPAWN_Y_OFFSET_PX + jy;
+            // Tiny random drift per cloud — picked from a unit circle
+            // scaled to DUST_DRIFT_PX_PER_FRAME, plus a fixed upward
+            // bias so the puff overall tends to lift rather than sit.
+            double angle = RNG.nextDouble() * Math.PI * 2.0;
+            float vx = (float) Math.cos(angle) * DUST_DRIFT_PX_PER_FRAME;
+            float vy = (float) Math.sin(angle) * DUST_DRIFT_PX_PER_FRAME
+                    + DUST_UP_BIAS_PX_PER_FRAME;
+            int tileX = (int) Math.floor(visualTX);
+            int tileY = (int) Math.floor(visualTY);
+            stage.add(Effect.dustCloud(tileX, tileY, pxX, pxY, vx, vy, RNG));
         }
     }
 
@@ -122,7 +303,31 @@ public final class Animator {
      *  per-mob anim state and pushing visual effects into the stage. */
     public void consume(Level level) {
         if (level.events == null || level.events.isEmpty()) return;
+        // Pre-pass: count distinct mobs that took an action this tick so we
+        // can compress per-mob action animations when the screen would
+        // otherwise grind through a long sequential chain. Scale = 0.8^(n−4)
+        // floored at 0.5 — n ≤ 4 is unscaled, n = 5 → 0.8×, n = 6 → 0.64×,
+        // n ≥ 7 → 0.5×.
+        actingMobsScratch.clear();
         for (GameEvent ev : level.events) {
+            Mob actor = null;
+            if      (ev instanceof GameEvent.MobMoved m)             actor = m.mob();
+            else if (ev instanceof GameEvent.MobMeleeAttacked m)     actor = m.attacker();
+            else if (ev instanceof GameEvent.MagicMissileFired m)    actor = m.caster();
+            else if (ev instanceof GameEvent.WandMissileFired m)     actor = m.caster();
+            else if (ev instanceof GameEvent.WandRayFired m)         actor = m.caster();
+            else if (ev instanceof GameEvent.ItemThrown m)           actor = m.thrower();
+            if (actor != null) actingMobsScratch.put(actor, Boolean.TRUE);
+        }
+        int actingCount = actingMobsScratch.size();
+        actionScale = (float) Math.max(0.5,
+                Math.pow(0.8, Math.max(0, actingCount - 4)));
+        // Cache the player once for this drain pass so the achievement
+        // observer (and any future per-event hooks) don't re-scan
+        // level.mobs per event.
+        Mob playerForEvents = eventObserver != null ? TurnSystem.findPlayer(level) : null;
+        for (GameEvent ev : level.events) {
+            if (eventObserver != null) eventObserver.onEvent(ev, playerForEvents, level);
             if      (ev instanceof GameEvent.MobMoved m)              onMobMoved(level, m);
             else if (ev instanceof GameEvent.MobMeleeAttacked m)      onMobMeleeAttacked(level, m);
             else if (ev instanceof GameEvent.MobHitFlinched m)        onMobHitFlinched(level, m);
@@ -151,6 +356,9 @@ public final class Animator {
             else if (ev instanceof GameEvent.ItemPickedUp m)          onItemPickedUp(m);
             else if (ev instanceof GameEvent.MobKnockedBack m)        onMobKnockedBack(level, m);
             else if (ev instanceof GameEvent.ItemFallingIntoChasm m)  onItemFallingIntoChasm(m);
+            else if (ev instanceof GameEvent.MobFellThroughChasm m)   onMobFellThroughChasm(m);
+            else if (ev instanceof GameEvent.GrappleFired m)          onGrappleFired(level, m);
+            else if (ev instanceof GameEvent.MobAbilityUsed m)        onMobAbilityUsed(level, m);
             // MobIgnited / MobExtinguished / MobSlept / MobWoke are polled instead of
             // event-driven (the Animator scans BuffSystem and StateOfMind each tick).
         }
@@ -173,7 +381,7 @@ public final class Animator {
         // can see them, which is standard roguelike behaviour.
         if (!MobSystem.isVisibleToPlayer(level, m.mob())) return;
         MobAnimState s = stateOf(m.mob());
-        int frames = stepFramesFor(m.mob());
+        int frames = scaleFrames(stepFramesFor(m.mob()));
         s.stepFromDx = (float) (m.fromX() - m.toX());
         s.stepFromDy = (float) (m.fromY() - m.toY());
         s.stepFrame  = 0;
@@ -195,7 +403,8 @@ public final class Animator {
         if (n > 0f) {
             startAnim(stateOf(attacker),
                     dx / n * MELEE_LUNGE_PX, dy / n * MELEE_LUNGE_PX,
-                    LUNGE_OUT_FRAMES, LUNGE_OUT_FRAMES + LUNGE_BACK_FRAMES,
+                    scaleFrames(LUNGE_OUT_FRAMES),
+                    scaleFrames(LUNGE_OUT_FRAMES + LUNGE_BACK_FRAMES),
                     /*concurrent=*/false);
         }
         // Attack-flash sprite next to the attacker. If multiple mobs attack in the
@@ -240,7 +449,14 @@ public final class Animator {
         if (!m.visibleAtKill()) return;
         boolean facingEast = m.mob() != null && m.mob().facingEast;
         ghosts.add(new Ghost(m.mob(), m.x(), m.y(), facingEast));
-        queue.concurrent(MobAnimState.DEATH_TOTAL_FRAMES);
+        // If the dying mob has a queued knockback slide, chain the death
+        // flicker / fade AFTER the slide so the fade plays at the
+        // destination once the shove lands. Otherwise the death runs
+        // concurrently with whatever's already in flight (the V1 path).
+        MobAnimState s = m.mob() != null ? states.get(m.mob()) : null;
+        boolean hasSlide = s != null && (s.delayFrames > 0 || s.stepTotal > 0);
+        if (hasSlide) queue.sequential(MobAnimState.DEATH_TOTAL_FRAMES);
+        else          queue.concurrent(MobAnimState.DEATH_TOTAL_FRAMES);
     }
 
     private void onMobTeleported(GameEvent.MobTeleported m) {
@@ -289,12 +505,39 @@ public final class Animator {
                 () -> com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wand, effLvl)));
     }
 
+    /** Visual for a mob ability cast on another mob — a green ray from
+     *  caster to target plus a small burst of green sparks at the target
+     *  tile. Blocking on the ray's lifetime so subsequent action animations
+     *  in the same tick play after, not over, the cast. */
+    private void onMobAbilityUsed(Level level, GameEvent.MobAbilityUsed m) {
+        Point from = m.from();
+        Point to   = m.to();
+        if (from == null || to == null) return;
+        Effect ray = Effect.ray(from, to, Effect.EffectTint.GREEN);
+        stage.add(ray);
+        Effect sparks = Effect.particleBurst(to, Effect.EffectTint.GREEN, 14, RNG);
+        stage.add(sparks);
+        if (visibleAt(level, from) || visibleAt(level, to)) {
+            queue.concurrent(ray.totalFrames());
+        }
+    }
+
     private void onItemThrown(Level level, GameEvent.ItemThrown m) {
         Item it = m.item();
+        Mob thrower = m.thrower();
+        Point dst = m.to();
         Effect thrown = Effect.thrownItem(m.from(), m.to(), it);
         stage.add(thrown);
         if (m.trajectoryVisible()) queue.concurrent(thrown.totalFrames());
-        // Throw resolution happens in rlib at fire time; no PendingImpact needed.
+        // Defer the engine mutation (damage, knockback, terrain ignite,
+        // surface paint, item drop) to the moment the projectile arrives.
+        // {@link MobSystem#throwItem} already removed the item from the
+        // thrower's inventory and applied move-cost so the turn gating
+        // is correct; this PendingImpact resolves the world-side effects
+        // exactly when the visual arc lands.
+        pendingImpacts.add(new PendingImpact(thrown,
+                () -> com.bjsp123.rl2.logic.MobSystem.applyThrowImpact(
+                        level, thrower, it, dst)));
     }
 
     /** Loot tossed off a dying mob — arc the item from the corpse to its
@@ -329,7 +572,8 @@ public final class Animator {
         int ddy = start.tileY() - end.tileY();
         int dist = Math.max(Math.abs(ddx), Math.abs(ddy));
         if (dist == 0) return;
-        int frames = Math.max(STEP_FRAMES_MIN, KNOCKBACK_FRAMES_PER_TILE * dist);
+        int frames = scaleFrames(
+                Math.max(STEP_FRAMES_MIN, KNOCKBACK_FRAMES_PER_TILE * dist));
         MobAnimState s = stateOf(mob);
         s.stepFromDx = (float) ddx;
         s.stepFromDy = (float) ddy;
@@ -337,6 +581,56 @@ public final class Animator {
         s.stepTotal  = frames;
         s.delayFrames = queue.sequential(frames);
         stage.add(Effect.particleBurst(start, Effect.EffectTint.WHITE, 10, RNG));
+        // Two knockback impact flashes:
+        //   1) at the start tile, the moment of the original hit;
+        //   2) at the end tile, only when the slide stopped because of an
+        //      obstacle — held back by the slide duration so the second
+        //      flash lands ON the mob as it slams to a stop.
+        // A clean full-distance slide (m.blocked() == false) gets only
+        // the first flash.
+        stage.add(Effect.knockbackFlash(start, 0));
+        if (m.blocked()) {
+            stage.add(Effect.knockbackFlash(end, frames));
+        }
+    }
+
+    /** Grappling-rope visual — extend phase blocks subsequent events
+     *  (the dragged-mob's {@link GameEvent.MobKnockedBack} slide that
+     *  follows in the same drain pass starts at frame {@code extendFrames}
+     *  via {@link AnimQueue#sequential}, lining up with the rope's retract).
+     *  Hidden when neither caster nor target tile is visible to the player —
+     *  off-screen grapples don't need a visual gate. */
+    private void onGrappleFired(Level level, GameEvent.GrappleFired m) {
+        Point from = m.from(), to = m.target();
+        if (from == null || to == null) return;
+        boolean visible = visibleAt(level, from) || visibleAt(level, to);
+        if (!visible) return;
+        int extendFrames  = scaleFrames(GRAPPLE_EXTEND_FRAMES);
+        int tailFrames    = scaleFrames(m.success()
+                ? GRAPPLE_RETRACT_FRAMES
+                : GRAPPLE_FAIL_TAIL_FRAMES);
+        stage.add(Effect.grappleRope(from, to, m.success(),
+                extendFrames, tailFrames));
+        // sequential() returns the queue delay caused by everything ahead of
+        // us — we register ONLY the extend window as the freeze contribution
+        // so the retract overlaps the dragged-mob slide that follows.
+        // Failure path uses sequential(total) so nothing else animates while
+        // the rope holds + fades.
+        if (m.success()) {
+            queue.sequential(extendFrames);
+        } else {
+            queue.sequential(extendFrames + tailFrames);
+        }
+    }
+
+    /** Mob fell through a chasm — revolve-shrink-fade at the source tile.
+     *  The engine has already either killed the mob (with items also
+     *  falling via {@link GameEvent.ItemFallingIntoChasm}) or relocated
+     *  the survivor to the next dungeon level. Non-blocking — same
+     *  pattern as the falling-item visual. */
+    private void onMobFellThroughChasm(GameEvent.MobFellThroughChasm m) {
+        if (m.mob() == null || m.fromTile() == null) return;
+        stage.add(Effect.fallingMob(m.fromTile(), m.mob()));
     }
 
     /** Item fell into a chasm — revolve-shrink-fade at its tile. Non-blocking. */
@@ -385,6 +679,14 @@ public final class Animator {
     }
 
     private void onWandImpactBurst(Level level, GameEvent.WandImpactBurst m) {
+        // Powerup pickups get a custom multi-effect composite instead of
+        // the standard 18-spark burst.
+        switch (m.element()) {
+            case LEVEL_UP -> { spawnLevelUpVisual(level, m.pos()); return; }
+            case HP_UP    -> { spawnHpUpVisual(level, m.pos());    return; }
+            case MANA_UP  -> { spawnManaUpVisual(level, m.pos());  return; }
+            default -> { /* fall through to the generic-burst path */ }
+        }
         Effect.EffectTint tint = switch (m.element()) {
             case WATER                -> Effect.EffectTint.BLUE;
             case OIL                  -> Effect.EffectTint.YELLOW;
@@ -393,13 +695,73 @@ public final class Animator {
             case LIGHTNING            -> Effect.EffectTint.YELLOW;
             case FREEZE               -> Effect.EffectTint.BLUE;
             case BLAST, DAMAGE        -> Effect.EffectTint.WHITE;
+            case APPLYBUFFS           -> Effect.EffectTint.YELLOW;
+            case POISONCLOUD          -> Effect.EffectTint.GREEN;
             case DETONATION,
                  BANISHMENT,
                  MISSILE             -> Effect.EffectTint.WHITE;
+            case VOID                -> Effect.EffectTint.BROWN;
+            case POLYMORPH           -> Effect.EffectTint.ORANGE;
+            case LEVEL_UP, HP_UP, MANA_UP -> Effect.EffectTint.YELLOW;
         };
         Effect burst = Effect.particleBurst(m.pos(), tint, 18, RNG);
         stage.add(burst);
         if (visibleAt(level, m.pos())) queue.concurrent(burst.totalFrames());
+    }
+
+    /** LEVEL_UP composite: 10 up-arrows + 30 sparks distributed over a
+     *  ~600 ms window, plus a sprite tint flash on the player.
+     *  Frames-per-render-frame defaults to 1 so 36 frames ≈ 600 ms. */
+    private void spawnLevelUpVisual(Level level, Point at) {
+        // Arrows — staggered start delays in [0, 36] render frames.
+        for (int i = 0; i < 10; i++) {
+            int delay = (i * 36) / 10;
+            stage.add(Effect.upArrow(at, Effect.EffectTint.YELLOW, delay));
+        }
+        // 30 sparks in one burst — drift outward + upward like the
+        // existing particleBurst, but staggered in two waves so the
+        // emission visibly extends over the 600 ms window.
+        Effect spark1 = Effect.particleBurst(at, Effect.EffectTint.YELLOW, 15, RNG);
+        Effect spark2 = Effect.particleBurst(at, Effect.EffectTint.YELLOW, 15, RNG);
+        spark2.startDelay = 18;
+        stage.add(spark1);
+        stage.add(spark2);
+        // Sprite-tint flash on the mob standing on the pickup tile (the
+        // player, by spec — POWERUP only fires for the player).
+        Mob standing = mobAt(level, at);
+        if (standing != null) {
+            stage.add(Effect.powerupFlash(standing, at));
+        }
+        if (visibleAt(level, at)) queue.concurrent(36);
+    }
+
+    /** HP_UP composite: 16 green sparks drifting upward with random
+     *  left/right drift. The standard heal indicator is emitted by the
+     *  HealApplied event handler — this layers extra polish on top. */
+    private void spawnHpUpVisual(Level level, Point at) {
+        Effect sparks = Effect.particleBurst(at, Effect.EffectTint.GREEN, 16, RNG);
+        stage.add(sparks);
+        if (visibleAt(level, at)) queue.concurrent(sparks.totalFrames());
+    }
+
+    /** MANA_UP composite: a single blue up-arrow over the player plus
+     *  16 blue sparks rising around them. */
+    private void spawnManaUpVisual(Level level, Point at) {
+        stage.add(Effect.upArrow(at, Effect.EffectTint.BLUE, 0));
+        Effect sparks = Effect.particleBurst(at, Effect.EffectTint.BLUE, 16, RNG);
+        stage.add(sparks);
+        if (visibleAt(level, at)) queue.concurrent(36);
+    }
+
+    /** Look up the mob whose logical position matches {@code at}. */
+    private static Mob mobAt(Level level, Point at) {
+        if (level == null || at == null || level.mobs == null) return null;
+        int tx = at.tileX(), ty = at.tileY();
+        for (Mob m : level.mobs) {
+            if (m == null || m.position == null) continue;
+            if (m.position.tileX() == tx && m.position.tileY() == ty) return m;
+        }
+        return null;
     }
 
     /** Throw-bomb / blast-bomb shockwave. Blocks while visible so a rapid second
@@ -528,16 +890,16 @@ public final class Animator {
      *  {@code FxRenderer.tintToColor} entry, which isn't worth it for these
      *  one-off potions. */
     private static Effect.EffectTint potionTint(Item item) {
-        if ("POTION_INSIGHT".equals(item.type)) return Effect.EffectTint.YELLOW;
-        if (item.appliesBuff == null) return Effect.EffectTint.WHITE;
-        return switch (item.appliesBuff) {
-            case REGENERATION -> Effect.EffectTint.GREEN;
-            case POISONED     -> Effect.EffectTint.BROWN;
-            case SORCERY      -> Effect.EffectTint.BLUE;
-            case GHOSTLY      -> Effect.EffectTint.WHITE;
-            case INVISIBLE    -> Effect.EffectTint.BLUE;
-            case HOPE, ESP    -> Effect.EffectTint.YELLOW;
-            default           -> Effect.EffectTint.WHITE;
+        com.bjsp123.rl2.model.Buff.BuffType primary = item.primaryBuff();
+        if (primary == null) return Effect.EffectTint.WHITE;
+        return switch (primary) {
+            case REGENERATION       -> Effect.EffectTint.GREEN;
+            case POISONED           -> Effect.EffectTint.BROWN;
+            case SORCERY            -> Effect.EffectTint.BLUE;
+            case GHOSTLY            -> Effect.EffectTint.WHITE;
+            case INVISIBLE          -> Effect.EffectTint.BLUE;
+            case HOPE, ESP, INSIGHT -> Effect.EffectTint.YELLOW;
+            default                 -> Effect.EffectTint.WHITE;
         };
     }
 
@@ -675,6 +1037,59 @@ public final class Animator {
         }
     }
 
+    /** Wall-clock interval between cloud puffs at a levitating mob's feet.
+     *  Slow enough that a single mob reads as drifting, not smoking. */
+    private static final int LEVITATE_PUFF_MIN_MS   = 220;
+    private static final int LEVITATE_PUFF_RANGE_MS = 180;
+
+    /** Per-mob foot-puff cadence for mobs with the LEVITATING buff. Visible
+     *  mobs only — out-of-FOV mobs don't burn effect slots on particles
+     *  the player can't see. The puff appears just below the mob's tile
+     *  centre and drifts gently downward / outward to read as displaced
+     *  air. */
+    private void tickLevitatePuffs(Level level, int dtMs) {
+        if (level.mobs == null) return;
+        for (Mob m : level.mobs) {
+            boolean levitating = com.bjsp123.rl2.logic.BuffSystem.hasBuff(m,
+                    com.bjsp123.rl2.model.Buff.BuffType.LEVITATING);
+            MobAnimState s = states.get(m);
+            if (!levitating || m.hp <= 0 || m.position == null) {
+                if (s != null) s.levitatePuffCountdownMs = 0;
+                continue;
+            }
+            if (!MobSystem.isVisibleToPlayer(level, m)) continue;
+            if (s == null) s = stateOf(m);
+            s.levitatePuffCountdownMs -= dtMs;
+            while (s.levitatePuffCountdownMs <= 0) {
+                emitLevitatePuff(m, s);
+                s.levitatePuffCountdownMs += LEVITATE_PUFF_MIN_MS
+                        + RNG.nextInt(LEVITATE_PUFF_RANGE_MS);
+            }
+        }
+    }
+
+    /** Spawn one small foot-puff under {@code mob}'s current visual tile. */
+    private void emitLevitatePuff(Mob mob, MobAnimState s) {
+        float visualTX = mob.position.tileX();
+        float visualTY = mob.position.tileY();
+        if (s.stepTotal > 0) {
+            float t = Math.min(1f, s.stepFrame / (float) s.stepTotal);
+            visualTX += s.stepFromDx * (1f - t);
+            visualTY += s.stepFromDy * (1f - t);
+        }
+        float jx = (RNG.nextFloat() - 0.5f) * 8f;
+        float jy = (RNG.nextFloat() - 0.5f) * 2f;
+        float pxX = (visualTX + 0.5f) * DUST_CELL_PX + jx;
+        float pxY = visualTY * DUST_CELL_PX + 1f + jy;
+        double angle = RNG.nextDouble() * Math.PI * 2.0;
+        float speed = 0.10f + RNG.nextFloat() * 0.10f;
+        float vx = (float) Math.cos(angle) * speed;
+        float vy = (float) Math.sin(angle) * speed - 0.05f; // slight sink
+        int tileX = (int) Math.floor(visualTX);
+        int tileY = (int) Math.floor(visualTY);
+        stage.add(Effect.dustCloud(tileX, tileY, pxX, pxY, vx, vy, RNG));
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────
 
     /** Build a coloured wand missile with palette / gravity / brightness picked from the
@@ -743,7 +1158,16 @@ public final class Animator {
     private static final int   STEP_FRAMES_DEFAULT = 5;
     /** Per-tile pace for knockback slides — faster than regular stepping so a shove
      *  reads as a sudden recoil instead of a stride. */
-    private static final int   KNOCKBACK_FRAMES_PER_TILE = 2;
+    private static final int   KNOCKBACK_FRAMES_PER_TILE = 5;
+    /** Grappling-rope frame budget. Extend phase is the freeze contribution
+     *  ({@link AnimQueue#sequential}); the dragged-mob slide is queued
+     *  immediately after and runs concurrently with the retract phase. */
+    private static final int   GRAPPLE_EXTEND_FRAMES    = 10;
+    private static final int   GRAPPLE_RETRACT_FRAMES   = 14;
+    /** Failure tail — flash + fade-out at full extent when the target is
+     *  too heavy. Longer than the success retract because the held flash
+     *  needs a beat to read before the fade. */
+    private static final int   GRAPPLE_FAIL_TAIL_FRAMES = 22;
 
     private static int stepFramesFor(Mob mob) {
         int cost = (mob == null || mob.intrinsic == null) ? 100 : (int) mob.effectiveStats().moveCost;
@@ -752,6 +1176,14 @@ public final class Animator {
         if (scaled < STEP_FRAMES_MIN) return STEP_FRAMES_MIN;
         if (scaled > STEP_FRAMES_MAX) return STEP_FRAMES_MAX;
         return scaled;
+    }
+
+    /** Multiply a frame count by {@link #actionScale} and clamp to a
+     *  minimum of 1, so a swarm-compressed animation never collapses to
+     *  zero frames (which would skip its visual entirely). */
+    private int scaleFrames(int frames) {
+        if (actionScale >= 1f) return frames;
+        return Math.max(1, Math.round(frames * actionScale));
     }
 
     private void startAnim(MobAnimState s,

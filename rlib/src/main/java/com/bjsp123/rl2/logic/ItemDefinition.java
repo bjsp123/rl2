@@ -28,11 +28,28 @@ public final class ItemDefinition {
     public Material material;
     public String   name;
     public String   description;
+    /** Optional second-paragraph flavor blurb. CSV column header is
+     *  {@code "description 2"} (with a space). Mirrors {@link Item#description2}. */
+    public String   description2;
 
     public MinMax damage = MinMax.ZERO;
     public MinMax damagePerLevel = MinMax.ZERO;
     public MinMax armor  = MinMax.ZERO;
     public MinMax armorPerLevel  = MinMax.ZERO;
+    /** AP damage range — see {@link Item#apDamage}. */
+    public MinMax apDamage = MinMax.ZERO;
+    public MinMax apDamagePerLevel = MinMax.ZERO;
+    /** Magic-resistance range — see {@link Item#magicResist}.
+     *  CSV column is {@code antiMagic}. */
+    public MinMax magicResist = MinMax.ZERO;
+    public MinMax magicResistPerLevel = MinMax.ZERO;
+    /** Flat accuracy / evasion bonuses — see {@link Item#accuracy} /
+     *  {@link Item#evasion}. */
+    public int accuracy;
+    public int evasion;
+    /** Speed multipliers — see {@link Item#attackSpeed}. */
+    public double attackSpeed = Item.ATTACK_SPEED_DEFAULT;
+    public double moveSpeed   = Item.MOVE_SPEED_DEFAULT;
     public double lightRadius;
     public int    foodValue;
     /** Base AOE tile count for wands and bombs. See {@link Item#tilesAffected}. */
@@ -41,6 +58,8 @@ public final class ItemDefinition {
 
     /** What happens when this item is thrown; null means it just lands on the floor. */
     public ItemEffect throwEffect;
+    /** Per-CSV-row throw-result. Blank cell → {@link Item.ThrowResult#NOTHING}. */
+    public Item.ThrowResult throwResult = Item.ThrowResult.NOTHING;
     public UseBehavior useBehavior = UseBehavior.NONE;
     public String      useVerb;
     /** Element a wand applies on impact. Null for summon-style wands. */
@@ -52,22 +71,24 @@ public final class ItemDefinition {
      *  user (scaled to item level). */
     public String summonsWhenUsed;
 
-    /** Optional buff applied to the user when this item is eaten or drunk. */
-    public Buff.BuffType appliesBuff;
+    /** Pipe-separated list of buffs the item applies to the user / target.
+     *  Single-buff CSV entries are read as a 1-element list. Empty list
+     *  means the item has no buff component. */
+    public java.util.List<Buff.BuffType> appliesBuff = new java.util.ArrayList<>();
 
-    /** Base buff duration in turns at item-level 0. Effective duration scales as
-     *  {@code (1 + item.level) * buffDuration}. */
-    public int buffDuration;
+    /** Generic magnitude knob — see {@link Item#abilityPower} for the
+     *  per-useBehavior interpretation. Float so fractional powers fit. */
+    public float abilityPower;
+
+    /** Wand-only: charge regenerated per game-tick (or per MANA_UP
+     *  pickup application). Read from the {@code chargeGain} CSV column. */
+    public float chargeGain;
 
     /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
     public int knockbackSquares;
 
     /** Floor-twinkle flag — see {@link Item#glows}. */
     public boolean glows;
-
-    /** Category this item silhouettes for when its slot is empty — see
-     *  {@link Item#silhouetteForCategory}. */
-    public InventoryCategory silhouetteForCategory;
 
     /** Authoritative item-kind tag — see {@link Item#inventoryCategory}. */
     public InventoryCategory inventoryCategory;
@@ -91,7 +112,10 @@ public final class ItemDefinition {
 
     /** When true, the level populator places one of this item on every floor
      *  (in addition to the random scatter). Used by the pear food-floor rule. */
-    public boolean guaranteedPerLevel;
+    /** Minimum copies guaranteed on every eligible level. {@code 0}
+     *  means "not guaranteed" (the default); {@code 1+} forces that
+     *  many copies to be placed before random clusters are rolled. */
+    public int guaranteedPerLevel;
 
     /** Atlas-cell coordinates on {@code sprites/items.png} (32-px grid). Read by
      *  the rgame-side {@code ItemSprites} loader; rlib code never touches them. */
@@ -111,32 +135,49 @@ public final class ItemDefinition {
         ItemDefinition d = new ItemDefinition();
         d.type        = CsvTable.str(row, "type", null);
         d.name        = CsvTable.str(row, "name", null);
-        d.description = CsvTable.str(row, "description", "");
+        d.description  = CsvTable.str(row, "description", "");
+        d.description2 = CsvTable.str(row, "description 2", "");
         d.material    = CsvTable.enumCell(row, "material", Material.class, Material.MAGIC);
 
         d.damage         = CsvTable.minMaxCell(row, "damage", MinMax.ZERO);
         d.damagePerLevel = CsvTable.minMaxCell(row, "damagePerLevel", MinMax.ZERO);
         d.armor          = CsvTable.minMaxCell(row, "armor", MinMax.ZERO);
         d.armorPerLevel  = CsvTable.minMaxCell(row, "armorPerLevel", MinMax.ZERO);
+        d.apDamage          = CsvTable.minMaxCell(row, "apDamage", MinMax.ZERO);
+        d.apDamagePerLevel  = CsvTable.minMaxCell(row, "apDamagePerLevel", MinMax.ZERO);
+        d.magicResist          = CsvTable.minMaxCell(row, "antiMagic", MinMax.ZERO);
+        d.magicResistPerLevel  = CsvTable.minMaxCell(row, "antiMagicPerLevel", MinMax.ZERO);
+        d.accuracy       = CsvTable.intCell(row, "accuracy", 0);
+        d.evasion        = CsvTable.intCell(row, "evasion", 0);
+        d.attackSpeed    = CsvTable.dblCell(row, "attackSpeed", Item.ATTACK_SPEED_DEFAULT);
+        d.moveSpeed      = CsvTable.dblCell(row, "moveSpeed",   Item.MOVE_SPEED_DEFAULT);
         d.lightRadius    = CsvTable.dblCell(row, "lightRadius", 0);
         d.foodValue      = CsvTable.intCell(row, "foodValue", 0);
         d.tilesAffected         = CsvTable.intCell(row, "tilesAffected", 0);
         d.tilesAffectedPerLevel = CsvTable.intCell(row, "tilesAffectedPerLevel", 0);
 
         d.throwEffect = CsvTable.enumCell(row, "throwEffect", ItemEffect.class, null);
+        d.throwResult = CsvTable.enumCell(row, "throwResult",
+                Item.ThrowResult.class, Item.ThrowResult.NOTHING);
         d.useBehavior = CsvTable.enumCell(row, "useBehavior", UseBehavior.class, UseBehavior.NONE);
         d.useVerb     = CsvTable.str(row, "useVerb", null);
         d.wandEffect  = CsvTable.enumCell(row, "wandEffect", ItemEffect.class, null);
         d.tameOnThrow = new java.util.ArrayList<>(CsvTable.listCell(row, "tameOnThrow"));
         d.summonsWhenUsed = CsvTable.str(row, "summonsWhenUsed", null);
 
-        d.appliesBuff   = CsvTable.enumCell(row, "appliesBuff", Buff.BuffType.class, null);
-        d.buffDuration  = CsvTable.intCell(row, "buffDuration", 0);
+        // Pipe-separated list (e.g. "POISONED|CHILLED") — single-buff
+        // entries parse to a 1-element list.
+        d.appliesBuff = new java.util.ArrayList<>();
+        for (String name : CsvTable.listCell(row, "appliesBuff")) {
+            try {
+                d.appliesBuff.add(Buff.BuffType.valueOf(name.trim()));
+            } catch (IllegalArgumentException ignored) { /* skip bad name */ }
+        }
+        d.abilityPower = (float) CsvTable.dblCell(row, "abilityPower", 0.0);
+        d.chargeGain   = (float) CsvTable.dblCell(row, "chargeGain",   0.0);
 
         d.knockbackSquares      = CsvTable.intCell(row, "knockbackSquares", 0);
         d.glows                 = CsvTable.boolCell(row, "glows", false);
-        d.silhouetteForCategory = CsvTable.enumCell(row, "silhouetteForCategory",
-                InventoryCategory.class, null);
         d.inventoryCategory     = CsvTable.enumCell(row, "inventoryCategory",
                 InventoryCategory.class, null);
         double[] power      = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
@@ -145,7 +186,7 @@ public final class ItemDefinition {
         d.clusterSize       = CsvTable.minMaxCell(row, "clusterSize", MinMax.of(1));
         d.theme             = CsvTable.enumCell(row, "theme",
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
-        d.guaranteedPerLevel = CsvTable.boolCell(row, "guaranteedPerLevel", false);
+        d.guaranteedPerLevel = CsvTable.intCell(row, "guaranteedPerLevel", 0);
 
         d.spriteCol     = CsvTable.intCell(row, "spriteCol", 0);
         d.spriteRow     = CsvTable.intCell(row, "spriteRow", 0);
@@ -158,29 +199,44 @@ public final class ItemDefinition {
         it.type        = type;
         it.material    = material;
         it.name        = name;
-        it.description = description == null ? "" : description;
+        it.description  = description  == null ? "" : description;
+        it.description2 = description2 == null ? "" : description2;
 
         it.damage         = damage;
         it.damagePerLevel = damagePerLevel;
         it.armor          = armor;
         it.armorPerLevel  = armorPerLevel;
+        it.apDamage           = apDamage;
+        it.apDamagePerLevel   = apDamagePerLevel;
+        it.magicResist        = magicResist;
+        it.magicResistPerLevel = magicResistPerLevel;
+        it.accuracy       = accuracy;
+        it.evasion        = evasion;
+        it.attackSpeed    = attackSpeed;
+        it.moveSpeed      = moveSpeed;
         it.lightRadius    = lightRadius;
         it.foodValue      = foodValue;
         it.tilesAffected         = tilesAffected;
         it.tilesAffectedPerLevel = tilesAffectedPerLevel;
 
         it.throwEffect    = throwEffect;
+        it.throwResult    = throwResult != null ? throwResult : Item.ThrowResult.NOTHING;
         it.useBehavior    = useBehavior;
         it.useVerb        = useVerb;
         it.wandEffect     = wandEffect;
         it.tameOnThrow    = tameOnThrow;
         it.summonsWhenUsed = summonsWhenUsed;
 
-        it.appliesBuff    = appliesBuff;
-        it.buffDuration   = buffDuration;
+        it.appliesBuff    = new java.util.ArrayList<>(appliesBuff);
+        it.abilityPower   = abilityPower;
+        it.chargeGain     = chargeGain;
         it.knockbackSquares = knockbackSquares;
         it.glows                 = glows;
-        it.silhouetteForCategory = silhouetteForCategory;
         it.inventoryCategory     = inventoryCategory;
+        // Wand items spawn with full charge — max == level + 1, set
+        // immediately after copying the level-affecting fields.
+        if (it.useBehavior == Item.UseBehavior.WAND) {
+            it.charge = it.maxCharge();
+        }
     }
 }

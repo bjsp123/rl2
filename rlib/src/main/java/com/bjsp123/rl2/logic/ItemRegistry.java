@@ -52,18 +52,6 @@ public final class ItemRegistry {
         return out;
     }
 
-    /** Definition of the item flagged as the empty-slot silhouette for
-     *  {@code category}, or {@code null} if no item carries that mark. The
-     *  inventory renderer paints this item's sprite as the placeholder for
-     *  unequipped slots. */
-    public static ItemDefinition silhouetteFor(com.bjsp123.rl2.model.Item.InventoryCategory category) {
-        if (category == null) return null;
-        for (ItemDefinition d : STORE.map().values()) {
-            if (d.silhouetteForCategory == category) return d;
-        }
-        return null;
-    }
-
     /** Insertion-order index of {@code type} in the registry — i.e. the row
      *  position in {@code items.csv}. Used by inventory sort to keep stacks of
      *  related items grouped in their CSV order. Returns {@link Integer#MAX_VALUE}

@@ -90,6 +90,55 @@ public final class InventorySystem {
         return true;
     }
 
+    /** Move {@code it} from its equipment slot back into the bag. No-op
+     *  when {@code it} isn't currently equipped or when the bag has no
+     *  room for another stack (and merging into an existing matching
+     *  stack isn't possible — though for typical equipment that case is
+     *  vanishingly rare since equipped items always carry count == 1).
+     *  Returns {@code true} on successful unequip. */
+    public static boolean unequip(Inventory inv, Item it) {
+        if (inv == null || it == null) return false;
+        InventoryCategory cat = it.inventoryCategory;
+        if (cat == null || !cat.isEquipment()) return false;
+        int slot = findEquippedSlot(inv, it);
+        if (slot < 0) return false;
+        // Capacity check — refuse the unequip if the bag is full and no
+        // matching stack can absorb it. Caller can surface that as a
+        // disabled button state.
+        boolean canAbsorb = false;
+        for (Item existing : inv.bag) {
+            if (existing.matchesStackKey(it)) { canAbsorb = true; break; }
+        }
+        if (!canAbsorb && inv.bag.size() >= GameBalance.INVENTORY_BAG_SIZE) {
+            return false;
+        }
+        inv.setEquipped(cat, slot, null);
+        it.count = Math.max(1, it.count);
+        mergeOrAdd(inv, it);
+        return true;
+    }
+
+    /** {@code true} when {@code it} is currently sitting in one of
+     *  {@code inv}'s equipment positions. Used by UI surfaces that need
+     *  to render Equip vs. Unequip on the same affordance. */
+    public static boolean isEquipped(Inventory inv, Item it) {
+        return findEquippedSlot(inv, it) >= 0;
+    }
+
+    /** Index within {@code it}'s category's position array where it is
+     *  currently equipped, or {@code -1} when not equipped. Single-slot
+     *  categories return {@code 0}. */
+    private static int findEquippedSlot(Inventory inv, Item it) {
+        if (inv == null || it == null) return -1;
+        InventoryCategory cat = it.inventoryCategory;
+        if (cat == null || !cat.isEquipment()) return -1;
+        int n = Inventory.positionCount(cat);
+        for (int i = 0; i < n; i++) {
+            if (inv.equipped(cat, i) == it) return i;
+        }
+        return -1;
+    }
+
     /** Peel a fresh count-1 entry off an existing bag stack {@code stack},
      *  decrementing the original by 1. Returns the new singleton (suitable
      *  for putting in an equipment slot). */
@@ -125,7 +174,6 @@ public final class InventorySystem {
         out.gemSpecies = src.gemSpecies;
         out.gemSize = src.gemSize;
         out.inventoryCategory = src.inventoryCategory;
-        out.silhouetteForCategory = src.silhouetteForCategory;
         out.count = 1;
         return out;
     }

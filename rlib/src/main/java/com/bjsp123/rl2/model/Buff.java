@@ -55,6 +55,10 @@ public class Buff {
         HOPE,
         /** Reveals every mob on the level to the player regardless of LOS or vision. */
         ESP,
+        /** Marks every tile on the level as explored at the start of every
+         *  turn while the buff is active. Applied by potion of insight;
+         *  effect is idempotent (subsequent ticks re-stamp the same flag). */
+        INSIGHT,
         /** Cold-slowed. Adds {@code 50 + level * 10} to both moveCost and attackCost
          *  while active — every action takes longer. Applied by freeze bombs. */
         CHILLED,
@@ -70,9 +74,9 @@ public class Buff {
         STARVING,
         /** Cooldown buffs — present means "can't fire yet"; duration counts down per
          *  standard turn until the buff drops and the action becomes available again.
-         *  Replace the legacy {@code MobCooldowns} fields. They share a single icon
-         *  cell (col 7, row 2 in {@code buffs.png}) since players don't need to
-         *  distinguish them at a glance — each is just "this action is recharging". */
+         *  Replace the legacy {@code MobCooldowns} fields. They share a single
+         *  recharging-glyph icon cell since players don't need to distinguish
+         *  them at a glance — each is just "this action is recharging". */
         TELEPORT_COOLDOWN,
         RANGED_COOLDOWN,
         /** Recharging haste-cast ability (kobold general, etc.). Same dispatch
@@ -86,7 +90,13 @@ public class Buff {
         HIDING,
         /** Killer perk's on-kill buff: reduces both {@code moveCost} and {@code attackCost}
          *  by 20%. Duration 10 standard turns. */
-        KILLER
+        KILLER,
+        /** Open-wound DOT. Per turn the mob loses
+         *  {@code (level * durationTurns) / 2} HP — strong at first then
+         *  tapers as the duration counts down. Doesn't stack with itself
+         *  (apply takes the max of level / duration via the standard
+         *  {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
+        BLEEDING
     }
 
     public BuffType type;

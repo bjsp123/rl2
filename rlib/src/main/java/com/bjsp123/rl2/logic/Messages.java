@@ -25,6 +25,12 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
+    /** "Achievement unlocked: First Blood." */
+    public static LogEvent achievementUnlocked(String displayName) {
+        return new LogEvent("Achievement unlocked: " + displayName + ".",
+                            EventPriority.HIGH, true);
+    }
+
     /** "Rogue enters level 3 (water, big rooms)." */
     public static LogEvent enterLevel(String playerName, int depth, Set<LevelFlag> flags) {
         StringBuilder sb = new StringBuilder(playerName);
@@ -172,6 +178,13 @@ public final class Messages {
 
     public static LogEvent playerStarves(String playerName) {
         return new LogEvent(playerName + " is starving!",
+                            EventPriority.HIGH, true);
+    }
+
+    /** "Adventurer eats the apple." — HIGH-priority so the player sees it
+     *  in the default log filter; food is a meaningful resource event. */
+    public static LogEvent playerEats(String playerName, String itemName) {
+        return new LogEvent(playerName + " eats the " + itemName + ".",
                             EventPriority.HIGH, true);
     }
 }

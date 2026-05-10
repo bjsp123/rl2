@@ -23,6 +23,21 @@ public class LevelSystem {
     private static final int POWER_ORB_SPARKLE_INTERVAL_MS = 700;
     private static final java.util.Random LIGHT_MOTE_RNG = new java.util.Random();
 
+    /** Mark every tile of {@code level} as explored, so the renderer paints
+     *  the whole map (in remembered-but-not-currently-visible state).
+     *  Vision (FOV) is unchanged — currently-lit tiles still show in full
+     *  colour, dark tiles in the explored-but-fogged tint. Used by the
+     *  {@link com.bjsp123.rl2.model.Buff.BuffType#INSIGHT} per-turn
+     *  handler. Idempotent — re-stamping already-true flags has no effect. */
+    public static void markAllExplored(Level level) {
+        if (level == null || level.explored == null) return;
+        for (int x = 0; x < level.width; x++) {
+            for (int y = 0; y < level.height; y++) {
+                level.explored[x][y] = true;
+            }
+        }
+    }
+
     public static void computeLighting(Level level) {
         int w = level.width, h = level.height;
         boolean[] blocking = buildBlocking(level, /*forLight=*/ true);
@@ -212,6 +227,14 @@ public class LevelSystem {
                     if (hasMob[idx]) blocks = true;
                     Vegetation v = level.vegetation[x][y];
                     if (v != null && v.blocksLight()) blocks = true;
+                }
+                // Smoke clouds block both sight and light — opaque to FOV
+                // (so a smoky room hides whatever's inside) and to lamps
+                // (so a torch can't shine through a plume). Steam and
+                // poison are see-through. Projectile traces don't consult
+                // this bitmap, so missiles still fly through smoke.
+                if (!blocks && CloudSystem.smokeAt(level, x, y)) {
+                    blocks = true;
                 }
                 if (x == 0 || y == 0 || x == w - 1 || y == h - 1) blocks = true;
                 blocking[idx] = blocks;

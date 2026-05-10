@@ -31,14 +31,21 @@ public final class IconSprites {
         INFO,
         EQUIPMENT,
         ITEMS,
+        GEMS,
         MOBS,
         PERKS,
         TERRAIN,
         LOOK,
         MAP,
         CHARACTER,
+        GAME,
         BACK,
-        OTHER
+        VIDEO,
+        SOUND,
+        FOOD,
+        INV,
+        CANCEL,
+        SETTINGS
     }
 
     private static Texture sheet;

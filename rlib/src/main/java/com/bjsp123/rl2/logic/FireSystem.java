@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.logic;
 
-import com.bjsp123.rl2.model.Level.Cloud;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Level.Surface;
@@ -60,9 +59,6 @@ public final class FireSystem {
      *  <b>game ticks</b>. */
     public static final int FIRE_DAMAGE_INTERVAL_TICKS = 100;
     public static final int FIRE_DAMAGE_PER_INTERVAL   = 5;
-
-    /** Per-<b>turn</b> chance that a fire tile emits a smoke cloud onto its own cell. */
-    public static final double SMOKE_EMIT_CHANCE = 0.04;
 
     /** Per-turn chance that a fire tile spreads to a chosen empty-floor neighbour. Bumped
      *  from 0.01 — the old rate was so slow fire effectively died out before reaching the
@@ -204,13 +200,12 @@ public final class FireSystem {
             for (int y = 0; y < h; y++)
                 wasFire[x][y] = level.vegetation[x][y] == Vegetation.FIRE;
 
+        // Smoke emission from fire tiles now lives in {@link CloudSystem#tickPerTurn}
+        // — the cloud layer owns its own per-turn drift / spread / spawn logic, so
+        // FireSystem just drives fire spread here.
         for (int x = 0; x < w; x++) {
             for (int y = 0; y < h; y++) {
                 if (!wasFire[x][y]) continue;
-                // Smoke roll on the fire tile itself.
-                if (RANDOM.nextDouble() < SMOKE_EMIT_CHANCE) {
-                    level.cloud[x][y] = Cloud.SMOKE;
-                }
                 // Independent spread roll for each of the four cardinal neighbours so a fire
                 // surrounded by oil or grass races outward at the per-cell SPREAD_CHANCE_*
                 // rate, rather than the old one-direction-per-turn lottery (which capped any

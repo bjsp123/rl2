@@ -125,6 +125,7 @@ public class SaveSystem {
             World w = json.fromJson(World.class, raw);
             if (w == null || w.levels == null) return null;
             for (Level l : w.levels) if (l != null) l.initTransients();
+            w.linkLevels();
             return w;
         } catch (Exception ex) {
             // Log so a broken Resume can be diagnosed instead of silently doing nothing.

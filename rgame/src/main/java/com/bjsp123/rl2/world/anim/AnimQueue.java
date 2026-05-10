@@ -30,6 +30,12 @@ public final class AnimQueue {
     public int currentSlotStart;
     /** Length of the most recently queued sequential slot — for ride-along callers. */
     public int currentSlotLength;
+    /** Set whenever {@link #sequential} or an extending {@link #rideLastSlot}
+     *  fires. The AI-catch-up loop in PlayController consults this via
+     *  {@link #consumeSequentialFlag} so that ONLY a sequential anim — not
+     *  a pile of concurrent mob slides — breaks the loop, letting many
+     *  mobs move simultaneously with the player on a single render frame. */
+    private boolean sawSequential;
 
     /** Drain one render frame. Call once per render frame from PlayScreen. */
     public void tick() {
@@ -57,6 +63,7 @@ public final class AnimQueue {
         currentSlotStart  = delay;
         currentSlotLength = frames;
         freezeFrames      = delay + frames;
+        sawSequential     = true;
         return delay;
     }
 
@@ -67,7 +74,21 @@ public final class AnimQueue {
         if (extra > 0) {
             freezeFrames      += extra;
             currentSlotLength += extra;
+            sawSequential     = true;
         }
         return currentSlotStart;
+    }
+
+    /** Returns whether any sequential animation has been queued since the
+     *  last call, then clears the flag. Used by PlayController's AI
+     *  catch-up loop: a pile of concurrent mob slides should NOT block
+     *  further ticks (we want simultaneous mob+player movement), but a
+     *  sequential anim (lunge, knockback slide, death-fade chained after
+     *  a slide) needs to play out before the next mob acts so its state
+     *  isn't clobbered. */
+    public boolean consumeSequentialFlag() {
+        boolean v = sawSequential;
+        sawSequential = false;
+        return v;
     }
 }

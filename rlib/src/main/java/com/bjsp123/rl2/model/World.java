@@ -32,4 +32,14 @@ public class World {
     public Level currentLevel() {
         return levels[currentLevelIndex];
     }
+
+    /** Wire each non-null level's transient back-reference to {@code this}.
+     *  Called once after construction (so freshly-built worlds resolve
+     *  inter-level references like the chasm-fall-through-floor mechanic
+     *  via {@link Level#world}) and again on save load (after JSON
+     *  deserialisation drops the transient field). */
+    public void linkLevels() {
+        if (levels == null) return;
+        for (Level l : levels) if (l != null) l.world = this;
+    }
 }

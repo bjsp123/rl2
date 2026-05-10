@@ -35,7 +35,50 @@ public class Item {
         /** Banishment (wand): ray that destroys ghosts on contact. */
         BANISHMENT,
         /** Lightning (wand): direct damage, doubled on wet / water targets. */
-        LIGHTNING
+        LIGHTNING,
+        /** Apply every buff in {@link Item#appliesBuff} to mobs in a
+         *  Chebyshev radius 1 disc around the impact tile. */
+        APPLYBUFFS,
+        /** Drop a poison cloud covering {@link Item#tilesAffected} tiles
+         *  around the impact (Euclidean disc). Cloud lifetime in turns
+         *  is taken from {@link Item#abilityPower}. */
+        POISONCLOUD,
+        /** Tear a void at the impact: pulls every mob within
+         *  {@code (effectiveLevel / 2) + 1} tiles (Chebyshev) toward
+         *  the centre, and converts floor-like tiles + small statues
+         *  inside the disc to {@link com.bjsp123.rl2.model.Tile#CHASM}.
+         *  Pulled mobs play the standard knockback-slide visual. */
+        VOID,
+        /** Reshape an area: every floor-like tile in the disc has a
+         *  50% chance to reroll to one of {FLOOR, FLOOR_WOOD,
+         *  FLOOR_SPECIAL, CHASM}, and every non-unique mob in the disc
+         *  is replaced by a random species whose intrinsic size is
+         *  within ±1 of the original's. */
+        POLYMORPH,
+        /** {@link UseBehavior#POWERUP} sub-effect: gain one character
+         *  level when picked up. */
+        LEVEL_UP,
+        /** {@link UseBehavior#POWERUP} sub-effect: restore
+         *  {@code maxHP * abilityPower} HP when picked up. */
+        HP_UP,
+        /** {@link UseBehavior#POWERUP} sub-effect: every wand-charging
+         *  item in the player's inventory gains its own
+         *  {@link Item#chargeGain} of charge (capped at max charge). */
+        MANA_UP
+    }
+
+    /** What happens to a thrown item AFTER its throw-effect resolves.
+     *  Read from the {@code throwResult} CSV column; blank cells parse
+     *  to {@link #NOTHING}. */
+    public enum ThrowResult {
+        /** Item lies on the ground at the impact tile (the historical
+         *  default for non-bomb throws). */
+        NOTHING,
+        /** Item ceases to exist (bombs, potions that shatter on impact). */
+        CONSUME,
+        /** Item bounces back to the thrower and lands on a tile adjacent
+         *  to them, ready to be picked up. */
+        RETURN
     }
 
     /**
@@ -57,7 +100,11 @@ public class Item {
      */
     public enum InventoryCategory {
         WEAPON, OFFHAND, ARMOR, AMULET, GEM,
-        POTION, WAND, FOOD, ORB, BOMB;
+        POTION, WAND, FOOD, ORB, BOMB,
+        /** Catch-all bag-tab category for "tools" — grappling hooks and any
+         *  future utility item that doesn't fit into one of the more
+         *  specialised buckets. Lives in the bag, never in a gear slot. */
+        ITEM;
 
         /** True if items in this category go into a gear strip equipment slot. */
         public boolean isEquipment() {
@@ -81,7 +128,26 @@ public class Item {
          *  default to the item's level. */
         DRINK,
         /** Consume the item to grant the user a perk point. Used by power orbs. */
-        GRANT_PERK
+        GRANT_PERK,
+        /** Throw a grappling rope — pick a target tile, then yank everything
+         *  on it (mob and any floor items) onto the nearest non-wall tile
+         *  adjacent to the user. Mobs whose {@code size} exceeds the item's
+         *  {@link Item#abilityPower} (overloaded as the max-size cap for
+         *  GRAPPLE items) are too heavy: the rope flashes and fades without
+         *  pulling anything. Items that land on a chasm fall in. */
+        GRAPPLE,
+        /** Quick-jump tool — picks a target tile within
+         *  {@link Item#abilityPower} squares (Chebyshev) of the user and
+         *  teleports them there for one {@code moveCost}. */
+        JUMP,
+        /** Pickup-trigger consumable: the moment the player walks onto
+         *  the item's tile it's destroyed and its {@link Item#wandEffect}
+         *  is applied to the player. Effects: {@code LEVEL_UP} grants one
+         *  character level; {@code HP_UP} restores
+         *  {@code maxHP * abilityPower} HP; {@code MANA_UP} adds each
+         *  inventory item's own {@code chargeGain} to its current
+         *  charge. POWERUP items are never picked up into the bag. */
+        POWERUP
     }
 
     /** Identifier — string key matching the {@code type} column of a row in
@@ -93,6 +159,12 @@ public class Item {
     public String name;
     /** Free-form flavor text / description shown in the item detail dialog. */
     public String description = "";
+    /** Optional secondary flavor paragraph — rendered immediately below
+     *  {@link #description} in the encyclopedia entry, separated by a
+     *  blank line. Use it for in-fiction lore or quotes that don't fit
+     *  on the inventory popup; the look popup deliberately ignores this
+     *  to keep its silhouette compact. Empty when the CSV cell is blank. */
+    public String description2 = "";
     public MinMax damage = MinMax.ZERO;
     /** Per-level damage range increment. Each {@code +N} on this item adds
      *  {@code N * damagePerLevel} to {@link #damage}. Used by weapons (melee
@@ -104,6 +176,36 @@ public class Item {
     /** Per-level armor range increment. Mirrors {@link #damagePerLevel} but
      *  for {@link #armor}. */
     public MinMax armorPerLevel  = MinMax.ZERO;
+    /** Armor-piercing damage range — bypasses the target's armor on a hit.
+     *  Composed by sum into the wielder's {@code apDamage} stat in
+     *  {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto}. */
+    public MinMax apDamage = MinMax.ZERO;
+    /** Per-level increment to {@link #apDamage}. */
+    public MinMax apDamagePerLevel = MinMax.ZERO;
+    /** Magic-resistance range — reduces magical / energy damage taken when
+     *  the item is equipped. Read from the CSV {@code antiMagic} column.
+     *  Composed by sum into the wielder's {@code magicResist} stat. */
+    public MinMax magicResist = MinMax.ZERO;
+    /** Per-level increment to {@link #magicResist}. */
+    public MinMax magicResistPerLevel = MinMax.ZERO;
+    /** Bonus to the wielder's {@code accuracy}. Composed by sum. */
+    public int accuracy;
+    /** Bonus to the wielder's {@code evasion}. Composed by sum. */
+    public int evasion;
+    /** Multiplier on the wielder's base attack cost — values below 1.0 mean
+     *  faster attacks, above 1.0 mean slower. {@link #ATTACK_SPEED_DEFAULT}
+     *  (= 1.0) is "no change". Read from the CSV {@code attackSpeed} column.
+     *  Wired into the wielder's {@code attackCost} via
+     *  {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto}. */
+    public double attackSpeed = ATTACK_SPEED_DEFAULT;
+    /** Multiplier on the wielder's base move cost. Mirrors
+     *  {@link #attackSpeed} for movement; CSV column is {@code moveSpeed}. */
+    public double moveSpeed = MOVE_SPEED_DEFAULT;
+    /** Identity values for the speed multipliers — items without a speed
+     *  modifier carry these so {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto}
+     *  contributes zero delta, and the lore renderer can suppress the row. */
+    public static final double ATTACK_SPEED_DEFAULT = 1.0;
+    public static final double MOVE_SPEED_DEFAULT   = 1.0;
     public double lightRadius;
     /** Number of tiles affected on use, for wands and bombs with an
      *  area-of-effect impact (water, oil, grass, fungus, fire, detonation,
@@ -118,6 +220,9 @@ public class Item {
     public Point location; // null when in an inventory
     /** What happens when this item is thrown; null means it just lands on the floor. */
     public ItemEffect throwEffect;
+    /** What happens to this item after its throw-effect resolves. See
+     *  {@link ThrowResult}. Defaults to {@link ThrowResult#NOTHING}. */
+    public ThrowResult throwResult = ThrowResult.NOTHING;
     public UseBehavior useBehavior = UseBehavior.NONE;
     /** Element a {@link UseBehavior#WAND} use applies on impact. Null for summon-style wands. */
     public ItemEffect wandEffect;
@@ -144,15 +249,50 @@ public class Item {
      *  scaled to the item's level via {@code MobProgression.setSpawnLevel}. */
     public String summonsWhenUsed;
 
-    /** Buff to apply to the user when this item is eaten or drunk. Null for items
-     *  with no buff effect. Generalises the legacy per-pear / per-potion switches
-     *  in {@code ItemSystem.eat} and {@code ItemSystem.drinkPotion}. */
-    public Buff.BuffType appliesBuff;
+    /** Buffs to apply to the user / target when this item is consumed or
+     *  thrown with the {@link ItemEffect#APPLYBUFFS} throw-effect. Empty
+     *  for items with no buff component. The CSV column accepts a single
+     *  buff name OR a pipe-separated list ({@code POISONED|CHILLED}); the
+     *  list semantics let an APPLYBUFFS thrown item layer multiple buffs
+     *  in one impact. */
+    public java.util.List<Buff.BuffType> appliesBuff = new java.util.ArrayList<>();
 
-    /** Base buff duration in turns at item-level 0. Effective duration scales with
-     *  item level via {@code (1 + item.level) * buffDuration}. Ignored when
-     *  {@link #appliesBuff} is null. */
-    public int buffDuration;
+    /** Convenience — first entry of {@link #appliesBuff} or {@code null}.
+     *  Used by call sites that historically treated the field as a single
+     *  buff (animator tinting, eat / drink hooks). */
+    public Buff.BuffType primaryBuff() {
+        return appliesBuff.isEmpty() ? null : appliesBuff.get(0);
+    }
+
+    /** Generic "magnitude" knob — overloaded by useBehavior:
+     *  <ul>
+     *    <li>{@code APPLYBUFFS} / {@code DRINK} / {@code EAT}: base buff
+     *        duration in turns at item-level 0; effective duration scales
+     *        with item level via {@code (1 + item.level) * abilityPower}.</li>
+     *    <li>{@code POISONCLOUD}: cloud lifetime in turns at level 0.</li>
+     *    <li>{@code GRAPPLE}: max grappable target size cap.</li>
+     *    <li>{@code JUMP}: jump radius in squares.</li>
+     *    <li>{@code POWERUP}+{@code HP_UP}: fraction of max HP healed
+     *        on pickup (0.5 = half max HP).</li>
+     *  </ul>
+     *  Stored as a float so fractional powers (HP_UP, future scalars)
+     *  fit cleanly; integer call sites cast as needed. */
+    public float abilityPower;
+
+    /** Wand-only: current charge level. Each {@link UseBehavior#WAND} fire
+     *  consumes 1 charge; the wand refuses to fire when {@code < 1}.
+     *  Stored as float so {@link #chargeGain} can drip charge in fractional
+     *  increments (e.g. mana pickups). Capped at {@link #maxCharge()}. */
+    public float charge;
+
+    /** Wand-only: charge regenerated per game-tick (or per
+     *  {@code MANA_UP} pickup application). Read from the {@code chargeGain}
+     *  CSV column. Default 0 (no regen). */
+    public float chargeGain;
+
+    /** Maximum charge a wand can hold — {@code level + 1}. Plain-level
+     *  wands carry 2; +N enchanted wands carry {@code N+2}. */
+    public int maxCharge() { return Math.max(1, level + 1); }
 
     /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
     public int knockbackSquares;
@@ -161,12 +301,6 @@ public class Item {
      *  particle stream so the player notices it. Power orbs use it; future
      *  glowing items just set the flag. */
     public boolean glows;
-
-    /** Category for which this item is the "empty-slot silhouette" art shown in
-     *  the inventory's gear strip. Set per item in {@code items.csv} via the
-     *  {@code silhouetteForCategory} column; null for items that aren't a
-     *  placeholder. */
-    public InventoryCategory silhouetteForCategory;
 
     /** Authoritative item-kind tag — see {@link InventoryCategory}. Drives
      *  equip routing, inventory tab grouping, and {@code ItemGenerator}

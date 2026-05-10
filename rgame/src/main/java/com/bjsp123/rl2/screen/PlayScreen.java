@@ -5,9 +5,6 @@ import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.ui.hud.ActionBar;
 import com.bjsp123.rl2.input.CameraController;
@@ -27,19 +24,15 @@ import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.World;
 import com.bjsp123.rl2.model.WorldTopology;
-import com.bjsp123.rl2.ui.popup.CharacterStatsRenderer;
+import com.bjsp123.rl2.ui.v2.V2CharacterStats;
+import com.bjsp123.rl2.ui.v2.V2Look;
 import com.bjsp123.rl2.world.render.DefaultLevelRenderer;
-import com.bjsp123.rl2.ui.hud.HudRenderer;
-import com.bjsp123.rl2.ui.popup.InventoryRenderer;
+import com.bjsp123.rl2.ui.v2.V2Inventory;
 import com.bjsp123.rl2.world.render.LevelRenderer;
-import com.bjsp123.rl2.ui.overlay.LookRenderer;
 import com.bjsp123.rl2.ui.overlay.TargetingOverlay;
 
 import java.util.ArrayList;
 import java.util.List;
-import com.bjsp123.rl2.ui.skin.StoneUi;
-import com.bjsp123.rl2.ui.skin.UiPixelScale;
-import com.bjsp123.rl2.ui.skin.UiScale;
 import com.bjsp123.rl2.world.anim.Animator;
 
 public class PlayScreen implements Screen {
@@ -55,24 +48,47 @@ public class PlayScreen implements Screen {
      *  seed inside the {@link com.bjsp123.rl2.util.SeedCode} window. Ignored
      *  when {@link #preloadedWorld} is non-null (load preserves the saved seed). */
     private final Long requestedSeed;
+    /** Pre-game-options god-mode flag — applied to the spawned player
+     *  Mob in {@link #initialize}. Ignored on a loaded run (the flag is
+     *  on the saved Mob itself in that case). */
+    private final boolean godModeRequested;
+    /** Pre-game-options starting character / dungeon level. {@code 1} is
+     *  the standard new-run start; values up to {@link
+     *  com.bjsp123.rl2.logic.GameBalance#DUNGEON_DEPTH} drop the player
+     *  into the corresponding generated level and bump their character
+     *  level to match. Ignored on a loaded run. */
+    private final int startingLevel;
+    /** Pre-game-options "all items" flag — seeds the spawned player's
+     *  inventory with one of every non-unique item in the registry. */
+    private final boolean allItemsRequested;
+    /** Pre-game-options "+10 perk points" flag — adds 10 perk points to
+     *  whatever the character normally starts with. */
+    private final boolean tenPerkPointsRequested;
 
     private World            world;
     private OrthographicCamera camera;
     private CameraController cameraController;
     private LevelRenderer    levelRenderer;
-    private HudRenderer      hudRenderer;
-    private InventoryRenderer inventoryRenderer;
-    private com.bjsp123.rl2.ui.popup.CraftingRenderer craftingRenderer;
-    private LookRenderer      lookRenderer;
+    private com.bjsp123.rl2.ui.v2.V2Hud v2Hud;
+    private V2Inventory v2Inventory;
+    private com.bjsp123.rl2.ui.v2.V2Crafting v2Crafting;
+    private V2Look      v2Look;
     private ActionBar         actionBar;
     private TargetingOverlay  targetingOverlay;
-    private CharacterStatsRenderer characterStatsRenderer;
-    private com.bjsp123.rl2.ui.popup.EncyclopediaRenderer encyclopediaRenderer;
+    private V2CharacterStats v2CharacterStats;
+    private com.bjsp123.rl2.ui.v2.V2Encyclopedia v2Encyclopedia;
+    /** Transient unlock-toast banner. Lives across the screen's lifetime;
+     *  rendered above the HUD on every frame; advances its countdown via
+     *  the same {@code dt} the animator consumes. */
+    private com.bjsp123.rl2.ui.v2.AchievementToast achievementToast;
+    /** Cached popup actors registered with the shared V2 stage on
+     *  {@link #show()} and de-registered on {@link #hide()}. The Stage
+     *  walks them in z-order each frame; PlayScreen no longer calls each
+     *  popup's render directly — the v2Stage.act/draw pair on
+     *  {@link #render(float)} does that work. */
+    private com.badlogic.gdx.scenes.scene2d.Actor[] popupActors;
     private GameInput         gameInput;
     private LookMode          lookMode;
-    private Stage             uiStage;
-    private StoneUi           stoneUi;
-    private Skin              uiSkin;
     /** In-world animator: drains {@code Level.events} after each {@code TurnSystem.tick}
      *  and maintains the per-mob {@link com.bjsp123.rl2.world.anim.MobAnimState} that the
      *  renderer reads. The single source of truth for the tick-gate freeze counter
@@ -93,15 +109,30 @@ public class PlayScreen implements Screen {
     private PlayController controller;
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls) {
-        this(game, slot, cls, null);
+        this(game, slot, cls, null, false, 1, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls, Long seed) {
+        this(game, slot, cls, seed, false, 1, false, false);
+    }
+
+    public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
+                      Long seed, boolean godMode) {
+        this(game, slot, cls, seed, godMode, 1, false, false);
+    }
+
+    public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
+                      Long seed, boolean godMode, int startingLevel,
+                      boolean allItems, boolean tenPerkPoints) {
         this.game = game;
         this.saveSlot = slot;
         this.charClass = cls;
         this.preloadedWorld = null;
         this.requestedSeed = seed;
+        this.godModeRequested = godMode;
+        this.startingLevel = startingLevel;
+        this.allItemsRequested = allItems;
+        this.tenPerkPointsRequested = tenPerkPoints;
     }
 
     public PlayScreen(Rl2Game game, int slot, World loadedWorld) {
@@ -110,6 +141,12 @@ public class PlayScreen implements Screen {
         this.charClass = null;
         this.preloadedWorld = loadedWorld;
         this.requestedSeed = null;
+        // Loaded runs read godMode off the saved player Mob; this flag
+        // is only consulted on a fresh new-game spawn.
+        this.godModeRequested = false;
+        this.startingLevel = 1;
+        this.allItemsRequested = false;
+        this.tenPerkPointsRequested = false;
     }
 
     @Override
@@ -133,9 +170,54 @@ public class PlayScreen implements Screen {
         // rules, the topmost window owns input and the world behind it
         // shouldn't slide under the user's finger.
         cameraController.setInputBlocker(this::isAnyPopupOpen);
+        // Input chain: cameraController → V2 modal popups (each a no-op when
+        // closed; consume when open) → V2 HUD (corner buttons) → world
+        // handlers. V2 popups come BEFORE the HUD so an open popup eats taps
+        // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
-                cameraController, uiStage, targetingOverlay, lookMode, gameInput));
+                cameraController,
+                v2Inventory.input(),
+                v2CharacterStats.input(),
+                v2Crafting.input(),
+                v2Encyclopedia.input(),
+                v2Look.input(),
+                v2Hud.input(),
+                targetingOverlay, lookMode, gameInput));
+        // Register the in-game popups with the shared V2 stage so their
+        // render order is owned by the scenegraph, not by an implicit
+        // call sequence in render(). Insertion order = back-to-front;
+        // the inventory's item-detail sub-popup goes on the higher
+        // {@code subPopupLayer} so its scrim covers the inventory text
+        // cleanly when up.
+        if (popupActors == null) {
+            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[6];
+            popupActors[0] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Inventory);
+            popupActors[1] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2CharacterStats);
+            popupActors[2] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Crafting);
+            popupActors[3] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Look);
+            popupActors[4] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Encyclopedia);
+            popupActors[5] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(
+                    v2Inventory.detailPopup());
+        }
+        game.ui.v2Stage.add(popupActors[0]);
+        game.ui.v2Stage.add(popupActors[1]);
+        game.ui.v2Stage.add(popupActors[2]);
+        game.ui.v2Stage.add(popupActors[3]);
+        game.ui.v2Stage.add(popupActors[4]);
+        game.ui.v2Stage.addToSubPopup(popupActors[5]);
         game.currentPlay = this;
+    }
+
+    @Override
+    public void hide() {
+        persist();
+        // Pull our popup actors back out of the shared stage so a
+        // disposed PlayScreen doesn't leave dangling actors.
+        if (popupActors != null) {
+            for (com.badlogic.gdx.scenes.scene2d.Actor a : popupActors) {
+                game.ui.v2Stage.remove(a);
+            }
+        }
     }
 
     private void initialize() {
@@ -147,6 +229,7 @@ public class PlayScreen implements Screen {
         if (preloadedWorld != null) {
             world = preloadedWorld;
             for (Level l : world.levels) if (l != null) l.initTransients();
+            world.linkLevels();
         } else {
             EventLog.clear();
             // World is procedurally generated — see WorldTopology.build. Depth and the
@@ -170,14 +253,28 @@ public class PlayScreen implements Screen {
                     new java.util.Random(world.seed),
                     world.unique);
             world.levels = levels;
-            world.currentLevelIndex = 0;
-            Point spawn = levels[0].spawnPoint != null ? levels[0].spawnPoint : new Point(2, 2);
+            world.linkLevels();
+            int startIdx = Math.max(0,
+                    Math.min(levels.length - 1, startingLevel - 1));
+            // Walk every level up to the start index as visited so the
+            // map screen / topology reads them as already-explored.
+            for (int i = 0; i <= startIdx; i++) {
+                if (levels[i] != null) levels[i].visited = true;
+            }
+            world.currentLevelIndex = startIdx;
+            Level startLevel = levels[startIdx];
+            Point spawn = startLevel.spawnPoint != null ? startLevel.spawnPoint : new Point(2, 2);
             Mob player  = MobFactory.player(spawn, charClass);
-            levels[0].mobs.add(player);
-            levels[0].visited = true;
+            player.godMode = godModeRequested;
+            if (startingLevel > 1) {
+                com.bjsp123.rl2.logic.MobProgression.setSpawnLevel(player, startingLevel);
+            }
+            if (tenPerkPointsRequested) player.perkPoints += 10;
+            if (allItemsRequested) grantOneOfEachItem(player);
+            startLevel.mobs.add(player);
             String playerName = player.name != null ? player.name : "Adventurer";
             EventLog.add(Messages.beginGame(playerName));
-            EventLog.add(Messages.enterLevel(playerName, 1, levels[0].flags));
+            EventLog.add(Messages.enterLevel(playerName, startLevel.depth, startLevel.flags));
         }
 
         Mob player = TurnSystem.findPlayer(world.currentLevel());
@@ -189,95 +286,110 @@ public class PlayScreen implements Screen {
         levelRenderer.setWorld(world);
         levelRenderer.setAnimator(animator);
 
-        // Shared in-game UI stack: one Stage backed by ScreenViewport at UiScale × UiPixelScale,
-        // one Skin from the stone 9-patches. All three overlays are scene2d Groups added to this
-        // stage. UiScale controls overall widget size; UiPixelScale adds an integer-multiple
-        // nearest-neighbor upscale on top (each source pixel → N screen pixels).
-        stoneUi = new StoneUi();
-        stoneUi.create();
-        uiSkin = stoneUi.newSkin();
-        ScreenViewport vp = new ScreenViewport();
-        vp.setUnitsPerPixel(1f / (UiScale.scale() * UiPixelScale.scale()));
-        uiStage = new Stage(vp);
+        // Achievement observation — every drained GameEvent gets a chance
+        // to fire a "first X" achievement. The listener flashes the toast
+        // banner + queues a HIGH-priority log line on each unlock.
+        achievementToast = new com.bjsp123.rl2.ui.v2.AchievementToast(game.ui);
+        if (game.achievementSystem != null) {
+            animator.setEventObserver(game.achievementSystem::observeEvent);
+            game.achievementSystem.setListener(this::onAchievementUnlocked);
+        }
 
-        hudRenderer = new HudRenderer(uiSkin, stoneUi);
-        hudRenderer.setOnReturnToTitle(() -> {
+        // V2 HUD — primitive ShapeRenderer + SpriteBatch chrome, drawn directly
+        // by this Screen. Game.ui is the shared V2 rendering context (one per
+        // Game).
+        v2Hud = new com.bjsp123.rl2.ui.v2.V2Hud(game.ui);
+        v2Hud.setOnReturnToTitle(() -> {
             persist();
-            game.setScreen(new TitleScreen(game));
+            game.setRootScreen(new com.bjsp123.rl2.ui.v2.V2Title(game, game.ui));
         });
-        PlayScreen self = this;
-        hudRenderer.setOnOpenSettings(() ->
-                game.setScreen(new SettingsScreen(game, () -> game.setScreen(self))));
-        // Encyclopaedia is now an in-game popup (constructed below); the menu callback
-        // just toggles it. Level Info reuses the old full-screen with only its
-        // current-level fact sheet.
-        hudRenderer.setOnOpenLevelInfo(() ->
-                game.setScreen(new LevelInfoScreen(
-                        () -> game.setScreen(self),
+        v2Hud.setOnOpenSettings(() ->
+                game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Settings(game, game.ui)));
+        v2Hud.setOnOpenLevelInfo(() ->
+                game.pushScreen(new com.bjsp123.rl2.ui.v2.V2LevelInfo(
+                        game.ui,
+                        game::popScreen,
                         world.currentLevel())));
 
-        // HUD action bar — used to live as a field on Mob; now an rgame-side UI object so
-        // the rlib model has no idea quickslots exist. New games seed the default
-        // bindings from the player's bag based on character class; loaded games start
-        // with everything empty until the user re-binds (saves don't persist the bar).
+        // HUD action bar — bound to the player Mob so quickslot assignments
+        // persist across save/load: ActionBar mirrors the live slot Item
+        // refs into {@link Mob#actionSlotTypes} on every set/clear, and
+        // {@link ActionBar#bindToPlayer} restores live refs from the
+        // saved type strings here.
         actionBar = new ActionBar();
+        actionBar.bindToPlayer(player);
 
-        inventoryRenderer = new InventoryRenderer(uiSkin);
-        inventoryRenderer.setPlayer(player);
-        inventoryRenderer.setActionBar(actionBar);
-        craftingRenderer = new com.bjsp123.rl2.ui.popup.CraftingRenderer(uiSkin);
-        craftingRenderer.setPlayer(player);
+        // V2 inventory popup — primitive-drawn modal, drawn directly by this
+        // Screen (not in uiStage). Reads the shared V2 rendering context off
+        // the Game so the same fonts / palette as the HUD apply.
+        v2Inventory = new V2Inventory(game.ui);
+        v2Inventory.setPlayer(player);
+        v2Inventory.setActionBar(actionBar);
+        v2Crafting = new com.bjsp123.rl2.ui.v2.V2Crafting(game.ui);
+        v2Crafting.setPlayer(player);
+        if (game.achievementSystem != null) {
+            v2Crafting.setOnCrafted(game.achievementSystem::observeCrafted);
+        }
         // The Combine button on the inventory's item-detail popup hands the chosen item
         // to the crafting screen, which pre-loads it into the first empty cell.
-        inventoryRenderer.setOnCombine((user, item) -> craftingRenderer.openWith(item));
+        v2Inventory.setOnCombine((user, item) -> v2Crafting.openWith(item));
 
         lookMode = new LookMode(camera);
         lookMode.setPlayer(player);
         lookMode.setLevel(world.currentLevel());
         lookMode.setHistory(targetHistory);
 
-        lookRenderer = new LookRenderer(uiSkin);
-        lookRenderer.setPlayer(player);
-        lookRenderer.setLevel(world.currentLevel());
-        lookRenderer.setLookMode(lookMode);
-        inventoryRenderer.setLookRenderer(lookRenderer);
-        hudRenderer.setOverlays(inventoryRenderer, lookRenderer);
-        hudRenderer.setLookMode(lookMode);
-        hudRenderer.setPlayerSupplier(() -> TurnSystem.findPlayer(world.currentLevel()));
-        hudRenderer.setActionBar(actionBar);
-        // Action-slot binding now lives entirely on the inventory popup's quickslot
-        // buttons — long-press has been removed (no-gesture rule), so the HUD action
-        // tiles are tap-only "fire what's bound" surfaces.
-        hudRenderer.setOnOpenInfo(() ->
-                game.setScreen(new MapScreen(() -> game.setScreen(self), world)));
-        hudRenderer.setCombineToggle(() -> {
-            if (craftingRenderer != null) craftingRenderer.toggle();
+        // V2 look popup — its open state follows lookMode.isActive(), so no
+        // toggle is needed here. The HUD's Look button toggles lookMode and
+        // V2Look reads from it on every frame.
+        v2Look = new V2Look(game.ui);
+        v2Look.setLevel(world.currentLevel());
+        v2Look.setLookMode(lookMode);
+        // V2 HUD doesn't track inv/look directly — it routes through callbacks
+        // (onOpenInventory + onLook) which the binding below wires up. setPlayerSupplier
+        // and setActionBar mirror the V1 HUD's API so the HUD always reads the live
+        // player + bound action items.
+        v2Hud.setPlayerSupplier(() -> TurnSystem.findPlayer(world.currentLevel()));
+        v2Hud.setActionBar(actionBar);
+        v2Hud.setOnOpenInventory(() -> {
+            if (v2Inventory != null) v2Inventory.toggle();
         });
+        v2Hud.setOnLook(() -> {
+            if (lookMode != null) lookMode.toggle();
+        });
+        v2Hud.setOnOpenMap(() ->
+                game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
+                        game.ui, game::popScreen, world)));
 
-        characterStatsRenderer = new CharacterStatsRenderer(uiSkin);
-        characterStatsRenderer.setPlayer(player);
-        hudRenderer.setOnPortraitTap(() -> {
+        v2CharacterStats = new V2CharacterStats(game.ui);
+        v2CharacterStats.setPlayer(player);
+        v2Hud.setOnPortraitTap(() -> {
             Mob cur = TurnSystem.findPlayer(world.currentLevel());
-            if (cur != null) characterStatsRenderer.setPlayer(cur);
-            characterStatsRenderer.toggle();
+            if (cur != null) v2CharacterStats.setPlayer(cur);
+            v2CharacterStats.toggle();
         });
 
-        encyclopediaRenderer = new com.bjsp123.rl2.ui.popup.EncyclopediaRenderer(uiSkin);
-        hudRenderer.setOnOpenEncyclopedia(() -> encyclopediaRenderer.toggle());
-        // Look popup's "?" info buttons (tile / mob / per-item) route through this
-        // shared encyclopaedia, so a click on the look reticle's tile portrait can
-        // open the encyclopedia pre-selected to that terrain entry.
-        lookRenderer.setEncyclopedia(encyclopediaRenderer);
-        // Inventory's item-detail popup also has a "?" info button under its icon.
-        inventoryRenderer.setEncyclopedia(encyclopediaRenderer);
+        v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui);
+        v2Hud.setOnOpenEncyclopedia(() -> v2Encyclopedia.toggle());
+        v2Hud.setOnBuffTap(type -> { if (type != null) v2Encyclopedia.openTo(type); });
+        // Inventory's item-detail info button jumps to the encyclopaedia
+        // pre-selected to that item — closes inventory in the process so
+        // the V2 single-popup-at-a-time rule is preserved.
+        v2Inventory.setEncyclopedia(v2Encyclopedia);
+        // Look popup's per-section info buttons route through the same
+        // shared encyclopaedia.
+        v2Look.setEncyclopedia(v2Encyclopedia);
+        // Character-stats popup's per-perk info buttons jump to the
+        // encyclopaedia's perk page.
+        v2CharacterStats.setEncyclopedia(v2Encyclopedia);
+        // The V1 path used to wire the Encyclopaedia into the Look popup's
+        // "?" info buttons; the V2 look popup doesn't have those yet, so
+        // there's nothing to wire here.
 
-        // Z-order: HUD beneath the dialogs so popups draw over the bar.
-        uiStage.addActor(hudRenderer);
-        uiStage.addActor(inventoryRenderer);
-        uiStage.addActor(craftingRenderer);
-        uiStage.addActor(lookRenderer);
-        uiStage.addActor(characterStatsRenderer);
-        uiStage.addActor(encyclopediaRenderer);
+        // V2 popups are rendered DIRECTLY by this Screen (see render() below)
+        // and route input through their own InputProcessors slotted into the
+        // multiplexer. None of them are scene2d Actors, so uiStage stays
+        // empty for now (kept around in case a follow-up V1 popup needs it).
 
         targetingOverlay = new TargetingOverlay();
         targetingOverlay.create();
@@ -293,25 +405,24 @@ public class PlayScreen implements Screen {
         controller = new PlayController(world, animator, actionBar, targetingOverlay,
                 levelRenderer, this::recenterCameraOnPlayer);
         if (newRun) controller.seedDefaultActionBar(player, charClass);
-        inventoryRenderer.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
-        inventoryRenderer.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
-        hudRenderer.setOnActionUse(controller::triggerActionSlot);
-        hudRenderer.setOnWait(controller::tryInteract);
+        v2Inventory.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
+        v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
+        v2Hud.setOnActionUse(controller::triggerActionSlot);
 
         gameInput = new GameInput(world, camera, cameraController);
         gameInput.setStairHandlers(controller::tryStairsUp, controller::tryStairsDown);
         gameInput.setInteractHandler(controller::tryInteract);
         gameInput.setInventoryToggle(() -> {
-            if (inventoryRenderer != null) inventoryRenderer.toggle();
+            if (v2Inventory != null) v2Inventory.toggle();
         });
         gameInput.setLookToggle(() -> {
             if (lookMode != null) lookMode.toggle();
         });
         gameInput.setCharacterToggle(() -> {
-            if (characterStatsRenderer != null) {
+            if (v2CharacterStats != null) {
                 Mob cur = TurnSystem.findPlayer(world.currentLevel());
-                if (cur != null) characterStatsRenderer.setPlayer(cur);
-                characterStatsRenderer.toggle();
+                if (cur != null) v2CharacterStats.setPlayer(cur);
+                v2CharacterStats.toggle();
             }
         });
         gameInput.setActionSlotHandler(controller::triggerActionSlot);
@@ -319,6 +430,46 @@ public class PlayScreen implements Screen {
         camera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         camera.zoom = DEFAULT_ZOOM;
         recenterCameraOnPlayer();
+    }
+
+    /** Listener registered on {@link com.bjsp123.rl2.save.AchievementSystem}
+     *  so each first-time unlock both flashes the toast banner and pushes
+     *  a HIGH-priority log line. Fired synchronously from inside the
+     *  unlock path. */
+    private void onAchievementUnlocked(com.bjsp123.rl2.save.Achievement a) {
+        if (a == null) return;
+        if (achievementToast != null) {
+            achievementToast.show("Achievement: " + a.displayName);
+        }
+        EventLog.add(com.bjsp123.rl2.logic.Messages.achievementUnlocked(a.displayName));
+    }
+
+    /** Forward the current depth to {@link com.bjsp123.rl2.save.AchievementSystem#observeDepth}.
+     *  Cheap no-op once every depth threshold is on the books. */
+    private void checkDepthAchievements() {
+        if (game.achievementSystem == null || world == null) return;
+        com.bjsp123.rl2.model.Level cur = world.currentLevel();
+        if (cur == null) return;
+        game.achievementSystem.observeDepth(cur.depth);
+    }
+
+    /** Stuff one of every type in {@link com.bjsp123.rl2.logic.ItemRegistry}
+     *  into {@code player}'s bag, equipping anything with a slot. Used by
+     *  the "All items" debug option on character creation. */
+    private static void grantOneOfEachItem(Mob player) {
+        if (player == null || player.inventory == null) return;
+        for (String type : com.bjsp123.rl2.logic.ItemRegistry.knownTypes()) {
+            try {
+                com.bjsp123.rl2.model.Item it =
+                        com.bjsp123.rl2.logic.ItemFactory.build(type);
+                player.inventory.bag.add(it);
+                if (it.isEquippable()) {
+                    com.bjsp123.rl2.logic.InventorySystem.equip(player.inventory, it);
+                }
+            } catch (RuntimeException ignored) {
+                // Defensive: skip any registry entry the factory refuses.
+            }
+        }
     }
 
     /** Save the in-progress world to disk. Called on hide/pause. */
@@ -334,7 +485,7 @@ public class PlayScreen implements Screen {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         Level level  = world.currentLevel();
-        lookRenderer.setLevel(level);
+        v2Look.setLevel(level);
         lookMode.setLevel(level);
         targetingOverlay.setLevel(level);
 
@@ -345,9 +496,13 @@ public class PlayScreen implements Screen {
         Mob player = TurnSystem.findPlayer(level);
         if (player != null) {
             lookMode.setPlayer(player);
-            lookRenderer.setPlayer(player);
+            // V2Look reads tile / mob / item info via cursor + level; player
+            // ref isn't needed for it.
             lastSnapshot = controller.snapshotOf(player);
         }
+        // Refresh look-popup level reference each frame (level can change on
+        // stairs traversal).
+        v2Look.setLevel(level);
 
         boolean overlayOpen = isAnyPopupOpen();
         // Drain one frame off the animation gate BEFORE the tick check. This lets a
@@ -364,7 +519,6 @@ public class PlayScreen implements Screen {
         if (ticked) {
             world.turn++;
             level.currentTurn = world.turn;
-            hudRenderer.recordTick();
             // Per-standard-turn handlers (vegetation spread, fire spread, smoke emission,
             // …) are dispatched from TurnSystem.tick on every 100th call, so they keep a
             // stable game-time cadence regardless of player speed. Ember emission lives
@@ -391,13 +545,22 @@ public class PlayScreen implements Screen {
         com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
 
         Mob playerAfter = TurnSystem.findPlayer(level);
+        // Cross-run achievement poll — depth-threshold checks fire from
+        // here so any path that changes the player's level (stairs,
+        // chasm fall, debug "starting level") feeds the same poll.
+        checkDepthAchievements();
         if (player != null && playerAfter == null && lastSnapshot != null) {
             game.hallOfFame.add(lastSnapshot);
             com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
+            if (game.achievementSystem != null) {
+                game.achievementSystem.observeRunEnded(lastSnapshot);
+            }
             game.saveSystem.clear(saveSlot);
             game.currentPlay = null;
             dispose();
-            game.setScreen(new GameOverScreen(game, lastSnapshot));
+            // Game over is terminal — clear the back-stack so the user can't
+            // pop back into a disposed PlayScreen.
+            game.setRootScreen(new com.bjsp123.rl2.ui.v2.V2GameOver(game, lastSnapshot));
             return;
         }
 
@@ -422,10 +585,25 @@ public class PlayScreen implements Screen {
         targetingOverlay.render();
         lookMode.render();
 
-        // Refresh HUD state for the frame, then let scene2d act+draw the entire UI.
-        hudRenderer.update(playerAfter, level.depth, world.turn, world.tick);
-        uiStage.act(delta);
-        uiStage.draw();
+        // V2 HUD chrome — drawn between the world and the popups so popups
+        // (inventory, look, etc.) overlay the HUD correctly. Switches
+        // projection to V2's camera internally.
+        v2Hud.update(level.depth, world.turn, world.tick);
+        v2Hud.render();
+
+        // Achievement toast — sits above the HUD strip and below modal
+        // popups. Renders nothing when no unlock is active.
+        if (achievementToast != null) achievementToast.render(dtMs);
+
+        // Popup layer — the V2 stage walks the registered popup actors
+        // in z-order. Each {@link com.bjsp123.rl2.ui.v2.stage.V2PopupActor}
+        // mirrors its popup's isOpen() onto its visibility, so closed
+        // popups are skipped. The inventory's item-detail sub-popup
+        // sits on a higher z-layer so its scrim cleanly hides the
+        // inventory's text behind it.
+        float dtSec = Gdx.graphics.getDeltaTime();
+        game.ui.v2Stage.act(dtSec);
+        game.ui.v2Stage.draw();
     }
 
     /** True iff any modal popup or input-claiming overlay is currently open.
@@ -433,13 +611,13 @@ public class PlayScreen implements Screen {
      *  is up) and as the camera input blocker (don't pan the map under a
      *  finger that's interacting with a popup). */
     private boolean isAnyPopupOpen() {
-        if (inventoryRenderer != null && inventoryRenderer.isOpen()) return true;
+        if (v2Inventory != null && v2Inventory.isOpen()) return true;
         if (lookMode != null && lookMode.isActive()) return true;
-        if (craftingRenderer != null && craftingRenderer.isOpen()) return true;
-        if (hudRenderer != null && hudRenderer.isMenuOpen()) return true;
+        if (v2Crafting != null && v2Crafting.isOpen()) return true;
+        if (v2Hud != null && v2Hud.isMenuOpen()) return true;
         if (targetingOverlay != null && targetingOverlay.isActive()) return true;
-        if (characterStatsRenderer != null && characterStatsRenderer.isOpen()) return true;
-        if (encyclopediaRenderer != null && encyclopediaRenderer.isOpen()) return true;
+        if (v2CharacterStats != null && v2CharacterStats.isOpen()) return true;
+        if (v2Encyclopedia != null && v2Encyclopedia.isOpen()) return true;
         return false;
     }
 
@@ -459,12 +637,14 @@ public class PlayScreen implements Screen {
         float oldZoom = camera.zoom;
         camera.setToOrtho(false, width, height);
         camera.zoom = oldZoom;
-        if (uiStage != null) {
-            ScreenViewport vp = (ScreenViewport) uiStage.getViewport();
-            vp.setUnitsPerPixel(1f / (UiScale.scale() * UiPixelScale.scale()));
-            vp.update(width, height, true);
-        }
         recenterCameraOnPlayer();
+        // Forward to the V2 UI viewport too — without this the HUD,
+        // popups, and burger menu keep their original size while the
+        // window grows / shrinks, so chrome ends up stretched (or
+        // crammed off-screen) instead of just repositioned.
+        if (game != null && game.ui != null) {
+            game.ui.resize(width, height);
+        }
     }
 
     public void cancelThrow() {
@@ -474,26 +654,26 @@ public class PlayScreen implements Screen {
     @Override public void pause()  { persist(); }
     @Override public void resume() {}
 
-    @Override public void hide()   { persist(); }
 
     @Override
     public void dispose() {
         if (levelRenderer    != null) levelRenderer.dispose();
-        if (inventoryRenderer != null) inventoryRenderer.dispose();
+        // V2 inventory has no GPU resources of its own — dispose via UiCtx.
         if (targetingOverlay != null) targetingOverlay.dispose();
         if (lookMode         != null) lookMode.dispose();
-        if (uiStage          != null) uiStage.dispose();
-        if (uiSkin           != null) uiSkin.dispose();
-        if (stoneUi          != null) stoneUi.dispose();
+        // Drop the achievement listener so a stale callback can't fire
+        // into a torn-down PlayScreen.
+        if (game.achievementSystem != null) {
+            game.achievementSystem.clearListener();
+        }
+        if (achievementToast != null) achievementToast.clear();
         levelRenderer = null;
-        hudRenderer = null;
-        inventoryRenderer = null;
-        lookRenderer = null;
+        v2Hud = null;
+        v2Inventory = null;
+        v2Look = null;
         targetingOverlay = null;
         lookMode = null;
-        uiStage = null;
-        uiSkin = null;
-        stoneUi = null;
+        achievementToast = null;
         initialized = false;
     }
 }

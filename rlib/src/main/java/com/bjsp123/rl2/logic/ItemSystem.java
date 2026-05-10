@@ -44,8 +44,48 @@ public final class ItemSystem {
         if (item == null || dst == null) return;
         if (item.damage.max() > 0) dst.damage = dst.damage.plus(effectiveDamageRange(item));
         if (item.armor.max()  > 0) dst.armor  = dst.armor .plus(effectiveArmorRange(item));
+        if (item.apDamage.max() > 0) {
+            dst.apDamage = dst.apDamage.plus(effectiveApDamageRange(item));
+        }
+        if (item.magicResist.max() > 0) {
+            dst.magicResist = dst.magicResist.plus(effectiveMagicResistRange(item));
+        }
+        dst.accuracy += item.accuracy;
+        dst.evasion  += item.evasion;
+        
+        // Speed multipliers are coeffients on the tick cost.
+        if (item.attackSpeed != Item.ATTACK_SPEED_DEFAULT) {
+            dst.attackCost *= item.attackSpeed;
+        }
+        if (item.moveSpeed != Item.MOVE_SPEED_DEFAULT) {
+            dst.moveCost *= item.moveSpeed;
+        }
         if (item.lightRadius > dst.lightRadius) dst.lightRadius = item.lightRadius;
         dst.knockbackSquares += item.knockbackSquares;
+    }
+
+    /** Effective AP-damage range, level-scaled by the item's
+     *  {@code apDamagePerLevel} CSV column. Mirrors
+     *  {@link #effectiveDamageRange(Item)} for {@link Item#apDamage}. */
+    public static MinMax effectiveApDamageRange(Item item) {
+        if (item == null || item.apDamage.max() <= 0) return MinMax.ZERO;
+        int lvl = clampedLevel(item);
+        MinMax inc = item.apDamagePerLevel == null
+                ? MinMax.ZERO : item.apDamagePerLevel;
+        return new MinMax(item.apDamage.min() + lvl * inc.min(),
+                          item.apDamage.max() + lvl * inc.max());
+    }
+
+    /** Effective magic-resist range, level-scaled by the item's
+     *  {@code antiMagicPerLevel} CSV column. Mirrors
+     *  {@link #effectiveArmorRange(Item)} for {@link Item#magicResist}. */
+    public static MinMax effectiveMagicResistRange(Item item) {
+        if (item == null || item.magicResist.max() <= 0) return MinMax.ZERO;
+        int lvl = clampedLevel(item);
+        MinMax inc = item.magicResistPerLevel == null
+                ? MinMax.ZERO : item.magicResistPerLevel;
+        return new MinMax(item.magicResist.min() + lvl * inc.min(),
+                          item.magicResist.max() + lvl * inc.max());
     }
 
     // ── Level-scaling primitives ─────────────────────────────────────────────
@@ -117,19 +157,43 @@ public final class ItemSystem {
         return item.foodValue;
     }
 
+    /** Single source of truth for "what level should this item act at
+     *  when {@code holder} uses it?". Combines:
+     *  <ul>
+     *    <li>{@link Item#level} — the item's own enchantment plusses.</li>
+     *    <li>+1 if {@code holder} carries the {@link Perk#WANDMASTER}
+     *        perk and {@code item} is a wand.</li>
+     *    <li>(future) bonuses from equipped gems / amulets that boost
+     *        item levels — add cases here so every consumer (combat,
+     *        UI display, AOE math) sees the same number.</li>
+     *  </ul>
+     *  {@code holder} may be {@code null} for floor-item / encyclopedia
+     *  inspection; the perk / gear bonuses are simply skipped in that
+     *  case. */
+    public static int effectiveLevel(Item item, Mob holder) {
+        if (item == null) return 0;
+        int lvl = clampedLevel(item);
+        if (holder != null && item.useBehavior == Item.UseBehavior.WAND
+                && holder.perks != null
+                && holder.perks.getOrDefault(Perk.WANDMASTER, 0) > 0) {
+            lvl += 1;
+        }
+        return lvl;
+    }
+
     /** Effective buff level applied by a buff-bestowing item. {@code 1 + item.level}
      *  so a level-0 starter potion still applies a level-1 buff. */
     public static int effectiveBuffLevel(Item item) {
         return 1 + clampedLevel(item);
     }
 
-    /** Effective buff duration in turns: {@code (1 + item.level) * item.buffDuration}.
+    /** Effective buff duration in turns: {@code (1 + item.level) * item.abilityPower}.
      *  Items that don't carry a base duration (data column blank) fall back to
      *  {@link #effectiveBuffLevel} so a level-N consumable still applies its buff
      *  for at least one tick per level. */
     public static int effectiveBuffDuration(Item item) {
         if (item == null) return 1;
-        int base = item.buffDuration > 0 ? item.buffDuration : 1;
+        int base = item.abilityPower > 0f ? Math.max(1, (int) item.abilityPower) : 1;
         return effectiveBuffLevel(item) * base;
     }
 
@@ -165,8 +229,72 @@ public final class ItemSystem {
         MobSystem.removeFromInventory(eater, item);
         if (eater.behavior == Behavior.PLAYER) {
             String name = eater.name != null ? eater.name : "Adventurer";
-            EventLog.add(Messages.playerUses(name,
-                    item.useVerb != null ? item.useVerb : "eat", item.name));
+            EventLog.add(Messages.playerEats(name, item.name));
+        }
+    }
+
+    /**
+     * Apply a {@link Item.UseBehavior#POWERUP} pickup to {@code picker}.
+     * Dispatches on {@link Item#wandEffect}:
+     * <ul>
+     *   <li>{@code LEVEL_UP} — bumps the picker's character level by one
+     *       (delegated to {@link MobProgression#applyLevelUp}).</li>
+     *   <li>{@code HP_UP} — restores {@code maxHp * abilityPower} HP,
+     *       clamped at the picker's max.</li>
+     *   <li>{@code MANA_UP} — every wand-bearing item in the picker's
+     *       inventory gains its own {@code chargeGain} of charge,
+     *       clamped at {@link Item#maxCharge()}.</li>
+     * </ul>
+     * Caller (currently {@link MobSystem}'s tile-step hook) is responsible
+     * for removing the item from the level — this method only applies the
+     * effect.
+     */
+    public static void applyPowerup(Level level, Mob picker, Item item) {
+        if (picker == null || item == null) return;
+        Item.ItemEffect eff = item.wandEffect;
+        if (eff == null) return;
+        switch (eff) {
+            case LEVEL_UP -> {
+                com.bjsp123.rl2.logic.MobProgression.applyLevelUp(level, picker);
+            }
+            case HP_UP -> {
+                double maxHp = picker.effectiveStats().maxHp;
+                double healed = Math.max(1.0, maxHp * item.abilityPower);
+                double newHp = Math.min(maxHp, picker.hp + healed);
+                int delta = (int) Math.round(newHp - picker.hp);
+                picker.hp = newHp;
+                if (level != null && level.events != null && delta > 0) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(
+                            picker, delta));
+                }
+            }
+            case MANA_UP -> {
+                if (picker.inventory == null) break;
+                for (Item bagItem : picker.inventory.bag) {
+                    if (bagItem == null) continue;
+                    if (bagItem.useBehavior != Item.UseBehavior.WAND) continue;
+                    bagItem.charge = Math.min(bagItem.maxCharge(),
+                            bagItem.charge + bagItem.chargeGain);
+                }
+                for (Item eq : picker.inventory.allEquipped()) {
+                    if (eq == null) continue;
+                    if (eq.useBehavior != Item.UseBehavior.WAND) continue;
+                    eq.charge = Math.min(eq.maxCharge(),
+                            eq.charge + eq.chargeGain);
+                }
+            }
+            default -> { /* not a POWERUP effect — ignore */ }
+        }
+        // Floating-text feedback so the player sees the absorption land.
+        if (level != null && level.events != null && picker.position != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(
+                    picker.position, eff));
+        }
+        if (picker.behavior == Behavior.PLAYER) {
+            String name = picker.name != null ? picker.name : "Adventurer";
+            EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                    name + " absorbs the " + (item.name != null ? item.name : "powerup") + ".",
+                    com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
         }
     }
 
@@ -222,13 +350,11 @@ public final class ItemSystem {
         emitPotionBurst(level, at, item);
     }
 
-    /** Apply the potion's drink-time effect to a single mob: appliesBuff plus
-     *  the rolled damage range (if non-zero). POTION_INSIGHT additionally
-     *  reveals the whole level when the affected mob is the player — that's
-     *  the only player-only side-effect, and it's expressed as a hard-coded
-     *  type check because revealing the explored map can't be modelled as a
-     *  Buff. Other potion specials should add a similar branch here rather
-     *  than reaching into drinkPotion / throwItem. */
+    /** Apply the potion's drink-time effect to a single mob: any buffs
+     *  in {@code item.appliesBuff} plus the rolled damage range when the
+     *  potion deals damage on impact. Player-only side-effects (like
+     *  reveal-the-level) are now expressed as buff types whose per-turn
+     *  handler does the work — see {@link com.bjsp123.rl2.model.Buff.BuffType#INSIGHT}. */
     private static void applyPotionEffect(Level level, Mob mob, Item item, Mob source) {
         if (mob == null || item == null) return;
         applyConsumableBuff(level, mob, item);
@@ -238,9 +364,6 @@ public final class ItemSystem {
                 MobSystem.processAttack(level, source, mob, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON);
             }
-        }
-        if ("POTION_INSIGHT".equals(item.type) && mob.behavior == Behavior.PLAYER) {
-            revealLevel(level);
         }
     }
 
@@ -253,25 +376,18 @@ public final class ItemSystem {
         level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(at, item));
     }
 
-    /** Stamp every tile of {@code level} as explored, so the renderer paints the
-     *  whole map (in remembered-but-not-currently-visible state). Player still
-     *  sees only currently-lit tiles in full colour — vision is unchanged. */
-    private static void revealLevel(Level level) {
-        if (level == null || level.explored == null) return;
-        for (int x = 0; x < level.width; x++) {
-            for (int y = 0; y < level.height; y++) {
-                level.explored[x][y] = true;
-            }
-        }
-    }
 
     /** Apply the item's CSV-declared {@link Item#appliesBuff} to the user, with
      *  level / duration scaled by the standard item-level helpers. No-op when the
      *  item carries no buff. */
     private static void applyConsumableBuff(Level level, Mob user, Item item) {
-        if (item == null || item.appliesBuff == null) return;
-        BuffSystem.apply(level, user, item.appliesBuff,
-                effectiveBuffLevel(item), effectiveBuffDuration(item), user);
+        if (item == null || item.appliesBuff == null
+                || item.appliesBuff.isEmpty()) return;
+        int lvl = effectiveBuffLevel(item);
+        int dur = effectiveBuffDuration(item);
+        for (com.bjsp123.rl2.model.Buff.BuffType b : item.appliesBuff) {
+            BuffSystem.apply(level, user, b, lvl, dur, user);
+        }
     }
 
     /**
@@ -325,7 +441,10 @@ public final class ItemSystem {
             case FIRE     -> MobSystem.igniteDisc(level, tx, ty, areaRadius);
             case DETONATION -> {
                 int radius = areaRadius + 1;
-                MobSystem.igniteDisc(level, tx, ty, radius);
+                // Concussive blast — only sets fire to tiles that are
+                // intrinsically flammable (grass / mushrooms / trees /
+                // oil). Bare stone is left intact.
+                MobSystem.igniteFlammableDisc(level, tx, ty, radius);
                 if (level.events != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.ExplosionEffect(target, radius));
                 }
@@ -359,6 +478,8 @@ public final class ItemSystem {
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
                 }
             }
+            case VOID -> applyVoidImpact(level, target, effectiveLevel);
+            case POLYMORPH -> applyPolymorphImpact(level, target, areaRadius);
         }
         if (element != Item.ItemEffect.DETONATION
                 && element != Item.ItemEffect.BANISHMENT
@@ -384,6 +505,208 @@ public final class ItemSystem {
      * eligible chain target, so a careless lightning shot in a puddled room
      * can fry the wand-user along with everyone else.
      */
+    /** Wand-of-void impact. Tears a chasm at the target tile and pulls
+     *  every mob within Chebyshev radius {@code (effectiveLevel / 2) + 1}
+     *  toward the centre. Floor-like tiles in the disc convert to
+     *  CHASM; small statues are obliterated into chasm too (large
+     *  statues survive — they're too anchored). Pulled mobs play the
+     *  standard knockback-slide animation; non-flying mobs that land on
+     *  a fresh chasm tile fall through via
+     *  {@link com.bjsp123.rl2.logic.MobSystem#fallToNextLevel}. */
+    private static void applyVoidImpact(Level level, com.bjsp123.rl2.model.Point target,
+                                        int effectiveLevel) {
+        int tx = target.tileX(), ty = target.tileY();
+        if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
+        int radius = Math.max(1, (effectiveLevel / 2) + 1);
+        int r2 = radius * radius;
+
+        // Tile conversion pass — floor-like + small statues become CHASM.
+        // Walk the disc and switch tiles in place.
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                if (dx * dx + dy * dy > r2) continue;
+                int x = tx + dx, y = ty + dy;
+                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                com.bjsp123.rl2.model.Tile t = level.tiles[x][y];
+                if (t == null) continue;
+                if (t.isFloorLike()
+                        || t == com.bjsp123.rl2.model.Tile.STATUE_SMALL_L
+                        || t == com.bjsp123.rl2.model.Tile.STATUE_SMALL_R) {
+                    level.tiles[x][y] = com.bjsp123.rl2.model.Tile.CHASM;
+                    if (level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(
+                                new com.bjsp123.rl2.model.Point(x, y)));
+                    }
+                }
+            }
+        }
+
+        // Mob pull pass — each mob in the disc is yanked one tile toward
+        // the centre, riding the standard knockback slide. Iteration uses
+        // a snapshot because MobSystem.fallToNextLevel can mutate
+        // level.mobs (cross-level transfer when a non-flyer lands on a
+        // fresh chasm).
+        java.util.List<Mob> snapshot = new java.util.ArrayList<>(level.mobs);
+        for (Mob m : snapshot) {
+            if (m == null || m.position == null || m.hp <= 0) continue;
+            int mdx = m.position.tileX() - tx;
+            int mdy = m.position.tileY() - ty;
+            if (mdx * mdx + mdy * mdy > r2) continue;
+            if (mdx == 0 && mdy == 0) continue;          // mob at the centre
+            int sx = -Integer.signum(mdx);
+            int sy = -Integer.signum(mdy);
+            voidPullMob(level, m, m.position, sx, sy);
+        }
+
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(
+                    target, Item.ItemEffect.VOID));
+        }
+    }
+
+    /** Slide {@code mob} one tile in direction ({@code sx}, {@code sy})
+     *  toward the void centre, emitting a {@code MobKnockedBack} for the
+     *  visual. If the destination is a (now-fresh) chasm and the mob
+     *  isn't flying, route to the standard
+     *  {@link com.bjsp123.rl2.logic.MobSystem#fallToNextLevel} so it
+     *  falls through. Stops on out-of-bounds, walls, or other mobs —
+     *  the slide just doesn't happen in those edge cases (the void is
+     *  a terrain hazard, not a guaranteed teleport). */
+    private static void voidPullMob(Level level, Mob mob,
+                                    com.bjsp123.rl2.model.Point start,
+                                    int sx, int sy) {
+        if (sx == 0 && sy == 0) return;
+        int nx = start.tileX() + sx;
+        int ny = start.tileY() + sy;
+        if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) return;
+        com.bjsp123.rl2.model.Tile t = level.tiles[nx][ny];
+        if (t == null || t.blocksMovement()) return;
+        // Block on another mob — pull stalls.
+        for (Mob other : level.mobs) {
+            if (other == mob) continue;
+            if (other.position == null) continue;
+            if (other.position.tileX() == nx && other.position.tileY() == ny) return;
+        }
+        com.bjsp123.rl2.model.Point dest = new com.bjsp123.rl2.model.Point(nx, ny);
+        mob.position = dest;
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobKnockedBack(
+                    mob, start, dest, false));
+        }
+        // Chasm landing follows the standard fall-to-next-level path.
+        if (t == com.bjsp123.rl2.model.Tile.CHASM
+                && !mob.effectiveStats().flying) {
+            com.bjsp123.rl2.logic.MobSystem.fallToNextLevel(level, mob);
+        }
+    }
+
+    /** Reshape an area: every floor-like tile in the disc has a 50%
+     *  chance to reroll to one of {FLOOR, FLOOR_WOOD, FLOOR_SPECIAL,
+     *  CHASM}; every non-unique mob in the disc is replaced by a
+     *  random species whose intrinsic size lies within ±1 of the
+     *  original's. The player is never polymorphed. */
+    private static void applyPolymorphImpact(Level level, Point target, int areaRadius) {
+        int tx = target.tileX(), ty = target.tileY();
+        if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
+        int radius = Math.max(1, areaRadius);
+        int r2 = radius * radius;
+
+        com.bjsp123.rl2.model.Tile[] floorRoll = {
+                com.bjsp123.rl2.model.Tile.FLOOR,
+                com.bjsp123.rl2.model.Tile.FLOOR_WOOD,
+                com.bjsp123.rl2.model.Tile.FLOOR_SPECIAL,
+                com.bjsp123.rl2.model.Tile.CHASM
+        };
+
+        // Tile reshape pass.
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                if (dx * dx + dy * dy > r2) continue;
+                int x = tx + dx, y = ty + dy;
+                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                com.bjsp123.rl2.model.Tile t = level.tiles[x][y];
+                if (t == null || !t.isFloorLike()) continue;
+                if (POLY_RNG.nextDouble() >= 0.5) continue;
+                com.bjsp123.rl2.model.Tile next = floorRoll[POLY_RNG.nextInt(floorRoll.length)];
+                level.tiles[x][y] = next;
+                if (level.events != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(
+                            new com.bjsp123.rl2.model.Point(x, y)));
+                }
+            }
+        }
+
+        // Mob reshape pass — snapshot since we mutate level.mobs in place.
+        // The disc check uses Chebyshev distance so a target at a corner
+        // of the disc is included rather than missed by the Euclidean
+        // gate (which clips diagonals at radius 1).
+        java.util.List<Mob> snapshot = new java.util.ArrayList<>(level.mobs);
+        for (Mob m : snapshot) {
+            if (m == null || m.position == null || m.hp <= 0) continue;
+            if (m.behavior == Behavior.PLAYER) continue;
+            int mdx = Math.abs(m.position.tileX() - tx);
+            int mdy = Math.abs(m.position.tileY() - ty);
+            if (Math.max(mdx, mdy) > radius) continue;
+            MobDefinition oldDef = m.mobType == null ? null : MobRegistry.get(m.mobType);
+            if (oldDef == null || oldDef.unique) continue;
+            int oldSize = oldDef.size;
+            String pick = pickPolymorphReplacement(oldSize, m.mobType);
+            if (pick == null) {
+                // Strict size band turned up nothing — fall back to any
+                // non-unique non-PLAYER species so the wand doesn't
+                // silently no-op on small / large outliers.
+                pick = pickPolymorphReplacement(Integer.MIN_VALUE, m.mobType);
+                if (pick == null) continue;
+            }
+            polymorphMob(level, m, pick);
+        }
+    }
+
+    /** Local RNG for polymorph rolls. Separate from MobSystem.RANDOM so
+     *  visual / world-state side-effects don't desync the combat stream. */
+    private static final java.util.Random POLY_RNG = new java.util.Random();
+
+    /** Pick a random non-unique, non-player mob type whose intrinsic
+     *  size lies in {@code [oldSize-1, oldSize+1]} and whose type
+     *  string differs from {@code excludeType}. Pass
+     *  {@link Integer#MIN_VALUE} as {@code oldSize} to drop the size
+     *  filter entirely (used as a last-resort fallback when the strict
+     *  band has no candidates). Returns {@code null} when no such
+     *  species exists in the registry. */
+    private static String pickPolymorphReplacement(int oldSize, String excludeType) {
+        boolean ignoreSize = oldSize == Integer.MIN_VALUE;
+        java.util.List<String> candidates = new java.util.ArrayList<>();
+        for (String type : MobRegistry.knownTypes()) {
+            if (type.equals(excludeType)) continue;
+            MobDefinition def = MobRegistry.get(type);
+            if (def == null) continue;
+            if (def.unique) continue;
+            if (def.behavior == Behavior.PLAYER) continue;
+            if (!ignoreSize
+                    && (def.size < oldSize - 1 || def.size > oldSize + 1)) continue;
+            candidates.add(type);
+        }
+        if (candidates.isEmpty()) return null;
+        return candidates.get(POLY_RNG.nextInt(candidates.size()));
+    }
+
+    /** Replace {@code old} in place with a fresh mob of {@code newType}
+     *  at the same tile. Position-tied state is dropped — the new mob
+     *  starts at full HP with the species' default stats. The MobSpawned
+     *  event drives the renderer's spawn-grow animation, which reads as
+     *  a polymorph poof. */
+    private static void polymorphMob(Level level, Mob old, String newType) {
+        com.bjsp123.rl2.model.Point pos = old.position;
+        Mob fresh = MobFactory.spawn(newType, pos);
+        if (fresh == null) return;
+        int idx = level.mobs.indexOf(old);
+        if (idx < 0) return;
+        level.mobs.set(idx, fresh);
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(fresh, pos));
+        }
+    }
+
     private static void applyLightningChain(Level level, Mob caster, Point target,
                                             Item wand, int effectiveLevel) {
         int tx = target.tileX(), ty = target.tileY();
@@ -480,8 +803,22 @@ public final class ItemSystem {
      */
     public static void fireWand(Level level, Mob caster, Item wand, Point target) {
         if (level == null || caster == null || wand == null) return;
+        // Charge gate — wands refuse to fire when current charge is < 1.
+        // The summoning branch shares the same gate so a depleted wand of
+        // dog won't yip out a free puppy on use.
+        if (wand.useBehavior == Item.UseBehavior.WAND && wand.charge < 1f) {
+            if (caster.behavior == Behavior.PLAYER) {
+                String name = caster.name != null ? caster.name : "Adventurer";
+                EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                        "The " + (wand.name != null ? wand.name : "wand")
+                                + " fizzles — out of charge.",
+                        com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+            }
+            return;
+        }
         if (wand.summonsWhenUsed != null) {
             castSummonWand(level, caster, wand);
+            wand.charge = Math.max(0f, wand.charge - 1f);
             TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
             return;
         }
@@ -489,9 +826,7 @@ public final class ItemSystem {
         Point impact = MobSystem.firstMobBlocking(level, caster.position, target, caster);
         boolean trajectoryVisible =
                 MobSystem.trajectoryTouchesVisible(level, caster.position, impact);
-        int effLvl = wand.level
-                + (caster.perks != null
-                        && caster.perks.getOrDefault(Perk.WANDMASTER, 0) > 0 ? 1 : 0);
+        int effLvl = effectiveLevel(wand, caster);
         if (level.events != null) {
             if (wand.wandEffect == Item.ItemEffect.BANISHMENT) {
                 level.events.add(new GameEvent.WandRayFired(
@@ -503,6 +838,8 @@ public final class ItemSystem {
                         trajectoryVisible));
             }
         }
+        // Charge consumed once the wand has actually fired the projectile.
+        wand.charge = Math.max(0f, wand.charge - 1f);
         TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
     }
 
@@ -519,9 +856,161 @@ public final class ItemSystem {
             case EAT         -> eat(level, user, item);
             case DRINK       -> drinkPotion(level, user, item);
             case GRANT_PERK  -> grantPerk(level, user, item);
-            case WAND, NONE  -> { return; } // need a target — caller routes elsewhere
+            case WAND, GRAPPLE, NONE -> { return; } // need a target — caller routes elsewhere
         }
         TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+    }
+
+    /**
+     * Resolve a grappling-rope use ({@link Item.UseBehavior#GRAPPLE}) targeted
+     * at {@code target}. The flow:
+     * <ol>
+     *   <li>Pick the landing tile — the nearest non-wall 8-neighbour of
+     *       {@code caster} (closest to {@code target} on Euclidean ties);
+     *       chasms count as valid landings (the grappled subject just
+     *       falls in).</li>
+     *   <li>Mob on the target tile: if its {@code size} exceeds the item's
+     *       {@code abilityPower} (overloaded as the max-size cap for GRAPPLE
+     *       items) the rope flashes and fades — emit a {@code GrappleFired}
+     *       with {@code success = false} and no movement events. Otherwise
+     *       the mob is moved to the landing tile (chasm-fall handled).</li>
+     *   <li>Floor items on the target tile: relocated to the landing tile,
+     *       or emit {@link com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm}
+     *       if the landing is a chasm.</li>
+     *   <li>{@code attackCost} is always charged.</li>
+     * </ol>
+     */
+    public static void castGrapple(Level level, Mob caster, Item item, Point target) {
+        if (level == null || caster == null || item == null || target == null) return;
+        if (caster.position == null) return;
+        Mob targetMob = MobSystem.mobAt(level,target);
+        if (targetMob != null) {
+            int maxSize = Math.max(0, (int) item.abilityPower);
+            if (targetMob.effectiveStats().size > maxSize) {
+                if (level.events != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
+                            caster, caster.position, target, false));
+                }
+                TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+                return;
+            }
+        }
+        Point landing = pickGrappleLanding(level, caster.position, target);
+        if (landing == null || landing.equals(target)) {
+            // No valid landing (caster boxed in by walls, or the target is
+            // already adjacent) — the rope reaches but pulls no-one.
+            if (level.events != null) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
+                        caster, caster.position, target, true));
+            }
+            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+            return;
+        }
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
+                    caster, caster.position, target, true));
+        }
+        boolean landingIsChasm = level.tiles[landing.tileX()][landing.tileY()]
+                == com.bjsp123.rl2.model.Tile.CHASM;
+        if (targetMob != null) {
+            grapplePullMob(level, targetMob, landing, landingIsChasm);
+        }
+        grapplePullFloorItems(level, target, landing, landingIsChasm);
+        TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+    }
+
+    /** Find the best grapple landing tile — nearest non-wall 8-neighbour of
+     *  {@code casterPos}, preferring the one closest to {@code target} on
+     *  Euclidean ties so the dragged subject lands on the natural side of
+     *  the caster. Skips tiles already occupied by another mob (the
+     *  grapple shouldn't pile two creatures into one tile). Returns
+     *  {@code null} only when no valid neighbour exists. */
+    private static Point pickGrappleLanding(Level level, Point casterPos, Point target) {
+        Point best = null;
+        double bestDist = Double.POSITIVE_INFINITY;
+        int cx = casterPos.tileX(), cy = casterPos.tileY();
+        int tx = target.tileX(),    ty = target.tileY();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = cx + dx, ny = cy + dy;
+                if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                com.bjsp123.rl2.model.Tile tile = level.tiles[nx][ny];
+                if (tile.blocksMovement()) continue;
+                if (MobSystem.mobAt(level,new Point(nx, ny)) != null) continue;
+                double d = (nx - tx) * (double) (nx - tx)
+                         + (ny - ty) * (double) (ny - ty);
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = new Point(nx, ny);
+                }
+            }
+        }
+        return best;
+    }
+
+    private static void grapplePullMob(Level level, Mob mob, Point landing,
+                                       boolean landingIsChasm) {
+        Point start = mob.position;
+        if (start == null) return;
+        boolean flying = mob.effectiveStats().flying;
+        mob.position = landing;
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobKnockedBack(
+                    mob, start, landing, false));
+        }
+        if (landingIsChasm && !flying) {
+            // Chasm landing — defer to the standard fall-through path so
+            // the grapple-pulled mob either lands on the next level
+            // (taking half-max-HP fall damage) or dies in the chasm if
+            // there's no next level / the fall would kill it.
+            MobSystem.fallToNextLevel(level, mob);
+        }
+    }
+
+    private static void grapplePullFloorItems(Level level, Point target,
+                                              Point landing, boolean landingIsChasm) {
+        if (level == null || level.items == null) return;
+        int tx = target.tileX(), ty = target.tileY();
+        java.util.List<Item> moved = new java.util.ArrayList<>();
+        for (Item it : level.items) {
+            if (it == null || it.location == null) continue;
+            if (it.location.tileX() == tx && it.location.tileY() == ty) {
+                moved.add(it);
+            }
+        }
+        for (Item it : moved) {
+            if (landingIsChasm) {
+                level.items.remove(it);
+                if (level.events != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
+                            it, landing));
+                }
+            } else {
+                it.location = landing;
+            }
+        }
+    }
+
+    private static void dropInventoryIntoChasm(Level level, Mob mob) {
+        if (mob == null || mob.inventory == null) return;
+        java.util.List<Item> falling = new java.util.ArrayList<>();
+        if (mob.inventory.bag != null) {
+            falling.addAll(mob.inventory.bag);
+            mob.inventory.bag.clear();
+        }
+        falling.addAll(mob.inventory.allEquipped());
+        mob.inventory.weapon  = null;
+        mob.inventory.offhand = null;
+        mob.inventory.armor   = null;
+        java.util.Arrays.fill(mob.inventory.amulets, null);
+        java.util.Arrays.fill(mob.inventory.gems,    null);
+        if (level.events != null) {
+            for (Item it : falling) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
+                        it, mob.position));
+            }
+        }
     }
 
     public static boolean castSummonWand(Level level, Mob caster, Item wand) {

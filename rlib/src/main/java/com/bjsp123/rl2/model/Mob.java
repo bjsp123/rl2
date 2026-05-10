@@ -397,6 +397,12 @@ public class Mob {
 
     // ── Vital signs ─────────────────────────────────────────────────────────
     public double hp;
+    /** Pre-game-options "god mode" — when {@code true}, damage routed
+     *  through {@link com.bjsp123.rl2.logic.MobSystem#processAttack} is
+     *  applied normally but the mob's hp is clamped to a minimum of 1 so
+     *  it never dies. Off by default; set on the player Mob from the
+     *  character-select pre-game options popup. */
+    public boolean godMode;
     /** Default ASLEEP — most species sleep in until something they care about wanders
      *  into their wakeRadius. Factories override (e.g. princess starts AWAKE, kitten
      *  starts FOLLOWING) when a different starting state is needed. */
@@ -468,6 +474,13 @@ public class Mob {
     /** Lifetime history — kills, level-ups, item finds — read by the character stats
      *  frame's History tab. */
     public java.util.List<HistoricalRecord> history = new java.util.ArrayList<>();
+    /** Player's quickslot bindings, by item type string. Index 0..5 maps to
+     *  HUD action buttons 1..6. {@code null} entries are empty slots.
+     *  Persisted with the save so quickslot assignments survive a load.
+     *  The live {@code ActionBar} mirrors this whenever the player binds /
+     *  unbinds; on load, the bar restores from the type strings by
+     *  matching them against the player's inventory. */
+    public String[] actionSlotTypes = new String[6];
 
     // ── Transient runtime — not part of the save format ─────────────────────
     /** True iff the door tile the mob currently stands on was {@link Tile#DOOR} (closed)

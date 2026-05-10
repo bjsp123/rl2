@@ -165,6 +165,10 @@ public final class ItemGenerator {
         if (d != null && d.useBehavior != UseBehavior.EAT) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
+        // Wand: charge is level-derived, so refill after the level bump.
+        if (it.useBehavior == UseBehavior.WAND) {
+            it.charge = it.maxCharge();
+        }
         return it;
     }
 
@@ -305,6 +309,10 @@ public final class ItemGenerator {
         // assignItemLevel); WANDs / EQUIPMENT / etc. all do.
         if (d != null && d.useBehavior != UseBehavior.EAT) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
+        }
+        // Wand: charge is level-derived, so refill after the level bump.
+        if (it.useBehavior == UseBehavior.WAND) {
+            it.charge = it.maxCharge();
         }
         return it;
     }

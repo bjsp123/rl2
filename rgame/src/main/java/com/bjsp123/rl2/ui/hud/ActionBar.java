@@ -20,6 +20,11 @@ public final class ActionBar {
     public static final int SLOTS = 6;
 
     private final Item[] slots = new Item[SLOTS];
+    /** Player Mob this action bar persists into. Set by {@link #bindToPlayer}
+     *  on PlayScreen show; the bar mirrors {@code slots[i].type} into
+     *  {@link Mob#actionSlotTypes} every time the player binds / unbinds
+     *  so the assignment survives a save / load. */
+    private Mob owner;
 
     public int size() { return SLOTS; }
 
@@ -30,11 +35,68 @@ public final class ActionBar {
 
     public void set(int i, Item it) {
         if (i < 0 || i >= SLOTS) return;
+        // An item lives in at most one slot at a time — binding it to a
+        // new slot evicts it from any other it was already in. Same-type
+        // duplicates (different Item instances) are unaffected.
+        if (it != null) {
+            for (int j = 0; j < SLOTS; j++) {
+                if (j != i && slots[j] == it) slots[j] = null;
+            }
+        }
         slots[i] = it;
+        persistTypes();
     }
 
     public void clear() {
         for (int i = 0; i < SLOTS; i++) slots[i] = null;
+        persistTypes();
+    }
+
+    /** Bind the action bar to the player Mob whose save persists the
+     *  quickslot assignments. Restores the in-memory slots from the
+     *  player's saved {@link Mob#actionSlotTypes} by looking up matching
+     *  item instances in the bag. Called from PlayScreen.show after the
+     *  world is loaded. */
+    public void bindToPlayer(Mob player) {
+        this.owner = player;
+        if (player == null) return;
+        if (player.actionSlotTypes == null) {
+            player.actionSlotTypes = new String[SLOTS];
+        }
+        // Restore live Item references from the persisted type strings.
+        // Each saved type matches the first bag item of that type that
+        // hasn't already been claimed by an earlier slot.
+        java.util.Set<Item> claimed = new java.util.HashSet<>();
+        for (int i = 0; i < SLOTS; i++) {
+            slots[i] = null;
+            String want = player.actionSlotTypes[i];
+            if (want == null) continue;
+            if (player.inventory == null) continue;
+            for (Item it : player.inventory.bag) {
+                if (it == null) continue;
+                if (claimed.contains(it)) continue;
+                if (want.equals(it.type)) { slots[i] = it; claimed.add(it); break; }
+            }
+            // Fall back to equipped items for gear-class quickslots.
+            if (slots[i] == null) {
+                for (Item it : player.inventory.allEquipped()) {
+                    if (it == null || claimed.contains(it)) continue;
+                    if (want.equals(it.type)) { slots[i] = it; claimed.add(it); break; }
+                }
+            }
+        }
+    }
+
+    /** Mirror current slot types into {@link Mob#actionSlotTypes} on the
+     *  bound owner so the save format captures them. */
+    private void persistTypes() {
+        if (owner == null) return;
+        if (owner.actionSlotTypes == null) {
+            owner.actionSlotTypes = new String[SLOTS];
+        }
+        for (int i = 0; i < SLOTS; i++) {
+            owner.actionSlotTypes[i] = slots[i] != null ? slots[i].type : null;
+        }
     }
 
     /**

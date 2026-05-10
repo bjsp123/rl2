@@ -32,6 +32,9 @@ public final class MobAnimState {
     // ── Real-time particle countdowns (ms) ──────────────────────────────────
     public int fireParticleCountdownMs;
     public int sleepZCountdownMs;
+    /** Wall-clock countdown until the next levitating-mob foot-puff. Zeroed
+     *  out when the mob loses the LEVITATING buff. */
+    public int levitatePuffCountdownMs;
 
     // ── Spawn-grow ─────────────────────────────────────────────────────────
     /** Frames elapsed in the spawn-grow animation. {@code 0} when no spawn anim

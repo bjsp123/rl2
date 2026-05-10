@@ -78,17 +78,19 @@ public final class LevelFactoryPopulate {
         return keys.get(keys.size() - 1);
     }
 
-    /** Items flagged {@code guaranteedPerLevel} that also pass the powerLevel + theme
-     *  gate. One of each is placed on every eligible level. */
+    /** Items whose {@code guaranteedPerLevel} count is positive and that
+     *  also pass the powerLevel + theme gate. The output list contains
+     *  {@code count} copies of each eligible type so the caller can
+     *  iterate it directly to place every guaranteed copy. */
     private static List<String> guaranteedItems(Level level) {
         List<String> out = new ArrayList<>();
         double f = depthFraction(level);
         for (String type : ItemRegistry.knownTypes()) {
             ItemDefinition def = ItemRegistry.get(type);
-            if (def == null || !def.guaranteedPerLevel) continue;
+            if (def == null || def.guaranteedPerLevel <= 0) continue;
             if (def.theme != null && def.theme != level.theme) continue;
             if (powerWeight(def.powerMin, def.powerMax, f) <= 0) continue;
-            out.add(type);
+            for (int i = 0; i < def.guaranteedPerLevel; i++) out.add(type);
         }
         return out;
     }

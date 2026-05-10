@@ -16,10 +16,14 @@ import com.bjsp123.rl2.persistence.Persistence;
 public class UiFontScale {
 
     /** Selectable multipliers exposed by Settings → Graphics → UI Font Size. */
-    public static final float[] CHOICES = { 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.5f };
+    public static final float[] CHOICES = { 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
 
-    private static final String KEY     = "rl2-ui-font-scale-v1";
-    public  static final float  DEFAULT = 1.5f;
+    /** Persistence key — the {@code -v2} suffix invalidates the prior
+     *  {@code -v1} key after CHOICES + DEFAULT were retuned in the V2 UI
+     *  rebuild, so a leftover {@code 1.5} value doesn't keep fonts at 150%
+     *  on first launch. */
+    private static final String KEY     = "rl2-ui-font-scale-v2";
+    public  static final float  DEFAULT = 1.0f;
 
     private static Persistence persistence;
     private static float scale = DEFAULT;
@@ -30,7 +34,13 @@ public class UiFontScale {
         if (raw != null) {
             try {
                 float v = Float.parseFloat(raw);
-                if (v > 0f) scale = v;
+                // Accept only values that match a current choice — defensive
+                // against tampered persistence or a CHOICES array narrowed in
+                // a future revision. Out-of-list values fall back to default.
+                for (float c : CHOICES) {
+                    if (Math.abs(v - c) < 0.001f) { scale = v; return; }
+                }
+                scale = DEFAULT;
             } catch (NumberFormatException ignored) { /* keep default */ }
         }
     }

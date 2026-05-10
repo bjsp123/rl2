@@ -42,7 +42,7 @@ public class Inventory {
             case WEAPON, OFFHAND, ARMOR -> 1;
             case AMULET -> 2;
             case GEM    -> 3;
-            case POTION, WAND, FOOD, ORB, BOMB -> 0;
+            case POTION, WAND, FOOD, ORB, BOMB, ITEM -> 0;
         };
     }
 
@@ -57,7 +57,7 @@ public class Inventory {
             case ARMOR   -> index == 0 ? armor   : null;
             case AMULET  -> index >= 0 && index < amulets.length ? amulets[index] : null;
             case GEM     -> index >= 0 && index < gems.length    ? gems[index]    : null;
-            case POTION, WAND, FOOD, ORB, BOMB -> null;
+            case POTION, WAND, FOOD, ORB, BOMB, ITEM -> null;
         };
     }
 

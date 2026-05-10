@@ -6,34 +6,29 @@ import com.bjsp123.rl2.model.Buff.BuffType;
 
 import java.util.EnumMap;
 import java.util.Map;
-import com.bjsp123.rl2.ui.hud.HudRenderer;
-import com.bjsp123.rl2.ui.overlay.LookRenderer;
 
 /**
  * Lazy-loaded sprite source for the {@link BuffType} icons that live in
- * {@code sprites/buffs.png}. The texture is an 8×8-cell grid (cell pitch 8 px,
- * art 6×6 px top-left within each cell — we sample the full 8-px cell so the renderer
- * can decide on padding). {@link #iconCell} maps each buff to its {@code (col, row)}
- * location.
- *
- * <p>Used by:
+ * {@code sprites/buffs16.png}. Sheet layout:
  * <ul>
- *   <li>{@link HudRenderer} — buff strip under the player portrait</li>
- *   <li>{@link LookRenderer} — buff list on the looked-at mob</li>
- *   <li>{@link DefaultLevelRenderer} — floating-icon "buff applied" effect</li>
+ *   <li>Top 16-px band — buff-icon row, 16×16 cells, single row.</li>
+ *   <li>Second 32-px band (y = 32..64) — attack-slash sprites, 32×32 cells.</li>
  * </ul>
+ * {@link #iconCol} maps each buff to its column in the buff row.
  *
- * <p>The texture is held as a singleton because it's ~80 × 32 = tiny, doesn't need to
- * be reloaded between screens, and gets a fresh handle on every screen create otherwise.
- * Call {@link #disposeShared()} when the game shuts down.
+ * <p>The texture is held as a singleton because it's tiny, doesn't need to
+ * be reloaded between screens, and gets a fresh handle on every screen
+ * create otherwise. Call {@link #disposeShared()} when the game shuts down.
  */
 public final class BuffIcons {
 
-    /** On-screen pitch and content size of an icon cell in the source texture. The
-     *  sheet uses 8×8 cells with 7×7 art top-left within each, so we sample 7×7 to
-     *  drop the single-pixel right/bottom padding cleanly. */
-    public static final int SOURCE_CELL  = 8;
-    public static final int SOURCE_ART   = 7;
+    /** Edge length of one buff-icon cell in source pixels. */
+    public static final int BUFF_CELL  = 16;
+    /** Edge length of one slash-sprite cell in source pixels. */
+    public static final int SLASH_CELL = 32;
+    /** Top-left y of the slash band — first 32-px row is the buff band
+     *  (16 px of icons + 16 px of blank), slashes start at the second. */
+    private static final int SLASH_Y   = 32;
 
     private static Texture sheet;
     private static Map<BuffType, TextureRegion> cache;
@@ -53,30 +48,35 @@ public final class BuffIcons {
         return sheet != null;
     }
 
-    /** Attack-flash sprite from {@code buffs.png}. The sheet's top 16-px band carries
-     *  the buff-icon grid (8×8 cells); the bottom 16-px band carries the slash sprites
-     *  on a 16×16 grid. Player slash at (col 0, row 1) → source pixels (0, 16).
-     *  Mob slash at (col 1, row 1) → (16, 16). Returns {@code null} if the sheet
-     *  failed to load or doesn't have room for a 16×16 cell at row 1. */
+    /** Attack-flash sprite from {@code buffs16.png}'s slash band. Player
+     *  slash at col 0 → source (0, 32, 32, 32); mob slash at col 1 → (32, 32,
+     *  32, 32). Returns {@code null} if the sheet failed to load or doesn't
+     *  have room for a 32×32 cell at the requested column. */
     public static TextureRegion attackFlashRegion(int col) {
         if (cache == null) load();
         if (sheet == null) return null;
         int sw = sheet.getWidth(), sh = sheet.getHeight();
-        if (sh < 32 || sw < (col + 1) * 16) return null;
-        return new TextureRegion(sheet, col * 16, 16, 16, 16);
+        if (sh < SLASH_Y + SLASH_CELL || sw < (col + 1) * SLASH_CELL) return null;
+        return new TextureRegion(sheet, col * SLASH_CELL, SLASH_Y, SLASH_CELL, SLASH_CELL);
+    }
+
+    /** Knockback graphic from the slash band — col 2, just to the right of
+     *  the player + mob slashes. Plays on a unit that's been knocked back
+     *  to signal the impact. Returns {@code null} on missing sheet / cell. */
+    public static TextureRegion knockbackRegion() {
+        return attackFlashRegion(2);
     }
 
     private static void load() {
         cache = new EnumMap<>(BuffType.class);
         try {
-            sheet = new Texture(Gdx.files.internal("sprites/buffs.png"));
+            sheet = new Texture(Gdx.files.internal("sprites/buffs16.png"));
             sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
             for (BuffType t : BuffType.values()) {
-                int[] cell = iconCell(t);
-                if (cell == null) continue;
+                int col = iconCol(t);
+                if (col < 0) continue;
                 cache.put(t, new TextureRegion(sheet,
-                        cell[0] * SOURCE_CELL, cell[1] * SOURCE_CELL,
-                        SOURCE_ART, SOURCE_ART));
+                        col * BUFF_CELL, 0, BUFF_CELL, BUFF_CELL));
             }
         } catch (Exception ignored) {
             sheet = null;
@@ -85,43 +85,39 @@ public final class BuffIcons {
     }
 
     /**
-     * Cell coordinates {@code (col, row)} on the 8×8-grid {@code sprites/buffs.png}
-     * sheet for a given buff. Renderer-side mapping — lives in rgame because the
-     * sheet layout is presentation, not game logic.
+     * Column on the single buff-icon row in {@code sprites/buffs16.png}.
+     * Renderer-side mapping — lives in rgame because the sheet layout is
+     * presentation, not game logic.
      *
-     * <p>Sheet layout per the user-supplied art:
-     * <pre>
-     *   row 0: 0=on fire | 1=invisible | 2=frightened | 3=oily | 4=sorcerous
-     *          5=levitating | 6=regenerating | 7=poisoned | 8=blessed | 9=ghostly
-     *   row 1: 0=hasted | 1=protection | 2=anti-magic | 3=ESP | 4=chilled
-     *          5=starving | 6=recharging (cooldown) | 7=killer
-     * </pre>
+     * <p>Single-row layout (left → right): on fire, invisible, frightened,
+     * oily, sorcerous, levitating, regenerating, poisoned, blessed,
+     * ghostly, hasted, protection, anti-magic, ESP, chilled, starving,
+     * recharging (cooldown), killer.
      */
-    private static int[] iconCell(BuffType type) {
+    private static int iconCol(BuffType type) {
         return switch (type) {
-            case ON_FIRE      -> new int[]{0, 0};
-            case INVISIBLE    -> new int[]{1, 0};
-            case FRIGHTENED   -> new int[]{2, 0};
-            case OILY         -> new int[]{3, 0};
-            case SORCERY      -> new int[]{4, 0};
-            case LEVITATING   -> new int[]{5, 0};
-            case REGENERATION -> new int[]{6, 0};
-            case POISONED     -> new int[]{7, 0};
-            case HOPE         -> new int[]{8, 0};
-            case GHOSTLY      -> new int[]{9, 0};
-            case HASTED       -> new int[]{0, 1};
-            case PROTECTION   -> new int[]{1, 1};
-            case ANTI_MAGIC   -> new int[]{2, 1};
-            case ESP          -> new int[]{3, 1};
-            case CHILLED      -> new int[]{4, 1};
-            case STARVING     -> new int[]{5, 1};
-            // Cooldown / dormant buffs share the "recharging" icon at (col 6, row 1).
-            case TELEPORT_COOLDOWN -> new int[]{6, 1};
-            case RANGED_COOLDOWN   -> new int[]{6, 1};
-            case HIDING            -> new int[]{6, 1};
-            // Killer's own slot, sitting to the right of recharging.
-            case KILLER            -> new int[]{7, 1};
-            default -> new int[]{6, 0};//regeneration as default
+            case ON_FIRE      -> 0;
+            case INVISIBLE    -> 1;
+            case FRIGHTENED   -> 2;
+            case OILY         -> 3;
+            case SORCERY      -> 4;
+            case LEVITATING   -> 5;
+            case REGENERATION -> 6;
+            case POISONED     -> 7;
+            case HOPE         -> 8;
+            case GHOSTLY      -> 9;
+            case HASTED       -> 10;
+            case PROTECTION   -> 11;
+            case ANTI_MAGIC   -> 12;
+            case ESP, INSIGHT -> 13;
+            case CHILLED      -> 14;
+            case STARVING     -> 15;
+            // Cooldown / dormant buffs share the "recharging" icon.
+            case TELEPORT_COOLDOWN, RANGED_COOLDOWN, HIDING -> 16;
+            case KILLER       -> 17;
+            case WET          -> 18;
+            case BLEEDING     -> 19;
+            default           -> 6;     // regeneration as fallback
         };
     }
 

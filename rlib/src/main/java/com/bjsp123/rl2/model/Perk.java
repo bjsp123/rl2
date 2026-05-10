@@ -22,7 +22,11 @@ public enum Perk {
     WANDMASTER,
     /** Player can move to any tile within Chebyshev radius 2 for the cost of one
      *  {@code moveCost}. Selectable. */
-    JUMP;
+    JUMP,
+    /** Each level contributes one square of melee-attack knockback. Stacks with
+     *  any knockback the equipped weapon already provides. Warrior class
+     *  starting perk. */
+    KNOCKBACK;
 
     public String displayName() {
         return switch (this) {
@@ -30,6 +34,7 @@ public enum Perk {
             case STEALTH    -> "Stealth";
             case WANDMASTER -> "Wandmaster";
             case JUMP       -> "Jump";
+            case KNOCKBACK  -> "Knockback";
         };
     }
 
@@ -39,6 +44,7 @@ public enum Perk {
             case STEALTH    -> "Enemy wake radius and vision halved against you.";
             case WANDMASTER -> "Wands gain +1 effective level.";
             case JUMP       -> "Move to any tile within 2 squares for one moveCost.";
+            case KNOCKBACK  -> "+1 square of melee knockback per level.";
         };
     }
 }

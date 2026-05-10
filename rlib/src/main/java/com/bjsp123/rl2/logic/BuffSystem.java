@@ -191,6 +191,17 @@ public final class BuffSystem {
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON);
                 if (killed) logDotDeath(m, "succumbs to poison");
             }
+            case BLEEDING -> {
+                // (level × duration) / 2 HP / turn — strong at first then
+                // tapers as the duration counts down. Read durationTurns
+                // BEFORE the post-effect decrement so the first tick uses
+                // the full duration the user-source applied.
+                int dmg = Math.max(1, (b.level * b.durationTurns) / 2);
+                emitPeriodicDamage(level, m, BuffType.BLEEDING, dmg);
+                boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
+                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL);
+                if (killed) logDotDeath(m, "bleeds out");
+            }
             case REGENERATION -> {
                 if (!hasBuff(m, BuffType.POISONED)) {
                     int heal = 1 + b.level / 2;
@@ -358,6 +369,7 @@ public final class BuffSystem {
             case HASTED       -> "Hasted";
             case HOPE         -> "Blessed";
             case ESP          -> "ESP";
+            case INSIGHT      -> "Insight";
             case CHILLED      -> "Chilled";
             case OILY         -> "Oily";
             case WET          -> "Wet";
@@ -368,6 +380,7 @@ public final class BuffSystem {
             case HEAL_COOLDOWN     -> "Recharging";
             case HIDING            -> "Hiding";
             case KILLER            -> "Killer";
+            case BLEEDING          -> "Bleeding";
         };
     }
 
@@ -386,6 +399,7 @@ public final class BuffSystem {
             case HASTED -> "Acting faster than normal.";
             case HOPE -> "Feeling hopeful and courageous.";
             case ESP -> "Can see mobs through walls, but not their HP bars or names.";
+            case INSIGHT -> "The whole level layout is revealed at the start of every turn.";
             case CHILLED -> "Acting slower than normal.";
             case OILY -> "Takes extra damage from fire.";
             case WET -> "Takes extra damage from lightning.";
@@ -396,6 +410,7 @@ public final class BuffSystem {
             case HEAL_COOLDOWN     -> "Can't cast heal again until this wears off.";
             case HIDING            -> "Hidden from enemies. Moving or attacking will cancel this.";
             case KILLER            -> "Striking with deadly precision.";
+            case BLEEDING          -> "Open wound — losing HP each turn until it clots.";
         };
     }
 

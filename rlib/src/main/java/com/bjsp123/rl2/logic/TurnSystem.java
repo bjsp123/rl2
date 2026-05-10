@@ -116,6 +116,13 @@ public class TurnSystem {
             // Satiety drains by one full turn's worth of ticks (and may cascade into
             // starvation HP loss for the player — see advanceSatiety).
             advanceSatiety(level, mob, STANDARD_TURN_TICKS);
+            // INSIGHT: while the buff is active, re-stamp every tile as
+            // explored so the player's map stays revealed for the duration.
+            // Player-only — NPCs don't have a personal map.
+            if (mob.behavior == Behavior.PLAYER
+                    && BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.INSIGHT)) {
+                LevelSystem.markAllExplored(level);
+            }
             // Teleport now lives on Mob.abilities (kind = TELEPORT) and dispatches
             // through {@code MobSystem.tryCastAbilities} on the mob's own AI turn,
             // so there's no per-turn special case to fire here.
@@ -128,6 +135,11 @@ public class TurnSystem {
         // spread + mushroom decay.
         FireSystem.tickPerTurn(level);
         VegetationSystem.tickPerTurn(level);
+        // Cloud layer ticks after fire/vegetation so the same turn's freshly-
+        // ignited / freshly-watered cells feed into smoke + steam emission.
+        // Cloud poison effects feed buffs that BuffSystem.tickPerTurn then
+        // sees this same turn.
+        CloudSystem.tickPerTurn(level);
         // Buff system runs after vegetation/fire so fresh ON_FIRE buffs applied this
         // turn (mob steps onto a fire tile during its move, FireSystem.tickPerTurn
         // applies the buff) immediately deal damage on the same turn instead of waiting
