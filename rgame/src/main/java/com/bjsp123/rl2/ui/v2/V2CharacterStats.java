@@ -38,6 +38,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     private Tab currentTab = Tab.CHARACTER;
     /** Optional jump target for the perks tab's per-row info buttons. */
     private V2Encyclopedia encyclopedia;
+    /** Buff-detail popup opened when a buff icon is tapped. */
+    private V2BuffInfo buffInfo;
 
     private final Rect window = new Rect();
     private final Rect[] tabRects = new Rect[Tab.values().length];
@@ -65,7 +67,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     /** Per-buff-icon hit rects, rebuilt every frame from the live buff
      *  list. Aligned in index with {@link #buffIconTypes}. */
     private final List<Rect> buffIconRects = new ArrayList<>();
-    private final List<Buff.BuffType> buffIconTypes = new ArrayList<>();
+    private final List<Buff> buffIconList = new ArrayList<>();
+    private final List<float[]> pendingDots = new ArrayList<>();
     private int buffIconPressed = -1;
 
     public V2CharacterStats(UiCtx ctx) {
@@ -75,6 +78,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
 
     public void setPlayer(Mob p) { this.player = p; }
     public void setEncyclopedia(V2Encyclopedia enc) { this.encyclopedia = enc; }
+    public void setBuffInfo(V2BuffInfo bi) { this.buffInfo = bi; }
     public boolean isOpen() { return open; }
     public void toggle() { open = !open; }
     public void close()  {
@@ -90,6 +94,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         layoutRects();
         renderShapesPass();
         renderTextPass();
+        renderDotColumns();
     }
 
     private void layoutRects() {
@@ -199,7 +204,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         // border + warm fill, brighter when pressed). The Plus button
         // dims to the window-bg fill when the player has no perk points
         // so the affordance reads as disabled.
-        boolean canSpend = player != null && player.perkPoints > 0;
+        boolean hasPoints = player != null && player.perkPoints > 0;
         for (int i = 0; i < perkInfoRects.size(); i++) {
             Rect r = perkInfoRects.get(i);
             Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
@@ -210,6 +215,10 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         }
         for (int i = 0; i < perkPlusRects.size(); i++) {
             Rect r = perkPlusRects.get(i);
+            Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
+            int cur = (player != null && player.perks != null && p != null)
+                    ? player.perks.getOrDefault(p, 0) : 0;
+            boolean canSpend = hasPoints && cur < 5;
             Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
             if (!canSpend) {
                 s.setColor(UiColors.WIN_BG);
@@ -227,6 +236,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     }
 
     private void renderTextPass() {
+        pendingDots.clear();
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, "Character",
                 window.cx(), window.top() - 22f);
@@ -263,10 +273,14 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         }
 
         // Perk-tab plus-button glyphs — a centred "+" character. Dimmed
-        // when the player has no perk points to spend.
-        boolean canSpend = player != null && player.perkPoints > 0;
+        // when the player has no perk points or the perk is already at level 5.
+        boolean hasPoints = player != null && player.perkPoints > 0;
         for (int i = 0; i < perkPlusRects.size(); i++) {
             Rect r = perkPlusRects.get(i);
+            Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
+            int cur = (player != null && player.perks != null && p != null)
+                    ? player.perks.getOrDefault(p, 0) : 0;
+            boolean canSpend = hasPoints && cur < 5;
             com.badlogic.gdx.graphics.Color c = !canSpend
                     ? UiColors.TEXT_DIM
                     : (i == perkPlusPressed ? UiColors.ACCENT : UiColors.TEXT_BODY);
@@ -314,7 +328,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         // Each row is a hit target that opens the encyclopedia at the
         // corresponding buff page.
         buffIconRects.clear();
-        buffIconTypes.clear();
+        buffIconList.clear();
+        pendingDots.clear();
         if (player.buffs != null && !player.buffs.isEmpty()) {
             top -= 14f;
             TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
@@ -334,14 +349,12 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                         buffName + " (lvl " + b.level + ")",
                         left + 22f, top);
                 if (b.durationTurns > 0) {
-                    TextDraw.right(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                            b.durationTurns + " t",
-                            window.right() - 18f, top);
+                    pendingDots.add(new float[]{ left + 17f, top - 16f, b.durationTurns });
                 }
                 Rect hit = new Rect();
                 hit.set(left, top - 18f, window.right() - 18f - left, 20f);
                 buffIconRects.add(hit);
-                buffIconTypes.add(b.type);
+                buffIconList.add(b);
                 top -= 20f;
             }
         }
@@ -387,6 +400,24 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         TextDraw.right(ctx, ctx.fontRegular, UiColors.TEXT_BODY, value,
                 window.right() - 18f, y);
         return y - 22f;
+    }
+
+    private void renderDotColumns() {
+        if (pendingDots.isEmpty()) return;
+        ctx.applyProjection();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ShapeRenderer s = ctx.shapes;
+        s.begin(ShapeRenderer.ShapeType.Filled);
+        s.setColor(UiColors.TEXT_DIM);
+        for (float[] d : pendingDots) {
+            int dots = Math.min(8, (int) d[2]);
+            for (int i = 0; i < dots; i++) {
+                s.rect(d[0], d[1] + i * 2f, 1f, 1f);
+            }
+        }
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     /** 8-tap unit circle for the silhouette outline — same constants as
@@ -498,6 +529,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                             player.perks = new java.util.EnumMap<>(Perk.class);
                         }
                         int cur = player.perks.getOrDefault(perk, 0);
+                        if (cur >= 5) return true;
                         player.perks.put(perk, cur + 1);
                         player.perkPoints--;
                     }
@@ -507,16 +539,10 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     int idx = buffIconPressed;
                     buffIconPressed = -1;
                     if (idx < buffIconRects.size()
-                            && idx < buffIconTypes.size()
+                            && idx < buffIconList.size()
                             && buffIconRects.get(idx).contains(vx, vy)) {
-                        Buff.BuffType type = buffIconTypes.get(idx);
-                        close();
-                        if (encyclopedia != null && type != null) {
-                            encyclopedia.openTo(type, () -> {
-                                open = true;
-                                currentTab = Tab.CHARACTER;
-                            });
-                        }
+                        Buff tapped = buffIconList.get(idx);
+                        if (buffInfo != null && tapped != null) buffInfo.open(tapped);
                     }
                     return true;
                 }

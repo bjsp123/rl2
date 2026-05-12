@@ -1,5 +1,6 @@
 package com.bjsp123.rl2.logic;
 
+import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.util.CsvTable;
 
 import java.util.ArrayList;
@@ -38,6 +39,8 @@ public final class ThemedRoomDefinition {
 
     public List<CsvTable.SpawnSpec> mobs  = new ArrayList<>();
     public List<CsvTable.SpawnSpec> items = new ArrayList<>();
+
+    public Level.VisualTheme theme;
 
     /** Overall floor geometry of the room. {@link #RECTANGLE} keeps the carved
      *  rectangle as-is; {@link #ROUND} walls in the corners; {@link #WALKWAY}
@@ -136,6 +139,7 @@ public final class ThemedRoomDefinition {
 
         d.mobs  = CsvTable.parseSpawnSpecList(CsvTable.str(row, "mobs", null));
         d.items = CsvTable.parseSpawnSpecList(CsvTable.str(row, "items", null));
+        d.theme = CsvTable.enumCell(row, "theme", Level.VisualTheme.class, null);
 
         return d;
     }

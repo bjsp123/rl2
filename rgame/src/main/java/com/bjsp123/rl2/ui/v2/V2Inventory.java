@@ -7,6 +7,7 @@ import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.bjsp123.rl2.logic.InventorySystem;
 import com.bjsp123.rl2.model.Inventory;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
@@ -208,7 +209,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         headerRect.set(contentX, winY + winH - pad - headerH, contentW, headerH);
 
         // Equipment row — 5 cells, sized to fit the content width.
-        float cellSz = 44f;
+        float cellSz = 44f * 1.3f;
         float cellGap = 6f;
         float equipRowW = 5 * cellSz + 4 * cellGap;
         float equipRowX = contentX + (contentW - equipRowW) * 0.5f;
@@ -226,7 +227,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         }
 
         // Tab strip — 4 tabs spanning the content width.
-        float tabH = 32f;
+        float tabH = 32f * 1.2f;
         float tabGap = 4f;
         float tabW = (contentW - (tabRects.length - 1) * tabGap) / tabRects.length;
         float tabRowY = gemRowY - 14f - tabH;
@@ -243,7 +244,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // chrome only.
         bagCells.clear();
         int cols = 6;
-        float gridCellSz = 36f;
+        float gridCellSz = 36f * 1.3f;
         float gridGap = 4f;
         float gridW = cols * gridCellSz + (cols - 1) * gridGap;
         float gridX = contentX + (contentW - gridW) * 0.5f;
@@ -251,16 +252,12 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         float gridBottom = winY + pad;
         float visibleH = gridTop - gridBottom;
         List<Item> filtered = filteredBag();
-        // Total rows = enough to hold every filtered item, but never less
-        // than the rows that would fill the visible band — so an empty
-        // tab still draws a full grid of empty slots.
-        int filledRows  = (filtered.size() + cols - 1) / cols;
-        int visibleRows = Math.max(1,
-                (int) Math.floor(visibleH / (gridCellSz + gridGap)));
-        int totalRows   = Math.max(filledRows, visibleRows);
+        // Total cells = exactly the bag capacity for this tab — no more, no less.
+        int tabCapacity = InventorySystem.bagLimitFor(tabCategory(currentTab));
+        int totalRows   = (tabCapacity + cols - 1) / cols;
         float totalContentH = totalRows * (gridCellSz + gridGap) - gridGap;
         bagScroller.setMaxScroll(totalContentH - visibleH);
-        for (int i = 0; i < totalRows * cols; i++) {
+        for (int i = 0; i < tabCapacity; i++) {
             int r = i / cols;
             int c = i % cols;
             float cellTop = gridTop - r * (gridCellSz + gridGap)
@@ -381,16 +378,26 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         return out;
     }
 
-    /** Maps an item to one of the four tabs — same grouping the V1 inventory
-     *  uses. Gems go to GEMS regardless of {@link Item#inventoryCategory}. */
+    /** Maps an item to one of the four tabs. */
     private static Tab categorize(Item it) {
         if (it.isGem()) return Tab.GEMS;
         if (it.inventoryCategory == null) return Tab.ITEMS;
         return switch (it.inventoryCategory) {
-            case WEAPON, OFFHAND, ARMOR, AMULET -> Tab.GEAR;
-            case GEM                            -> Tab.GEMS;
-            case FOOD                           -> Tab.FOOD;
-            default                             -> Tab.ITEMS;
+            case WEAPON, OFFHAND, ARMOR, AMULET, WAND, ITEM, TOOL -> Tab.GEAR;
+            case GEM                                         -> Tab.GEMS;
+            case FOOD                                        -> Tab.FOOD;
+            case POTION, BOMB, ORB                           -> Tab.ITEMS;
+        };
+    }
+
+    /** A representative {@link Item.InventoryCategory} for each tab — used to
+     *  look up the bag-capacity limit that applies to items on that tab. */
+    private static Item.InventoryCategory tabCategory(Tab tab) {
+        return switch (tab) {
+            case GEAR  -> Item.InventoryCategory.WEAPON;
+            case FOOD  -> Item.InventoryCategory.FOOD;
+            case ITEMS -> Item.InventoryCategory.POTION;
+            case GEMS  -> Item.InventoryCategory.GEM;
         };
     }
 
@@ -433,6 +440,22 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 // Pressed highlight overlay.
                 s.setColor(Pal.PANEL_HI);
                 s.rect(c.rect.x + 2, c.rect.y + 2, c.rect.w - 4, c.rect.h - 4);
+            }
+        }
+
+        // Charge bars for any item that has charges (wands, frogs, hooks, blinkstones).
+        for (BagCell c : bagCells) {
+            if (c.item != null && c.item.baseChargeMax > 0) {
+                drawWandChargeBar(s, c.rect, c.item, player);
+            }
+        }
+        if (player != null && player.inventory != null) {
+            Item[] equip = {player.inventory.weapon, player.inventory.offhand};
+            Rect[] rects = {equipRects[0], equipRects[1]};
+            for (int i = 0; i < equip.length; i++) {
+                if (equip[i] != null && equip[i].baseChargeMax > 0) {
+                    drawWandChargeBar(s, rects[i], equip[i], player);
+                }
             }
         }
 
@@ -513,6 +536,42 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
     }
 
+    private static void drawWandChargeBar(ShapeRenderer s, Rect r, Item it,
+                                          com.bjsp123.rl2.model.Mob player) {
+        int max = com.bjsp123.rl2.logic.ItemSystem.effectiveMaxCharge(it, player);
+        float pad = 4f, barH = 3f;
+        float barW = r.w - 2 * pad;
+        float bx = r.x + pad, by = r.y + 4f;
+        s.setColor(0f, 0f, 0f, 0.85f);
+        s.rect(bx - 1, by - 1, barW + 2, barH + 2);
+        if (max <= 1) {
+            s.setColor(0.25f, 0.25f, 0.25f, 1f);
+            s.rect(bx, by, barW, barH);
+            if (it.charge >= 1f) {
+                s.setColor(0.2f, 0.85f, 0.3f, 1f);
+                s.rect(bx, by, barW, barH);
+            } else if (it.charge > 0f) {
+                s.setColor(0.1f, 0.5f, 0.15f, 1f);
+                s.rect(bx, by, barW * it.charge, barH);
+            }
+        } else {
+            float slotW = (barW - (max - 1)) / max;
+            for (int i = 0; i < max; i++) {
+                float sx = bx + i * (slotW + 1f);
+                float filled = Math.min(1f, Math.max(0f, it.charge - i));
+                s.setColor(0.25f, 0.25f, 0.25f, 1f);
+                s.rect(sx, by, slotW, barH);
+                if (filled >= 1f) {
+                    s.setColor(0.2f, 0.85f, 0.3f, 1f);
+                    s.rect(sx, by, slotW, barH);
+                } else if (filled > 0f) {
+                    s.setColor(0.1f, 0.5f, 0.15f, 1f);
+                    s.rect(sx, by, slotW * filled, barH);
+                }
+            }
+        }
+    }
+
     private void drawTab(ShapeRenderer s, Rect r, boolean active, boolean pressed) {
         if (active || pressed) {
             Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W,
@@ -580,6 +639,38 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
         }
 
+        // Brand sparks — additive pass over all slots with branded items.
+        if (player != null && player.inventory != null) {
+            Item[] equips = {
+                player.inventory.weapon, player.inventory.offhand,
+                player.inventory.armor,
+                player.inventory.amulets[0], player.inventory.amulets[1]
+            };
+            Rect[] eRects = {
+                equipRects[0], equipRects[1],
+                equipRects[2],
+                equipRects[3], equipRects[4]
+            };
+            for (int i = 0; i < equips.length; i++) {
+                if (equips[i] != null && equips[i].brand != null) {
+                    com.bjsp123.rl2.world.render.BrandFx.drawSparks(
+                            ctx.batch, ctx.whitePixel,
+                            eRects[i].x, eRects[i].y, eRects[i].w, eRects[i].h,
+                            equips[i].brand,
+                            com.bjsp123.rl2.world.render.BrandFx.phaseFor(equips[i]));
+                }
+            }
+        }
+        for (BagCell c : bagCells) {
+            if (c.item != null && c.item.brand != null) {
+                com.bjsp123.rl2.world.render.BrandFx.drawSparks(
+                        ctx.batch, ctx.whitePixel,
+                        c.rect.x, c.rect.y, c.rect.w, c.rect.h,
+                        c.item.brand,
+                        com.bjsp123.rl2.world.render.BrandFx.phaseFor(c.item));
+            }
+        }
+
         ctx.batch.end();
     }
 
@@ -596,11 +687,24 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         detailIconRect.x + 4, detailIconRect.y + 4,
                         detailIconRect.w - 8, detailIconRect.h - 8);
             }
-            // Name + description + stat lines.
-            String name = selectedItem.name != null ? selectedItem.name
-                    : selectedItem.type;
-            TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, name,
-                    detailWindow.cx(), detailIconRect.y - 12f);
+            if (selectedItem.brand != null) {
+                com.bjsp123.rl2.world.render.BrandFx.drawSparks(
+                        ctx.batch, ctx.whitePixel,
+                        detailIconRect.x, detailIconRect.y,
+                        detailIconRect.w, detailIconRect.h,
+                        selectedItem.brand,
+                        com.bjsp123.rl2.world.render.BrandFx.phaseFor(selectedItem));
+            }
+            // Name — up to 2 wrapped lines, centred, in header font.
+            String name = com.bjsp123.rl2.logic.ItemSystem.displayName(selectedItem);
+            if (name.isEmpty()) name = selectedItem.type != null ? selectedItem.type : "";
+            java.util.List<String> nameLines = new java.util.ArrayList<>();
+            TextDraw.wrap(ctx.fontHeader, name, detailWindow.w - 28f, 2, nameLines);
+            float nameBaseY = detailIconRect.y - 12f;
+            for (int ni = 0; ni < nameLines.size(); ni++) {
+                TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, nameLines.get(ni),
+                        detailWindow.cx(), nameBaseY - ni * 18f);
+            }
 
             // Body — flavor (bright) on top, optional rule, then details
             // (dim) below. Lines + divider Y are pre-computed in
@@ -751,6 +855,12 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     return true;   // any tap inside the detail window is consumed
                 }
 
+                // Arm the scroller so any subsequent touchDragged knows the
+                // starting Y, preventing stale dragLastY=0 from making the
+                // first drag-check trip on a clean tap (Android always fires
+                // touchDragged even for stationary finger presses).
+                bagScroller.onTouchDown(vy);
+
                 // Tabs.
                 for (int i = 0; i < tabRects.length; i++) {
                     if (tabRects[i].contains(vx, vy)) {
@@ -890,9 +1000,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             com.bjsp123.rl2.logic.InventorySystem
                                     .equip(player.inventory, it);
                         }
-                        // Keep the popup open so the player sees the
-                        // button label flip Equip ↔ Unequip and can keep
-                        // managing gear without re-opening anything.
+                        selectedItem = null;
+                        close();
                     }
                     return true;
                 }

@@ -96,10 +96,10 @@ final class FxRenderer {
         } else if (effect.type == EffectType.PICKUP_TOSS) {
             drawPickupToss(effect);
         } else if (effect.type == EffectType.PARTICLE_BURST) {
-            if (!level.visible[ex][ey]) return;
+            if (!effect.ignoresFov && !level.visible[ex][ey]) return;
             drawParticleBurst(effect);
         } else if (effect.type == EffectType.EXPLOSION) {
-            if (!level.visible[ex][ey]) return;
+            if (!effect.ignoresFov && !level.visible[ex][ey]) return;
             drawExplosion(effect);
         } else if (effect.type == EffectType.MAGIC_MISSILE) {
             drawMagicMissile(effect);
@@ -497,17 +497,57 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Integrate each particle from its stored initial state and draw with gravity. */
+    /** Integrate each particle from its stored initial state and draw with gravity.
+     *  When {@code particleSpawnFrame} is populated (same length as {@code particleX0}),
+     *  each particle uses its own age so they stagger independently: colour transitions
+     *  from tint to white over the first half of its life, then alpha fades to zero over
+     *  the second half.  Without per-particle spawn frames the original global-t path runs. */
     private void drawParticleBurst(Effect e) {
         if (e.particleX0 == null) return;
+        float baseX = e.location.tileX() * (float) CELL;
+        float baseY = e.location.tileY() * (float) CELL;
+
+        if (e.particleSpawnFrame != null
+                && e.particleSpawnFrame.length == e.particleX0.length) {
+            // Per-particle path — each particle lives for PARTICLE_LIFE frames
+            // starting at its own spawn frame, independent of the others.
+            final int PARTICLE_LIFE = 40;
+            Color base = tintToColor(e.tint, Color.WHITE);
+            for (int i = 0; i < e.particleX0.length; i++) {
+                int age = e.frame - e.particleSpawnFrame[i];
+                if (age < 0 || age >= PARTICLE_LIFE) continue;
+                float lifeFrac = age / (float) PARTICLE_LIFE;
+                // First half: tint → white.  Second half: white, alpha fades.
+                float whiteFrac = Math.min(1f, lifeFrac * 2f);
+                float cr = base.r + (1f - base.r) * whiteFrac;
+                float cg = base.g + (1f - base.g) * whiteFrac;
+                float cb = base.b + (1f - base.b) * whiteFrac;
+                float alpha = lifeFrac < 0.5f ? 1f : 1f - (lifeFrac - 0.5f) * 2f;
+                float dx = e.particleVX[i] * age;
+                float dy = e.particleVY[i] * age;
+                float px = baseX + e.particleX0[i] + dx;
+                float py = baseY + e.particleY0[i] + dy;
+                batch.setColor(cr, cg, cb, alpha);
+                batch.draw(whiteRegion, px, py, PARTICLE_SIZE, PARTICLE_SIZE);
+            }
+            batch.setColor(Color.WHITE);
+            return;
+        }
+
+        // Original global-t path.
         float t = e.frame;
         int total = EffectType.PARTICLE_BURST.frameCount;
         float lifeFrac = 1f - Math.max(0f, t - total / 2f) / (total / 2f);
         float alpha = Math.max(0f, Math.min(1f, lifeFrac));
-        float baseX = e.location.tileX() * (float) CELL;
-        float baseY = e.location.tileY() * (float) CELL;
         Color c = tintToColor(e.tint, Color.WHITE);
-        batch.setColor(c.r, c.g, c.b, alpha);
+        float cr = c.r, cg = c.g, cb = c.b;
+        if (e.particleFadeToWhite && total > 0) {
+            float whiteFrac = Math.min(1f, t / (float) total);
+            cr = cr + (1f - cr) * whiteFrac;
+            cg = cg + (1f - cg) * whiteFrac;
+            cb = cb + (1f - cb) * whiteFrac;
+        }
+        batch.setColor(cr, cg, cb, alpha);
         for (int i = 0; i < e.particleX0.length; i++) {
             float dx = e.particleVX[i] * t;
             float dy = e.particleVY[i] * t - 0.5f * PARTICLE_GRAVITY * t * t;
@@ -899,6 +939,7 @@ final class FxRenderer {
             case BLUE   -> TINT_BLUE;
             case BROWN  -> TINT_BROWN;
             case ORANGE -> TINT_ORANGE;
+            case CYAN  -> Color.CYAN;
         };
     }
 }

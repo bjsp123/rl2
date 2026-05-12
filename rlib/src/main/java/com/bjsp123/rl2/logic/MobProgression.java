@@ -87,21 +87,26 @@ public final class MobProgression {
 
     /** Bump the mob one level and apply the level-up bonuses. Honors the
      *  {@link GameBalance#MAX_CHARACTER_LEVEL} cap — calling it on a max-level mob is a no-op.
-     *  Records a history entry on the mob if {@code level} is non-null. */
+     *  Records a history entry on the mob if {@code level} is non-null, and emits a
+     *  {@link com.bjsp123.rl2.event.GameEvent.RainbowBurst} celebratory visual. */
     public static void applyLevelUp(Level level, Mob mob) {
+        applyLevelUp(level, mob, true);
+    }
+
+    /** As {@link #applyLevelUp(Level, Mob)} but {@code emitRainbow=false} suppresses the
+     *  {@link com.bjsp123.rl2.event.GameEvent.RainbowBurst} — used by powerup pickup
+     *  so the caller's own composite visual is the only one shown. */
+    public static void applyLevelUp(Level level, Mob mob, boolean emitRainbow) {
         if (mob.characterLevel >= GameBalance.MAX_CHARACTER_LEVEL) return;
         mob.characterLevel++;
-        mob.perkPoints += GameBalance.PERK_POINTS_PER_LEVEL;
+        if (mob.characterLevel % 2 == 0) mob.perkPoints++;
         applyPerLevelDeltas(mob);
 
         if (level != null && mob.history != null) {
             mob.history.add(HistoricalRecord.levelUp(
                     level.currentTurn, level.depth, mob.characterLevel));
         }
-        // Multi-coloured rainbow burst at the leveller's tile so the player
-        // gets a celebratory visual cue alongside the +N stats. Skipped at
-        // level-gen when level.events isn't bound yet.
-        if (level != null && level.events != null && mob.position != null) {
+        if (emitRainbow && level != null && level.events != null && mob.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.RainbowBurst(mob.position));
         }
     }

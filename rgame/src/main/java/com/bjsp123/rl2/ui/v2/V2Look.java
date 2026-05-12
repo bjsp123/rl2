@@ -27,6 +27,9 @@ import java.util.List;
  * Anchored to the top-centre of the viewport so the world view + bottom HUD
  * stay visible behind it.
  *
+ * <p>Content scrolls vertically when it exceeds the window height. A thin
+ * scroll bar on the right edge indicates position.
+ *
  * <p>Each section gets a "?" button when an encyclopaedia is wired —
  * tapping it opens the encyclopaedia pre-selected to that tile / mob entry,
  * deactivating look mode in the process so the V2 single-popup-at-a-time
@@ -34,59 +37,67 @@ import java.util.List;
  */
 public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
+    // ── Constants ─────────────────────────────────────────────────────────────
+    /** Pixels from window top reserved for the "Look" header (title + gap). */
+    private static final float HEADER_H        = 56f;
+    /** Max bag items listed before a "..." truncation line. */
+    private static final int   MAX_BAG_DISPLAY = 8;
+
+    // ── Dependencies ─────────────────────────────────────────────────────────
     private final UiCtx ctx;
     private LookMode lookMode;
     private Level level;
     private V2Encyclopedia encyclopedia;
+    private V2BuffInfo buffInfo;
 
-    private final Rect window = new Rect();
-    /** Top of the mob-block region, captured during layout so the text pass
-     *  can render its first line at a stable baseline regardless of how
-     *  many items above it pushed the cursor around. */
-    private float mobBlockTop;
-
-    /** Pre-wrapped flavor lines for the mob description (rendered in bright
-     *  text above the divider). Populated in {@link #layoutRects()}. */
-    private final List<String> mobFlavorLines = new ArrayList<>();
-    /** Y of the horizontal rule between the mob description and the live
-     *  details below it, or {@code Float.NaN} when the looked-at mob has
-     *  no description and no rule should be drawn. */
-    private float mobDividerY = Float.NaN;
-    /** Y of the chrome bar separating the tile / item section (top) from
-     *  the mob section (bottom). Drawn as a tri-line strip whenever the
-     *  looked-at tile carries a mob — without one there's nothing to
-     *  separate from. */
-    private float tileSectionDividerY = Float.NaN;
-
-    /** Tile under the cursor, captured during layout for input + render. */
-    private Tile lookedTile;
-    /** Mob under the cursor (or null). */
-    private Mob lookedMob;
-
-    // "?" buttons.
+    // ── Layout ────────────────────────────────────────────────────────────────
+    private final Rect window      = new Rect();
     private final Rect tileInfoBtn = new Rect();
     private final Rect mobInfoBtn  = new Rect();
     private boolean tileInfoPressed, mobInfoPressed;
-    /** Per-buff-icon hit rects on the looked-at mob, rebuilt every frame
-     *  by the text pass that draws them. */
-    private final List<Rect> buffIconRects = new ArrayList<>();
-    private final List<Buff.BuffType> buffIconTypes = new ArrayList<>();
+
+    /** Flavor lines for the mob description, wrapped to window width. */
+    private final List<String> mobFlavorLines = new ArrayList<>();
+
+    /** Screen Y of the tile/mob section divider; NaN when no mob is present. */
+    private float shapeTileDivY = Float.NaN;
+    /** Screen Y of the rule between mob flavor text and live stats; NaN when
+     *  there is no flavor text to separate. */
+    private float shapeMobDivY  = Float.NaN;
+
+    /** Total content height computed during {@link #doContentLayout}, used to
+     *  drive the scroll bar ratio and max-scroll clamping. */
+    private float totalContentH;
+
+    /** Content-space Y positions (0 = top, increasing downward) of the two
+     *  significant section boundaries — set by {@link #doContentLayout}. */
+    private float tileDivContentY;
+    private float mobDivContentY;   // -1 when no mob
+    private float mobHeaderContentY; // -1 when no mob
+
+    // ── Scroll state ──────────────────────────────────────────────────────────
+    private final Scroller scroller = new Scroller();
+    /** Last mob we computed layout for — used to detect cursor movement so
+     *  the scroll position resets when the player looks at a new mob. */
+    private Mob prevLookedMob;
+
+    // ── Looked-at capture ─────────────────────────────────────────────────────
+    private Tile lookedTile;
+    private Mob  lookedMob;
+
+    // ── Buff icon hit targets ─────────────────────────────────────────────────
+    private final List<Rect>    buffIconRects = new ArrayList<>();
+    private final List<Buff>    buffIconList  = new ArrayList<>();
+    private final List<float[]> pendingDots   = new ArrayList<>();
     private int buffIconPressed = -1;
 
     public V2Look(UiCtx ctx) { this.ctx = ctx; }
 
-    public void setLookMode(LookMode lm)         { this.lookMode = lm; }
-    public void setLevel(Level lvl)              { this.level = lvl; }
-    /** Wire the encyclopaedia popup so the per-section "?" buttons can
-     *  jump into it. Without this set, no "?" buttons render. */
+    public void setLookMode(LookMode lm)            { this.lookMode = lm; }
+    public void setLevel(Level lvl)                 { this.level = lvl; }
     public void setEncyclopedia(V2Encyclopedia enc) { this.encyclopedia = enc; }
+    public void setBuffInfo(V2BuffInfo bi)          { this.buffInfo = bi; }
 
-    /** True while the look popup is actually visible — i.e. look mode is
-     *  active AND the player has committed a target via tap/click/enter.
-     *  During the preview phase (look just activated, no tap yet) this
-     *  returns false so the popup neither renders nor captures input —
-     *  taps fall through to {@link LookMode}'s own handler so the player
-     *  can pick a tile. */
     public boolean isOpen() {
         return lookMode != null && lookMode.isPanelVisible();
     }
@@ -98,7 +109,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         layoutRects();
         renderShapesPass();
         renderTextPass();
+        renderDotColumns();
     }
+
+    // ── Capture ───────────────────────────────────────────────────────────────
 
     private void captureLookedAt() {
         lookedTile = null;
@@ -122,14 +136,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         }
     }
 
+    // ── Layout ────────────────────────────────────────────────────────────────
+
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float winW = Math.min(320f, vw - 32f);
 
-        // Wrap the mob description (when present) into the flavor block —
-        // bright text above the divider rule. Width matches the live-detail
-        // body width below.
+        // Wrap mob description into flavor lines — must happen before
+        // doContentLayout so it can count them.
         mobFlavorLines.clear();
         if (lookedMob != null && lookedMob.description != null
                 && !lookedMob.description.isEmpty()) {
@@ -137,48 +152,142 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     winW - 28f, 4, mobFlavorLines);
         }
 
-        // Variable height — the flavor block at the top, optional divider
-        // gap, then the live-stats block (header line + stats + state +
-        // optional buff-icon row).
-        int detailsH = 0;
-        if (lookedMob != null) {
-            detailsH = 22                                                 // header line
-                    + 6 * 16                                              // stat lines
-                    + 18                                                  // state + intent
-                    + ((lookedMob.buffs != null && !lookedMob.buffs.isEmpty())
-                            ? 22 : 0);
-        }
-        int flavorH = mobFlavorLines.size() * 16;
-        boolean hasRule = !mobFlavorLines.isEmpty() && lookedMob != null;
-        int ruleGap = hasRule ? 12 : 0;
-        int mobBlockH = lookedMob == null
-                ? 0 : flavorH + ruleGap + detailsH;
-        float winH = 160f + mobBlockH;
-        window.set((vw - winW) * 0.5f, vh - 80f - winH, winW, winH);
-        // First-line baseline of the live-details block — anchored to the
-        // bottom strip of the window so the buff icons never crowd the
-        // window's lower edge.
-        mobBlockTop = window.y + detailsH - 14f;
-        // Divider sits between flavor block (top) and details block (bottom).
-        mobDividerY = hasRule
-                ? window.y + detailsH + ruleGap * 0.5f - 1f
-                : Float.NaN;
-        // Chrome bar separating tile / items section (above) from the mob
-        // section (below). Anchored just above the topmost line of the
-        // mob block; only drawn when there's a mob to introduce.
-        tileSectionDividerY = lookedMob == null
-                ? Float.NaN
-                : window.y + mobBlockH + 6f;
+        // Measure total content height (dry-run mirrors renderTextPass).
+        totalContentH = doContentLayout(winW);
 
+        // Window — top anchored at vh-80, height capped to leave 10px at
+        // the bottom of the screen.
+        float maxWinH = vh - 90f;
+        float winH    = Math.min(maxWinH, HEADER_H + totalContentH);
+        window.set((vw - winW) * 0.5f, vh - 80f - winH, winW, winH);
+
+        // Scroll clamping.
+        float visH = winH - HEADER_H;
+        scroller.setMaxScroll(Math.max(0f, totalContentH - visH));
+
+        // Reset scroll when looking at a new mob (cursor moved to a different
+        // tile that has a mob).
+        if (prevLookedMob != lookedMob) {
+            prevLookedMob = lookedMob;
+            scroller.resetTop();
+        }
+
+        // Convert stored content-Y positions to screen Y for the shapes pass.
+        // screenY = contentAreaTop + scrollY - contentY
+        float caTop   = window.top() - HEADER_H;
+        float scrollOff = scroller.scrollY();
+
+        shapeTileDivY = (lookedMob != null)
+                ? caTop + scrollOff - tileDivContentY
+                : Float.NaN;
+        shapeMobDivY  = (mobDivContentY >= 0f && !mobFlavorLines.isEmpty())
+                ? caTop + scrollOff - mobDivContentY
+                : Float.NaN;
+
+        // "?" buttons — scroll with their respective section headings.
         float infoSz = 22f;
-        // Tile "?" button — top-right of the tile section.
         tileInfoBtn.set(window.right() - 14f - infoSz,
-                window.top() - 80f, infoSz, infoSz);
-        // Mob "?" button — beside the mob's name line at the top of the
-        // live-details block. Aligned to the same X as the tile info button.
-        mobInfoBtn .set(window.right() - 14f - infoSz,
-                mobBlockTop - infoSz + 6f, infoSz, infoSz);
+                caTop + scrollOff - infoSz,          // beside first tile line
+                infoSz, infoSz);
+        if (mobHeaderContentY >= 0f) {
+            mobInfoBtn.set(window.right() - 14f - infoSz,
+                    caTop + scrollOff - mobHeaderContentY - infoSz + 6f,
+                    infoSz, infoSz);
+        }
     }
+
+    /**
+     * Dry-run of the content layout — mirrors {@link #renderTextPass} but only
+     * accumulates heights. Sets {@link #tileDivContentY}, {@link #mobDivContentY},
+     * and {@link #mobHeaderContentY} as side effects. Returns total content height.
+     */
+    private float doContentLayout(float winW) {
+        tileDivContentY   = 0f;
+        mobDivContentY    = -1f;
+        mobHeaderContentY = -1f;
+
+        float h = 0f;
+        Point cursor = lookMode != null ? lookMode.cursor() : null;
+        if (cursor == null || level == null) return h;
+        int cx = (int) Math.floor(cursor.x());
+        int cy = (int) Math.floor(cursor.y());
+        boolean inBounds = cx >= 0 && cy >= 0 && cx < level.width && cy < level.height;
+
+        // Tile section.
+        if (lookedTile != null) h += 18f;
+        if (inBounds && level.surface != null && level.surface[cx][cy] != null) h += 18f;
+        if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) h += 18f;
+        if (inBounds && level.cloud != null && level.cloud[cx][cy] != 0
+                && com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]) != null) h += 18f;
+        if (lookedTile != null) h += 4f;
+
+        // Floor items.
+        if (level.items != null) {
+            int count = 0;
+            List<String> wrapBuf = new ArrayList<>();
+            for (Item it : level.items) {
+                if (it == null || it.location == null) continue;
+                if ((int) Math.floor(it.location.x()) == cx
+                        && (int) Math.floor(it.location.y()) == cy) {
+                    if (count == 0) h += 18f; // "Items:" header
+                    wrapBuf.clear();
+                    String iname = itemDisplayName(it);
+                    TextDraw.wrap(ctx.fontRegular, "  " + iname, winW - 28f, 2, wrapBuf);
+                    h += wrapBuf.size() * 16f;
+                    count++;
+                    if (count > 3) break;
+                }
+            }
+        }
+
+        // Record where the tile/mob divider goes.
+        tileDivContentY = h;
+        if (lookedMob != null) h += 14f; // divider gap
+
+        if (lookedMob != null) {
+            // Flavor text block.
+            h += mobFlavorLines.size() * 16f;
+            mobDivContentY = h;
+            if (!mobFlavorLines.isEmpty()) h += 10f; // rule gap
+
+            // Mob live-detail block.
+            mobHeaderContentY = h;
+            h += 18f; // name header
+            h += 16f; // HP
+            h += 16f; // Att / Def
+            h += 16f; // Dmg / Arm
+            StatBlock s = lookedMob.effectiveStats();
+            if (!s.rangedDamage.isZero()) h += 16f;
+            Mob viewer = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
+            if (viewer != null && lookedMob != viewer
+                    && attitudeLabel(viewer, lookedMob) != null) h += 16f;
+            if (stateOfMindLabel(lookedMob) != null) h += 16f;
+            if (lookedMob.owner != null) h += 16f;
+            if (lookedMob.buffs != null && !lookedMob.buffs.isEmpty()) h += 22f;
+
+            // Equipped items.
+            if (lookedMob.inventory != null) {
+                List<Item> eq = lookedMob.inventory.allEquipped();
+                if (!eq.isEmpty()) {
+                    h += 18f;               // "Equipped:" header
+                    h += eq.size() * 16f;
+                }
+                // Bag items.
+                int bagCount = 0;
+                for (Item it : lookedMob.inventory.bag) if (it != null) bagCount++;
+                if (bagCount > 0) {
+                    h += 18f;               // "Bag:" header
+                    int shown = Math.min(bagCount, MAX_BAG_DISPLAY);
+                    h += shown * 16f;
+                    if (bagCount > MAX_BAG_DISPLAY) h += 16f; // "..." line
+                }
+            }
+        }
+
+        return h;
+    }
+
+    // ── Shapes pass ───────────────────────────────────────────────────────────
 
     private void renderShapesPass() {
         ctx.applyProjection();
@@ -186,27 +295,52 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
+
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
-        if (encyclopedia != null && lookedTile != null) {
+        // Thin separator between the fixed header and the scrollable body —
+        // masks any ascender bleed from the top content line.
+        float caTop = window.top() - HEADER_H;
+        s.setColor(UiColors.BORDER_MID);
+        s.rect(window.x + 4f, caTop, window.w - 8f, 1f);
+
+        float caBot = window.y;
+
+        // "?" buttons — only draw when scrolled into view.
+        if (encyclopedia != null && lookedTile != null
+                && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= caBot) {
             drawInfoBtn(s, tileInfoBtn, tileInfoPressed);
         }
-        if (encyclopedia != null && lookedMob != null) {
+        if (encyclopedia != null && lookedMob != null
+                && mobInfoBtn.top() <= caTop + 2f && mobInfoBtn.y >= caBot) {
             drawInfoBtn(s, mobInfoBtn, mobInfoPressed);
         }
-        // Horizontal rule between the bright mob flavor blurb and the
-        // dim live-details body below it.
-        if (!Float.isNaN(mobDividerY)) {
+
+        // Mob flavor-text / live-stats rule.
+        if (!Float.isNaN(shapeMobDivY)
+                && shapeMobDivY >= caBot && shapeMobDivY <= caTop) {
             s.setColor(UiColors.BORDER_MID);
-            s.rect(window.x + 14f, mobDividerY,
-                    window.w - 28f, 1f);
+            s.rect(window.x + 14f, shapeMobDivY, window.w - 28f, 1f);
         }
-        // Chrome bar between tile / items and the mob section — same
-        // tri-line treatment as the window edge so the divide reads as
-        // proper window furniture rather than just a hairline rule.
-        if (!Float.isNaN(tileSectionDividerY)) {
-            Edges.drawTriLine(s, window.x + 8f, tileSectionDividerY,
+
+        // Tile / mob section chrome divider.
+        if (!Float.isNaN(shapeTileDivY)
+                && shapeTileDivY >= caBot && shapeTileDivY <= caTop) {
+            Edges.drawTriLine(s, window.x + 8f, shapeTileDivY,
                     window.w - 16f, 4f, 1f);
+        }
+
+        // Scroll bar — shown when content is taller than the visible area.
+        float visH = window.h - HEADER_H;
+        if (totalContentH > visH + 1f) {
+            float barW  = 3f;
+            float ratio = visH / totalContentH;
+            float barH  = Math.max(12f, visH * ratio);
+            float scrollFrac = scroller.scrollY() / (totalContentH - visH);
+            // scrollFrac 0 = bar at top of content, 1 = bar at bottom.
+            float barY = caBot + (visH - barH) * (1f - scrollFrac);
+            s.setColor(UiColors.BORDER_MID);
+            s.rect(window.right() - 4f - barW, barY, barW, barH);
         }
 
         s.end();
@@ -220,12 +354,16 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
     }
 
+    // ── Text pass ─────────────────────────────────────────────────────────────
+
     private void renderTextPass() {
         ctx.batch.begin();
-        Point cursor = lookMode != null ? lookMode.cursor() : null;
+
+        // Fixed header — always visible, never scrolls.
         TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, "Look",
                 window.cx(), window.top() - 22f);
 
+        Point cursor = lookMode != null ? lookMode.cursor() : null;
         if (cursor == null || level == null) {
             TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                     "(no tile)", window.cx(), window.top() - 56f);
@@ -235,112 +373,321 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         int cx = (int) Math.floor(cursor.x());
         int cy = (int) Math.floor(cursor.y());
-        float left = window.x + 14f;
-        float top  = window.top() - 56f;
+        float left   = window.x + 14f;
+        float caTop  = window.top() - HEADER_H;  // content area ceiling
+        float caBot  = window.y + 2f;             // content area floor
+        float drawY  = caTop + scroller.scrollY(); // current line baseline
 
+        boolean inBounds = cx >= 0 && cy >= 0 && cx < level.width && cy < level.height;
+
+        // --- TILE SECTION ---
         if (lookedTile != null) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    "Terrain: " + lookedTile.name().toLowerCase(),
-                    left, top);
-            // "?" glyph centred in the tile-info button.
-            if (encyclopedia != null) {
-                TextDraw.centre(ctx, ctx.fontRegular,
-                        tileInfoPressed ? UiColors.ACCENT : UiColors.TEXT_BODY,
-                        "?", tileInfoBtn.cx(), tileInfoBtn.cy() + 6f);
+            if (inView(drawY, caTop, caBot)) {
+                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                        "Terrain: " + lookedTile.name().toLowerCase(), left, drawY);
+                if (encyclopedia != null
+                        && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= caBot) {
+                    TextDraw.centre(ctx, ctx.fontRegular,
+                            tileInfoPressed ? UiColors.ACCENT : UiColors.TEXT_BODY,
+                            "?", tileInfoBtn.cx(), tileInfoBtn.cy() + 6f);
+                }
             }
-            top -= 18f;
+            drawY -= 18f;
         }
 
-        // Surface (water / blood / oil / ice) and vegetation (grass /
-        // mushrooms / fire / trees) on this tile — only drawn when
-        // present so a bare floor stays uncluttered.
-        if (level.surface != null
-                && cx >= 0 && cy >= 0
-                && cx < level.width && cy < level.height
-                && level.surface[cx][cy] != null) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    "Surface: " + describeSurface(level.surface[cx][cy]),
-                    left, top);
-            top -= 18f;
+        if (inBounds && level.surface != null && level.surface[cx][cy] != null) {
+            if (inView(drawY, caTop, caBot)) {
+                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                        "Surface: " + describeSurface(level.surface[cx][cy]), left, drawY);
+            }
+            drawY -= 18f;
         }
-        if (level.vegetation != null
-                && cx >= 0 && cy >= 0
-                && cx < level.width && cy < level.height
-                && level.vegetation[cx][cy] != null) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    "Plants: " + describeVegetation(level.vegetation[cx][cy]),
-                    left, top);
-            top -= 18f;
+
+        if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) {
+            if (inView(drawY, caTop, caBot)) {
+                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                        "Plants: " + describeVegetation(level.vegetation[cx][cy]), left, drawY);
+            }
+            drawY -= 18f;
         }
-        // Cloud — packed in level.cloud; non-zero means a gas overlay.
-        if (level.cloud != null
-                && cx >= 0 && cy >= 0
-                && cx < level.width && cy < level.height
-                && level.cloud[cx][cy] != 0) {
+
+        if (inBounds && level.cloud != null && level.cloud[cx][cy] != 0) {
             com.bjsp123.rl2.model.Level.Cloud type =
                     com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]);
             if (type != null) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                        "Cloud: " + type.name().toLowerCase().replace('_', ' '),
-                        left, top);
-                top -= 18f;
+                if (inView(drawY, caTop, caBot)) {
+                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                            "Cloud: " + type.name().toLowerCase().replace('_', ' '),
+                            left, drawY);
+                }
+                drawY -= 18f;
             }
         }
-        if (lookedTile != null) top -= 4f;
 
-        // Items on this tile.
-        List<Item> floorItems = level.items;
-        if (floorItems != null) {
+        if (lookedTile != null) drawY -= 4f;
+
+        // Floor items.
+        if (level.items != null) {
             int count = 0;
-            for (Item it : floorItems) {
+            List<String> wrapBuf = new ArrayList<>();
+            for (Item it : level.items) {
                 if (it == null || it.location == null) continue;
                 int ix = (int) Math.floor(it.location.x());
                 int iy = (int) Math.floor(it.location.y());
                 if (ix == cx && iy == cy) {
                     if (count == 0) {
-                        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                                "Items:", left, top);
-                        top -= 18f;
+                        if (inView(drawY, caTop, caBot)) {
+                            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                                    "Items:", left, drawY);
+                        }
+                        drawY -= 18f;
                     }
-                    String iname = it.name != null ? it.name : it.type;
-                    if (it.level > 1) iname += " +" + (it.level - 1);
-                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
-                            "  " + iname, left, top);
-                    top -= 16f;
+                    wrapBuf.clear();
+                    TextDraw.wrap(ctx.fontRegular, "  " + itemDisplayName(it),
+                            window.w - 28f, 2, wrapBuf);
+                    for (String line : wrapBuf) {
+                        if (inView(drawY, caTop, caBot)) {
+                            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                                    line, left, drawY);
+                        }
+                        drawY -= 16f;
+                    }
                     count++;
                     if (count > 3) break;
                 }
             }
         }
 
-        // Mob on this tile — flavor description (bright) at the top of the
-        // mob block, then the rule (drawn in the shape pass), then the
-        // live-details body anchored to the bottom of the window so the
-        // "?" jump button always sits beside the name line.
+        // Consume the tile/mob divider gap (divider itself is shapes pass).
+        if (lookedMob != null) drawY -= 14f;
+
+        // --- MOB SECTION ---
         if (lookedMob != null) {
-            // Flavor lines — bright text above the divider rule. Top line
-            // sits just under the divider's top edge, descending upward
-            // from there.
-            float flavorTop = (Float.isNaN(mobDividerY)
-                    ? mobBlockTop + mobFlavorLines.size() * 16f
-                    : mobDividerY + 6f + mobFlavorLines.size() * 16f);
-            for (int i = 0; i < mobFlavorLines.size(); i++) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
-                        mobFlavorLines.get(i), left,
-                        flavorTop - i * 16f);
+            // Flavor text — bright, above the rule.
+            for (String line : mobFlavorLines) {
+                if (inView(drawY, caTop, caBot)) {
+                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                            line, left, drawY);
+                }
+                drawY -= 16f;
             }
-            renderMobBlock(left, mobBlockTop);
-            // Mob "?" glyph.
-            if (encyclopedia != null) {
+            if (!mobFlavorLines.isEmpty()) drawY -= 10f; // rule gap
+
+            // Live-stats block.
+            drawY = renderMobBlockAt(left, drawY, caTop, caBot);
+
+            // Mob "?" label — drawn after renderMobBlockAt so it appears on top
+            // of any overlapping buff icons drawn to the batch.
+            if (encyclopedia != null
+                    && mobInfoBtn.top() <= caTop + 2f && mobInfoBtn.y >= caBot) {
                 TextDraw.centre(ctx, ctx.fontRegular,
                         mobInfoPressed ? UiColors.ACCENT : UiColors.TEXT_BODY,
                         "?", mobInfoBtn.cx(), mobInfoBtn.cy() + 6f);
             }
         }
+
         ctx.batch.end();
     }
 
-    /** Friendly label for a {@link com.bjsp123.rl2.model.Level.Surface}. */
+    /** Returns {@code true} when a line with its baseline at {@code y} is
+     *  within the scrollable content area and should be drawn. */
+    private static boolean inView(float y, float caTop, float caBot) {
+        return y <= caTop && y >= caBot;
+    }
+
+    /**
+     * Render the mob live-stats block top-down starting at {@code drawY}.
+     * Returns the Y cursor after the last rendered element.
+     * Buff icon hit-rects are rebuilt here (cleared before this call).
+     */
+    private float renderMobBlockAt(float left, float drawY, float caTop, float caBot) {
+        Mob m = lookedMob;
+        StatBlock s = m.effectiveStats();
+
+        // Name + level header.
+        String mname  = m.name != null ? m.name : "mob";
+        String header = "Mob: " + mname;
+        if (m.characterLevel > 1) header += " (lvl " + m.characterLevel + ")";
+        if (inView(drawY, caTop, caBot)) {
+            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, header, left, drawY);
+        }
+        drawY -= 18f;
+
+        // HP.
+        if (inView(drawY, caTop, caBot)) {
+            int hp    = (int) Math.round(m.hp);
+            int maxHp = (int) Math.round(s.maxHp);
+            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                    "HP " + hp + " / " + maxHp, left, drawY);
+        }
+        drawY -= 16f;
+
+        // Att / Def.
+        if (inView(drawY, caTop, caBot)) {
+            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                    "Att " + s.accuracy + "   Def " + s.evasion, left, drawY);
+        }
+        drawY -= 16f;
+
+        // Dmg / Arm.
+        if (inView(drawY, caTop, caBot)) {
+            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                    "Dmg " + range(s.damage) + "   Arm " + range(s.armor), left, drawY);
+        }
+        drawY -= 16f;
+
+        // Ranged (optional).
+        if (!s.rangedDamage.isZero()) {
+            if (inView(drawY, caTop, caBot)) {
+                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                        "Ranged " + range(s.rangedDamage) + " @ " + s.rangedDistance + " sq",
+                        left, drawY);
+            }
+            drawY -= 16f;
+        }
+
+        // Attitude toward the player.
+        Mob viewer = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
+        if (viewer != null && m != viewer) {
+            String al = attitudeLabel(viewer, m);
+            if (al != null) {
+                if (inView(drawY, caTop, caBot)) {
+                    TextDraw.left(ctx, ctx.fontRegular, attitudeColor(viewer, m),
+                            al, left, drawY);
+                }
+                drawY -= 16f;
+            }
+        }
+
+        // State of mind + intent.
+        String state = stateOfMindLabel(m);
+        if (state != null) {
+            if (inView(drawY, caTop, caBot)) {
+                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, state, left, drawY);
+            }
+            drawY -= 16f;
+        }
+
+        // Loyalty.
+        if (m.owner != null) {
+            String ownerLabel = m.owner.behavior == Mob.Behavior.PLAYER ? "you"
+                    : (m.owner.mobType != null ? m.owner.mobType.toLowerCase() : "unknown");
+            if (inView(drawY, caTop, caBot)) {
+                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                        "Loyal to: " + ownerLabel, left, drawY);
+            }
+            drawY -= 16f;
+        }
+
+        // Buff icons row — always rebuild hit rects regardless of visibility
+        // so touch targets stay accurate.
+        buffIconRects.clear();
+        buffIconList.clear();
+        pendingDots.clear();
+        if (m.buffs != null && !m.buffs.isEmpty()) {
+            float iconSz = 16f, iconGap = 2f;
+            int max = Math.min(m.buffs.size(), 8);
+            for (int i = 0; i < max; i++) {
+                Buff b = m.buffs.get(i);
+                if (b == null || b.type == null) continue;
+                TextureRegion region = BuffIcons.regionFor(b.type);
+                if (region == null) continue;
+                float ix = left + i * (iconSz + iconGap);
+                float iy = drawY - iconSz;
+                if (iy + iconSz >= window.y && iy <= caTop) {
+                    ctx.batch.draw(region, ix, iy, iconSz, iconSz);
+                }
+                Rect r = new Rect();
+                r.set(ix, iy, iconSz, iconSz);
+                buffIconRects.add(r);
+                buffIconList.add(b);
+                if (b.durationTurns > 0) {
+                    pendingDots.add(new float[]{ ix + iconSz + 1f, iy, b.durationTurns });
+                }
+            }
+            drawY -= 22f;
+        }
+
+        // Equipped items.
+        if (m.inventory != null) {
+            List<Item> eq = m.inventory.allEquipped();
+            if (!eq.isEmpty()) {
+                if (inView(drawY, caTop, caBot)) {
+                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                            "Equipped:", left, drawY);
+                }
+                drawY -= 18f;
+                for (Item it : eq) {
+                    if (it == null) continue;
+                    if (inView(drawY, caTop, caBot)) {
+                        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                                "  " + itemDisplayName(it), left, drawY);
+                    }
+                    drawY -= 16f;
+                }
+            }
+
+            // Bag items.
+            int bagNonNull = 0;
+            for (Item it : m.inventory.bag) if (it != null) bagNonNull++;
+            if (bagNonNull > 0) {
+                if (inView(drawY, caTop, caBot)) {
+                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                            "Bag:", left, drawY);
+                }
+                drawY -= 18f;
+                int shown = 0;
+                for (Item it : m.inventory.bag) {
+                    if (it == null) continue;
+                    if (shown >= MAX_BAG_DISPLAY) {
+                        if (inView(drawY, caTop, caBot)) {
+                            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                                    "  ...", left, drawY);
+                        }
+                        drawY -= 16f;
+                        break;
+                    }
+                    String iname = itemDisplayName(it);
+                    if (it.count > 1) iname += " x" + it.count;
+                    if (inView(drawY, caTop, caBot)) {
+                        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                                "  " + iname, left, drawY);
+                    }
+                    drawY -= 16f;
+                    shown++;
+                }
+            }
+        }
+
+        return drawY;
+    }
+
+    private void renderDotColumns() {
+        if (pendingDots.isEmpty()) return;
+        ctx.applyProjection();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ShapeRenderer s = ctx.shapes;
+        s.begin(ShapeRenderer.ShapeType.Filled);
+        s.setColor(UiColors.TEXT_DIM);
+        for (float[] d : pendingDots) {
+            int dots = Math.min(8, (int) d[2]);
+            for (int i = 0; i < dots; i++) {
+                s.rect(d[0], d[1] + i * 2f, 1f, 1f);
+            }
+        }
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    // ── Static helpers ────────────────────────────────────────────────────────
+
+    private static String itemDisplayName(Item it) {
+        String name = it.name != null ? it.name : it.type;
+        if (it.level > 1) name += " +" + (it.level - 1);
+        return name;
+    }
+
     private static String describeSurface(com.bjsp123.rl2.model.Level.Surface s) {
         return switch (s) {
             case WATER -> "shallow water";
@@ -350,7 +697,6 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    /** Friendly label for a {@link com.bjsp123.rl2.model.Level.Vegetation}. */
     private static String describeVegetation(com.bjsp123.rl2.model.Level.Vegetation v) {
         return switch (v) {
             case GRASS     -> "grass";
@@ -360,115 +706,6 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    /** Draw the live-mob-on-this-tile block — name + level, current HP / max HP,
-     *  attack / defence / damage / armor, state-of-mind + intent, and an
-     *  optional buff-icon row. Caller has the SpriteBatch open and supplies
-     *  the top-left start position. */
-    private void renderMobBlock(float left, float top) {
-        Mob m = lookedMob;
-        StatBlock s = m.effectiveStats();
-
-        // Name + level header — dimmer than the flavor blurb above the
-        // divider so the description / details split reads visually.
-        String mname = m.name != null ? m.name : "mob";
-        String header = "Mob: " + mname;
-        if (m.characterLevel > 1) header += " (lvl " + m.characterLevel + ")";
-        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                header, left, top);
-        top -= 18f;
-
-        // Current HP / max HP.
-        int hp    = (int) Math.round(m.hp);
-        int maxHp = (int) Math.round(s.maxHp);
-        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                "HP " + hp + " / " + maxHp, left, top);
-        top -= 16f;
-
-        // Combat numbers — only emit the row when the value isn't a useless
-        // default (zero damage / armor on a weaponless mob is uninteresting).
-        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                "Att " + s.accuracy + "   Def " + s.evasion, left, top);
-        top -= 16f;
-        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                "Dmg " + range(s.damage)
-                        + "   Arm " + range(s.armor),
-                left, top);
-        top -= 16f;
-        if (!s.rangedDamage.isZero()) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    "Ranged " + range(s.rangedDamage)
-                            + " @ " + s.rangedDistance + " sq",
-                    left, top);
-            top -= 16f;
-        }
-
-        // Attitude toward the player — colour-coded so the hostility of
-        // anything on the tile reads at a glance.
-        Mob viewer = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
-        if (viewer != null && m != viewer) {
-            String attitudeLine = attitudeLabel(viewer, m);
-            if (attitudeLine != null) {
-                TextDraw.left(ctx, ctx.fontRegular,
-                        attitudeColor(viewer, m),
-                        attitudeLine, left, top);
-                top -= 16f;
-            }
-        }
-
-        // State of mind + intent — what the mob is doing right now.
-        String state = stateOfMindLabel(m);
-        if (state != null) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    state, left, top);
-            top -= 16f;
-        }
-
-        // Loyalty — owned mobs (kittens, summoned dogs, tame creatures)
-        // show whom they belong to so the player can spot allies at a
-        // glance. Player owners read as "you" rather than the underlying
-        // mobType string.
-        if (m.owner != null) {
-            String ownerLabel = m.owner.behavior == Mob.Behavior.PLAYER
-                    ? "you"
-                    : (m.owner.mobType != null
-                            ? m.owner.mobType.toLowerCase() : "unknown");
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    "Loyal to: " + ownerLabel, left, top);
-            top -= 16f;
-        }
-
-        // Buff icons row — each icon is a hit target that opens the
-        // encyclopedia at that buff's page.
-        buffIconRects.clear();
-        buffIconTypes.clear();
-        if (m.buffs != null && !m.buffs.isEmpty()) {
-            float iconSz = 16f;
-            float iconGap = 2f;
-            int max = Math.min(m.buffs.size(), 8);
-            for (int i = 0; i < max; i++) {
-                Buff b = m.buffs.get(i);
-                if (b == null || b.type == null) continue;
-                TextureRegion region = BuffIcons.regionFor(b.type);
-                if (region == null) continue;
-                float ix = left + i * (iconSz + iconGap);
-                float iy = top - iconSz;
-                ctx.batch.draw(region, ix, iy, iconSz, iconSz);
-                Rect r = new Rect();
-                r.set(ix, iy, iconSz, iconSz);
-                buffIconRects.add(r);
-                buffIconTypes.add(b.type);
-            }
-        }
-    }
-
-    /** Human-readable "what is this mob doing" label combining
-     *  {@link Mob#stateOfMind} with the per-tick {@link Mob#intent}. The
-     *  player and inert species (e.g. mushrooms) get a brief description
-     *  instead of a state machine label. Returns {@code null} when there
-     *  is nothing useful to say. */
-    /** Human-readable hostility line — "Hostile.", "Fearful.", "Neutral.",
-     *  or "Friendly." — for {@code target}'s attitude toward {@code viewer}.
-     *  Returns null when the attitude can't be resolved. */
     private static String attitudeLabel(Mob viewer, Mob target) {
         com.bjsp123.rl2.logic.MobSystem.Attitude a =
                 com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(target, viewer);
@@ -481,13 +718,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    /** Friendly green — UiColors has no OK / green-positive tone, so the
-     *  attitude line uses this local constant for the ALLY case. */
     private static final com.badlogic.gdx.graphics.Color ATTITUDE_FRIENDLY =
             new com.badlogic.gdx.graphics.Color(0.4f, 0.85f, 0.4f, 1f);
 
-    /** Tint matching {@link #attitudeLabel} — red for hostile, yellow for
-     *  fearful, dim for neutral, green for friendly. */
     private static com.badlogic.gdx.graphics.Color attitudeColor(Mob viewer, Mob target) {
         com.bjsp123.rl2.logic.MobSystem.Attitude a =
                 com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(target, viewer);
@@ -529,33 +762,60 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                                     : mm.min() + "-" + mm.max();
     }
 
+    // ── Input ─────────────────────────────────────────────────────────────────
+
     public InputProcessor input() {
         return new InputAdapter() {
+
+            private boolean dragging;
+
             @Override
             public boolean touchDown(int sx, int sy, int pointer, int button) {
                 if (!isOpen()) return false;
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
+                dragging = false;
+
+                // "?" buttons — only hittable when scrolled into view.
+                float caTop = window.top() - HEADER_H;
                 if (encyclopedia != null && lookedTile != null
+                        && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= window.y
                         && tileInfoBtn.contains(vx, vy)) {
-                    tileInfoPressed = true; return true;
+                    tileInfoPressed = true;
+                    scroller.onTouchDown(vy);
+                    return true;
                 }
                 if (encyclopedia != null && lookedMob != null
+                        && mobInfoBtn.top() <= caTop + 2f && mobInfoBtn.y >= window.y
                         && mobInfoBtn.contains(vx, vy)) {
-                    mobInfoPressed = true; return true;
+                    mobInfoPressed = true;
+                    scroller.onTouchDown(vy);
+                    return true;
                 }
                 for (int i = 0; i < buffIconRects.size(); i++) {
                     if (buffIconRects.get(i).contains(vx, vy)) {
                         buffIconPressed = i;
+                        scroller.onTouchDown(vy);
                         return true;
                     }
                 }
-                // Tap outside the look window acts like Back — closes
-                // look mode. Matches the V2 modal-dismissal contract used
-                // by the inventory, encyclopaedia, and character popups.
                 if (!window.contains(vx, vy)) {
                     if (lookMode != null) lookMode.toggle();
                     return true;
+                }
+                scroller.onTouchDown(vy);
+                return true;
+            }
+
+            @Override
+            public boolean touchDragged(int sx, int sy, int pointer) {
+                if (!isOpen()) return false;
+                float vy = ctx.unprojectY(sx, sy);
+                if (scroller.onTouchDragged(vy)) {
+                    dragging = true;
+                    tileInfoPressed = false;
+                    mobInfoPressed  = false;
+                    buffIconPressed = -1;
                 }
                 return true;
             }
@@ -565,15 +825,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 if (!isOpen()) return false;
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
+                scroller.onTouchUp();
+                boolean wasDragging = dragging;
+                dragging = false;
+
                 if (tileInfoPressed) {
                     tileInfoPressed = false;
-                    if (encyclopedia != null
-                            && tileInfoBtn.contains(vx, vy)
-                            && lookedTile != null) {
+                    if (!wasDragging && encyclopedia != null
+                            && tileInfoBtn.contains(vx, vy) && lookedTile != null) {
                         Tile t = lookedTile;
-                        // Looking has been "consumed" — exit look mode so
-                        // back from the encyclopaedia returns to the
-                        // world view, not a re-armed look popup.
                         if (lookMode != null) lookMode.toggle();
                         encyclopedia.openTo(t);
                     }
@@ -581,33 +841,33 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 }
                 if (mobInfoPressed) {
                     mobInfoPressed = false;
-                    if (encyclopedia != null
-                            && mobInfoBtn.contains(vx, vy)
-                            && lookedMob != null) {
-                        // Mob ids in V2Encyclopedia are stored as the mob
-                        // type string (matching MobRegistry.knownTypes).
+                    if (!wasDragging && encyclopedia != null
+                            && mobInfoBtn.contains(vx, vy) && lookedMob != null) {
                         String mobType = lookedMob.mobType;
                         if (lookMode != null) lookMode.toggle();
-                        if (mobType != null) {
-                            encyclopedia.openTo(mobType);
-                        }
+                        if (mobType != null) encyclopedia.openTo(mobType);
                     }
                     return true;
                 }
                 if (buffIconPressed >= 0) {
                     int idx = buffIconPressed;
                     buffIconPressed = -1;
-                    if (encyclopedia != null
-                            && idx < buffIconRects.size()
-                            && idx < buffIconTypes.size()
+                    if (!wasDragging && idx < buffIconRects.size()
+                            && idx < buffIconList.size()
                             && buffIconRects.get(idx).contains(vx, vy)) {
-                        Buff.BuffType type = buffIconTypes.get(idx);
-                        if (lookMode != null) lookMode.toggle();
-                        if (type != null) encyclopedia.openTo(type);
+                        Buff b = buffIconList.get(idx);
+                        if (buffInfo != null && b != null) buffInfo.open(b);
                     }
                     return true;
                 }
                 return false;
+            }
+
+            @Override
+            public boolean scrolled(float amountX, float amountY) {
+                if (!isOpen()) return false;
+                scroller.onScrolled(amountY, 16f);
+                return true;
             }
 
             @Override

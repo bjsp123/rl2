@@ -73,7 +73,7 @@ public final class V2Settings extends V2Screen {
                 ctx.worldW() - 2 * SCREEN_MARGIN);
         float winH = Math.min(Pal.VIRTUAL_H - 110f, ctx.worldH() - 110f);
         float winX = (ctx.worldW() - winW) * 0.5f;
-        float winY = 76f;                     // leave room for back btn below
+        float winY = (ctx.worldH() - winH) * 0.5f;
         window.set(winX, winY, winW, winH);
 
         // Tab strip — anchored at the TOP of the window's interior. Tab
@@ -115,6 +115,9 @@ public final class V2Settings extends V2Screen {
             }
             case GAMEPLAY -> {
                 yCursor = addAnimationSpeedRow(winX + WIN_PAD, yCursor);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Queue Acceleration",
+                        AnimationSpeed::queueAccelEnabled, AnimationSpeed::setQueueAccelEnabled);
+                yCursor = addQuickslotCountRow(winX + WIN_PAD, yCursor);
             }
             case LOG -> {
                 yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Show Event Log",
@@ -222,13 +225,24 @@ public final class V2Settings extends V2Screen {
 
     private float addAnimationSpeedRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (int n : AnimationSpeed.CHOICES) {
-            final int chosen = n;
+        for (float n : AnimationSpeed.CHOICES) {
+            final float chosen = n;
             choices.add(new ChoiceSpec(n + "x", 56f,
                     AnimationSpeed.framesPerRender() == n,
                     () -> { AnimationSpeed.setFramesPerRender(chosen); show(); }));
         }
         return addRow("Animation Speed", x, yTop, choices);
+    }
+
+    private float addQuickslotCountRow(float x, float yTop) {
+        List<ChoiceSpec> choices = new ArrayList<>();
+        for (int n : com.bjsp123.rl2.ui.skin.QuickslotCount.CHOICES) {
+            final int chosen = n;
+            choices.add(new ChoiceSpec(String.valueOf(n), 56f,
+                    com.bjsp123.rl2.ui.skin.QuickslotCount.count() == n,
+                    () -> { com.bjsp123.rl2.ui.skin.QuickslotCount.set(chosen); show(); }));
+        }
+        return addRow("Quickslots", x, yTop, choices);
     }
 
     private float addLogFontScaleRow(float x, float yTop) {

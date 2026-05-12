@@ -376,6 +376,8 @@ public class Mob {
     // ── CSV-driven species flags ────────────────────────────────────────────
     /** When {@code true}, this mob can be one-shot by the wand-of-banishment. */
     public boolean banishable;
+    /** Unique mobs spawn at most once per run; drives gold outline pulse in the renderer. */
+    public boolean unique;
 
     // ════════════════════════════════════════════════════════════════════════
     // 3. WORLD-INTERACTION MODES — universal but not really "stats"
@@ -475,12 +477,13 @@ public class Mob {
      *  frame's History tab. */
     public java.util.List<HistoricalRecord> history = new java.util.ArrayList<>();
     /** Player's quickslot bindings, by item type string. Index 0..5 maps to
-     *  HUD action buttons 1..6. {@code null} entries are empty slots.
+     *  HUD action buttons (up to 9). {@code null} entries are empty slots.
      *  Persisted with the save so quickslot assignments survive a load.
      *  The live {@code ActionBar} mirrors this whenever the player binds /
      *  unbinds; on load, the bar restores from the type strings by
-     *  matching them against the player's inventory. */
-    public String[] actionSlotTypes = new String[6];
+     *  matching them against the player's inventory. Always sized to the
+     *  maximum (9) so saved bindings survive a slot-count preference change. */
+    public String[] actionSlotTypes = new String[9];
 
     // ── Transient runtime — not part of the save format ─────────────────────
     /** True iff the door tile the mob currently stands on was {@link Tile#DOOR} (closed)

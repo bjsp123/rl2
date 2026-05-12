@@ -514,7 +514,7 @@ public class MobSystem {
      * overrides flee). Attack/flee identity is keyed on {@link com.bjsp123.rl2.model.Mob.MobType}
      * so behavior code never has to consult the glyph.
      */
-    public static void recordCombatMemory(Level level, Mob a, Mob b) {
+    public static void recordCombatMemory(Level level, Mob a, Mob b, String reason) {
         if (a == null || b == null || a == b) return;
         if (a.mobType == null || b.mobType == null) return;
         if (a.attackTypes == null) a.attackTypes = new java.util.HashSet<>();
@@ -532,12 +532,12 @@ public class MobSystem {
         String aName = nameForLog(level, a);
         String bName = nameForLog(level, b);
         if (!aPlayer && bPlayer && aLearned) {
-            EventLog.add(Messages.attitudeTurnsOnPlayer(aName, bName));
+            EventLog.add(Messages.attitudeTurnsOnPlayer(aName, reason));
         } else if (!bPlayer && aPlayer && bLearned) {
-            EventLog.add(Messages.attitudeTurnsOnPlayer(bName, aName));
+            EventLog.add(Messages.attitudeTurnsOnPlayer(bName, reason));
         } else if (!aPlayer && !bPlayer) {
-            if (aLearned) EventLog.add(Messages.attitudeMobOnMob(aName, bName));
-            else          EventLog.add(Messages.attitudeMobOnMob(bName, aName));
+            if (aLearned) EventLog.add(Messages.attitudeMobOnMob(aName, bName, reason));
+            else          EventLog.add(Messages.attitudeMobOnMob(bName, aName, reason));
         }
     }
 
@@ -894,6 +894,10 @@ public class MobSystem {
                 || target.stateOfMind == Mob.StateOfMind.SEEKING_HIDING) {
             target.stateOfMind = Mob.StateOfMind.AWAKE;
             BuffSystem.removeBuff(target, com.bjsp123.rl2.model.Buff.BuffType.HIDING);
+            if (target.behavior != Behavior.PLAYER && isVisibleToPlayer(level, target)) {
+                EventLog.add(Messages.mobWakesUp(nameForLog(level, target),
+                        "damaged by " + element.name().toLowerCase()));
+            }
         }
         // Hostility from damage: a mob that takes real damage from an attacker promotes
         // that attacker into its attackTypes (and recordCombatMemory's reciprocal does the
@@ -901,7 +905,7 @@ public class MobSystem {
         // count, so a sparring kitten that scratches without breaking skin doesn't turn
         // the household feral. Environmental damage has no attacker and is skipped.
         if (dealt > 0 && attacker != null) {
-            recordCombatMemory(level, attacker, target);
+            recordCombatMemory(level, attacker, target, "attacked");
         }
         // Floating combat text — every visible blow produces a number ("-N" red for a
         // hit, "miss" yellow for a glancing/zero-damage strike). Heal text is added by
@@ -954,6 +958,14 @@ public class MobSystem {
             FireSystem.ignite(level, tx - 1, ty);
             FireSystem.ignite(level, tx,     ty + 1);
             FireSystem.ignite(level, tx,     ty - 1);
+        }
+        // Brand on-hit elemental effect — fired when a melee blow lands, using
+        // the attacker's equipped weapon brand (if any).
+        if (dealt > 0 && attacker != null && attacker.inventory != null) {
+            com.bjsp123.rl2.model.Item weapon = attacker.inventory.weapon;
+            if (weapon != null && weapon.brand != null) {
+                BrandSystem.applyBrandOnHit(level, attacker, target, weapon.brand);
+            }
         }
         if (target.hp <= 0) {
             killMob(level, target, attacker);
@@ -1065,6 +1077,8 @@ public class MobSystem {
             picked++;
             if (isPlayer) {
                 EventLog.add(Messages.pickupItem(pickerName, item.name));
+            } else if (item.name != null && isVisibleToPlayer(level, mob)) {
+                EventLog.add(Messages.mobPicksUpItem(nameForLog(level, mob), item.name));
             }
             if (mob.history != null) {
                 mob.history.add(com.bjsp123.rl2.model.HistoricalRecord.itemFound(
@@ -1120,6 +1134,8 @@ public class MobSystem {
 
         if (killer != null) {
             int reward = (int) Math.round(mob.effectiveStats().maxHp);
+            //mobs currently give no XP at all, it's all earned through powerups.
+            reward = 0;
             killer.score += reward;
             MobProgression.awardXp(level, killer, reward);
             // KILLER perk: every kill grants the killer the KILLER buff (-20% attack /
@@ -1349,6 +1365,10 @@ public class MobSystem {
                     : hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius);
             if (wakeUp) {
                 mob.stateOfMind = StateOfMind.AWAKE;
+                if (isVisibleToPlayer(level, mob)) {
+                    EventLog.add(Messages.mobWakesUp(nameForLog(level, mob),
+                            "sensing something nearby"));
+                }
             } else {
                 mob.intent = Mob.Intent.IDLE;
                 // Only mobile mobs need a sleep cooldown — INANIMATE never has its
@@ -1419,6 +1439,19 @@ public class MobSystem {
                     && BuffSystem.hasBuff(caster, ab.cooldownTracker)) continue;
             Mob target = pickAbilityTarget(caster, level, ab, vision);
             if (target == null) continue;
+            if (isVisibleToPlayer(level, caster) || isVisibleToPlayer(level, target)) {
+                String abilityDesc = ab.kind == Mob.MobAbility.AbilityKind.HEAL
+                        ? "a healing ability"
+                        : ab.kind == Mob.MobAbility.AbilityKind.TELEPORT
+                        ? "a teleport ability"
+                        : (ab.applies != null
+                                ? "a " + ab.applies.name().toLowerCase() + " ability"
+                                : "an ability");
+                boolean inv = caster.behavior == Behavior.PLAYER
+                        || target.behavior == Behavior.PLAYER;
+                EventLog.add(Messages.mobUsesAbility(nameForLog(level, caster),
+                        abilityDesc, nameForLog(level, target), inv));
+            }
             switch (ab.kind) {
                 case BUFF -> {
                     if (level.events != null) {
@@ -1535,9 +1568,11 @@ public class MobSystem {
         if (item.useBehavior == null
                 || item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.NONE) return false;
         return switch (item.useBehavior) {
-            case DRINK -> wouldDrinkHelp(mob, item);
-            case WAND -> isWandUsableByAi(mob, item, level);
-            case EAT, GRANT_PERK, GRAPPLE, JUMP, POWERUP, NONE -> false;
+            case DRINK   -> wouldDrinkHelp(mob, item);
+            case WAND    -> isWandUsableByAi(mob, item, level);
+            case GRAPPLE -> isGrappleUsableByAi(mob, item, level);
+            case JUMP    -> isJumpUsableByAi(mob, item, level);
+            case EAT, GRANT_PERK, POWERUP, NONE -> false;
         };
     }
 
@@ -1558,6 +1593,23 @@ public class MobSystem {
         return true;
     }
 
+    private static boolean isGrappleUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        if (mob.position == null) return false;
+        Mob target = nearestAttackTarget(mob, level);
+        if (target == null || target.position == null) return false;
+        // No point grappling when already adjacent
+        if (LevelFactoryUtils.chebyshev(mob.position, target.position) <= 1) return false;
+        int maxSize = Math.max(0, (int) item.abilityPower);
+        return target.effectiveStats().size <= maxSize;
+    }
+
+    private static boolean isJumpUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        if (mob.position == null) return false;
+        Mob threat = nearestAttackTarget(mob, level);
+        if (threat == null || threat.position == null) return false;
+        return pickBestJumpTile(mob, item, level, threat) != null;
+    }
+
     /** Element-wand AI gate. Only single-target / ally-creating elements pass
      *  in this first cut — element wands with AOE / friendly-fire risk
      *  (water, oil, grass, fungus, fire, detonation, banishment) are deferred. */
@@ -1565,6 +1617,10 @@ public class MobSystem {
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
             Mob target = nearestAttackTarget(mob, level);
             return target != null;
+        }
+        if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
+            return nearestAttackTarget(mob, level) != null
+                    && pickTeleportDestination(mob, level) != null;
         }
         if (wand.summonsWhenUsed != null) {
             return MobSystem.levelHasRoomForSpawn(level)
@@ -1604,6 +1660,10 @@ public class MobSystem {
     /** Apply the chosen AI item-use. Each branch mirrors the player path that
      *  uses the same item, minus the targeting overlay / animation hook-up. */
     private static void applyAiItemUse(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        if (isVisibleToPlayer(level, mob) && item.name != null) {
+            boolean inv = mob.behavior == Behavior.PLAYER;
+            EventLog.add(Messages.mobUsesItem(nameForLog(level, mob), item.name, inv));
+        }
         if (item.inventoryCategory == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
             Mob target = nearestAttackTarget(mob, level);
             if (target != null) {
@@ -1612,9 +1672,11 @@ public class MobSystem {
             return;
         }
         switch (item.useBehavior) {
-            case DRINK -> ItemSystem.useItem(level, mob, item);
-            case WAND  -> aiCastWand(mob, item, level);
-            default    -> { /* unreachable per the gate */ }
+            case DRINK   -> ItemSystem.useItem(level, mob, item);
+            case WAND    -> aiCastWand(mob, item, level);
+            case GRAPPLE -> aiCastGrapple(mob, item, level);
+            case JUMP    -> aiCastJump(mob, item, level);
+            default      -> { /* unreachable per the gate */ }
         }
     }
 
@@ -1632,7 +1694,73 @@ public class MobSystem {
             Mob target = nearestAttackTarget(caster, level);
             if (target == null) return;
             ItemSystem.fireWand(level, caster, wand, target.position);
+            return;
         }
+        if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
+            com.bjsp123.rl2.model.Point dest = pickTeleportDestination(caster, level);
+            if (dest != null) ItemSystem.fireWand(level, caster, wand, dest);
+        }
+    }
+
+    private static void aiCastGrapple(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        Mob target = nearestAttackTarget(mob, level);
+        if (target == null || target.position == null) return;
+        ItemSystem.castGrapple(level, mob, item, target.position);
+    }
+
+    private static void aiCastJump(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        Mob threat = nearestAttackTarget(mob, level);
+        if (threat == null) return;
+        com.bjsp123.rl2.model.Point dest = pickBestJumpTile(mob, item, level, threat);
+        if (dest != null) ItemSystem.castJump(level, mob, item, dest);
+    }
+
+    /** Find the tile in JUMP radius that maximises Chebyshev distance from {@code threat}.
+     *  Returns null when no reachable tile improves on the mob's current distance. */
+    private static com.bjsp123.rl2.model.Point pickBestJumpTile(
+            Mob mob, com.bjsp123.rl2.model.Item item, Level level, Mob threat) {
+        if (mob.position == null || threat.position == null) return null;
+        int radius = Math.max(0, (int) item.abilityPower);
+        int mx = mob.position.tileX(), my = mob.position.tileY();
+        int tx = threat.position.tileX(), ty = threat.position.tileY();
+        int currentDist = LevelFactoryUtils.chebyshev(mob.position, threat.position);
+        com.bjsp123.rl2.model.Point best = null;
+        int bestDist = currentDist;
+        for (int dy = -radius; dy <= radius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = mx + dx, ny = my + dy;
+                if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                if (level.tiles[nx][ny].blocksMovement()) continue;
+                com.bjsp123.rl2.model.Point p = new com.bjsp123.rl2.model.Point(nx, ny);
+                if (mobAt(level, p) != null) continue;
+                int d = Math.max(Math.abs(nx - tx), Math.abs(ny - ty));
+                if (d > bestDist) { bestDist = d; best = p; }
+            }
+        }
+        return best;
+    }
+
+    /** Pick a random free floor tile farther from the nearest threat than the mob's
+     *  current position. Returns null when no improvement is possible. */
+    private static com.bjsp123.rl2.model.Point pickTeleportDestination(Mob mob, Level level) {
+        if (mob.position == null) return null;
+        Mob threat = nearestAttackTarget(mob, level);
+        int currentDist = threat != null
+                ? LevelFactoryUtils.chebyshev(mob.position, threat.position) : 0;
+        java.util.List<com.bjsp123.rl2.model.Point> candidates = new java.util.ArrayList<>();
+        for (int y = 0; y < level.height; y++) {
+            for (int x = 0; x < level.width; x++) {
+                if (level.tiles[x][y].blocksMovement()) continue;
+                com.bjsp123.rl2.model.Point p = new com.bjsp123.rl2.model.Point(x, y);
+                if (mobAt(level, p) != null) continue;
+                if (threat != null
+                        && LevelFactoryUtils.chebyshev(p, threat.position) <= currentDist) continue;
+                candidates.add(p);
+            }
+        }
+        if (candidates.isEmpty()) return null;
+        return candidates.get(RANDOM.nextInt(candidates.size()));
     }
 
     /** Standard turns away from the leader's tile that a stand-off ranged mob will retreat
@@ -2386,11 +2514,11 @@ public class MobSystem {
                 consumedByTame = true;
             }
         }
-        int lvl = Math.max(0, it.level);
+        int lvl = ItemSystem.effectiveLevel(it, thrower);
         // Bomb damage and AoE come from ItemSystem so every bomb-class throw shares
         // the same level-scaling formula with the rest of the item-stat math.
-        int bombDamage = rollRange(ItemSystem.effectiveDamageRange(it));
-        int bombTiles  = ItemSystem.effectiveTilesAffected(it);
+        int bombDamage = rollRange(ItemSystem.effectiveDamageRange(it, thrower));
+        int bombTiles  = ItemSystem.effectiveTilesAffected(it, thrower);
         int bombRadius = ItemSystem.radiusForTileCount(bombTiles);
         int r2 = bombRadius * bombRadius;
         if (te == ItemEffect.FIRE && inBounds) {
@@ -2530,6 +2658,8 @@ public class MobSystem {
                             Math.max(1, lvl), Math.max(1, 3 + lvl), thrower);
                 }
             }
+        } else if (te == ItemEffect.VOID && inBounds) {
+            ItemSystem.applyVoidImpact(level, dst, lvl);
         }
 
         // The item's fate after impact is now driven entirely by the

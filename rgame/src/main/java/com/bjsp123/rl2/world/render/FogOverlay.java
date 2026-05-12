@@ -195,15 +195,20 @@ public class FogOverlay {
 
         // Non-wall: corner sampling so explored/unseen edges saturate inside an explored cell,
         // giving the blurry visibility boundary we want for floors/chasms/water.
+        // Exception: when the center tile is currently visible (including ESP-revealed mob
+        // tiles), neighbouring unexplored cells must not dominate the max and make the
+        // corner fully opaque — that would bury the mob behind a solid black overlay.
+        int selfFog = cellFog(level, x, y);
         for (int iy = 0; iy < 2; iy++) {
             int dy = (iy == 0) ? -1 : +1;
             for (int ix = 0; ix < 2; ix++) {
                 int dx = (ix == 0) ? -1 : +1;
                 int fog = max4(
-                        cellFog(level, x,      y),
+                        selfFog,
                         cellFog(level, x + dx, y),
                         cellFog(level, x,      y + dy),
                         cellFog(level, x + dx, y + dy));
+                if (level.visible[x][y]) fog = Math.min(fog, selfFog);
                 fillFog(pxX + ix * halfX, pxY + iy * halfY, halfX, halfY, fog);
             }
         }

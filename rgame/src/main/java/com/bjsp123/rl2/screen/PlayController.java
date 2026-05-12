@@ -159,6 +159,7 @@ final class PlayController {
             }
             case WAND    -> beginWand(level, player, bound);
             case GRAPPLE -> beginGrapple(level, player, bound);
+            case JUMP    -> beginJump(level, player, bound);
             case NONE -> { /* handled above */ }
         }
     }
@@ -179,6 +180,7 @@ final class PlayController {
             }
             case WAND    -> beginWand(level, user, item);
             case GRAPPLE -> beginGrapple(level, user, item);
+            case JUMP    -> beginJump(level, user, item);
             case NONE -> { /* unreachable — the popup gates Use on isUsable() */ }
         }
     }
@@ -207,6 +209,7 @@ final class PlayController {
         }
         targetingOverlay.setPlayer(user);
         targetingOverlay.setLevel(level);
+        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             ItemSystem.fireWand(cur, user, wand, target);
@@ -229,6 +232,7 @@ final class PlayController {
     private void beginGrapple(Level level, Mob user, Item item) {
         targetingOverlay.setPlayer(user);
         targetingOverlay.setLevel(level);
+        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             ItemSystem.castGrapple(cur, user, item, target);
@@ -237,16 +241,60 @@ final class PlayController {
         }, item);
     }
 
+    /** Jump use entry point. Opens the targeting overlay restricted to tiles within
+     *  Chebyshev radius {@code item.abilityPower}, then routes the confirmed tile
+     *  through {@link ItemSystem#castJump}. Non-blocking hop animation. */
+    private void beginJump(Level level, Mob user, Item item) {
+        targetingOverlay.setPlayer(user);
+        targetingOverlay.setLevel(level);
+        targetingOverlay.setValidTiles(jumpGrid(level, user, item), level.width, level.height);
+        targetingOverlay.activate(target -> {
+            Level cur = world.currentLevel();
+            ItemSystem.castJump(cur, user, item, target);
+            animator.consume(cur);
+            afterMove(cur);
+        }, item);
+    }
+
     /** Kick off target-picking for a throw action from the inventory popup. */
     void beginThrow(Mob thrower, Item item) {
         if (thrower == null || item == null) return;
+        Level level = world.currentLevel();
         targetingOverlay.setPlayer(thrower);
-        targetingOverlay.setLevel(world.currentLevel());
+        targetingOverlay.setLevel(level);
+        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             MobSystem.throwItem(cur, thrower, item, target);
             afterMove(cur);
         }, item);
+    }
+
+    /** Grid of tiles currently visible to the player — valid targets for wand/grapple/throw. */
+    private static boolean[][] visibleGrid(Level level) {
+        boolean[][] grid = new boolean[level.width][level.height];
+        if (level.visible == null) return grid;
+        for (int x = 0; x < level.width; x++)
+            for (int y = 0; y < level.height; y++)
+                grid[x][y] = level.visible[x][y];
+        return grid;
+    }
+
+    /** Grid of valid jump destinations: within Chebyshev radius, passable, unoccupied. */
+    private static boolean[][] jumpGrid(Level level, Mob jumper, Item item) {
+        boolean[][] grid = new boolean[level.width][level.height];
+        if (jumper.position == null) return grid;
+        int radius = Math.max(0, (int) item.abilityPower);
+        int px = jumper.position.tileX(), py = jumper.position.tileY();
+        for (int x = Math.max(0, px - radius); x <= Math.min(level.width - 1, px + radius); x++) {
+            for (int y = Math.max(0, py - radius); y <= Math.min(level.height - 1, py + radius); y++) {
+                if (Math.max(Math.abs(x - px), Math.abs(y - py)) > radius) continue;
+                if (level.tiles[x][y].blocksMovement()) continue;
+                if (MobSystem.mobAt(level, new Point(x, y)) != null) continue;
+                grid[x][y] = true;
+            }
+        }
+        return grid;
     }
 
     void cancelThrow() {

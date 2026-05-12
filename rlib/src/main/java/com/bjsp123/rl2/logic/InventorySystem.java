@@ -11,30 +11,75 @@ import com.bjsp123.rl2.model.Item.InventoryCategory;
  * {@link com.bjsp123.rl2.model.Mob}: storage in {@code model/}, behaviour in
  * {@code logic/}.
  *
- * <p>Bag capacity is {@link GameBalance#INVENTORY_BAG_SIZE}; multi-position
- * routing for {@link InventoryCategory#AMULET} (2 positions) and
- * {@link InventoryCategory#GEM} (3) lives in {@link #resolveEquipIndex}.
+ * <p>The bag is divided into four capacity groups, each capped independently by
+ * a constant in {@link GameBalance}: equipment ({@code BAG_EQUIPMENT_SIZE}),
+ * gems ({@code BAG_GEMS_SIZE}), food ({@code BAG_FOOD_SIZE}), and all other
+ * consumables / tools ({@code BAG_ITEMS_SIZE}).
+ *
+ * <p>Only {@link InventoryCategory#POTION}, {@link InventoryCategory#BOMB}, and
+ * {@link InventoryCategory#FOOD} items can merge into stacks; all other item
+ * types are always singletons.
+ *
+ * <p>Multi-position equipment routing for {@link InventoryCategory#AMULET}
+ * (2 positions) and {@link InventoryCategory#GEM} (3) lives in
+ * {@link #resolveEquipIndex}.
  */
 public final class InventorySystem {
 
     private InventorySystem() {}
 
+    // ── Capacity groups ───────────────────────────────────────────────────────
+
+    /** The four bag-capacity buckets that partition every {@link InventoryCategory}. */
+    private enum BagGroup { EQUIPMENT, GEMS, FOOD, ITEMS }
+
+    private static BagGroup groupOf(InventoryCategory cat) {
+        if (cat == null) return BagGroup.ITEMS;
+        return switch (cat) {
+            case WEAPON, OFFHAND, ARMOR, AMULET, WAND, ITEM, TOOL -> BagGroup.EQUIPMENT;
+            case GEM                                         -> BagGroup.GEMS;
+            case FOOD                                        -> BagGroup.FOOD;
+            case POTION, BOMB, ORB                           -> BagGroup.ITEMS;
+        };
+    }
+
+    /** Bag slot limit that applies to items in the same capacity group as {@code cat}. */
+    public static int bagLimitFor(InventoryCategory cat) {
+        return switch (groupOf(cat)) {
+            case EQUIPMENT -> GameBalance.BAG_EQUIPMENT_SIZE;
+            case GEMS      -> GameBalance.BAG_GEMS_SIZE;
+            case FOOD      -> GameBalance.BAG_FOOD_SIZE;
+            case ITEMS     -> GameBalance.BAG_ITEMS_SIZE;
+        };
+    }
+
+    /** Number of bag entries currently occupying the same capacity group as {@code cat}. */
+    private static int bagCountFor(Inventory inv, InventoryCategory cat) {
+        BagGroup target = groupOf(cat);
+        int n = 0;
+        for (Item it : inv.bag) {
+            if (groupOf(it.inventoryCategory) == target) n++;
+        }
+        return n;
+    }
+
     /**
-     * Add {@code it} to {@code inv}'s bag. If an existing entry has a matching
-     * stack key ({@link Item#matchesStackKey}), {@code it}'s count merges into
-     * it instead of occupying a new bag slot. Returns {@code true} on success,
-     * {@code false} when the bag is full and no existing stack can absorb the
-     * addition.
+     * Add {@code it} to {@code inv}'s bag. Stackable items (potions, bombs, food)
+     * merge into an existing stack with a matching key instead of occupying a new
+     * slot. Returns {@code true} on success, {@code false} when the category's
+     * capacity is full and no existing stack can absorb the addition.
      */
     public static boolean addToBag(Inventory inv, Item it) {
         if (inv == null || it == null) return false;
-        for (Item existing : inv.bag) {
-            if (existing.matchesStackKey(it)) {
-                existing.count += Math.max(1, it.count);
-                return true;
+        if (it.isStackable()) {
+            for (Item existing : inv.bag) {
+                if (existing.matchesStackKey(it)) {
+                    existing.count += Math.max(1, it.count);
+                    return true;
+                }
             }
         }
-        if (inv.bag.size() >= GameBalance.INVENTORY_BAG_SIZE) return false;
+        if (bagCountFor(inv, it.inventoryCategory) >= bagLimitFor(it.inventoryCategory)) return false;
         inv.bag.add(it);
         return true;
     }
@@ -102,14 +147,16 @@ public final class InventorySystem {
         if (cat == null || !cat.isEquipment()) return false;
         int slot = findEquippedSlot(inv, it);
         if (slot < 0) return false;
-        // Capacity check — refuse the unequip if the bag is full and no
-        // matching stack can absorb it. Caller can surface that as a
-        // disabled button state.
+        // Capacity check — refuse the unequip if the category is full and no
+        // matching stack can absorb it. Equipment is never stackable, so the
+        // canAbsorb path only matters for stackable items unequipped by mistake.
         boolean canAbsorb = false;
-        for (Item existing : inv.bag) {
-            if (existing.matchesStackKey(it)) { canAbsorb = true; break; }
+        if (it.isStackable()) {
+            for (Item existing : inv.bag) {
+                if (existing.matchesStackKey(it)) { canAbsorb = true; break; }
+            }
         }
-        if (!canAbsorb && inv.bag.size() >= GameBalance.INVENTORY_BAG_SIZE) {
+        if (!canAbsorb && bagCountFor(inv, it.inventoryCategory) >= bagLimitFor(it.inventoryCategory)) {
             return false;
         }
         inv.setEquipped(cat, slot, null);
@@ -178,12 +225,17 @@ public final class InventorySystem {
         return out;
     }
 
-    /** Add {@code it} to the bag, merging into a matching stack if one exists. */
+    /** Add {@code it} to the bag, merging into a matching stack if the item is
+     *  stackable and a match exists. No capacity check — only called after the
+     *  caller has already verified there is room (or for equipped→bag returns
+     *  where item loss would be worse than overflow). */
     private static void mergeOrAdd(Inventory inv, Item it) {
-        for (Item existing : inv.bag) {
-            if (existing.matchesStackKey(it)) {
-                existing.count += Math.max(1, it.count);
-                return;
+        if (it.isStackable()) {
+            for (Item existing : inv.bag) {
+                if (existing.matchesStackKey(it)) {
+                    existing.count += Math.max(1, it.count);
+                    return;
+                }
             }
         }
         inv.bag.add(it);

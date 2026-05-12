@@ -220,6 +220,68 @@ public final class CsvTable {
         return out;
     }
 
+    /** Parsed entry from a drop-spec list cell — a keyword (item type, category
+     *  name, {@code NONE}, or {@code STUFF}) plus an optional explicit plus-level
+     *  ({@code +n}) and a fractional count ({@code *n}). The integer part of
+     *  {@code count} is the guaranteed number of items; the fractional remainder
+     *  is the probability of one bonus item. {@code plusLevel == -1} means "derive
+     *  the item's plus level from the level's power fraction" (the normal path);
+     *  a non-negative value overrides the generated plus directly.
+     *
+     * <p>Used by {@code MobDefinition.drops} (the {@code dropQuality} CSV column). */
+    public static final class DropSpec {
+        public final String keyword;
+        public final int    plusLevel;  // -1 = power-derived
+        public final double count;
+
+        public DropSpec(String keyword, int plusLevel, double count) {
+            this.keyword   = keyword;
+            this.plusLevel = plusLevel;
+            this.count     = count;
+        }
+    }
+
+    /** Parse a pipe-separated drop-spec cell. Each entry takes the form
+     *  {@code <keyword>}, {@code <keyword>+<n>}, {@code <keyword>*<n>}, or
+     *  {@code <keyword>+<n>*<n>} where {@code n} may be a decimal for the count
+     *  part. Keywords: {@code NONE} (no drop), {@code STUFF} (any item), any
+     *  {@link com.bjsp123.rl2.logic.ItemGenerator.LootCategory} name, or a
+     *  literal item type. Examples:
+     *  <pre>
+     *  NONE              → no drop
+     *  STUFF             → 1 random item, power-derived level
+     *  STUFF*2.5         → 2–3 random items (2 guaranteed, 50% chance of third)
+     *  EQUIPMENT+2       → 1 equipment item forced to +2
+     *  HEALING_POTION*0.5 → 50% chance of one healing potion
+     *  STUFF+3*2         → 2 random items each forced to +3
+     *  </pre>
+     *  Empty / null cells return an empty list. */
+    public static List<DropSpec> parseDropSpecList(String cell) {
+        List<DropSpec> out = new ArrayList<>();
+        if (cell == null || cell.isEmpty()) return out;
+        for (String entry : cell.split("\\|")) {
+            String e = entry.trim();
+            if (e.isEmpty()) continue;
+
+            double count = 1.0;
+            int star = e.indexOf('*');
+            if (star >= 0) {
+                count = Double.parseDouble(e.substring(star + 1).trim());
+                e = e.substring(0, star).trim();
+            }
+
+            int plusLevel = -1;
+            int plus = e.indexOf('+');
+            if (plus >= 0) {
+                plusLevel = Integer.parseInt(e.substring(plus + 1).trim());
+                e = e.substring(0, plus).trim();
+            }
+
+            out.add(new DropSpec(e, plusLevel, count));
+        }
+        return out;
+    }
+
     /** Sub-list cells use {@code |} as the separator. {@code MOUSE|CAT|RAT}
      *  → {@code [MOUSE, CAT, RAT]}. Empty cell → empty list. */
     public static List<String> listCell(Map<String, String> row, String key) {

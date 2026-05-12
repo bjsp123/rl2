@@ -84,6 +84,10 @@ public final class ItemDefinition {
      *  pickup application). Read from the {@code chargeGain} CSV column. */
     public float chargeGain;
 
+    /** Maximum charges at item level 0. Each level beyond the base adds 1 more
+     *  max charge. 0 means the item has no charges (default). */
+    public int baseChargeMax = 0;
+
     /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
     public int knockbackSquares;
 
@@ -121,6 +125,39 @@ public final class ItemDefinition {
      *  the rgame-side {@code ItemSprites} loader; rlib code never touches them. */
     public int spriteCol;
     public int spriteRow;
+
+    private static InventoryCategory defaultCategory(String type) {
+        if (type == null) return null;
+        return switch (type) {
+            case "SWORD", "RAPIER", "RAPIER2", "KATANA", "DAGGER", "THROWING_KNIFE",
+                 "PUNCH_DAGGER", "CUTLASS", "BLOODYBLADE"
+                    -> InventoryCategory.WEAPON;
+            case "SHIELD", "KITE_SHIELD", "TORCH"
+                    -> InventoryCategory.OFFHAND;
+            case "CHAIN_MAIL", "SCALE_MAIL", "HEAVY_MAIL"
+                    -> InventoryCategory.ARMOR;
+            case "AMULET_OF_NIMBLENESS", "AMULET_OF_FINESSE", "AMULET_OF_DEFENCE",
+                 "AMULET_OF_WARDING", "AMULET_OF_LIGHT"
+                    -> InventoryCategory.AMULET;
+            case "WAND_WATER", "WAND_OIL", "WAND_GRASS", "WAND_FUNGUS", "WAND_FIRE",
+                 "WAND_DOG", "WAND_DETONATION", "WAND_MAGIC_MISSILE", "WAND_BANISHMENT",
+                 "WAND_LIGHTNING", "WAND_POLYMORPH", "BLINKSTONE"
+                    -> InventoryCategory.WAND;
+            case "PEAR", "FISH", "PEAR_SCRUMPTIOUS", "PEAR_SILVERY", "PEAR_CONFERENCE",
+                 "FOUL_MEAT", "ANT_JELLY", "TASTY_MEAT", "IPWERGIS"
+                    -> InventoryCategory.FOOD;
+            case "HEALING_POTION", "POTION_SORCERY", "POTION_GHOSTLINESS",
+                 "POTION_INVISIBILITY", "POTION_POISON", "POTION_INSIGHT",
+                 "POTION_ESP", "POTION_LEV"
+                    -> InventoryCategory.POTION;
+            case "FIRE_BOMB", "BLAST_BOMB", "FREEZE_BOMB", "OIL_BOMB", "VOID_BOMB",
+                 "CHERRY_BOMB", "SHOCK_BOMB"
+                    -> InventoryCategory.BOMB;
+            case "GRAPPLING_HOOK", "VINE_HOOK", "FROG", "FROG2"
+                    -> InventoryCategory.ITEM;
+            default -> InventoryCategory.ORB;
+        };
+    }
 
     public static List<ItemDefinition> parseAll(String csv) {
         CsvTable table = CsvTable.parse(csv);
@@ -173,13 +210,14 @@ public final class ItemDefinition {
                 d.appliesBuff.add(Buff.BuffType.valueOf(name.trim()));
             } catch (IllegalArgumentException ignored) { /* skip bad name */ }
         }
-        d.abilityPower = (float) CsvTable.dblCell(row, "abilityPower", 0.0);
-        d.chargeGain   = (float) CsvTable.dblCell(row, "chargeGain",   0.0);
+        d.abilityPower  = (float) CsvTable.dblCell(row, "abilityPower",  0.0);
+        d.chargeGain    = (float) CsvTable.dblCell(row, "chargeGain",    0.0);
+        d.baseChargeMax =         CsvTable.intCell(row, "baseChargeMax", 0);
 
         d.knockbackSquares      = CsvTable.intCell(row, "knockbackSquares", 0);
         d.glows                 = CsvTable.boolCell(row, "glows", false);
         d.inventoryCategory     = CsvTable.enumCell(row, "inventoryCategory",
-                InventoryCategory.class, null);
+                InventoryCategory.class, defaultCategory(d.type));
         double[] power      = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
         d.powerMin          = power[0];
         d.powerMax          = power[1];
@@ -230,12 +268,11 @@ public final class ItemDefinition {
         it.appliesBuff    = new java.util.ArrayList<>(appliesBuff);
         it.abilityPower   = abilityPower;
         it.chargeGain     = chargeGain;
+        it.baseChargeMax  = baseChargeMax;
         it.knockbackSquares = knockbackSquares;
         it.glows                 = glows;
         it.inventoryCategory     = inventoryCategory;
-        // Wand items spawn with full charge — max == level + 1, set
-        // immediately after copying the level-affecting fields.
-        if (it.useBehavior == Item.UseBehavior.WAND) {
+        if (it.baseChargeMax > 0) {
             it.charge = it.maxCharge();
         }
     }

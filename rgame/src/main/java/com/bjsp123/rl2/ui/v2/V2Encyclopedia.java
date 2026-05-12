@@ -202,7 +202,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             rowEntries.clear();
             float left = window.x + 14f;
             float rowW = winW - 28f;
-            float rowH = 36f;
+            float rowH = 84f;
             float visibleTop    = tabRects[0].y - 6f;
             float visibleBottom = window.y + 14f;
             float visibleH      = visibleTop - visibleBottom;
@@ -351,7 +351,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 // border around the 32×32 cell that holds each row's
                 // sprite. Sprite itself paints in the text pass on top.
                 for (Rect rr : rowRects) {
-                    float fSz = 32f;
+                    float fSz = 80f;
                     float fx  = rr.x + 2f;
                     float fy  = rr.y + (rr.h - fSz) * 0.5f;
                     Edges.drawTriLine(s, fx, fy, fSz, fSz, Pal.HUD_LINE_W);
@@ -492,10 +492,10 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 for (int i = 0; i < rowRects.size(); i++) {
                     Rect r = rowRects.get(i);
                     Entry e = rowEntries.get(i);
-                    // Fixed 32×32 frame — every list row reserves the same
+                    // Fixed 80×80 frame — every list row reserves the same
                     // cell regardless of source sprite size. Sprite is
                     // aspect-fit + outlined inside the frame.
-                    float fSz = 32f;
+                    float fSz = 80f;
                     float fx  = r.x + 2f;
                     float fy  = r.y + (r.h - fSz) * 0.5f;
                     if (e.icon != null) {

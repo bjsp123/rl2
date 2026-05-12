@@ -26,7 +26,10 @@ public enum Perk {
     /** Each level contributes one square of melee-attack knockback. Stacks with
      *  any knockback the equipped weapon already provides. Warrior class
      *  starting perk. */
-    KNOCKBACK;
+    KNOCKBACK,
+    /** Each level adds +1 effective level to all bombs thrown by this player.
+     *  Scales bomb damage and AoE. Rogue class starting perk. */
+    BOMB_JACK;
 
     public String displayName() {
         return switch (this) {
@@ -35,6 +38,7 @@ public enum Perk {
             case WANDMASTER -> "Wandmaster";
             case JUMP       -> "Jump";
             case KNOCKBACK  -> "Knockback";
+            case BOMB_JACK  -> "Bomb Jack";
         };
     }
 
@@ -45,6 +49,7 @@ public enum Perk {
             case WANDMASTER -> "Wands gain +1 effective level.";
             case JUMP       -> "Move to any tile within 2 squares for one moveCost.";
             case KNOCKBACK  -> "+1 square of melee knockback per level.";
+            case BOMB_JACK  -> "+1 bomb effective level per perk level.";
         };
     }
 }

@@ -146,19 +146,48 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
+    /** "The Kobold picks up a healing potion." */
+    public static LogEvent mobPicksUpItem(String mobName, String itemName) {
+        return new LogEvent("The " + mobName + " picks up the " + itemName + ".",
+                            EventPriority.LOW, false);
+    }
+
     public static LogEvent mobSpawn(String name) {
         return new LogEvent("A " + name + " appears.",
                             EventPriority.HIGH, false);
     }
 
-    public static LogEvent attitudeTurnsOnPlayer(String name, String playerName) {
-        return new LogEvent("The " + name + " turns on " + playerName + "!",
-                            EventPriority.HIGH, true);
+    public static LogEvent attitudeTurnsOnPlayer(String name, String reason) {
+        String msg = "The " + name + " becomes hostile"
+                + (reason != null && !reason.isEmpty() ? " (" + reason + ")" : "") + "!";
+        return new LogEvent(msg, EventPriority.HIGH, true);
     }
 
-    public static LogEvent attitudeMobOnMob(String a, String b) {
-        return new LogEvent("The " + a + " turns on the " + b + ".",
-                            EventPriority.HIGH, false);
+    public static LogEvent attitudeMobOnMob(String a, String b, String reason) {
+        String msg = "The " + a + " turns on the " + b
+                + (reason != null && !reason.isEmpty() ? " (" + reason + ")" : "") + ".";
+        return new LogEvent(msg, EventPriority.HIGH, false);
+    }
+
+    /** "The Black Ant wakes up (damaged by fire)." */
+    public static LogEvent mobWakesUp(String name, String reason) {
+        String msg = "The " + name + " wakes up"
+                + (reason != null && !reason.isEmpty() ? " (" + reason + ")" : "") + ".";
+        return new LogEvent(msg, EventPriority.LOW, false);
+    }
+
+    /** "The Kobold General uses a haste ability on the Kobold Warrior." */
+    public static LogEvent mobUsesAbility(String caster, String abilityDesc, String target,
+                                          boolean involvesPlayer) {
+        return new LogEvent("The " + caster + " uses " + abilityDesc + " on "
+                + (involvesPlayer ? target : "the " + target) + ".",
+                EventPriority.LOW, involvesPlayer);
+    }
+
+    /** "The Goblin uses a healing potion." */
+    public static LogEvent mobUsesItem(String mobName, String itemName, boolean involvesPlayer) {
+        return new LogEvent("The " + mobName + " uses the " + itemName + ".",
+                EventPriority.LOW, involvesPlayer);
     }
 
     public static LogEvent vegetationEaten(String name, String vegetation) {
@@ -174,6 +203,12 @@ public final class Messages {
         String v = (verb == null || verb.isEmpty()) ? "uses" : verb + "s";
         return new LogEvent(playerName + " " + v + " the " + itemName + ".",
                             EventPriority.LOW, true);
+    }
+
+    /** "The rope can't pull the kobold." */
+    public static LogEvent grappleBlocked(String targetName) {
+        return new LogEvent("The rope can't pull the " + targetName + ".",
+                            EventPriority.HIGH, true);
     }
 
     public static LogEvent playerStarves(String playerName) {

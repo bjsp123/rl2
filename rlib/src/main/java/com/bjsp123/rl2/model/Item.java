@@ -64,7 +64,9 @@ public class Item {
         /** {@link UseBehavior#POWERUP} sub-effect: every wand-charging
          *  item in the player's inventory gains its own
          *  {@link Item#chargeGain} of charge (capped at max charge). */
-        MANA_UP
+        MANA_UP,
+        /** Wand effect: teleport the caster to the target tile instantly. */
+        TELEPORT
     }
 
     /** What happens to a thrown item AFTER its throw-effect resolves.
@@ -99,11 +101,9 @@ public class Item {
      * {@code wandEffect} ({@link ItemEffect}) as orthogonal sub-axes.
      */
     public enum InventoryCategory {
-        WEAPON, OFFHAND, ARMOR, AMULET, GEM,
+        WEAPON, OFFHAND, ARMOR, AMULET, GEM, TOOL,
         POTION, WAND, FOOD, ORB, BOMB,
-        /** Catch-all bag-tab category for "tools" — grappling hooks and any
-         *  future utility item that doesn't fit into one of the more
-         *  specialised buckets. Lives in the bag, never in a gear slot. */
+       
         ITEM;
 
         /** True if items in this category go into a gear strip equipment slot. */
@@ -290,9 +290,14 @@ public class Item {
      *  CSV column. Default 0 (no regen). */
     public float chargeGain;
 
-    /** Maximum charge a wand can hold — {@code level + 1}. Plain-level
-     *  wands carry 2; +N enchanted wands carry {@code N+2}. */
-    public int maxCharge() { return Math.max(1, level + 1); }
+    /** Base maximum charges at item level 0. Each level beyond the base
+     *  adds 1 max charge. 0 means the item has no charges (default). */
+    public int baseChargeMax = 0;
+
+    /** Intrinsic maximum charge — {@code baseChargeMax + level}. Use
+     *  {@code ItemSystem.effectiveMaxCharge(item, holder)} when the holder
+     *  is available so WANDMASTER / BOMB_JACK bonuses apply. */
+    public int maxCharge() { return Math.max(1, baseChargeMax + level); }
 
     /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
     public int knockbackSquares;
@@ -301,6 +306,12 @@ public class Item {
      *  particle stream so the player notices it. Power orbs use it; future
      *  glowing items just set the flag. */
     public boolean glows;
+
+    /** Brand applied to this item at generation time, or {@code null} for unbranded items.
+     *  Brands contribute stat bonuses via
+     *  {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto} and add an
+     *  "of [name]" suffix to the display name. */
+    public com.bjsp123.rl2.logic.BrandDefinition brand;
 
     /** Authoritative item-kind tag — see {@link InventoryCategory}. Drives
      *  equip routing, inventory tab grouping, and {@code ItemGenerator}
@@ -330,16 +341,21 @@ public class Item {
     }
     public boolean isUsable()     { return useBehavior != null && useBehavior != UseBehavior.NONE; }
 
-    /** True if {@code other} is "exactly identical" for stacking purposes — same type,
-     *  same level, same gem species + size, same material. Equipped status is not
-     *  consulted; callers ensure they're stacking on bag items. */
+    /** True only for categories that may form stacks: potions, bombs, and food.
+     *  All other item types (weapons, wands, gems, tools, …) are always singletons. */
+    public boolean isStackable() {
+        return inventoryCategory == InventoryCategory.POTION
+                || inventoryCategory == InventoryCategory.BOMB
+                || inventoryCategory == InventoryCategory.FOOD;
+    }
+
+    /** True if {@code other} is "exactly identical" for stacking purposes — same type
+     *  and level, both stackable categories. Non-stackable items always return false. */
     public boolean matchesStackKey(Item other) {
         if (other == null || other == this) return false;
+        if (!isStackable() || !other.isStackable()) return false;
         if (!java.util.Objects.equals(type, other.type)) return false;
         if (level != other.level) return false;
-        if (gemSpecies != other.gemSpecies) return false;
-        if (gemSize != other.gemSize) return false;
-        if (material != other.material) return false;
         return true;
     }
 

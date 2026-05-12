@@ -27,7 +27,7 @@ MOB_DEFAULTS: dict[str, str | None] = {
     "enemyFactions": None,
     # Uniqueness + drops
     "unique": "false",
-    "dropQuality": "1",
+    "dropQuality": "NONE",
     # Spawn eligibility (level-gen)
     "powerLevel": "0.3_0.7",
     "clusterSize": "1",

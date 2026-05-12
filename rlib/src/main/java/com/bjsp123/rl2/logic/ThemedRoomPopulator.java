@@ -136,7 +136,7 @@ final class ThemedRoomPopulator {
         if (cat != null) {
             return ItemGenerator.generateItem(powerLevel, level.theme, cat, rng);
         }
-        return ItemGenerator.buildItem(ref, powerLevel);
+        return ItemGenerator.buildItem(ref, powerLevel, rng);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

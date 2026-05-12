@@ -1740,31 +1740,97 @@ public class DefaultLevelRenderer implements LevelRenderer {
     }
 
     private void drawItem(Level level, Item it) {
-        if(it==null) return;
-        if(it.location == null) {
-            System.err .println("Item " + it.type + " has null location, skipping draw");
+        if (it == null) return;
+        if (it.location == null) {
+            System.err.println("Item " + it.type + " has null location, skipping draw");
             return;
         }
         int x = it.location.tileX(), y = it.location.tileY();
         if (!inBounds(level, x, y) || !level.visible[x][y]) return;
+        float dx = x * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
+        if (it.useBehavior == Item.UseBehavior.POWERUP) {
+            float phase = x * 1.3f + y * 0.7f;
+            dy += (float) Math.sin(stairLabelTime * 2.0f + phase) * 1.5f;
+            drawPowerupGlow(it, dx, dy, phase);
+        }
         // Prefer the shared ItemSprites lookup so the on-floor icon matches the
         // inventory + action-bar art. Falls back to the glyph if no sprite is registered.
         com.badlogic.gdx.graphics.g2d.TextureRegion region = ItemSprites.regionFor(it);
         if (region != null) {
-            // Same silhouette outline mobs/statues/lamps get — items on the floor
-            // were the lone holdout. Helps loot pop visually against busy terrain.
-            float dx = x * (float) CELL;
-            float dy = y * (float) CELL + ENTITY_Y_OFFSET;
-            drawRegionOutline(region, dx, dy, (float) CELL, (float) CELL);
+            // Brand outline pulse: every 3 seconds the outline briefly flashes the
+            // brand color before returning to black.
+            if (it.brand != null) {
+                float t = stairLabelTime % 3.0f;
+                float pulse = t < 0.3f ? (float) Math.sin(t / 0.3f * Math.PI) : 0f;
+                if (pulse > 0f) {
+                    int hex = it.brand.colorHex;
+                    float br = ((hex >> 16) & 0xFF) / 255f;
+                    float bg = ((hex >> 8)  & 0xFF) / 255f;
+                    float bb = ( hex        & 0xFF) / 255f;
+                    drawRegionOutlineTinted(region, dx, dy, (float) CELL, (float) CELL,
+                            br, bg, bb, pulse);
+                } else {
+                    drawRegionOutline(region, dx, dy, (float) CELL, (float) CELL);
+                }
+                drawBrandParticles(it, dx, dy);
+            } else {
+                // Same silhouette outline mobs/statues/lamps get — items on the floor
+                // were the lone holdout. Helps loot pop visually against busy terrain.
+                drawRegionOutline(region, dx, dy, (float) CELL, (float) CELL);
+            }
             batch.setColor(Color.WHITE);
             // Source art is 32×32, world cell is 16×16 — libGDX scales 2:1 down with
             // nearest-neighbour filtering for crisp pixels.
             batch.draw(region, dx, dy, (float) CELL, (float) CELL);
         } else {
             System.err.println("No sprite for item " + it.type + " at (" + x + ", " + y + ")");
-            //here draw a placeholder
         }
         if (it.level > 0) drawItemLevelBadge(it, x, y);
+    }
+
+    /** Additive halo drawn behind a POWERUP floor item, using the dedicated
+     *  glow sprites from {@code buffs16.png} (col 4 for perk powerups,
+     *  col 5 for HP/mana powerups). Two passes at different sizes give depth
+     *  without drawing squares. */
+    private void drawPowerupGlow(Item it, float dx, float dy, float phase) {
+        com.badlogic.gdx.graphics.g2d.TextureRegion glow = isHpManaGlow(it)
+                ? BuffIcons.hpManaGlowRegion()
+                : BuffIcons.perkGlowRegion();
+        if (glow == null) return;
+
+        float pulse = 0.4f + 0.15f * (float) Math.sin(stairLabelTime * 2.0f + phase);
+        float cx = dx + CELL * 0.5f;
+        float cy = dy + CELL * 0.5f;
+        float[] rgb = powerupGlowColor(it);
+
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+
+        float outerSize = CELL * 2.5f;
+        batch.setColor(rgb[0], rgb[1], rgb[2], 0.55f * pulse);
+        batch.draw(glow, cx - outerSize * 0.5f, cy - outerSize * 0.5f, outerSize, outerSize);
+
+        float innerSize = CELL * 1.5f;
+        batch.setColor(rgb[0], rgb[1], rgb[2], 0.85f * pulse);
+        batch.draw(glow, cx - innerSize * 0.5f, cy - innerSize * 0.5f, innerSize, innerSize);
+
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        batch.setColor(Color.WHITE);
+    }
+
+    private static boolean isHpManaGlow(Item it) {
+        return it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.HP_UP
+            || it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MANA_UP;
+    }
+
+    private static float[] powerupGlowColor(Item it) {
+        if (it.wandEffect == null) return new float[]{1f, 0.9f, 0.4f};
+        return switch (it.wandEffect) {
+            case LEVEL_UP -> new float[]{1f, 0.85f, 0.2f};
+            case HP_UP    -> new float[]{0.9f, 0.15f, 0.15f};
+            case MANA_UP  -> new float[]{0.25f, 0.5f,  1f};
+            default       -> new float[]{1f, 0.9f, 0.4f};
+        };
     }
 
     /** Small {@code +N} marker drawn at the top-right corner of an item's tile to
@@ -1835,7 +1901,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
         Sprite s = spriteForMob(mob);
         if (s != null) {
-            drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale);
+            // Unique mobs continuously pulse their outline between black and white.
+            float pulseR = 0f, pulseG = 0f, pulseB = 0f;
+            if (mob.unique) {
+                float p = 0.5f + 0.5f * (float) Math.sin(stairLabelTime * Math.PI * 2.0 / 1.5);
+                pulseR = p; pulseG = p; pulseB = p;
+            }
+            if (as.borderFlashFrames > 0) {
+                pulseR = 1f; pulseG = 1f; pulseB = 1f;
+            }
+            drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale, pulseR, pulseG, pulseB);
         } else {
             System.err.println("No sprite for mob " + mob.mobType + " at (" + mx + ", " + my + ")");
             //placeholder drawn here?
@@ -1931,7 +2006,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * shadow is drawn first, anchored at the baseline.
      */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY, float alpha) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f);
     }
 
     /** Spawn-scale variant: {@code spawnScale} 0..1 multiplies both x and y
@@ -1940,6 +2015,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  is the no-op default for normal rendering. */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale) {
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f);
+    }
+
+    /**
+     * Full variant: {@code outlinePulseR/G/B} inject a tinted outline color that
+     * blends with black for pulse effects (e.g. gold for unique mobs). When all
+     * three are 0 the outline is pure black as usual.
+     */
+    private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
+                               float alpha, float spawnScale,
+                               float outlinePulseR, float outlinePulseG, float outlinePulseB) {
         // "Natural" sprites (large blobs etc.) draw at source scale; everything else gets
         // normalised to MOB_VISIBLE_W × MOB_VISIBLE_H so silhouettes read consistently.
         float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * spawnScale;
@@ -1982,7 +2068,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
             ensureOutlineTaps(outlineW);
             Texture mobTex = s.region.getTexture();
             setOutlineFilter(mobTex, true);
-            batch.setColor(0f, 0f, 0f, outlineA);
+            batch.setColor(outlinePulseR, outlinePulseG, outlinePulseB, outlineA);
             for (int i = 0; i < outlineTaps; i++) {
                 batch.draw(s.region,
                         drawX + outlineDx[i] * outlineW,
@@ -2036,6 +2122,61 @@ public class DefaultLevelRenderer implements LevelRenderer {
             batch.draw(r, x + outlineDx[i] * ow, y + outlineDy[i] * ow, w, h);
         }
         setOutlineFilter(tex, false);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Like {@link #drawRegionOutline} but with a custom RGB outline color for
+     *  brand/unique pulse effects. When {@code pulseStrength} is 0, falls back
+     *  to the normal black outline. */
+    private void drawRegionOutlineTinted(TextureRegion r, float x, float y, float w, float h,
+                                         float pr, float pg, float pb, float pulseStrength) {
+        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
+        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        if (ow <= 0f || oa <= 0f || r == null) return;
+        ensureOutlineTaps(ow);
+        Texture tex = r.getTexture();
+        setOutlineFilter(tex, true);
+        batch.setColor(pr * pulseStrength, pg * pulseStrength, pb * pulseStrength, oa);
+        for (int i = 0; i < outlineTaps; i++) {
+            batch.draw(r, x + outlineDx[i] * ow, y + outlineDy[i] * ow, w, h);
+        }
+        setOutlineFilter(tex, false);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Small additive-blended particles that drift upward around a branded floor
+     *  item. Positions are deterministic per (item location + time) so particles
+     *  animate smoothly without any per-item state. */
+    private void drawBrandParticles(Item it, float dx, float dy) {
+        if (it.brand == null) return;
+        int hex = it.brand.colorHex;
+        float cr = ((hex >> 16) & 0xFF) / 255f;
+        float cg = ((hex >> 8)  & 0xFF) / 255f;
+        float cb = ( hex        & 0xFF) / 255f;
+        // Phase offset per tile so nearby branded items don't pulse in sync.
+        int tx = it.location.tileX(), ty = it.location.tileY();
+        float phase = (tx * 1.7f + ty * 2.3f);
+        float particleSize = CELL * 0.18f;
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        int count = 4;
+        for (int i = 0; i < count; i++) {
+            float slot = i / (float) count;
+            // Each particle cycles at a slightly different rate; speed chosen so
+            // the fastest takes ~2.5 s and the slowest ~3.5 s per cycle.
+            float speed = 0.8f + i * 0.15f;
+            float t = (stairLabelTime * speed + phase + slot * 7.3f) % 1.0f;
+            // Particles are only visible in the lower half of their cycle so
+            // they fade in and out rather than jumping back to the bottom.
+            if (t > 0.55f) continue;
+            float alpha = t < 0.15f ? t / 0.15f : (0.55f - t) / 0.40f;
+            alpha *= 0.7f;
+            // Spread horizontally based on slot; drift upward with t.
+            float px = dx + CELL * (0.2f + slot * 0.6f) - particleSize * 0.5f;
+            float py = dy + CELL * (0.1f + t * 1.4f);
+            batch.setColor(cr, cg, cb, alpha);
+            batch.draw(whiteRegion, px, py, particleSize, particleSize);
+        }
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         batch.setColor(Color.WHITE);
     }
 

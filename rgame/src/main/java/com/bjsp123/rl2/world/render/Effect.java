@@ -93,7 +93,7 @@ public class Effect {
     }
 
     public enum EffectTint {
-        RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE
+        RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN
     }
 
     public static final float MAGIC_MISSILE_PX_PER_FRAME = 2.25f;
@@ -144,6 +144,10 @@ public class Effect {
      *  varying shades of the same warm grey. */
     public float dustShade;
 
+    /** When true, PARTICLE_BURST particles blend from their {@link #tint} color
+     *  toward white as they age — used by powerup pickups so the sparks start
+     *  colored then turn white before fading. */
+    public boolean particleFadeToWhite;
     public float[] particleX0;
     public float[] particleY0;
     public float[] particleVX;
@@ -169,6 +173,13 @@ public class Effect {
      *  rope retracts; {@code false} when the target was too heavy and the
      *  rope holds at full extent then fades. */
     public boolean grappleSuccess;
+
+    /** When {@code true}, the renderer skips its normal per-tile FOV check
+     *  for this effect (PARTICLE_BURST, EXPLOSION). Used for ability sparks
+     *  at both the caster and target when the Animator has already confirmed
+     *  that at least one end of the ability is visible — so both endpoints
+     *  render as a single visual unit. */
+    public boolean ignoresFov;
 
     public Effect() {}
 
@@ -232,11 +243,11 @@ public class Effect {
      *  stagger flashes when multiple mobs attack on the same tick so the slashes
      *  appear in sequence rather than overlapping. */
     public static Effect attackFlash(Point at, boolean isPlayer, boolean facesRight,
-                                     int startDelay) {
+                                     float startDelay) {
         Effect e = new Effect(at, EffectType.ATTACK_FLASH);
         e.spriteCol = isPlayer ? 0 : 1;
         e.facesRight = facesRight;
-        e.startDelay = Math.max(0, startDelay);
+        e.startDelay = (int)Math.max(0f, startDelay);
         return e;
     }
 
@@ -429,6 +440,32 @@ public class Effect {
         Effect e = new Effect(location, EffectType.BUFF_ICON);
         e.text = fallbackText;
         e.buffType = type;
+        return e;
+    }
+
+    /** 32-particle powerup-pickup cloud: each particle has an individual spawn
+     *  time in [0, 64] frames (±32 stagger), a random offset of ±16 px in X and
+     *  ±8 px in Y from the tile centre, drifts straight up, turns white, then
+     *  fades. Per-particle timing is honoured by {@code FxRenderer.drawParticleBurst}
+     *  when {@code particleSpawnFrame} is populated. */
+    public static Effect powerupParticles(Point at, EffectTint tint, int count, Random rng) {
+        int particleLife = 40;
+        int spawnSpread  = 64;   // particles spawn between frame 0 and frame 64
+        Effect e = new Effect(at, EffectType.PARTICLE_BURST);
+        e.frameCount = spawnSpread + particleLife;
+        e.tint = tint;
+        e.particleX0         = new float[count];
+        e.particleY0         = new float[count];
+        e.particleVX         = new float[count];
+        e.particleVY         = new float[count];
+        e.particleSpawnFrame = new int[count];
+        for (int i = 0; i < count; i++) {
+            e.particleX0[i]         = 8f + (rng.nextFloat() - 0.5f) * 32f;   // centre ± 16 px
+            e.particleY0[i]         = 8f + (rng.nextFloat() - 0.5f) * 16f;   // centre ± 8 px
+            e.particleVX[i]         = 0f;
+            e.particleVY[i]         = 0.25f + rng.nextFloat() * 0.25f;        // gentle upward drift
+            e.particleSpawnFrame[i] = rng.nextInt(spawnSpread + 1);            // 0 .. 64
+        }
         return e;
     }
 

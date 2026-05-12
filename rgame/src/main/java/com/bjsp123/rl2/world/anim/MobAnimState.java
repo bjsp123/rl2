@@ -10,7 +10,7 @@ public final class MobAnimState {
 
     /** Frames to wait before the queued anim begins playing — set from the
      *  {@link AnimQueue} return value at queue time. */
-    public int delayFrames;
+    public float delayFrames;
 
     // ── Step interpolation ──────────────────────────────────────────────────
     /** Tile-units offset toward the mob's previous position, advanced toward zero
@@ -35,6 +35,15 @@ public final class MobAnimState {
     /** Wall-clock countdown until the next levitating-mob foot-puff. Zeroed
      *  out when the mob loses the LEVITATING buff. */
     public int levitatePuffCountdownMs;
+
+    // ── Powerup pickup border flash ─────────────────────────────────────────
+    /** Remaining frames for the white-border flash on powerup pickup.
+     *  Decremented each frame by {@link Animator}; renderer outlines the
+     *  player sprite while {@code > 0}. */
+    public int borderFlashFrames;
+    /** Duration of the white border flash — 0.5 s at the default
+     *  framesPerRender cadence. */
+    public static final int BORDER_FLASH_FRAMES = 30;
 
     // ── Spawn-grow ─────────────────────────────────────────────────────────
     /** Frames elapsed in the spawn-grow animation. {@code 0} when no spawn anim

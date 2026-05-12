@@ -48,6 +48,7 @@ public sealed interface GameEvent permits
         GameEvent.SurfaceChanged,
         GameEvent.VegetationChanged,
         GameEvent.RainbowBurst,
+        GameEvent.XPGainBurst,
         GameEvent.PeriodicBuffDamage,
         GameEvent.LootDropped,
         GameEvent.ItemPickedUp,
@@ -55,6 +56,7 @@ public sealed interface GameEvent permits
         GameEvent.ItemFallingIntoChasm,
         GameEvent.MobFellThroughChasm,
         GameEvent.GrappleFired,
+        GameEvent.MobJumped,
         GameEvent.MobAbilityUsed {
 
     /** Mob took a single tile step. The animator translates this into a step interpolation. */
@@ -171,6 +173,8 @@ public sealed interface GameEvent permits
      *  player notices the level-up before the next turn ticks. */
     record RainbowBurst(Point pos) implements GameEvent {}
 
+    record XPGainBurst(Point pos) implements GameEvent {}
+
     /** Per-turn HP loss from a buff DOT (fire, poison, …). The renderer picks the
      *  floating-text tint from {@code buff} (orange for fire, green for poison, …). */
     record PeriodicBuffDamage(Mob mob, Buff.BuffType buff, int amount) implements GameEvent {}
@@ -204,6 +208,11 @@ public sealed interface GameEvent permits
      *  via the source level's down-stairs link. The renderer doesn't
      *  need to know which — the sprite animation is the same. */
     record MobFellThroughChasm(Mob mob, Point fromTile) implements GameEvent {}
+
+    /** Mob jumped from {@code from} to {@code to} via a JUMP-behavior item.
+     *  The animator slides the sprite across the intervening tiles as a
+     *  non-blocking hop and emits departure/landing dust clouds. */
+    record MobJumped(Mob mob, Point from, Point to) implements GameEvent {}
 
     /** Player (or future AI) fired a grappling rope from {@code from} to
      *  {@code target}. {@code success == true} → the rope retracts and the

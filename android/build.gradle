@@ -78,3 +78,17 @@ task copyAndroidNatives() {
 tasks.matching { it.name.contains("merge") && it.name.contains("JniLibFolders") }.configureEach {
     it.dependsOn copyAndroidNatives
 }
+
+// Build, install, and launch on an attached device in one step.
+// Requires adb on PATH (Android SDK platform-tools).
+// Run with:  ./gradlew :android:deploy
+task deploy(dependsOn: 'installDebug') {
+    group       'install'
+    description 'Assembles the debug APK, installs it on the attached device, and launches the app.'
+    doLast {
+        exec {
+            commandLine 'adb', 'shell', 'am', 'start',
+                    '-n', 'com.bjsp123.rl2/com.bjsp123.rl2.android.AndroidLauncher'
+        }
+    }
+}

@@ -1,83 +1,141 @@
 package com.bjsp123.rl2.ui.v2;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.HallOfFameEntry;
+import com.bjsp123.rl2.model.Mob.CharacterClass;
+import com.bjsp123.rl2.world.render.IconSprites;
+import com.bjsp123.rl2.world.render.PortraitSprites;
 
-/** V2 game-over screen — full-screen modal shown when the player dies. */
+import java.util.ArrayList;
+import java.util.List;
+
+/** V2 game-over screen — shown when the player dies. */
 public final class V2GameOver extends V2Screen {
 
-    private final Rl2Game game;
+    private static final Color DIM_WARN = new Color(0.9f, 0.3f, 0.3f, 1f);
+
+    private final Rl2Game        game;
     private final HallOfFameEntry record;
-    private final Rect window = new Rect();
+    private final V2Log           log;
+
+    // Layout rects — computed once in buildLayout().
+    private final Rect window   = new Rect();
+    private final Rect portrait = new Rect();
+    private float nameY, statsY, deathY;
 
     public V2GameOver(Rl2Game game, HallOfFameEntry record) {
         super(game.ui);
-        this.game = game;
+        this.game   = game;
         this.record = record;
+        this.log    = new V2Log(game.ui);
+    }
+
+    // ── V2Screen lifecycle ────────────────────────────────────────────────────
+
+    @Override
+    public void show() {
+        super.show();
+        Gdx.input.setInputProcessor(new InputMultiplexer(log.input(), baseInput()));
     }
 
     @Override
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - 24f);
-        float winH = Math.min(440f, vh - 100f);
-        window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
+        float winW = Math.min(340f, vw - 24f);
+        float winH = Math.min(460f, vh - 80f);
+        float winX = (vw - winW) * 0.5f;
+        float winY = (vh - winH) * 0.5f;
+        window.set(winX, winY, winW, winH);
 
-        // Single chunky button at the bottom of the window.
-        float btnW = winW - 32f;
-        float btnH = 56f;
-        Btn home = new Btn("Return to Title",
-                window.x + (window.w - btnW) * 0.5f, window.y + 16f,
-                btnW, btnH,
+        // Portrait box — centred, below "YOU DIED" title.
+        float portSz  = 72f;
+        float titleH  = 36f;   // space for "YOU DIED" at window top
+        float portX   = winX + (winW - portSz) * 0.5f;
+        float portTop = winY + winH - titleH - 16f;
+        portrait.set(portX, portTop - portSz, portSz, portSz);
+
+        // Text anchor Ys.
+        nameY  = portrait.y - 20f;
+        statsY = nameY  - 18f;
+        deathY = statsY - 18f;
+
+        // Buttons — bottom of window.
+        float btnH    = 52f;
+        float btnGap  = 8f;
+        float iconSz  = 52f;
+        float btnY    = winY + 16f;
+        float mainW   = winW - iconSz - btnGap - 32f;
+        float mainX   = winX + 16f;
+        float iconX   = mainX + mainW + btnGap;
+
+        Btn mainMenu = new Btn("Main Menu", mainX, btnY, mainW, btnH,
                 () -> game.setRootScreen(new V2Title(game, ctx))).header();
-        buttons.add(home);
+        buttons.add(mainMenu);
+
+        Btn logBtn = new Btn("", iconX, btnY, iconSz, iconSz,
+                () -> { log.open(); });
+        logBtn.icon = IconSprites.regionFor(IconSprites.Icon.BOOK);
+        buttons.add(logBtn);
     }
 
     @Override
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+
+        // Portrait frame — a simple recessed rect slightly larger than the portrait.
+        float pad = 4f;
+        ctx.shapes.setColor(UiColors.SLOT_RECESS);
+        ctx.shapes.rect(portrait.x - pad, portrait.y - pad,
+                portrait.w + 2f * pad, portrait.h + 2f * pad);
     }
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
         float cx = window.cx();
-        float top = window.top() - 24f;
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.WARN, "You died", cx, top);
-        top -= 16f;
 
-        // Portrait of the dead character — same sprite the HUD shows. Pulled
-        // by parsing the saved class name (record.charClass is the V1 enum's
-        // displayName / name string).
-        com.bjsp123.rl2.model.Mob.CharacterClass cls = parseClass(record.charClass);
+        // "YOU DIED" title.
+        float titleY = window.top() - 8f;
+        TextDraw.centre(ctx, ctx.fontHeader, DIM_WARN, "YOU DIED", cx, titleY);
+
+        // Portrait.
+        CharacterClass cls = parseClass(record.charClass);
         if (cls != null) {
-            var portrait = com.bjsp123.rl2.world.render.PortraitSprites.regionFor(cls);
-            if (portrait != null) {
-                float pSize = 56f;
-                ctx.batch.draw(portrait,
-                        cx - pSize * 0.5f, top - pSize, pSize, pSize);
-                top -= pSize + 8f;
-            }
-        } else {
-            top -= 32f;
-        }
-
-        String summary = record.charClass + "   score " + record.score
-                + "   depth " + record.depth;
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE, summary, cx, top);
-
-        top -= 32f;
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "Equipment", cx, top);
-        top -= 22f;
-        if (record.equipment.isEmpty()) {
-            TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "(none)", cx, top);
-        } else {
-            for (String s : record.equipment) {
-                if (top < window.y + 100f) break;
-                TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE, s, cx, top);
-                top -= 18f;
+            TextureRegion p = PortraitSprites.regionFor(cls);
+            if (p != null) {
+                ctx.batch.draw(p, portrait.x, portrait.y, portrait.w, portrait.h);
             }
         }
+
+        // Class name.
+        TextDraw.centre(ctx, ctx.fontHeader, Pal.WHITE, record.charClass, cx, nameY);
+
+        // Score + depth.
+        String stats = "Score: " + record.score + "   Depth: " + record.depth;
+        TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM, stats, cx, statsY);
+
+        // Death message — word-wrapped up to 2 lines.
+        if (record.deathMessage != null && !record.deathMessage.isEmpty()) {
+            float maxW = window.w - 24f;
+            List<String> lines = new ArrayList<>();
+            TextDraw.wrap(ctx.fontRegular, record.deathMessage, maxW, 2, lines);
+            float lineH = ctx.fontRegular.getLineHeight() + 2f;
+            float y = deathY;
+            for (String line : lines) {
+                TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM, line, cx, y);
+                y -= lineH;
+            }
+        }
+    }
+
+    @Override
+    public void render(float delta) {
+        super.render(delta);
+        if (log.isOpen()) log.render();
     }
 
     @Override
@@ -85,18 +143,13 @@ public final class V2GameOver extends V2Screen {
         game.setRootScreen(new V2Title(game, ctx));
     }
 
-    /** Map the saved class string (either the enum's {@code name()} or its
-     *  {@code displayName}) back to a {@link com.bjsp123.rl2.model.Mob.CharacterClass}.
-     *  Returns {@code null} when the string doesn't match any known class —
-     *  the portrait is then suppressed and the layout falls through to the
-     *  text-only summary. */
-    private static com.bjsp123.rl2.model.Mob.CharacterClass parseClass(String name) {
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static CharacterClass parseClass(String name) {
         if (name == null) return null;
-        for (var c : com.bjsp123.rl2.model.Mob.CharacterClass.values()) {
-            if (c.displayName.equalsIgnoreCase(name)
-                    || c.name().equalsIgnoreCase(name)) {
+        for (CharacterClass c : CharacterClass.values()) {
+            if (c.displayName.equalsIgnoreCase(name) || c.name().equalsIgnoreCase(name))
                 return c;
-            }
         }
         return null;
     }

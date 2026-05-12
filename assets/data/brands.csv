@@ -1,0 +1,22 @@
+brand,name,rarity,itemTypes,description,accuracy,evasion,damage,armor,antimagic,element,elementpower,moveSpeed,attackSpeed,knockback,resistFire,resistPoison,sorcery,color
+ACCURACY,accuracy,1,WEAPON|AMULET,This device magically increases the wielder's accuracy.,5,,,,,,,,,,,,,#40E0D0
+EVASION,evasion,1,WEAPON|AMULET,This device magically increases the wielder's ability to avoid attacks.,,5,,,,,,,,,,,,#CC88AA
+DAMAGE,hurting,1,WEAPON|AMULET,An enchantment on this device causes the wielder to do more damage.,,,2,,,,,,,,,,,#FF6644
+ARMOR,defence,1,ARMOR|AMULET,"Magically warded, this device protects the user from physical hurt.",,,,2,,,,,,,,,,#C8A870
+ANTIMAGIC,stability,1,ARMOR|AMULET,This device weakens hostile magic before it can affect the wearer.,,,,,2,,,,,,,,,#008888
+FLAME,flame,1,WEAPON,This weapon burns with magical fire.,,,,,,FIRE,2,,,,,,,#FF8800
+LIGHTNING,sparks,1,WEAPON,Sparks crackle from this lightning-infused weapon.,,,,,,LIGHTNING,2,,,,,,,#88CCFF
+FREEZING,cold,1,WEAPON,The air is chilly around this cold-infused weapon.,,,,,,FREEZE,2,,,,,,,#4466FF
+POISON,venom,1,WEAPON,"Dripping with toxic fluids, this weapon poisons its wielder's foes.",,,,,,POISONCLOUD,2,,,,,,,#44AA44
+HASTE,haste,1,AMULET,This amulet helps you move around faster.,,,,,,,,0.9,,,,,,#FFDD00
+DEXTERITY,alacrity,1,AMULET,This amulet helps you act faster.,,,,,,,,,0.9,,,,,#FFFF88
+KNOCKBACK,smiting,1,WEAPON,This weapon can help knock foes away from you and into each other.,,,,,,,,,,1,,,,#FF3333
+THUNDER,thunder,0.5,WEAPON,This weapon strikes with the power of a thunderclap.,,,,,,LIGHTNING,2,,,1,,,,#9933BB
+RESISTANCE,resistance,0.5,ARMOR|AMULET,This device protects you from fire and poison.,,,,,,,,,,,1,1,,#88EE88
+IMMUNITY,immunity,1,ARMOR|AMULET,This device renders you immune to poisons.,,,,,,,,,,,,1,,#FFFFFF
+ANTIFIRE,extinguishing,1,ARMOR|AMULET,You can't be hurt by fire while wearing this.,,,,,,,,,,,1,,,#FFFFFF
+FENCING,swordplay,0.5,WEAPON|AMULET,"While using this, you have both extra accuracy and exta evasion",4,4,,,,,,,,,,,,#FFDD00
+SORCERY,sorcery,1,AMULET,This amulet empowers your wands.,,,,,,,,,,,,,1,#00DDDD
+SORCEROUS_FIRE,sorcerous fire,0.5,WEAPON,This exotic weapon burns with a magic flame that empowers your wands.,,,,,,FIRE,2,,,,,,1,#BB44EE
+VICIOUSNESS,viciousness,0.3,WEAPON,A brutally damaging weapon that hits extra hard an accurately.,4,,2,,,,,,0.9,,,,,#AA1100
+INVULNERABILITY,invulnerability,0.3,ARMOR,"This deluxe armor protects you from blows, magic, and even fire and poison.",,,,2,2,,,,,,1,1,,#999999

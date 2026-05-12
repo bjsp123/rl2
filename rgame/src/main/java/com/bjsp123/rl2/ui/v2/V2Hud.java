@@ -63,12 +63,12 @@ public final class V2Hud {
     private static final float BAR_W        = 140f;
     private static final float BAR_H        = 14f;
     private static final float BAR_GAP      = 4f;
-    private static final float ACTION_BTN   = 48f;
+    /** Scale factor applied to all HUD interactive elements so they read
+     *  comfortably at every UiScale setting. */
+    private static final float HUD_SCALE    = 1.5f;
+    private static final float ACTION_BTN   = 48f * 0.8f * HUD_SCALE;
     private static final float ACTION_GAP   = 4f;
-    private static final float INV_BTN_W    = 56f;
-    private static final float INV_BTN_H    = 56f;
-    private static final float MISC_BTN     = 48f;
-    private static final float ICON_PAD     = 6f;
+    private static final float ICON_PAD     = 6f  * HUD_SCALE;
 
     // ── State ────────────────────────────────────────────────────────────────
     private final UiCtx ctx;
@@ -90,9 +90,10 @@ public final class V2Hud {
     private Runnable    onOpenLevelInfo;
     private Runnable    onReturnToTitle;
     private Runnable    onOpenMap;
-    /** Tap on a player buff icon → open encyclopedia at that buff. */
-    private java.util.function.Consumer<com.bjsp123.rl2.model.Buff.BuffType> onBuffTap;
-    public void setOnBuffTap(java.util.function.Consumer<com.bjsp123.rl2.model.Buff.BuffType> fn) {
+    private Runnable    onOpenLog;
+    /** Tap on a player buff icon → open buff detail popup. */
+    private java.util.function.Consumer<Buff> onBuffTap;
+    public void setOnBuffTap(java.util.function.Consumer<Buff> fn) {
         this.onBuffTap = fn;
     }
 
@@ -101,23 +102,26 @@ public final class V2Hud {
     private final Rect hpBarRect    = new Rect();
     private final Rect xpBarRect    = new Rect();
     private final Rect satBarRect   = new Rect();
-    private final Rect[] actionRects = new Rect[6];
+    private final Rect[] actionRects = new Rect[ActionBar.SLOTS];
     private final Rect invRect      = new Rect();
     private final Rect lookRect     = new Rect();
     private final Rect burgerRect   = new Rect();
     private final Rect menuPanelRect = new Rect();
     /** Per-menu-item rects, populated when the burger menu is open. */
-    private final Rect[] menuItemRects = new Rect[4];
+    private final Rect[] menuItemRects = new Rect[5];
     /** Per-buff-icon hit rects, rebuilt every frame from the live buff
      *  list. Aligned in index with {@link #buffIconTypes}. */
     private final java.util.List<Rect> buffIconRects = new java.util.ArrayList<>();
-    private final java.util.List<com.bjsp123.rl2.model.Buff.BuffType> buffIconTypes
-            = new java.util.ArrayList<>();
+    private final java.util.List<Buff> buffIconList = new java.util.ArrayList<>();
 
     // ── Pressed state for visual feedback ───────────────────────────────────
-    private final boolean[] actionPressed = new boolean[6];
+    private final boolean[] actionPressed = new boolean[ActionBar.SLOTS];
     private boolean invPressed, lookPressed, burgerPressed;
     private boolean menuOpen;
+    /** True when the action slots are folded into a grid because the viewport
+     *  is too narrow for a single row. Set each frame by {@link #layoutRects()};
+     *  read by the render and input passes. */
+    private boolean gridLayout;
     private int menuItemPressed = -1;
     /** Index of the buff icon currently being held; -1 when none. */
     private int buffIconPressed = -1;
@@ -140,6 +144,7 @@ public final class V2Hud {
     public void setOnOpenLevelInfo(Runnable fn)     { this.onOpenLevelInfo = fn; }
     public void setOnReturnToTitle(Runnable fn)     { this.onReturnToTitle = fn; }
     public void setOnOpenMap(Runnable fn)           { this.onOpenMap = fn; }
+    public void setOnOpenLog(Runnable fn)           { this.onOpenLog = fn; }
 
     /** Frame state — depth / turn for the status line; player read via
      *  {@link #playerSupplier}. The {@code tick} parameter is accepted for
@@ -170,7 +175,7 @@ public final class V2Hud {
 
         // Top-left cluster: portrait on the left, three status bars stacked
         // to its right. Portrait is square; bars take the rest of the row.
-        float portraitSz = 40f;
+        float portraitSz = 40f * HUD_SCALE;
         portraitRect.set(MARGIN, h - MARGIN - portraitSz, portraitSz, portraitSz);
 
         float barX = portraitRect.right() + 4f;
@@ -182,21 +187,38 @@ public final class V2Hud {
         satBarRect.set(barX, by, BAR_W, BAR_H);
 
         // Burger at top-right.
-        burgerRect.set(w - MARGIN - MISC_BTN, h - MARGIN - MISC_BTN,
-                MISC_BTN, MISC_BTN);
+        burgerRect.set(w - MARGIN - ACTION_BTN, h - MARGIN - ACTION_BTN,
+                ACTION_BTN, ACTION_BTN);
 
         // Look at bottom-left.
-        lookRect.set(MARGIN, MARGIN, MISC_BTN, MISC_BTN);
+        lookRect.set(MARGIN, MARGIN, ACTION_BTN, ACTION_BTN);
 
-        // Bottom-right strip: action 0..5 left-to-right (so slot 1 reads
-        // as the leftmost button, matching the keyboard's number-row),
-        // then the inventory button at the far right.
-        invRect.set(w - INV_BTN_W, MARGIN, INV_BTN_W, INV_BTN_H);
-        float stripW = 6 * ACTION_BTN + 5 * ACTION_GAP;
-        float ax = invRect.x - ACTION_GAP - stripW;
-        for (int i = 0; i < 6; i++) {
-            actionRects[i].set(ax, MARGIN, ACTION_BTN, ACTION_BTN);
-            ax += ACTION_GAP + ACTION_BTN;
+        // Bottom-right: inventory button at far right, action slots to its left.
+        // If the single row would overlap the look button, fold into a grid.
+        int n = com.bjsp123.rl2.ui.skin.QuickslotCount.count();
+        invRect.set(w - ACTION_BTN, MARGIN, ACTION_BTN, ACTION_BTN);
+        float stripW1row = n * ACTION_BTN + (n - 1) * ACTION_GAP;
+        float ax1row = invRect.x - ACTION_GAP - stripW1row;
+        gridLayout = ax1row < lookRect.x + lookRect.w + ACTION_GAP;
+        if (gridLayout) {
+            int gridRows = n <= 6 ? 2 : 3;
+            int gridCols = (n + gridRows - 1) / gridRows;
+            float gridW = gridCols * ACTION_BTN + (gridCols - 1) * ACTION_GAP;
+            float gx = invRect.x - ACTION_GAP - gridW;
+            for (int i = 0; i < n; i++) {
+                int col = i % gridCols;
+                int row = i / gridCols;
+                actionRects[i].set(
+                        gx + col * (ACTION_BTN + ACTION_GAP),
+                        MARGIN + row * (ACTION_BTN + ACTION_GAP),
+                        ACTION_BTN, ACTION_BTN);
+            }
+        } else {
+            float ax = ax1row;
+            for (int i = 0; i < n; i++) {
+                actionRects[i].set(ax, MARGIN, ACTION_BTN, ACTION_BTN);
+                ax += ACTION_GAP + ACTION_BTN;
+            }
         }
 
         // Burger menu — centred on the viewport as a chunky column-of-
@@ -254,8 +276,17 @@ public final class V2Hud {
         // Buttons — chrome only; icons land in the SpriteBatch pass.
         // Action quickslots + inventory button carry item / chest icons,
         // so they paint with the paler SLOT_BG so the icon stays legible.
-        for (int i = 0; i < 6; i++) drawSlotBtn(s, actionRects[i], actionPressed[i]);
+        for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) drawSlotBtn(s, actionRects[i], actionPressed[i]);
         drawSlotBtn(s, invRect, invPressed);
+        // Wand charge bars — shapes pass so they sit under the sprite icon.
+        if (actionBar != null) {
+            for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
+                Item it = actionBar.get(i);
+                if (it != null && it.baseChargeMax > 0) {
+                    drawWandChargeBar(s, actionRects[i], it, player);
+                }
+            }
+        }
         // Look + burger have no item icon — plain HUD chrome.
         drawBtn(s, lookRect,   lookPressed);
         drawBtn(s, burgerRect, burgerPressed);
@@ -276,6 +307,28 @@ public final class V2Hud {
                         ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
                 s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
                         r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+            }
+        }
+
+        // Buff duration dot timers — one 1×1 dot per remaining turn (max 8),
+        // stacked bottom-to-top to the right of each buff icon.
+        Mob dotPlayer = currentPlayer();
+        if (dotPlayer != null && dotPlayer.buffs != null && !dotPlayer.buffs.isEmpty()) {
+            float iconSz = 16f * HUD_SCALE;
+            float iconGap = 2f * HUD_SCALE;
+            float bx = MARGIN;
+            float by = satBarRect.y - 30f * HUD_SCALE;
+            int max = Math.min(dotPlayer.buffs.size(), 8);
+            s.setColor(UiColors.TEXT_DIM);
+            for (int i = 0; i < max; i++) {
+                Buff b = dotPlayer.buffs.get(i);
+                if (b == null || b.type == null || b.durationTurns <= 0) continue;
+                if (BuffIcons.regionFor(b.type) == null) continue;
+                float dotX = bx + i * (iconSz + iconGap) + iconSz + 1f;
+                int dots = Math.min(8, b.durationTurns);
+                for (int d = 0; d < dots; d++) {
+                    s.rect(dotX, by + d * 2f, 1f, 1f);
+                }
             }
         }
 
@@ -315,6 +368,42 @@ public final class V2Hud {
                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
     }
 
+    private static void drawWandChargeBar(ShapeRenderer s, Rect r, Item it,
+                                          com.bjsp123.rl2.model.Mob player) {
+        int max = com.bjsp123.rl2.logic.ItemSystem.effectiveMaxCharge(it, player);
+        float pad = 4f, barH = 3f;
+        float barW = r.w - 2 * pad;
+        float bx = r.x + pad, by = r.y + 4f;
+        s.setColor(0f, 0f, 0f, 0.85f);
+        s.rect(bx - 1, by - 1, barW + 2, barH + 2);
+        if (max <= 1) {
+            s.setColor(0.25f, 0.25f, 0.25f, 1f);
+            s.rect(bx, by, barW, barH);
+            if (it.charge >= 1f) {
+                s.setColor(0.2f, 0.85f, 0.3f, 1f);
+                s.rect(bx, by, barW, barH);
+            } else if (it.charge > 0f) {
+                s.setColor(0.1f, 0.5f, 0.15f, 1f);
+                s.rect(bx, by, barW * it.charge, barH);
+            }
+        } else {
+            float slotW = (barW - (max - 1)) / max;
+            for (int i = 0; i < max; i++) {
+                float sx = bx + i * (slotW + 1f);
+                float filled = Math.min(1f, Math.max(0f, it.charge - i));
+                s.setColor(0.25f, 0.25f, 0.25f, 1f);
+                s.rect(sx, by, slotW, barH);
+                if (filled >= 1f) {
+                    s.setColor(0.2f, 0.85f, 0.3f, 1f);
+                    s.rect(sx, by, slotW, barH);
+                } else if (filled > 0f) {
+                    s.setColor(0.1f, 0.5f, 0.15f, 1f);
+                    s.rect(sx, by, slotW * filled, barH);
+                }
+            }
+        }
+    }
+
     private void renderTextPass() {
         ctx.batch.begin();
 
@@ -332,7 +421,7 @@ public final class V2Hud {
 
         // Action button icons — pull from ActionBar.
         if (actionBar != null) {
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
                 Item it = actionBar.get(i);
                 if (it == null) continue;
                 TextureRegion region = ItemSprites.regionFor(it);
@@ -341,6 +430,17 @@ public final class V2Hud {
                 ctx.batch.draw(region,
                         r.x + ICON_PAD, r.y + ICON_PAD,
                         r.w - 2 * ICON_PAD, r.h - 2 * ICON_PAD);
+            }
+            // Brand sparks — additive pass over the icons.
+            for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
+                Item it = actionBar.get(i);
+                if (it != null && it.brand != null) {
+                    Rect r = actionRects[i];
+                    com.bjsp123.rl2.world.render.BrandFx.drawSparks(
+                            ctx.batch, ctx.whitePixel,
+                            r.x, r.y, r.w, r.h, it.brand,
+                            com.bjsp123.rl2.world.render.BrandFx.phaseFor(it));
+                }
             }
         }
 
@@ -374,12 +474,12 @@ public final class V2Hud {
         // chrome on a narrow viewport.
         Mob p = currentPlayer();
         buffIconRects.clear();
-        buffIconTypes.clear();
+        buffIconList.clear();
         if (p != null && p.buffs != null && !p.buffs.isEmpty()) {
-            float iconSz = 16f;
-            float iconGap = 2f;
+            float iconSz = 16f * HUD_SCALE;
+            float iconGap = 2f * HUD_SCALE;
             float bx = MARGIN;
-            float by = satBarRect.y - 30f;
+            float by = satBarRect.y - 30f * HUD_SCALE;
             int max = Math.min(p.buffs.size(), 8);
             for (int i = 0; i < max; i++) {
                 Buff b = p.buffs.get(i);
@@ -391,7 +491,7 @@ public final class V2Hud {
                 Rect r = new Rect();
                 r.set(ix, by, iconSz, iconSz);
                 buffIconRects.add(r);
-                buffIconTypes.add(b.type);
+                buffIconList.add(b);
             }
         }
 
@@ -403,7 +503,9 @@ public final class V2Hud {
         if (LogPreferences.logOn()) {
             float logRight = invRect.x - ACTION_GAP;
             float logLeft  = MARGIN;
-            float logBottom = MARGIN + ACTION_BTN + 6f;
+            float logBottom = MARGIN + (gridLayout
+                    ? 2 * ACTION_BTN + ACTION_GAP
+                    : ACTION_BTN) + 6f;
             float lineH = 16f;
             int maxLines = LogPreferences.expanded() ? 6 : 3;
             // Walk recent entries newest-first; render newest at logBottom
@@ -439,7 +541,7 @@ public final class V2Hud {
         // Burger menu items — centred header-weight labels, matching the
         // V2Screen menu-screen burger style.
         if (menuOpen) {
-            String[] labels = { "Settings", "Map", "Encyclopaedia", "Quit to Title" };
+            String[] labels = { "Settings", "Map", "Encyclopaedia", "Log", "Quit to Title" };
             for (int i = 0; i < labels.length; i++) {
                 Rect r = menuItemRects[i];
                 TextDraw.centre(ctx, ctx.fontHeader,
@@ -510,7 +612,7 @@ public final class V2Hud {
                         return true;
                     }
                 }
-                for (int i = 0; i < 6; i++) {
+                for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
                     if (actionRects[i].contains(vx, vy)) {
                         actionPressed[i] = true;
                         return true;
@@ -542,7 +644,8 @@ public final class V2Hud {
                             case 1 -> { if (onOpenMap          != null) onOpenMap.run();
                                         else if (onOpenLevelInfo != null) onOpenLevelInfo.run(); }
                             case 2 -> { if (onOpenEncyclopedia != null) onOpenEncyclopedia.run(); }
-                            case 3 -> { if (onReturnToTitle    != null) onReturnToTitle.run(); }
+                            case 3 -> { if (onOpenLog          != null) onOpenLog.run(); }
+                            case 4 -> { if (onReturnToTitle    != null) onReturnToTitle.run(); }
                         }
                     }
                     return true;
@@ -571,12 +674,12 @@ public final class V2Hud {
                     if (idx < buffIconRects.size()
                             && buffIconRects.get(idx).contains(vx, vy)
                             && onBuffTap != null
-                            && idx < buffIconTypes.size()) {
-                        onBuffTap.accept(buffIconTypes.get(idx));
+                            && idx < buffIconList.size()) {
+                        onBuffTap.accept(buffIconList.get(idx));
                     }
                     return true;
                 }
-                for (int i = 0; i < 6; i++) {
+                for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
                     if (actionPressed[i]) {
                         actionPressed[i] = false;
                         if (actionRects[i].contains(vx, vy) && onActionUse != null) {

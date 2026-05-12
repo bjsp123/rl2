@@ -77,6 +77,8 @@ public class PlayScreen implements Screen {
     private TargetingOverlay  targetingOverlay;
     private V2CharacterStats v2CharacterStats;
     private com.bjsp123.rl2.ui.v2.V2Encyclopedia v2Encyclopedia;
+    private com.bjsp123.rl2.ui.v2.V2BuffInfo v2BuffInfo;
+    private com.bjsp123.rl2.ui.v2.V2Log v2Log;
     /** Transient unlock-toast banner. Lives across the screen's lifetime;
      *  rendered above the HUD on every frame; advances its countdown via
      *  the same {@code dt} the animator consumes. */
@@ -176,10 +178,12 @@ public class PlayScreen implements Screen {
         // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
                 cameraController,
+                v2BuffInfo.input(),
                 v2Inventory.input(),
                 v2CharacterStats.input(),
                 v2Crafting.input(),
                 v2Encyclopedia.input(),
+                v2Log.input(),
                 v2Look.input(),
                 v2Hud.input(),
                 targetingOverlay, lookMode, gameInput));
@@ -190,7 +194,7 @@ public class PlayScreen implements Screen {
         // {@code subPopupLayer} so its scrim covers the inventory text
         // cleanly when up.
         if (popupActors == null) {
-            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[6];
+            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[8];
             popupActors[0] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Inventory);
             popupActors[1] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2CharacterStats);
             popupActors[2] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Crafting);
@@ -198,6 +202,8 @@ public class PlayScreen implements Screen {
             popupActors[4] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Encyclopedia);
             popupActors[5] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(
                     v2Inventory.detailPopup());
+            popupActors[6] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2BuffInfo);
+            popupActors[7] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Log);
         }
         game.ui.v2Stage.add(popupActors[0]);
         game.ui.v2Stage.add(popupActors[1]);
@@ -205,6 +211,8 @@ public class PlayScreen implements Screen {
         game.ui.v2Stage.add(popupActors[3]);
         game.ui.v2Stage.add(popupActors[4]);
         game.ui.v2Stage.addToSubPopup(popupActors[5]);
+        game.ui.v2Stage.addToSubPopup(popupActors[6]);
+        game.ui.v2Stage.addToSubPopup(popupActors[7]);
         game.currentPlay = this;
     }
 
@@ -371,7 +379,12 @@ public class PlayScreen implements Screen {
 
         v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui);
         v2Hud.setOnOpenEncyclopedia(() -> v2Encyclopedia.toggle());
-        v2Hud.setOnBuffTap(type -> { if (type != null) v2Encyclopedia.openTo(type); });
+        v2BuffInfo = new com.bjsp123.rl2.ui.v2.V2BuffInfo(game.ui);
+        v2Hud.setOnBuffTap(buff -> { if (buff != null) v2BuffInfo.open(buff); });
+        v2Log = new com.bjsp123.rl2.ui.v2.V2Log(game.ui);
+        v2Hud.setOnOpenLog(() -> v2Log.toggle());
+        v2CharacterStats.setBuffInfo(v2BuffInfo);
+        v2Look.setBuffInfo(v2BuffInfo);
         // Inventory's item-detail info button jumps to the encyclopaedia
         // pre-selected to that item — closes inventory in the process so
         // the V2 single-popup-at-a-time rule is preserved.
@@ -539,8 +552,13 @@ public class PlayScreen implements Screen {
         // Engine→renderer event drain plus the in-world animation tick. The Animator
         // owns per-mob anim state, the freeze gate, ghost flicker/fade, and the
         // periodic teleport / burning / sleep-Z particle cadences.
+        animator.impactFiredThisTick = false;
         animator.consume(level);
         animator.tick(level, dtMs);
+        if (animator.impactFiredThisTick) {
+            levelRenderer.markDirty();
+            if (controller != null) controller.afterMove(level);
+        }
         com.bjsp123.rl2.logic.FireSystem.tickRealTime(level, dtMs);
         com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
 
@@ -550,6 +568,11 @@ public class PlayScreen implements Screen {
         // chasm fall, debug "starting level") feeds the same poll.
         checkDepthAchievements();
         if (player != null && playerAfter == null && lastSnapshot != null) {
+            java.util.List<com.bjsp123.rl2.model.LogEvent> logEntries = com.bjsp123.rl2.logic.EventLog.all();
+            for (int i = logEntries.size() - 1; i >= 0; i--) {
+                com.bjsp123.rl2.model.LogEvent le = logEntries.get(i);
+                if (le.involvesPlayer) { lastSnapshot.deathMessage = le.text; break; }
+            }
             game.hallOfFame.add(lastSnapshot);
             com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
             if (game.achievementSystem != null) {
@@ -618,6 +641,8 @@ public class PlayScreen implements Screen {
         if (targetingOverlay != null && targetingOverlay.isActive()) return true;
         if (v2CharacterStats != null && v2CharacterStats.isOpen()) return true;
         if (v2Encyclopedia != null && v2Encyclopedia.isOpen()) return true;
+        if (v2BuffInfo != null && v2BuffInfo.isOpen()) return true;
+        if (v2Log != null && v2Log.isOpen()) return true;
         return false;
     }
 

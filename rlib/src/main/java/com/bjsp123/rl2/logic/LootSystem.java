@@ -1,12 +1,12 @@
 package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.event.GameEvent;
-import com.bjsp123.rl2.model.Inventory;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
+import com.bjsp123.rl2.util.CsvTable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,14 +23,12 @@ import java.util.Random;
  * given the seed) and inspecting a sleeping mob's bag mid-run will reveal
  * exactly what they're going to drop.
  *
- * <p>Drop-quality formula (applied during spawn):
- * {@code total = (dropQuality - 1) * 10 + mobLevel}
- * <ul>
- *   <li>Each whole 10 points = roll a new item (level
- *       {@code max(1, mobLevel - 2)}) <em>or</em> bump a previously-rolled
- *       item by +2 levels.</li>
- *   <li>Leftover {@code N} points (0..9) = one item rolled at {@code N × 10%}.</li>
- * </ul>
+ * <p>Drops are declared via the {@code dropQuality} CSV column as a
+ * pipe-separated {@link CsvTable.DropSpec} list. Each entry names a keyword
+ * ({@code NONE}, {@code STUFF}, a {@link ItemGenerator.LootCategory}, or a
+ * literal item type), with optional {@code +n} (forced plus level) and
+ * {@code *n} (fractional count: integer part guaranteed, decimal part =
+ * probability of one bonus item).
  */
 public final class LootSystem {
 
@@ -50,34 +48,49 @@ public final class LootSystem {
         if (level == null || mob == null || mob.inventory == null) return;
         if (mob.behavior == Mob.Behavior.PLAYER) return;
         MobDefinition def = MobRegistry.get(mob.mobType);
-        int dropQuality = def == null ? 1 : Math.max(1, def.dropQuality);
-        int mobLevel    = Math.max(1, mob.characterLevel);
-        int total       = (dropQuality - 1) * 10 + mobLevel;
-        int itemLevel   = Math.max(1, mobLevel - 2);
-        double powerLevel = itemLevelToPower(itemLevel);
+        if (def == null || def.drops == null || def.drops.isEmpty()) return;
 
-        List<Item> rolled = new ArrayList<>();
-        int chunks   = total / 10;
-        int leftover = total % 10;
-        for (int i = 0; i < chunks; i++) {
-            // First chunk always rolls something so the rest can bump it.
-            if (rolled.isEmpty() || rng.nextBoolean()) {
-                Item it = ItemGenerator.generateItem(powerLevel, level.theme,
-                        ItemGenerator.LootCategory.NON_GEM, rng);
-                if (it != null) {
-                    rolled.add(it);
-                    mob.inventory.bag.add(it);
-                }
-            } else {
-                Item bump = rolled.get(rng.nextInt(rolled.size()));
-                bump.level += 2;
+        double powerLevel = itemLevelToPower(Math.max(1, mob.characterLevel - 2));
+
+        for (CsvTable.DropSpec spec : def.drops) {
+            if (spec.keyword == null || "NONE".equalsIgnoreCase(spec.keyword)) continue;
+
+            // Integer part = guaranteed count; fractional part = probability of +1.
+            int n = (int) Math.floor(spec.count);
+            double frac = spec.count - n;
+            if (frac > 0 && rng.nextDouble() < frac) n++;
+
+            for (int i = 0; i < n; i++) {
+                Item it = resolveItem(level, spec, powerLevel, rng);
+                if (it != null) mob.inventory.bag.add(it);
             }
         }
-        if (leftover > 0 && rng.nextDouble() < leftover / 10.0) {
-            Item it = ItemGenerator.generateItem(powerLevel, level.theme,
-                    ItemGenerator.LootCategory.NON_GEM, rng);
-            if (it != null) mob.inventory.bag.add(it);
+    }
+
+    /** Build one item from a drop spec. {@code STUFF} maps to {@link
+     *  ItemGenerator.LootCategory#NON_GEM}; other keywords try the
+     *  {@link ItemGenerator.LootCategory} enum first, then fall back to a
+     *  literal item-type lookup. If {@code spec.plusLevel >= 0} the item's
+     *  level is forced to that value after generation. */
+    private static Item resolveItem(Level level, CsvTable.DropSpec spec,
+                                    double powerLevel, Random rng) {
+        String keyword = spec.keyword;
+        // STUFF = shorthand for "any non-gem item"
+        if ("STUFF".equalsIgnoreCase(keyword)) keyword = "NON_GEM";
+
+        ItemGenerator.LootCategory cat = ItemGenerator.LootCategory.parse(keyword);
+        Item it;
+        if (cat != null) {
+            it = ItemGenerator.generateItem(powerLevel, level.theme, cat, rng);
+        } else {
+            it = ItemGenerator.buildItem(keyword, powerLevel, rng);
         }
+
+        if (it != null && spec.plusLevel >= 0) {
+            it.level = spec.plusLevel;
+            if (it.useBehavior == Item.UseBehavior.WAND) it.charge = it.maxCharge();
+        }
+        return it;
     }
 
     public static void dropLootOnDeath(Level level, Mob mob) {

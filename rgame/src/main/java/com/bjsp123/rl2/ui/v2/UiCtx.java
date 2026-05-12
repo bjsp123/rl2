@@ -3,10 +3,12 @@ package com.bjsp123.rl2.ui.v2;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -32,6 +34,9 @@ public final class UiCtx implements Disposable {
     public final GlyphLayout   layout      = new GlyphLayout();
     public final BitmapFont    fontRegular;
     public final BitmapFont    fontHeader;
+    /** 1×1 white pixel for colored rect drawing (brand sparks, charge bars, etc.). */
+    public final TextureRegion whitePixel;
+    private final Texture      whiteTex;
     public final OrthographicCamera camera = new OrthographicCamera();
     /** ScreenViewport — 1 world unit ≈ 1 screen pixel, so UI controls
      *  drawn at fixed world dimensions (Pal.BTN_W, Pal.BTN_H, etc.) keep
@@ -61,6 +66,12 @@ public final class UiCtx implements Disposable {
         fontRegular = makeFont(gen, Pal.FONT_REGULAR_PX);
         fontHeader  = makeFont(gen, Pal.FONT_HEADER_PX);
         gen.dispose();
+        Pixmap wp = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        wp.setColor(1, 1, 1, 1);
+        wp.fill();
+        whiteTex   = new Texture(wp);
+        whitePixel = new TextureRegion(whiteTex);
+        wp.dispose();
         applyFontScale();
         applyUiScale();
         // Built last because it shares this.viewport + this.batch.
@@ -142,6 +153,7 @@ public final class UiCtx implements Disposable {
         batch.dispose();
         fontRegular.dispose();
         fontHeader.dispose();
+        whiteTex.dispose();
     }
 
     /** Build a Pixel Operator BitmapFont at {@code px} native size with a

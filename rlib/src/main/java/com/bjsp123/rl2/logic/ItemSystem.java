@@ -52,7 +52,7 @@ public final class ItemSystem {
         }
         dst.accuracy += item.accuracy;
         dst.evasion  += item.evasion;
-        
+
         // Speed multipliers are coeffients on the tick cost.
         if (item.attackSpeed != Item.ATTACK_SPEED_DEFAULT) {
             dst.attackCost *= item.attackSpeed;
@@ -62,6 +62,19 @@ public final class ItemSystem {
         }
         if (item.lightRadius > dst.lightRadius) dst.lightRadius = item.lightRadius;
         dst.knockbackSquares += item.knockbackSquares;
+
+        // Brand stat bonuses — layered on top of the item's own contribution.
+        if (item.brand != null) {
+            BrandDefinition b = item.brand;
+            if (b.damage    > 0) dst.damage      = dst.damage     .plus(new MinMax(b.damage,    b.damage));
+            if (b.armor     > 0) dst.armor        = dst.armor      .plus(new MinMax(b.armor,     b.armor));
+            if (b.antimagic > 0) dst.magicResist  = dst.magicResist.plus(new MinMax(b.antimagic, b.antimagic));
+            dst.accuracy         += b.accuracy;
+            dst.evasion          += b.evasion;
+            if (b.attackSpeed != 1.0) dst.attackCost = (int) (dst.attackCost * b.attackSpeed);
+            if (b.moveSpeed   != 1.0) dst.moveCost   = (int) (dst.moveCost   * b.moveSpeed);
+            dst.knockbackSquares += b.knockback;
+        }
     }
 
     /** Effective AP-damage range, level-scaled by the item's
@@ -116,6 +129,12 @@ public final class ItemSystem {
      *  damage range return {@link MinMax#ZERO}. */
     public static MinMax effectiveDamageRange(Item item) {
         return effectiveDamageRange(item, clampedLevel(item));
+    }
+
+    /** Holder-aware overload — uses {@link #effectiveLevel} so WANDMASTER
+     *  and BOMB_JACK bonuses are reflected in damage output. */
+    public static MinMax effectiveDamageRange(Item item, Mob holder) {
+        return effectiveDamageRange(item, effectiveLevel(item, holder));
     }
 
     /** Level-explicit overload — used by paths where the effective level
@@ -173,12 +192,22 @@ public final class ItemSystem {
     public static int effectiveLevel(Item item, Mob holder) {
         if (item == null) return 0;
         int lvl = clampedLevel(item);
-        if (holder != null && item.useBehavior == Item.UseBehavior.WAND
-                && holder.perks != null
-                && holder.perks.getOrDefault(Perk.WANDMASTER, 0) > 0) {
-            lvl += 1;
+        if (holder != null && holder.perks != null) {
+            if (item.useBehavior == Item.UseBehavior.WAND
+                    && holder.perks.getOrDefault(Perk.WANDMASTER, 0) > 0) {
+                lvl += 1;
+            }
+            if (item.inventoryCategory == Item.InventoryCategory.BOMB) {
+                lvl += holder.perks.getOrDefault(Perk.BOMB_JACK, 0);
+            }
         }
         return lvl;
+    }
+
+    /** Effective maximum charge for a wand, accounting for the holder's WANDMASTER
+     *  bonus. Falls back to {@link Item#maxCharge()} when {@code holder} is null. */
+    public static int effectiveMaxCharge(Item it, Mob holder) {
+        return Math.max(1, it.baseChargeMax + effectiveLevel(it, holder));
     }
 
     /** Effective buff level applied by a buff-bestowing item. {@code 1 + item.level}
@@ -207,6 +236,12 @@ public final class ItemSystem {
         return effectiveTilesAffected(item, clampedLevel(item));
     }
 
+    /** Holder-aware overload — uses {@link #effectiveLevel} so BOMB_JACK bonus
+     *  expands bomb AOE. */
+    public static int effectiveTilesAffected(Item item, Mob holder) {
+        return effectiveTilesAffected(item, effectiveLevel(item, holder));
+    }
+
     /** Level-explicit overload (WANDMASTER bumps wand level at fire time). */
     public static int effectiveTilesAffected(Item item, int level) {
         if (item == null || item.tilesAffected <= 0) return 0;
@@ -230,6 +265,8 @@ public final class ItemSystem {
         if (eater.behavior == Behavior.PLAYER) {
             String name = eater.name != null ? eater.name : "Adventurer";
             EventLog.add(Messages.playerEats(name, item.name));
+        } else if (eater.name != null && item.name != null) {
+            EventLog.add(Messages.mobUsesItem(eater.name, item.name, false));
         }
     }
 
@@ -255,7 +292,7 @@ public final class ItemSystem {
         if (eff == null) return;
         switch (eff) {
             case LEVEL_UP -> {
-                com.bjsp123.rl2.logic.MobProgression.applyLevelUp(level, picker);
+                com.bjsp123.rl2.logic.MobProgression.applyLevelUp(level, picker, false);
             }
             case HP_UP -> {
                 double maxHp = picker.effectiveStats().maxHp;
@@ -271,15 +308,13 @@ public final class ItemSystem {
             case MANA_UP -> {
                 if (picker.inventory == null) break;
                 for (Item bagItem : picker.inventory.bag) {
-                    if (bagItem == null) continue;
-                    if (bagItem.useBehavior != Item.UseBehavior.WAND) continue;
-                    bagItem.charge = Math.min(bagItem.maxCharge(),
+                    if (bagItem == null || bagItem.baseChargeMax <= 0) continue;
+                    bagItem.charge = Math.min(effectiveMaxCharge(bagItem, picker),
                             bagItem.charge + bagItem.chargeGain);
                 }
                 for (Item eq : picker.inventory.allEquipped()) {
-                    if (eq == null) continue;
-                    if (eq.useBehavior != Item.UseBehavior.WAND) continue;
-                    eq.charge = Math.min(eq.maxCharge(),
+                    if (eq == null || eq.baseChargeMax <= 0) continue;
+                    eq.charge = Math.min(effectiveMaxCharge(eq, picker),
                             eq.charge + eq.chargeGain);
                 }
             }
@@ -294,7 +329,7 @@ public final class ItemSystem {
             String name = picker.name != null ? picker.name : "Adventurer";
             EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                     name + " absorbs the " + (item.name != null ? item.name : "powerup") + ".",
-                    com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+                    com.bjsp123.rl2.model.LogEvent.EventPriority.LOW, true));
         }
     }
 
@@ -314,6 +349,8 @@ public final class ItemSystem {
             String name = drinker.name != null ? drinker.name : "Adventurer";
             EventLog.add(Messages.playerUses(name,
                     item.useVerb != null ? item.useVerb : "drink", item.name));
+        } else if (drinker.name != null && item.name != null) {
+            EventLog.add(Messages.mobUsesItem(drinker.name, item.name, false));
         }
     }
 
@@ -409,6 +446,20 @@ public final class ItemSystem {
         }
     }
 
+    public static void grantXP(Level level, Mob user, Item item) {
+        if (user == null || item == null) return;
+        int xp = GameBalance.XP_PER_POWER_ORB; // currently the only XP-granting item is the power orb, so hardcode the value here
+        user.xp += xp;
+        MobSystem.removeFromInventory(user, item);
+        if (level != null && level.events != null && user.position != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.XPGainBurst(user.position));
+        }
+        if (user.behavior == Behavior.PLAYER) {
+            String name = user.name != null ? user.name : "Adventurer";
+            EventLog.add(Messages.playerUses(name,
+                    item.useVerb != null ? item.useVerb : "use", item.name));
+        }
+    }
     /**
      * Apply a wand's element to a target tile. Effect strength scales with
      * the wand's own per-item columns ({@link Item#tilesAffected},
@@ -513,8 +564,8 @@ public final class ItemSystem {
      *  standard knockback-slide animation; non-flying mobs that land on
      *  a fresh chasm tile fall through via
      *  {@link com.bjsp123.rl2.logic.MobSystem#fallToNextLevel}. */
-    private static void applyVoidImpact(Level level, com.bjsp123.rl2.model.Point target,
-                                        int effectiveLevel) {
+    static void applyVoidImpact(Level level, com.bjsp123.rl2.model.Point target,
+                                int effectiveLevel) {
         int tx = target.tileX(), ty = target.tileY();
         if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
         int radius = Math.max(1, (effectiveLevel / 2) + 1);
@@ -709,6 +760,15 @@ public final class ItemSystem {
 
     private static void applyLightningChain(Level level, Mob caster, Point target,
                                             Item wand, int effectiveLevel) {
+        applyLightningChain(level, caster, target, effectiveDamageRange(wand, effectiveLevel), null);
+    }
+
+    /** Package-private overload for brand-triggered lightning — caller supplies
+     *  the damage range directly (no wand item required). {@code excluded}, when
+     *  non-null, is added to the hit-set before the chain starts so it can never
+     *  be targeted (used by brands to protect the attacker from self-damage). */
+    static void applyLightningChain(Level level, Mob caster, Point target,
+                                    MinMax dmgRange, Mob excluded) {
         int tx = target.tileX(), ty = target.tileY();
         Mob first = MobSystem.mobAt(level, target);
         if (first == null) return;
@@ -719,12 +779,13 @@ public final class ItemSystem {
 
         java.util.Set<Mob> hit = new java.util.HashSet<>();
         java.util.ArrayDeque<Mob> frontier = new java.util.ArrayDeque<>();
+        if (excluded != null) hit.add(excluded);
         frontier.add(first);
         hit.add(first);
 
         while (!frontier.isEmpty()) {
             Mob v = frontier.poll();
-            int dmg = MobSystem.rollRange(effectiveDamageRange(wand, effectiveLevel));
+            int dmg = MobSystem.rollRange(dmgRange);
             if (isWet(level, v)) dmg *= 2;
             MobSystem.processAttack(level, caster, v, dmg,
                     MobSystem.AttackType.MAGIC, MobSystem.DamageElement.SHOCK);
@@ -819,10 +880,39 @@ public final class ItemSystem {
         if (wand.summonsWhenUsed != null) {
             castSummonWand(level, caster, wand);
             wand.charge = Math.max(0f, wand.charge - 1f);
+            if (caster.behavior == Behavior.PLAYER) {
+                String n = caster.name != null ? caster.name : "Adventurer";
+                EventLog.add(Messages.playerUses(n,
+                        wand.useVerb != null ? wand.useVerb : "use", wand.name));
+            } else if (caster.name != null && wand.name != null) {
+                EventLog.add(Messages.mobUsesItem(caster.name, wand.name, false));
+            }
             TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
             return;
         }
         if (target == null) return;
+        if (wand.wandEffect == Item.ItemEffect.TELEPORT) {
+            int tx = target.tileX(), ty = target.tileY();
+            if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
+            if (level.tiles[tx][ty].blocksMovement()) return;
+            if (MobSystem.mobAt(level, target) != null) return;
+            Point teleportOrigin = caster.position;
+            caster.position = target;
+            if (level.events != null) {
+                level.events.add(new GameEvent.MobTeleported(
+                        caster, teleportOrigin.tileX(), teleportOrigin.tileY(), tx, ty));
+            }
+            wand.charge = Math.max(0f, wand.charge - 1f);
+            if (caster.behavior == Behavior.PLAYER) {
+                String n = caster.name != null ? caster.name : "Adventurer";
+                EventLog.add(Messages.playerUses(n,
+                        wand.useVerb != null ? wand.useVerb : "use", wand.name));
+            } else if (caster.name != null && wand.name != null) {
+                EventLog.add(Messages.mobUsesItem(caster.name, wand.name, false));
+            }
+            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+            return;
+        }
         Point impact = MobSystem.firstMobBlocking(level, caster.position, target, caster);
         boolean trajectoryVisible =
                 MobSystem.trajectoryTouchesVisible(level, caster.position, impact);
@@ -840,6 +930,13 @@ public final class ItemSystem {
         }
         // Charge consumed once the wand has actually fired the projectile.
         wand.charge = Math.max(0f, wand.charge - 1f);
+        if (caster.behavior == Behavior.PLAYER) {
+            String n = caster.name != null ? caster.name : "Adventurer";
+            EventLog.add(Messages.playerUses(n,
+                    wand.useVerb != null ? wand.useVerb : "use", wand.name));
+        } else if (caster.name != null && wand.name != null) {
+            EventLog.add(Messages.mobUsesItem(caster.name, wand.name, false));
+        }
         TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
     }
 
@@ -855,7 +952,7 @@ public final class ItemSystem {
         switch (item.useBehavior) {
             case EAT         -> eat(level, user, item);
             case DRINK       -> drinkPotion(level, user, item);
-            case GRANT_PERK  -> grantPerk(level, user, item);
+            case GRANT_PERK  -> grantXP(level, user, item);//grantPerk(level, user, item);
             case WAND, GRAPPLE, NONE -> { return; } // need a target — caller routes elsewhere
         }
         TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
@@ -883,6 +980,14 @@ public final class ItemSystem {
     public static void castGrapple(Level level, Mob caster, Item item, Point target) {
         if (level == null || caster == null || item == null || target == null) return;
         if (caster.position == null) return;
+        if (item.baseChargeMax > 0 && item.charge < 1f) {
+            if (caster.behavior == Behavior.PLAYER) {
+                EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                        "The " + (item.name != null ? item.name : "item") + " has no charge left.",
+                        com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+            }
+            return;
+        }
         Mob targetMob = MobSystem.mobAt(level,target);
         if (targetMob != null) {
             int maxSize = Math.max(0, (int) item.abilityPower);
@@ -891,6 +996,11 @@ public final class ItemSystem {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
                             caster, caster.position, target, false));
                 }
+                if (caster.behavior == Behavior.PLAYER) {
+                    EventLog.add(Messages.grappleBlocked(
+                            targetMob.name != null ? targetMob.name : "creature"));
+                }
+                if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
                 TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
                 return;
             }
@@ -903,6 +1013,14 @@ public final class ItemSystem {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
                         caster, caster.position, target, true));
             }
+            if (caster.behavior == Behavior.PLAYER) {
+                String n = caster.name != null ? caster.name : "Adventurer";
+                EventLog.add(Messages.playerUses(n,
+                        item.useVerb != null ? item.useVerb : "use", item.name));
+            } else if (caster.name != null && item.name != null) {
+                EventLog.add(Messages.mobUsesItem(caster.name, item.name, false));
+            }
+            if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
             TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
             return;
         }
@@ -916,7 +1034,54 @@ public final class ItemSystem {
             grapplePullMob(level, targetMob, landing, landingIsChasm);
         }
         grapplePullFloorItems(level, target, landing, landingIsChasm);
+        if (caster.behavior == Behavior.PLAYER) {
+            String n = caster.name != null ? caster.name : "Adventurer";
+            EventLog.add(Messages.playerUses(n,
+                    item.useVerb != null ? item.useVerb : "use", item.name));
+        } else if (caster.name != null && item.name != null) {
+            EventLog.add(Messages.mobUsesItem(caster.name, item.name, false));
+        }
+        if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
         TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+    }
+
+    /** JUMP-behavior use: teleport the jumper to {@code target} within Chebyshev
+     *  radius {@code item.abilityPower}. The target must be a passable, unoccupied tile.
+     *  Costs one {@code moveCost}. Emits {@link com.bjsp123.rl2.event.GameEvent.MobJumped}. */
+    public static void castJump(Level level, Mob jumper, Item item, Point target) {
+        if (level == null || jumper == null || item == null || target == null) return;
+        if (jumper.position == null) return;
+        if (item.baseChargeMax > 0 && item.charge < 1f) {
+            if (jumper.behavior == Behavior.PLAYER) {
+                EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                        "The " + (item.name != null ? item.name : "item") + " has no charge left.",
+                        com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+            }
+            return;
+        }
+        int radius = Math.max(0, (int) item.abilityPower);
+        int dx = Math.abs(target.tileX() - jumper.position.tileX());
+        int dy = Math.abs(target.tileY() - jumper.position.tileY());
+        if (Math.max(dx, dy) > radius) return;
+        if (target.tileX() < 0 || target.tileY() < 0
+                || target.tileX() >= level.width || target.tileY() >= level.height) return;
+        com.bjsp123.rl2.model.Tile tile = level.tiles[target.tileX()][target.tileY()];
+        if (tile.blocksMovement()) return;
+        if (MobSystem.mobAt(level, target) != null) return;
+        Point from = jumper.position;
+        jumper.position = target;
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobJumped(jumper, from, target));
+        }
+        if (jumper.behavior == Behavior.PLAYER) {
+            String n = jumper.name != null ? jumper.name : "Adventurer";
+            EventLog.add(Messages.playerUses(n,
+                    item.useVerb != null ? item.useVerb : "use", item.name));
+        } else if (jumper.name != null && item.name != null) {
+            EventLog.add(Messages.mobUsesItem(jumper.name, item.name, false));
+        }
+        if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+        TurnSystem.applyMoveCost(jumper, jumper.effectiveStats().moveCost);
     }
 
     /** Find the best grapple landing tile — nearest non-wall 8-neighbour of
@@ -1049,6 +1214,8 @@ public final class ItemSystem {
         if (item.isGem()) return gemDisplayName(item);
         String name = item.name == null ? "" : item.name;
         if (item.level > 0) name = name + " +" + item.level;
+        if (item.brand != null && item.brand.name != null && !item.brand.name.isEmpty())
+            name = name + " of " + item.brand.name;
         return name;
     }
 

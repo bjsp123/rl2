@@ -25,17 +25,23 @@ package com.bjsp123.rl2.world.anim;
 public final class AnimQueue {
 
     /** Frames remaining until every queued visible animation finishes. */
-    public int freezeFrames;
+    public float freezeFrames;
     /** Start delay of the most recently queued sequential slot — for ride-along callers. */
-    public int currentSlotStart;
+    public float currentSlotStart;
     /** Length of the most recently queued sequential slot — for ride-along callers. */
-    public int currentSlotLength;
+    public float currentSlotLength;
     /** Set whenever {@link #sequential} or an extending {@link #rideLastSlot}
      *  fires. The AI-catch-up loop in PlayController consults this via
      *  {@link #consumeSequentialFlag} so that ONLY a sequential anim — not
      *  a pile of concurrent mob slides — breaks the loop, letting many
      *  mobs move simultaneously with the player on a single render frame. */
     private boolean sawSequential;
+    /** Count of sequential slots pushed during the current drain pass.
+     *  Reset by {@link #resetSequentialCount()} at the start of each
+     *  {@code Animator.consume()} call; incremented by {@link #sequential()}.
+     *  Read by {@link com.bjsp123.rl2.world.anim.Animator#scaleFrames} to
+     *  compress later animations when the queue grows deep. */
+    private int sequentialCount;
 
     /** Drain one render frame. Call once per render frame from PlayScreen. */
     public void tick() {
@@ -46,20 +52,26 @@ public final class AnimQueue {
      *  speed" setting — when the {@link com.bjsp123.rl2.world.anim.Animator} is
      *  advancing N animation frames per render frame, the freeze gate has to drain
      *  at the same pace or the game-tick gate stays closed too long. */
-    public void tick(int n) {
+    public void tick(float n) {
         if (n <= 0 || freezeFrames <= 0) return;
-        freezeFrames = Math.max(0, freezeFrames - n);
+        freezeFrames = Math.max(0f, freezeFrames - n);
     }
 
-    public int concurrent(int frames) {
+    public float concurrent(float frames) {
         if (frames <= 0) return 0;
         if (frames > freezeFrames) freezeFrames = frames;
         return 0;
     }
 
-    public int sequential(int frames) {
+    public int sequentialCount() { return sequentialCount; }
+
+    /** Reset the sequential counter — call once at the start of each drain pass. */
+    public void resetSequentialCount() { sequentialCount = 0; }
+
+    public float sequential(float frames) {
         if (frames <= 0) return 0;
-        int delay = freezeFrames;
+        sequentialCount++;
+        float delay = freezeFrames;
         currentSlotStart  = delay;
         currentSlotLength = frames;
         freezeFrames      = delay + frames;
@@ -67,10 +79,10 @@ public final class AnimQueue {
         return delay;
     }
 
-    public int rideLastSlot(int frames) {
+    public float rideLastSlot(float frames) {
         if (frames <= 0) return 0;
         if (currentSlotLength <= 0) return sequential(frames);
-        int extra = frames - currentSlotLength;
+        float extra = frames - currentSlotLength;
         if (extra > 0) {
             freezeFrames      += extra;
             currentSlotLength += extra;

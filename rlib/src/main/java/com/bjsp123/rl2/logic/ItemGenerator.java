@@ -153,6 +153,12 @@ public final class ItemGenerator {
      *  this item, scaled to this level" call site. Returns {@code null}
      *  when {@code type} is unknown to {@link ItemRegistry}. */
     public static Item buildItem(String type, double powerLevel) {
+        return buildItem(type, powerLevel, null);
+    }
+
+    /** As {@link #buildItem(String, double)} but also applies a random brand
+     *  (20% chance for equipment/amulets) when {@code rng} is non-null. */
+    public static Item buildItem(String type, double powerLevel, Random rng) {
         if (type == null) return null;
         Item it;
         try {
@@ -165,10 +171,10 @@ public final class ItemGenerator {
         if (d != null && d.useBehavior != UseBehavior.EAT) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
-        // Wand: charge is level-derived, so refill after the level bump.
-        if (it.useBehavior == UseBehavior.WAND) {
+        if (it.baseChargeMax > 0) {
             it.charge = it.maxCharge();
         }
+        if (rng != null) BrandSystem.applyRandomBrand(it, rng);
         return it;
     }
 
@@ -284,9 +290,9 @@ public final class ItemGenerator {
         for (String type : candidates) {
             ItemDefinition d = ItemRegistry.get(type);
             if (d == null) continue;
-            if (d.theme != null && d.theme != theme) continue;
             double w = powerWeight(d.powerMin, d.powerMax, powerLevel);
             if (w <= 0) continue;
+            w *= themeMultiplier(d.theme, theme);
             pool.add(type);
             weights.add(w);
             total += w;
@@ -310,10 +316,10 @@ public final class ItemGenerator {
         if (d != null && d.useBehavior != UseBehavior.EAT) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
-        // Wand: charge is level-derived, so refill after the level bump.
-        if (it.useBehavior == UseBehavior.WAND) {
+        if (it.baseChargeMax > 0) {
             it.charge = it.maxCharge();
         }
+        BrandSystem.applyRandomBrand(it, rng);
         return it;
     }
 
@@ -332,4 +338,12 @@ public final class ItemGenerator {
     }
 
     private static final double POWER_EDGE_WEIGHT = 0.05;
+
+    /** Weight multiplier for a definition's theme relative to the level's theme.
+     *  Null theme = theme-neutral (1×); matching = twice as likely (2×);
+     *  mismatching = half as likely (0.5×). */
+    private static double themeMultiplier(VisualTheme defTheme, VisualTheme levelTheme) {
+        if (defTheme == null) return 1.0;
+        return defTheme == levelTheme ? 2.0 : 0.5;
+    }
 }

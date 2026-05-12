@@ -16,7 +16,7 @@ import com.bjsp123.rl2.persistence.Persistence;
 public class UiFontScale {
 
     /** Selectable multipliers exposed by Settings → Graphics → UI Font Size. */
-    public static final float[] CHOICES = { 0.5f, 0.75f, 1.0f, 1.5f, 2.0f };
+    public static final float[] CHOICES = { 0.75f, 1.0f, 1.5f, 2.0f };
 
     /** Persistence key — the {@code -v2} suffix invalidates the prior
      *  {@code -v1} key after CHOICES + DEFAULT were retuned in the V2 UI

@@ -8,6 +8,7 @@ import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 import com.bjsp123.rl2.save.Achievement;
 import com.bjsp123.rl2.world.render.IconSprites;
+import com.bjsp123.rl2.world.render.PortraitSprites;
 
 import java.util.List;
 
@@ -124,38 +125,69 @@ public final class V2HallOfFame extends V2Screen {
 
     private void drawHeroesTab(UiCtx ctx) {
         List<HallOfFameEntry> entries = game.hallOfFame.entries;
-        float left  = window.x + 18f;
-        float right = window.right() - 18f;
-        float headerY = bandTop();
-        TextDraw.left (ctx, ctx.fontRegular, Pal.DIM, "#  Class",       left,  headerY);
-        TextDraw.right(ctx, ctx.fontRegular, Pal.DIM, "Score / Depth", right, headerY);
-
-        float rowH = 22f;
-        float visibleTop    = headerY - 22f;
+        float bodyLeft  = window.x + 12f;
+        float bodyRight = window.right() - 12f;
+        float visibleTop    = bandTop();
         float visibleBottom = bandBottom();
         float visibleH      = visibleTop - visibleBottom;
+
         if (entries.isEmpty()) {
             TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM,
                     "No entries yet — die first.",
                     window.cx(), visibleTop - 24f);
             return;
         }
-        heroesScroller.setMaxScroll(entries.size() * rowH - visibleH);
 
-        // Scissor-clip the row band so off-screen rows don't bleed into
-        // the header / window chrome above and below.
+        float rowH    = 48f;
+        float rowGap  = 4f;
+        float portSz  = 40f;
+        float portPad = (rowH - portSz) * 0.5f;
+        float textLeft = bodyLeft + portSz + 8f;
+        float totalH  = entries.size() * (rowH + rowGap) - rowGap;
+        heroesScroller.setMaxScroll(Math.max(0f, totalH - visibleH));
+
         clipBand(ctx, visibleTop, visibleBottom, () -> {
             for (int i = 0; i < entries.size(); i++) {
-                float yTop = visibleTop - i * rowH + heroesScroller.scrollY();
+                float yTop = visibleTop - i * (rowH + rowGap) + heroesScroller.scrollY();
+                float yBot = yTop - rowH;
+                if (yBot > visibleTop)     continue;
                 if (yTop <= visibleBottom) break;
-                if (yTop > visibleTop)     continue;
                 HallOfFameEntry e = entries.get(i);
-                String l = (i + 1) + "  " + e.charClass;
-                String r = e.score + " / " + e.depth;
-                TextDraw.left (ctx, ctx.fontRegular, Pal.WHITE, l, left,  yTop);
-                TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE, r, right, yTop);
+
+                // Portrait on the left.
+                com.bjsp123.rl2.model.Mob.CharacterClass cls = parseClass(e.charClass);
+                if (cls != null) {
+                    TextureRegion port = PortraitSprites.regionFor(cls);
+                    if (port != null) {
+                        ctx.batch.draw(port, bodyLeft, yBot + portPad, portSz, portSz);
+                    }
+                }
+
+                // Upper line: rank + class name on left, score / depth on right.
+                String upper     = (i + 1) + "  " + e.charClass;
+                String scoreStr  = e.score + " / " + e.depth;
+                float  upperY    = yTop - rowH * 0.28f;
+                TextDraw.left (ctx, ctx.fontRegular, Pal.WHITE, upper,    textLeft,  upperY);
+                TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE, scoreStr, bodyRight, upperY);
+
+                // Lower line: death message in dim colour.
+                if (e.deathMessage != null && !e.deathMessage.isEmpty()) {
+                    float lowerY = yBot + rowH * 0.28f;
+                    TextDraw.left(ctx, ctx.fontRegular, Pal.DIM, e.deathMessage,
+                            textLeft, lowerY);
+                }
             }
         });
+    }
+
+    private static com.bjsp123.rl2.model.Mob.CharacterClass parseClass(String name) {
+        if (name == null) return null;
+        for (com.bjsp123.rl2.model.Mob.CharacterClass c :
+                com.bjsp123.rl2.model.Mob.CharacterClass.values()) {
+            if (c.displayName.equalsIgnoreCase(name) || c.name().equalsIgnoreCase(name))
+                return c;
+        }
+        return null;
     }
 
     private void drawAchievementsTab(UiCtx ctx) {

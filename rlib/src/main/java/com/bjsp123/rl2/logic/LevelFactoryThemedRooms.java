@@ -56,24 +56,38 @@ public final class LevelFactoryThemedRooms {
         }
         if (candidates.isEmpty()) return;
 
-        // Walk rooms (skipping the first / last so stairs always have a clean room
-        // to land on) and pick the first candidate whose constraints fit.
+        // Collect all fitting (room-index, definition) pairs then weighted-pick one.
         int last = rooms.size() - 1;
+        List<int[]>                  pairRooms = new ArrayList<>();
+        List<ThemedRoomDefinition>   pairDefs  = new ArrayList<>();
         for (int ri = 1; ri < last; ri++) {
             int[] r = rooms.get(ri);
             for (ThemedRoomDefinition d : candidates) {
                 if (!fits(d, r)) continue;
-                int spawnLevel = 1 + level.depth;
-                ThemedRoomPainter.paint(level, d, r[0], r[1], r[2], r[3], rng);
-                ThemedRoomPopulator.populate(level, d, r[0], r[1], r[2], r[3],
-                                             spawnLevel, rng);
-                level.reservedRects.add(new int[]{r[0], r[1], r[2], r[3]});
-                unique.rooms.add(d.type);
-                tagSnapshotKind(level, r, d.type);
-                rooms.remove(ri);
-                return;
+                pairRooms.add(r);
+                pairDefs.add(d);
             }
         }
+        if (pairRooms.isEmpty()) return;
+
+        // Weighted-pick: weight = themeMultiplier of the definition.
+        double total = 0;
+        for (ThemedRoomDefinition d : pairDefs) total += themeMultiplier(d, level);
+        double pick = rng.nextDouble() * total;
+        int chosen = pairDefs.size() - 1;
+        for (int i = 0; i < pairDefs.size(); i++) {
+            pick -= themeMultiplier(pairDefs.get(i), level);
+            if (pick <= 0) { chosen = i; break; }
+        }
+        int[] r = pairRooms.get(chosen);
+        ThemedRoomDefinition d = pairDefs.get(chosen);
+        int spawnLevel = 1 + level.depth;
+        ThemedRoomPainter.paint(level, d, r[0], r[1], r[2], r[3], rng);
+        ThemedRoomPopulator.populate(level, d, r[0], r[1], r[2], r[3], spawnLevel, rng);
+        level.reservedRects.add(new int[]{r[0], r[1], r[2], r[3]});
+        unique.rooms.add(d.type);
+        tagSnapshotKind(level, r, d.type);
+        rooms.remove(pairRooms.get(chosen));
     }
 
     public static void stampRegularThemedRooms(Level level, List<int[]> rooms, Random rng) {
@@ -107,7 +121,7 @@ public final class LevelFactoryThemedRooms {
                 fitting.add(d);
             }
             if (fitting.isEmpty()) continue;
-            ThemedRoomDefinition d = fitting.get(rng.nextInt(fitting.size()));
+            ThemedRoomDefinition d = weightedPick(fitting, level, rng);
             int spawnLevel = 1 + level.depth;
             ThemedRoomPainter.paint(level, d, r[0], r[1], r[2], r[3], rng);
             ThemedRoomPopulator.populate(level, d, r[0], r[1], r[2], r[3],
@@ -142,6 +156,26 @@ public final class LevelFactoryThemedRooms {
             if (longSide < shortSide * 3 / 2) return false;   // 1.5×
         }
         return true;
+    }
+
+    /** Weight multiplier for a definition's theme relative to the level's theme.
+     *  Null = theme-neutral (1×); matching = 2×; mismatching = 0.5×. */
+    private static double themeMultiplier(ThemedRoomDefinition d, Level level) {
+        if (d.theme == null) return 1.0;
+        return d.theme == level.theme ? 2.0 : 0.5;
+    }
+
+    /** Weighted pick from a list of definitions using theme multipliers. */
+    private static ThemedRoomDefinition weightedPick(List<ThemedRoomDefinition> defs,
+                                                      Level level, Random rng) {
+        double total = 0;
+        for (ThemedRoomDefinition d : defs) total += themeMultiplier(d, level);
+        double r = rng.nextDouble() * total;
+        for (ThemedRoomDefinition d : defs) {
+            r -= themeMultiplier(d, level);
+            if (r <= 0) return d;
+        }
+        return defs.get(defs.size() - 1);
     }
 
     /** Depth-fraction of {@code level.depth} within the configured dungeon size:

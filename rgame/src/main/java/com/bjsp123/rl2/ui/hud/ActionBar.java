@@ -16,8 +16,10 @@ import com.bjsp123.rl2.model.Mob;
  */
 public final class ActionBar {
 
-    /** Number of HUD action buttons (1..6 mapped to indices 0..5). */
-    public static final int SLOTS = 6;
+    /** Maximum number of HUD action buttons. Always 9 to match
+     *  {@link com.bjsp123.rl2.model.Mob#actionSlotTypes}; the visible
+     *  count is controlled by {@link com.bjsp123.rl2.ui.skin.QuickslotCount}. */
+    public static final int SLOTS = 9;
 
     private final Item[] slots = new Item[SLOTS];
     /** Player Mob this action bar persists into. Set by {@link #bindToPlayer}

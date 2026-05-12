@@ -33,6 +33,7 @@ public final class BuffIcons {
     private static Texture sheet;
     private static Map<BuffType, TextureRegion> cache;
 
+
     private BuffIcons() {}
 
     /** Texture-region for {@code type}, or {@code null} when the buff has no icon
@@ -65,6 +66,16 @@ public final class BuffIcons {
      *  to signal the impact. Returns {@code null} on missing sheet / cell. */
     public static TextureRegion knockbackRegion() {
         return attackFlashRegion(2);
+    }
+
+    /** Glow sprite for perk-type powerups (col 4 of the slash band). */
+    public static TextureRegion perkGlowRegion() {
+        return attackFlashRegion(4);
+    }
+
+    /** Glow sprite for HP/mana-type powerups (col 5 of the slash band). */
+    public static TextureRegion hpManaGlowRegion() {
+       return attackFlashRegion(5);
     }
 
     private static void load() {

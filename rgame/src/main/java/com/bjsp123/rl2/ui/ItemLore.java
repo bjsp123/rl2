@@ -39,6 +39,10 @@ public final class ItemLore {
             if (sb.length() > 0) sb.append("\n\n");
             sb.append(it.description2);
         }
+        if (it.brand != null && it.brand.description != null && !it.brand.description.isEmpty()) {
+            if (sb.length() > 0) sb.append("\n\n");
+            sb.append(it.brand.description);
+        }
         return sb.toString();
     }
 
@@ -88,6 +92,9 @@ public final class ItemLore {
                 tag += " (intrinsic +" + (it.level - 1) + ")";
             }
             hdr.append("Level: ").append(tag).append('\n');
+        }
+        if (it.brand != null && it.brand.name != null && !it.brand.name.isEmpty()) {
+            hdr.append("Brand: ").append(it.brand.name).append('\n');
         }
         if (hdr.length() > 0) sb.append(hdr);
 
@@ -162,7 +169,7 @@ public final class ItemLore {
                     }
                 }
                 case GRANT_PERK -> flag(use,
-                        "Consume to gain a perk point.");
+                        "Consume to gain XP.");
                 case WAND -> {
                     if (it.summonsWhenUsed != null) {
                         flag(use, "Aim and " + verb
@@ -297,6 +304,7 @@ public final class ItemLore {
             case VOID        -> "tear a void at the target — pulls nearby creatures in and crumbles the ground";
             case POLYMORPH   -> "reshape the target area — rerolls floor tiles and transforms nearby creatures into similarly-sized kin";
             case LEVEL_UP, HP_UP, MANA_UP -> "absorb its power";
+            default -> "perform a magical action at the target";
         };
     }
 

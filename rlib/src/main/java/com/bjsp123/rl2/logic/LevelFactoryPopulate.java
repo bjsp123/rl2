@@ -64,6 +64,15 @@ public final class LevelFactoryPopulate {
      *  a positive spawn chance. */
     private static final double POWER_EDGE_WEIGHT = 0.05;
 
+    /** Weight multiplier for a definition's theme relative to the level's theme.
+     *  Null theme = theme-neutral (1×); matching = twice as likely (2×);
+     *  mismatching = half as likely (0.5×). */
+    private static double themeMultiplier(Level.VisualTheme defTheme,
+                                          Level.VisualTheme levelTheme) {
+        if (defTheme == null) return 1.0;
+        return defTheme == levelTheme ? 2.0 : 0.5;
+    }
+
     /** Pick a key from {@code keys} weighted by the parallel {@code weights} array.
      *  All-zero weights → null. */
     static String pickWeighted(List<String> keys, double[] weights, Random rng) {
@@ -111,9 +120,9 @@ public final class LevelFactoryPopulate {
             if (def.behavior == Mob.Behavior.PLAYER) continue;
             if (def.unique) continue;
             if (def.powerMin == 0 && def.powerMax == 0) continue;
-            if (def.theme != null && def.theme != level.theme) continue;
             double w = powerWeight(def.powerMin, def.powerMax, f);
             if (w <= 0) continue;
+            w *= themeMultiplier(def.theme, level.theme);
             keys.add(type);
             ws.add(w);
         }
@@ -136,7 +145,6 @@ public final class LevelFactoryPopulate {
             if (def.behavior == Mob.Behavior.PLAYER) continue;
             if (unique.mobs.contains(type)) continue;
             if (def.powerMin == 0 && def.powerMax == 0) continue;
-            if (def.theme != null && def.theme != level.theme) continue;
             if (powerWeight(def.powerMin, def.powerMax, f) <= 0) continue;
             out.add(type);
         }
@@ -269,7 +277,7 @@ public final class LevelFactoryPopulate {
                     it = template;
                     placedTemplate = true;
                 } else {
-                    it = ItemGenerator.buildItem(template.type, powerLevel);
+                    it = ItemGenerator.buildItem(template.type, powerLevel, rng);
                 }
                 placeItem(level, it, p);
             }
@@ -355,6 +363,7 @@ public final class LevelFactoryPopulate {
                 if (seed == null) break;
                 if (mobAt(level, seed.tileX(), seed.tileY())) continue;
                 if (level.isReserved(seed.tileX(), seed.tileY())) continue;
+                if (inStairsUpRoom(level, seed.tileX(), seed.tileY())) continue;
                 String type = pickWeighted(pool, weightHolder[0], rng);
                 if (type == null) break;
                 MobDefinition def = MobRegistry.get(type);
@@ -378,13 +387,19 @@ public final class LevelFactoryPopulate {
             }
         }
 
-        // ── Unique pass: independent 50% roll per eligible candidate ──────
+        // ── Unique pass: independent roll per eligible candidate ─────────
+        // Base chance is 50%; multiplied by theme factor (so matching theme
+        // raises it to 100%, mismatching lowers it to 25%).
         for (String type : eligibleUniqueMobs(level, unique)) {
-            if (rng.nextInt(2) != 0) continue;
+            MobDefinition ud = MobRegistry.get(type);
+            double chance = Math.min(1.0, 0.5 * themeMultiplier(
+                    ud == null ? null : ud.theme, level.theme));
+            if (rng.nextDouble() >= chance) continue;
             Point seed = LevelFactoryUtils.randomFloorTile(level, rng);
             if (seed == null) break;
             if (mobAt(level, seed.tileX(), seed.tileY())) continue;
             if (level.isReserved(seed.tileX(), seed.tileY())) continue;
+            if (inStairsUpRoom(level, seed.tileX(), seed.tileY())) continue;
             Mob m = spawnMobAt(level, type, seed, spawnLevel, rng,
                                /* withRetainers= */ true);
             if (m == null) continue;
@@ -403,6 +418,7 @@ public final class LevelFactoryPopulate {
         Mob m = MobFactory.spawn(type, pos);
         if (m == null) return null;
         MobProgression.setSpawnLevel(m, spawnLevel);
+        brandStartingInventory(m, rng);
         // Pre-roll the mob's drops into its bag at spawn time. Death-time
         // {@link LootSystem#dropLootOnDeath} just dumps the bag — making the
         // dungeon's loot deterministic for a given world seed.
@@ -430,12 +446,21 @@ public final class LevelFactoryPopulate {
             String t = def.retainerTypes.get(rng.nextInt(def.retainerTypes.size()));
             Mob r = MobFactory.spawn(t, p);
             if (r == null) continue;
+            brandStartingInventory(r, rng);
             r.owner = parent;
             MobProgression.setSpawnLevel(r, spawnLevel);
             LootSystem.rollAndStashLoot(level, r, rng);
             level.mobs.add(r);
             placed++;
         }
+    }
+
+    /** Apply random brands to a non-player mob's starting inventory items.
+     *  Player starting kits are left unbranded for a consistent game start. */
+    private static void brandStartingInventory(Mob m, Random rng) {
+        if (m.behavior == Mob.Behavior.PLAYER || m.inventory == null) return;
+        for (Item it : m.inventory.bag) BrandSystem.applyRandomBrand(it, rng);
+        for (Item it : m.inventory.allEquipped()) BrandSystem.applyRandomBrand(it, rng);
     }
 
     /** Inclusive sample from a {@link com.bjsp123.rl2.model.MinMax} range. Null /
@@ -523,6 +548,20 @@ public final class LevelFactoryPopulate {
     private static boolean mobAt(Level level, int x, int y) {
         for (Mob m : level.mobs)
             if (m.position.tileX() == x && m.position.tileY() == y) return true;
+        return false;
+    }
+
+    /** True if (x, y) falls inside the room that contains the stairs-up tile.
+     *  Rooms with stairs up are kept mob-free so the player spawns into a safe area. */
+    private static boolean inStairsUpRoom(Level level, int x, int y) {
+        if (level.stairsUp == null || level.rooms == null) return false;
+        int sx = level.stairsUp.tileX();
+        int sy = level.stairsUp.tileY();
+        for (Level.RoomSnapshot r : level.rooms) {
+            if (sx >= r.x && sx < r.x + r.w && sy >= r.y && sy < r.y + r.h) {
+                return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+            }
+        }
         return false;
     }
 }

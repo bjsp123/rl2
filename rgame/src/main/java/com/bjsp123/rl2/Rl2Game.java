@@ -1,6 +1,8 @@
 package com.bjsp123.rl2;
 
 import com.badlogic.gdx.Game;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.bjsp123.rl2.save.ArenaHallOfFame;
 import com.bjsp123.rl2.save.ArenaHallOfFameStore;
 import com.bjsp123.rl2.save.Achievements;
@@ -89,6 +91,7 @@ public class Rl2Game extends Game {
         loadGameBalance();
         loadMobConfig();
         loadItemConfig();
+        loadBrandConfig();
         loadThemedRoomConfig();
         UiScale.init(persistence);
         UiPixelScale.init(persistence);
@@ -96,6 +99,7 @@ public class Rl2Game extends Game {
         com.bjsp123.rl2.ui.skin.MobOutline.init(persistence);
         com.bjsp123.rl2.ui.skin.UseBuffIcons.init(persistence);
         com.bjsp123.rl2.ui.skin.AnimationSpeed.init(persistence);
+        com.bjsp123.rl2.ui.skin.QuickslotCount.init(persistence);
         // Plug the rgame-side icon-pref toggle into the in-world Animator so its
         // BuffApplied event handler renders an icon when the user wants icons and a
         // text float otherwise.
@@ -116,6 +120,7 @@ public class Rl2Game extends Game {
         // wired in: title → saves → character select → game; settings,
         // hall-of-fame, arena, credits, map, level-info all V2 too.
         ui = new UiCtx();
+        Gdx.input.setCatchKey(Input.Keys.BACK, true);
         setScreen(new V2Title(this, ui));
     }
 
@@ -146,6 +151,14 @@ public class Rl2Game extends Game {
     private void loadItemConfig() {
         String csv = com.badlogic.gdx.Gdx.files.internal("data/items.csv").readString();
         com.bjsp123.rl2.logic.ItemRegistry.load(csv);
+    }
+
+    /** Read {@code assets/data/brands.csv} into {@link com.bjsp123.rl2.logic.BrandRegistry}. */
+    private void loadBrandConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/brands.csv");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.logic.BrandRegistry.load(fh.readString());
     }
 
     /** Read {@code assets/data/themedrooms.csv} into

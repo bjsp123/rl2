@@ -138,11 +138,21 @@ public final class GameBalance {
      *  per-mob — see the {@code *PerLevel} columns of {@code mobs.csv}.) */
     public static int PERK_POINTS_PER_LEVEL = 1;
 
-    /** Maximum number of distinct stack entries an {@link com.bjsp123.rl2.model.Inventory}
-     *  bag can hold. Stacks (count &gt; 1) occupy a single entry. The inventory UI
-     *  expects a 6×6 = 36 grid by default; widening the column / row count and bumping
-     *  this number lets a designer offer larger bags without code changes. */
-    public static int INVENTORY_BAG_SIZE = 100;
+    public static int XP_PER_POWER_ORB = 10;
+
+    /** Maximum bag slots for equipment items (WEAPON, OFFHAND, ARMOR, AMULET) not
+     *  yet placed in an equipment slot. Each item occupies exactly one slot (equipment
+     *  never stacks). */
+    public static int BAG_EQUIPMENT_SIZE = 20;
+    /** Maximum bag slots for gem items not yet socketed. */
+    public static int BAG_GEMS_SIZE = 20;
+    /** Maximum bag slots for food items (FOOD). Identical food items at the same
+     *  level merge into a single counted stack. */
+    public static int BAG_FOOD_SIZE = 20;
+    /** Maximum bag slots for consumable / tool items (POTION, WAND, ORB, BOMB, ITEM).
+     *  Potions and bombs at the same type + level merge into stacks; wands, orbs, and
+     *  tools are always singletons. */
+    public static int BAG_ITEMS_SIZE = 20;
 
     // ───────────────────────── Item-level scaling ────────────────────────────
     // Items carry a {@code level} field. Level 0 is baseline; every level above adds

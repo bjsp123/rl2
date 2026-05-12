@@ -1,0 +1,140 @@
+package com.bjsp123.rl2.ui.v2;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.InputProcessor;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.bjsp123.rl2.logic.BuffSystem;
+import com.bjsp123.rl2.model.Buff;
+import com.bjsp123.rl2.world.render.BuffIcons;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Small modal popup showing the details of a single active buff: a large
+ * icon, the buff name with level, its flavour description, and how many
+ * turns remain.  Opened by tapping a buff icon in the HUD or any info
+ * screen; closed by tapping outside or pressing Back/Escape.
+ */
+public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
+
+    private final UiCtx ctx;
+    private boolean open;
+    private Buff buff;
+
+    private final Rect window = new Rect();
+    private final List<String> descLines = new ArrayList<>();
+
+    public V2BuffInfo(UiCtx ctx) { this.ctx = ctx; }
+
+    public void open(Buff b) {
+        this.buff = b;
+        this.open = true;
+    }
+
+    public void close() { this.open = false; }
+
+    @Override
+    public boolean isOpen() { return open; }
+
+    @Override
+    public void renderSelf() {
+        if (!open || buff == null) return;
+        layoutRects();
+        renderShapesPass();
+        renderTextPass();
+    }
+
+    private void layoutRects() {
+        float vw = ctx.worldW();
+        float vh = ctx.worldH();
+        float winW = Math.min(240f, vw - 32f);
+
+        descLines.clear();
+        String desc = BuffSystem.description(buff.type);
+        if (desc != null && !desc.isEmpty()) {
+            TextDraw.wrap(ctx.fontRegular, desc, winW - 28f, 3, descLines);
+        }
+
+        float winH = Math.min(180f + descLines.size() * 18f, vh - 80f);
+        window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
+    }
+
+    private void renderShapesPass() {
+        ctx.applyProjection();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ShapeRenderer s = ctx.shapes;
+        s.begin(ShapeRenderer.ShapeType.Filled);
+        s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+        s.rect(0, 0, ctx.worldW(), ctx.worldH());
+        Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private void renderTextPass() {
+        ctx.batch.begin();
+
+        float iconSz = 48f;
+        float top = window.top() - 16f;
+        float iconY = top - iconSz;
+
+        TextureRegion region = BuffIcons.regionFor(buff.type);
+        if (region != null) {
+            ctx.batch.draw(region, window.cx() - iconSz * 0.5f, iconY, iconSz, iconSz);
+        }
+
+        top = iconY - 18f;
+        TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT,
+                BuffSystem.displayName(buff.type), window.cx(), top);
+
+        top -= 28f;
+        TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                "Level " + buff.level, window.cx(), top);
+
+        top -= 24f;
+        for (String line : descLines) {
+            TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM, line, window.cx(), top);
+            top -= 18f;
+        }
+
+        top -= 6f;
+        String durStr = buff.durationTurns > 0 ? buff.durationTurns + " turns" : "Permanent";
+        TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_BODY, durStr, window.cx(), top);
+
+        ctx.batch.end();
+    }
+
+    public InputProcessor input() {
+        return new InputAdapter() {
+            @Override
+            public boolean touchDown(int sx, int sy, int pointer, int button) {
+                if (!open) return false;
+                float vx = ctx.unprojectX(sx, sy);
+                float vy = ctx.unprojectY(sx, sy);
+                if (!window.contains(vx, vy)) close();
+                return true;
+            }
+
+            @Override
+            public boolean touchUp(int sx, int sy, int pointer, int button) {
+                return open;
+            }
+
+            @Override
+            public boolean keyDown(int keycode) {
+                if (!open) return false;
+                if (keycode == Input.Keys.ESCAPE || keycode == Input.Keys.BACK) {
+                    close();
+                    return true;
+                }
+                return false;
+            }
+        };
+    }
+}

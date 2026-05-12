@@ -78,10 +78,11 @@ public final class MobDefinition {
      *  checks {@code World.unique.mobs} and adds the type-name on spawn so
      *  subsequent levels skip it. Used by the elder-* boss variants. */
     public boolean unique;
-    /** Drop-quality multiplier on whatever the mob drops (today an opaque integer
-     *  parsed from the CSV; consumed by future loot logic). Ordinary mobs use
-     *  {@code 1}; unique bosses use {@code 3}. */
-    public int dropQuality = 1;
+    /** Items this mob drops on death. Each {@link com.bjsp123.rl2.util.CsvTable.DropSpec}
+     *  entry declares a keyword ({@code NONE}, {@code STUFF}, a category name, or a
+     *  literal type), an optional explicit plus level ({@code +n}), and a fractional
+     *  count ({@code *n}). Empty list = no drops. */
+    public java.util.List<com.bjsp123.rl2.util.CsvTable.DropSpec> drops = new java.util.ArrayList<>();
     /** Where in the dungeon this species is meant to appear. Expressed as a
      *  fraction-of-depth window (0 = depth 1, 1 = {@code DUNGEON_DEPTH}); the
      *  populator filters out levels whose depth-fraction falls outside
@@ -262,7 +263,7 @@ public final class MobDefinition {
         d.faction         = CsvTable.str(row, "faction", null);
         d.enemyFactions.addAll(CsvTable.listCell(row, "enemyFactions"));
         d.unique          = CsvTable.boolCell(row, "unique", false);
-        d.dropQuality     = CsvTable.intCell(row, "dropQuality", 1);
+        d.drops           = com.bjsp123.rl2.util.CsvTable.parseDropSpecList(CsvTable.str(row, "dropQuality", null));
         double[] power    = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
         d.powerMin        = power[0];
         d.powerMax        = power[1];
@@ -447,6 +448,7 @@ public final class MobDefinition {
         m.turnSpawnType        = turnSpawnType;
 
         m.banishable              = banishable;
+        m.unique                  = unique;
         m.intrinsic.knockbackSquares = knockbackSquares;
 
         m.hpPerLevel             = hpPerLevel;
