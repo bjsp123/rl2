@@ -198,6 +198,22 @@ public final class GameBalance {
      *  side, in addition to its same-side downstairs. */
     public static double CROSSLINK_PROBABILITY = 0.4;
 
+    // ───────────────────────── Level population ──────────────────────────────
+    /** Base hostile-mob target when populating a fresh level. Actual count is
+     *  {@code STARTING_MOBS_PER_LEVEL + rng(4)}, so each level starts with
+     *  this many to {@code this + 3} hostiles. */
+    public static int STARTING_MOBS_PER_LEVEL = 7;
+    /** Minimum random item clusters placed per level (on top of
+     *  {@code guaranteedPerLevel} CSV drops). Actual clusters =
+     *  {@code RANDOM_ITEMS_PER_LEVEL + rng(3)}, so each level gets this many
+     *  to {@code this + 2} random clusters. */
+    public static int RANDOM_ITEMS_PER_LEVEL = 1;
+    /** Multiplier applied to every mob's pre-rolled loot count at spawn time.
+     *  1.0 = baseline CSV quantities; 2.0 = twice as many drops per mob;
+     *  0.5 = half. Fractional parts are probabilistic: a scaled count of 1.5
+     *  gives each drop a 50 % chance of one extra copy. */
+    public static double LOOT_DROP_FREQUENCY_COEFF = 1.0;
+
     // ───────────────────────── Mob population caps ───────────────────────────
     /** Hard cap on mobs alive on a level — magical / scripted spawn effects
      *  (summon wands, kissyblob eat-spawn, mouse mushroom-eat-spawn) skip

@@ -375,7 +375,7 @@ public final class V2Arena extends ScreenAdapter {
 
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, headline,
-                bannerWindow.cx(), bannerWindow.top() - 22f);
+                bannerWindow.cx(), bannerWindow.top() - ctx.headerLineH());
         TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
                 "Team A: " + describeSurvivors(teamA),
                 bannerWindow.cx(), bannerWindow.top() - 64f);

@@ -40,7 +40,7 @@ import java.util.List;
  */
 public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
-    private enum Cat { ITEMS, CREATURES, BUFFS_PERKS, GEMS, TERRAIN }
+    private enum Cat { ITEMS, CREATURES, BUFFS_PERKS, GEMS, TERRAIN, GUIDE }
 
     /** Map each tab to a glyph in the shared UI icon sheet. GEMS has no
      *  dedicated icon yet — falls back to OTHER. */
@@ -51,6 +51,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             case BUFFS_PERKS -> com.bjsp123.rl2.world.render.IconSprites.Icon.PERKS;
             case GEMS        -> com.bjsp123.rl2.world.render.IconSprites.Icon.GEMS;
             case TERRAIN     -> com.bjsp123.rl2.world.render.IconSprites.Icon.TERRAIN;
+            case GUIDE       -> com.bjsp123.rl2.world.render.IconSprites.Icon.BOOK;
         };
     }
 
@@ -134,6 +135,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         entries.put(Cat.BUFFS_PERKS,  buildBuffsAndPerksEntries());
         entries.put(Cat.GEMS,         buildGemEntries());
         entries.put(Cat.TERRAIN,      buildTerrainEntries());
+        entries.put(Cat.GUIDE,        buildGuideEntries());
     }
 
     /** {@code true} when the encyclopaedia was opened with a registered
@@ -163,7 +165,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - 24f);
+        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
         float winH = Math.min(Pal.VIRTUAL_H - 100f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -178,7 +180,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             // (which scales with UiFontScale). The tab strip sits below
             // that band so a 1.5×/2× font scale doesn't bleed the title
             // text into the tabs.
-            float headerBand = ctx.fontHeader.getCapHeight() + 28f;
+            float headerBand = ctx.headerLineH() + ctx.lineH();
             float tabsY = window.top() - pad - tabH - headerBand;
             for (int i = 0; i < tabRects.length; i++) {
                 tabRects[i].set(window.x + pad + i * (tabW + tabGap),
@@ -271,7 +273,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             // visible band. Lines and divider y are shared by the shape pass
             // (which draws the rule) and the text pass (which paints the
             // lines), with the body's scrollY offset applied at render time.
-            float lineH = 18f;
+            float lineH = ctx.lineH();
             float bodyTop    = detailIconFrame.y - 24f;
             float bodyBottom = window.y + 16f;
             float visibleH   = bodyTop - bodyBottom;
@@ -433,7 +435,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
      *  cap directly, so we recompute it from the band height + content
      *  metrics here for the arrow-visibility check. */
     private float scrollMax() {
-        float lineH = 18f;
+        float lineH = ctx.lineH();
         int gapLines = (!detailFlavorLines.isEmpty()
                 && !detailDetailsLines.isEmpty()) ? 2 : 0;
         float totalH = (detailFlavorLines.size() + gapLines
@@ -468,7 +470,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
 
         if (selected == null) {
             TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Encyclopedia",
-                    window.cx(), window.top() - 22f);
+                    window.cx(), window.top() - ctx.headerLineH());
 
             // Tabs render as icons — same source sheet as the Settings
             // tab strip. {@link #tabIcon} maps each Cat to a sheet column.
@@ -509,7 +511,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             }
         } else {
             TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT,
-                    selected.name, window.cx(), window.top() - 22f);
+                    selected.name, window.cx(), window.top() - ctx.headerLineH());
 
             // Detail sprite — aspect-fit inside the frame computed in
             // layoutRects. Frame is 2× source size with a 64-px floor so
@@ -527,7 +529,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             // region scissors out anything outside the visible band, and
             // the per-line y is offset by the active scrollY.
             float top    = detailIconFrame.y - 24f;
-            float lineH  = 18f;
+            float lineH  = ctx.lineH();
             float scroll = detailScroller.scrollY();
             ctx.batch.flush();
             if (!pushDetailBodyScissor()) {
@@ -537,7 +539,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             int   line  = 0;
             for (String s : detailFlavorLines) {
                 TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                        s, window.x + 18f,
+                        s, window.x + Pal.PAD_CONTENT,
                         top - line * lineH + scroll);
                 line++;
             }
@@ -546,7 +548,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             if (!Float.isNaN(detailDividerY)) line += 2;
             for (String s : detailDetailsLines) {
                 TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                        s, window.x + 18f,
+                        s, window.x + Pal.PAD_CONTENT,
                         top - line * lineH + scroll);
                 line++;
             }
@@ -836,6 +838,39 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             out.add(new Entry(t, null, t.name().toLowerCase(), sb.toString()));
         }
         return out;
+    }
+
+    private static List<Entry> buildGuideEntries() {
+        List<Entry> out = new ArrayList<>();
+        Point dummy = new Point(0, 0);
+        for (com.bjsp123.rl2.GuideRegistry.HelpPage page : com.bjsp123.rl2.GuideRegistry.pages()) {
+            TextureRegion icon = regionForKey(page.imageKey, dummy);
+            String flavor  = page.para1;
+            StringBuilder details = new StringBuilder();
+            if (!page.para2.isEmpty()) details.append(page.para2);
+            if (!page.para3.isEmpty()) {
+                if (details.length() > 0) details.append("\n\n");
+                details.append(page.para3);
+            }
+            out.add(new Entry(page.title, icon, page.title, flavor, details.toString()));
+        }
+        return out;
+    }
+
+    private static TextureRegion regionForKey(String key, Point dummy) {
+        if (key == null || key.isEmpty()) return null;
+        if (com.bjsp123.rl2.logic.ItemRegistry.knownTypes().contains(key)) {
+            Item it = ItemFactory.build(key);
+            if (it != null) {
+                TextureRegion r = ItemSprites.regionFor(it);
+                if (r != null) return r;
+            }
+        }
+        if (com.bjsp123.rl2.logic.MobRegistry.knownTypes().contains(key)) {
+            Mob m = MobFactory.spawn(key, dummy);
+            if (m != null) return MobSprites.regionFor(m);
+        }
+        return null;
     }
 
     /** Open the popup pre-selected to a specific entry — used by inventory's

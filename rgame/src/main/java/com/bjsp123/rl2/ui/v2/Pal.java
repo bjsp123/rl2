@@ -58,6 +58,12 @@ public final class Pal {
     public static final float VIRTUAL_W     = 400f;
     public static final float VIRTUAL_H     = 720f;
 
+    /** Minimum total horizontal/vertical margin when sizing a modal window
+     *  (e.g. {@code Math.min(maxW, vw - PAD_MODAL)}). */
+    public static final float PAD_MODAL   = 24f;
+    /** Standard inset from the window edge to body content. */
+    public static final float PAD_CONTENT = 18f;
+
     public static final int   FONT_REGULAR_PX = 16;
     public static final int   FONT_HEADER_PX  = 32;
 }

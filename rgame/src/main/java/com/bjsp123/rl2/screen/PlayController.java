@@ -232,7 +232,7 @@ final class PlayController {
     private void beginGrapple(Level level, Mob user, Item item) {
         targetingOverlay.setPlayer(user);
         targetingOverlay.setLevel(level);
-        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
+        targetingOverlay.setValidTiles(grappleGrid(level, user, item), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             ItemSystem.castGrapple(cur, user, item, target);
@@ -268,6 +268,21 @@ final class PlayController {
             MobSystem.throwItem(cur, thrower, item, target);
             afterMove(cur);
         }, item);
+    }
+
+    /** Grid of valid grapple targets: visible + within Chebyshev range {@code 2 + abilityPower}. */
+    private static boolean[][] grappleGrid(Level level, Mob user, Item item) {
+        boolean[][] grid = new boolean[level.width][level.height];
+        if (user.position == null || level.visible == null) return grid;
+        int radius = 2 + Math.max(0, (int) item.abilityPower);
+        int px = user.position.tileX(), py = user.position.tileY();
+        for (int x = Math.max(0, px - radius); x <= Math.min(level.width - 1, px + radius); x++) {
+            for (int y = Math.max(0, py - radius); y <= Math.min(level.height - 1, py + radius); y++) {
+                if (Math.max(Math.abs(x - px), Math.abs(y - py)) > radius) continue;
+                grid[x][y] = level.visible[x][y];
+            }
+        }
+        return grid;
     }
 
     /** Grid of tiles currently visible to the player — valid targets for wand/grapple/throw. */
@@ -309,6 +324,7 @@ final class PlayController {
         }
         return new HallOfFameEntry(
                 p.characterClass != null ? p.characterClass.displayName : "Adventurer",
+                p.characterLevel,
                 p.score, world.currentLevel().depth, equipment, System.currentTimeMillis());
     }
 

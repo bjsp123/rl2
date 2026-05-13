@@ -108,7 +108,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(340f, vw - 24f);
+        float winW = Math.min(340f, vw - Pal.PAD_MODAL);
         float winH = Math.min(440f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -236,7 +236,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private void renderTextPass() {
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Crafting",
-                window.cx(), window.top() - 22f);
+                window.cx(), window.top() - ctx.headerLineH());
 
         // Slot icons.
         for (int i = 0; i < slotRects.length; i++) {
@@ -282,7 +282,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             String desc = r.describe();
             if (desc.length() > 42) desc = desc.substring(0, 40) + "…";
             TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                    desc, window.x + 18f, top);
+                    desc, window.x + Pal.PAD_CONTENT, top);
             top -= 16f;
         }
 
@@ -291,7 +291,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT,
                     "Choose item",
                     pickerWindow.cx(),
-                    pickerWindow.top() - 22f);
+                    pickerWindow.top() - ctx.headerLineH());
             for (int i = 0; i < pickerCells.size(); i++) {
                 drawCellIcon(pickerCells.get(i), pickerItems.get(i));
             }

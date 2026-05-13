@@ -149,7 +149,7 @@ public final class Messages {
     /** "The Kobold picks up a healing potion." */
     public static LogEvent mobPicksUpItem(String mobName, String itemName) {
         return new LogEvent("The " + mobName + " picks up the " + itemName + ".",
-                            EventPriority.LOW, false);
+                            EventPriority.LOW, true);
     }
 
     public static LogEvent mobSpawn(String name) {

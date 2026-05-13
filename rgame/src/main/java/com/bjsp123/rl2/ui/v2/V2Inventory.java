@@ -12,6 +12,7 @@ import com.bjsp123.rl2.model.Inventory;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.ui.hud.ActionBar;
+import com.bjsp123.rl2.world.render.DefaultLevelRenderer;
 import com.bjsp123.rl2.world.render.ItemSprites;
 
 import java.util.ArrayList;
@@ -94,8 +95,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private float detailDividerY = Float.NaN;
     /** Top of the body text region (the y of the first flavor line). */
     private float detailBodyTop;
-    /** Per-line height for body text. */
-    private static final float DETAIL_LINE_H = 16f;
+    private float detailLineH() { return ctx.lineH(); }
     /** Quickslot-binding buttons — six numbered cells in the detail popup
      *  that bind / unbind the chosen item to / from each action-bar slot.
      *  Built only when an {@link ActionBar} has been wired. */
@@ -194,7 +194,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // HUD strip at the bottom and a clear gap at the top.
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - 24f);
+        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
         float winH = Math.min(580f, vh - 96f);
         float winX = (vw - winW) * 0.5f;
         float winY = (vh - winH) * 0.5f;
@@ -318,7 +318,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             float bodyBottom = bindBtnRects[0].top() + 22f;
             int   maxLines   = Math.max(0,
                     (int) Math.floor((detailBodyTop - bodyBottom)
-                            / DETAIL_LINE_H));
+                            / detailLineH()));
             float bodyWidth  = detailWindow.w - 2 * 14f;
             String flavor  = com.bjsp123.rl2.ui.ItemLore.describeFlavor(selectedItem);
             String details = com.bjsp123.rl2.ui.ItemLore.describeDetails(selectedItem, player);
@@ -342,7 +342,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             TextDraw.wrap(ctx.fontRegular, details, bodyWidth, detailMax,
                     detailDetailsLines);
             detailDividerY = hasRule
-                    ? detailBodyTop - detailFlavorLines.size() * DETAIL_LINE_H - 4f
+                    ? detailBodyTop - detailFlavorLines.size() * detailLineH() - 4f
                     : Float.NaN;
         }
     }
@@ -713,13 +713,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             int line = 0;
             for (String s : detailFlavorLines) {
                 TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
-                        s, left, detailBodyTop - line * DETAIL_LINE_H);
+                        s, left, detailBodyTop - line * detailLineH());
                 line++;
             }
             if (!Float.isNaN(detailDividerY)) line += 2;
             for (String s : detailDetailsLines) {
                 TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                        s, left, detailBodyTop - line * DETAIL_LINE_H);
+                        s, left, detailBodyTop - line * detailLineH());
                 line++;
             }
 
@@ -805,10 +805,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 cell.w - 2 * pad, cell.h - 2 * pad);
         // Enchantment badge — "+N" tucked into the bottom-right corner
         // when the item is above its design baseline of 1.
-        if (item.level > 1) {
-            String tag = "+" + (item.level - 1);
+        int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(item, player);
+        if (effLvl > 1) {
             TextDraw.right(ctx, ctx.fontRegular, Pal.ACCENT,
-                    tag, cell.right() - 2f, cell.y + 12f);
+                    "+" + (effLvl - 1), cell.right() - 2f, cell.y + 12f);
         }
         // Stack count — "xN" tucked into the bottom-left corner when more
         // than one of this item is in the slot. Equipped slots always

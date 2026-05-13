@@ -20,7 +20,7 @@ public final class V2Credits extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(320f, vw - 24f);
+        float winW = Math.min(320f, vw - Pal.PAD_MODAL);
         float winH = Math.min(360f, vh - 120f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -39,9 +39,9 @@ public final class V2Credits extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         float cx = window.cx();
-        float top = window.top() - 24f;
+        float top = window.top() - ctx.headerLineH();
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Credits", cx, top);
-        top -= 60f;
+        top -= ctx.headerLineH() * 2f;
         String[] lines = {
                 "rl2",
                 "",
@@ -54,7 +54,7 @@ public final class V2Credits extends V2Screen {
         };
         for (String s : lines) {
             TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE, s, cx, top);
-            top -= 22f;
+            top -= ctx.lineH();
         }
     }
 }

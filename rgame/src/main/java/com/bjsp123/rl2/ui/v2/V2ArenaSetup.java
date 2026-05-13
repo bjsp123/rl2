@@ -84,7 +84,7 @@ public final class V2ArenaSetup extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(380f, vw - 24f);
+        float winW = Math.min(380f, vw - Pal.PAD_MODAL);
         float winH = Math.min(640f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -96,7 +96,7 @@ public final class V2ArenaSetup extends V2Screen {
         float bottomBtnH = 48f;
         float bottomReserved = 16f + 2 * bottomBtnH + 8f;  // matches btnY chain below
         float vsBandH = 30f;
-        float headerReserved = 60f;
+        float headerReserved = headerBandH();
         float remaining = winH - bottomReserved - headerReserved - vsBandH;
         float teamH = remaining * 0.5f;
 
@@ -131,47 +131,72 @@ public final class V2ArenaSetup extends V2Screen {
                 () -> game.pushScreen(new V2ArenaHallOfFame(game)));
     }
 
-    /** Lay out one team's controls inside a full-width horizontal band.
-     *  From top to bottom: title text, type < label >, "Level" + 4 buttons,
-     *  "Count" + 4 buttons. The title and section labels are drawn in
-     *  {@link #drawBodyText} using the same {@code y} cursor maths so
-     *  shapes and labels stay aligned. */
-    private void buildTeamRow(boolean isA, float x, float y, float w, float h) {
+    /**
+     * Shared geometry for one team band. Returns 7 Y positions:
+     *   [0] title baseline
+     *   [1] type-nav button bottom (libGDX rect convention)
+     *   [2] type name label baseline (vertically centred in the button)
+     *   [3] "Level" caption baseline
+     *   [4] level-button bottom
+     *   [5] "Count" caption baseline
+     *   [6] count-button bottom
+     * Both {@link #buildTeamRow} and {@link #drawTeamLabels} call this so
+     * button placement and text placement are always derived from the same
+     * formula and can never drift.
+     */
+    private float[] teamLayout(float y, float h) {
+        float lh   = ctx.lineH();
         float btnH = 32f;
+        float[] p  = new float[7];
+
+        float c = y + h;          // start at band top
+        c -= lh * 0.5f;           // top padding
+        p[0] = c;                 // [0] title baseline
+        c -= lh + lh * 0.5f;     // title height + gap below
+
+        p[1] = c - btnH;          // [1] type-nav button bottom
+        p[2] = p[1] + btnH * 0.5f + lh * 0.25f; // [2] type label: above centre of button
+        c    = p[1];              // advance past buttons
+
+        c -= lh * 0.6f;           // gap below type row
+        p[3] = c;                 // [3] "Level" caption baseline
+        c -= lh + 4f;             // caption height + small gap before buttons
+        p[4] = c - btnH;          // [4] level-button bottom
+        c    = p[4];
+
+        c -= lh * 0.6f;           // gap below level buttons
+        p[5] = c;                 // [5] "Count" caption baseline
+        c -= lh + 4f;
+        p[6] = c - btnH;          // [6] count-button bottom
+        return p;
+    }
+
+    private void buildTeamRow(boolean isA, float x, float y, float w, float h) {
+        float[] p      = teamLayout(y, h);
+        float btnH     = 32f;
         float typeBtnW = 28f;
+        float chooseW  = (w - 9f) / 4f;
 
-        // Title row reserved at top (drawn in drawBodyText).
-        float yCursor = y + h - 24f;
-
-        // Type prev/label/next row.
-        yCursor -= 36f;
-        buttons.add(new Btn("<", x, yCursor, typeBtnW, btnH,
+        buttons.add(new Btn("<", x, p[1], typeBtnW, btnH,
                 () -> shiftType(isA, -1)));
-        buttons.add(new Btn(">", x + w - typeBtnW, yCursor, typeBtnW, btnH,
+        buttons.add(new Btn(">", x + w - typeBtnW, p[1], typeBtnW, btnH,
                 () -> shiftType(isA, +1)));
 
-        // Level chooser — 4 buttons across the full row width.
-        yCursor -= 40f;
-        float chooseW = (w - 9f) / 4f;
         for (int i = 0; i < LEVELS.length; i++) {
             final int lvl = LEVELS[i];
             Btn b = new Btn(Integer.toString(lvl),
-                    x + i * (chooseW + 3f), yCursor, chooseW, btnH,
+                    x + i * (chooseW + 3f), p[4], chooseW, btnH,
                     () -> { if (isA) teamALevel = lvl; else teamBLevel = lvl; show(); });
-            int cur = isA ? teamALevel : teamBLevel;
-            if (cur == lvl) b.checked = true;
+            if ((isA ? teamALevel : teamBLevel) == lvl) b.checked = true;
             buttons.add(b);
         }
 
-        // Count chooser — 4 buttons across the full row width.
-        yCursor -= 40f;
         for (int i = 0; i < COUNTS.length; i++) {
             final int cnt = COUNTS[i];
             Btn b = new Btn(Integer.toString(cnt),
-                    x + i * (chooseW + 3f), yCursor, chooseW, btnH,
+                    x + i * (chooseW + 3f), p[6], chooseW, btnH,
                     () -> { if (isA) teamACount = cnt; else teamBCount = cnt; show(); });
-            int cur = isA ? teamACount : teamBCount;
-            if (cur == cnt) b.checked = true;
+            if ((isA ? teamACount : teamBCount) == cnt) b.checked = true;
             buttons.add(b);
         }
     }
@@ -191,13 +216,13 @@ public final class V2ArenaSetup extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Arena",
-                window.cx(), window.top() - 22f);
+                window.cx(), window.top() - ctx.headerLineH());
 
         float pad = 14f;
         float bottomBtnH = 48f;
         float bottomReserved = 16f + 2 * bottomBtnH + 8f;
         float vsBandH = 30f;
-        float headerReserved = 60f;
+        float headerReserved = headerBandH();
         float remaining = window.h - bottomReserved - headerReserved - vsBandH;
         float teamH = remaining * 0.5f;
 
@@ -216,20 +241,13 @@ public final class V2ArenaSetup extends V2Screen {
 
     private void drawTeamLabels(UiCtx ctx, boolean isA,
                                 float x, float y, float w, float h) {
-        float cx = x + w * 0.5f;
-        float yCursor = y + h - 4f;
+        float[] p  = teamLayout(y, h);
+        float cx   = x + w * 0.5f;
         TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
-                isA ? "Team A" : "Team B", cx, yCursor);
-        yCursor -= 36f;
-        // Type label centred between < / > buttons.
+                isA ? "Team A" : "Team B", cx, p[0]);
         TextDraw.centre(ctx, ctx.fontRegular, Pal.ACCENT,
-                types().get(isA ? teamAIdx : teamBIdx).label,
-                cx, yCursor + 8f);
-        yCursor -= 40f;
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "Level",
-                cx, yCursor + 28f);
-        yCursor -= 40f;
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "Count",
-                cx, yCursor + 28f);
+                types().get(isA ? teamAIdx : teamBIdx).label, cx, p[2]);
+        TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "Level", cx, p[3]);
+        TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "Count", cx, p[5]);
     }
 }

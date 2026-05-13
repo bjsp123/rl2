@@ -89,18 +89,18 @@ public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             ctx.batch.draw(region, window.cx() - iconSz * 0.5f, iconY, iconSz, iconSz);
         }
 
-        top = iconY - 18f;
+        top = iconY - ctx.lineH();
         TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT,
                 BuffSystem.displayName(buff.type), window.cx(), top);
 
-        top -= 28f;
+        top -= ctx.headerLineH();
         TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
                 "Level " + buff.level, window.cx(), top);
 
-        top -= 24f;
+        top -= ctx.lineH() * 1.5f;
         for (String line : descLines) {
             TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM, line, window.cx(), top);
-            top -= 18f;
+            top -= ctx.lineH();
         }
 
         top -= 6f;

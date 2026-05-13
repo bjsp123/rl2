@@ -56,8 +56,11 @@ public final class LootSystem {
             if (spec.keyword == null || "NONE".equalsIgnoreCase(spec.keyword)) continue;
 
             // Integer part = guaranteed count; fractional part = probability of +1.
-            int n = (int) Math.floor(spec.count);
-            double frac = spec.count - n;
+            // LOOT_DROP_FREQUENCY_COEFF scales the whole quantity so a coefficient
+            // of 2 doubles every drop entry; 0.5 halves it.
+            double scaledCount = spec.count * GameBalance.LOOT_DROP_FREQUENCY_COEFF;
+            int n = (int) Math.floor(scaledCount);
+            double frac = scaledCount - n;
             if (frac > 0 && rng.nextDouble() < frac) n++;
 
             for (int i = 0; i < n; i++) {

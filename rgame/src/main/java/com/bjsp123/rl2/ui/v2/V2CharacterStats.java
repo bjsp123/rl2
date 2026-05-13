@@ -100,7 +100,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(340f, vw - 24f);
+        float winW = Math.min(340f, vw - Pal.PAD_MODAL);
         float winH = Math.min(540f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -113,7 +113,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         float tabGap = 4f;
         float innerW = winW - 2 * pad;
         float tabW = (innerW - (tabRects.length - 1) * tabGap) / tabRects.length;
-        float headerBand = ctx.fontHeader.getCapHeight() + 28f;
+        float headerBand = ctx.headerLineH() + ctx.lineH();
         float tabsY = window.top() - pad - tabH - headerBand;
         for (int i = 0; i < tabRects.length; i++) {
             tabRects[i].set(window.x + pad + i * (tabW + tabGap),
@@ -147,7 +147,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             float rowH   = 36f;
             float btnSz  = 28f;
             float btnGap = 6f;
-            float infoX  = window.right() - 18f - btnSz;
+            float infoX  = window.right() - Pal.PAD_CONTENT - btnSz;
             float plusX  = infoX - btnGap - btnSz;
             for (Perk p : Perk.values()) {
                 if (rowTop < window.y + 16f) break;
@@ -239,7 +239,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         pendingDots.clear();
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, "Character",
-                window.cx(), window.top() - 22f);
+                window.cx(), window.top() - ctx.headerLineH());
 
         // Tab labels.
         String[] labels = { "Stats", "Perks" };
@@ -310,7 +310,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         }
 
         StatBlock st = player.effectiveStats();
-        float left = window.x + 18f;
+        float left = window.x + Pal.PAD_CONTENT;
         float top = characterFrame.y - 16f;
         top = row(left, top, "HP",        ((int) Math.round(player.hp))
                 + " / " + ((int) Math.round(st.maxHp)));
@@ -331,10 +331,10 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         buffIconList.clear();
         pendingDots.clear();
         if (player.buffs != null && !player.buffs.isEmpty()) {
-            top -= 14f;
+            top -= ctx.lineH();
             TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                     "Buffs", left, top);
-            top -= 22f;
+            top -= ctx.lineH();
             int max = Math.min(player.buffs.size(), 8);
             for (int i = 0; i < max; i++) {
                 if (top < window.y + 16f) break;
@@ -352,7 +352,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     pendingDots.add(new float[]{ left + 17f, top - 16f, b.durationTurns });
                 }
                 Rect hit = new Rect();
-                hit.set(left, top - 18f, window.right() - 18f - left, 20f);
+                hit.set(left, top - 18f, window.right() - Pal.PAD_CONTENT - left, 20f);
                 buffIconRects.add(hit);
                 buffIconList.add(b);
                 top -= 20f;
@@ -361,7 +361,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     }
 
     private void drawPerksTab() {
-        float left = window.x + 18f;
+        float left = window.x + Pal.PAD_CONTENT;
         float top  = tabRects[0].y - 24f;
 
         // Header: "Available: N" — remaining perk points the player can
@@ -371,7 +371,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                 "Available", left, top);
         TextDraw.right(ctx, ctx.fontRegular, UiColors.ACCENT,
                 Integer.toString(player.perkPoints),
-                window.right() - 18f, top);
+                window.right() - Pal.PAD_CONTENT, top);
         top -= 28f;
 
         // One row per Perk in the catalog — name on the left, current
@@ -386,7 +386,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     p.displayName(), left, top);
             float lvlRight = perkPlusRects.size() > i
                     ? perkPlusRects.get(i).x - 8f
-                    : window.right() - 18f;
+                    : window.right() - Pal.PAD_CONTENT;
             String lvlText = lvl > 0 ? Integer.toString(lvl) : "--";
             TextDraw.right(ctx, ctx.fontRegular,
                     lvl > 0 ? UiColors.ACCENT : UiColors.TEXT_DIM,
@@ -398,8 +398,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     private float row(float x, float y, String label, String value) {
         TextDraw.left (ctx, ctx.fontRegular, UiColors.TEXT_DIM,   label, x, y);
         TextDraw.right(ctx, ctx.fontRegular, UiColors.TEXT_BODY, value,
-                window.right() - 18f, y);
-        return y - 22f;
+                window.right() - Pal.PAD_CONTENT, y);
+        return y - ctx.lineH();
     }
 
     private void renderDotColumns() {

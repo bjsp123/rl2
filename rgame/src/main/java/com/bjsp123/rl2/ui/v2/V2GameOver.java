@@ -46,7 +46,7 @@ public final class V2GameOver extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(340f, vw - 24f);
+        float winW = Math.min(340f, vw - Pal.PAD_MODAL);
         float winH = Math.min(460f, vh - 80f);
         float winX = (vw - winW) * 0.5f;
         float winY = (vh - winH) * 0.5f;
@@ -54,15 +54,14 @@ public final class V2GameOver extends V2Screen {
 
         // Portrait box — centred, below "YOU DIED" title.
         float portSz  = 72f;
-        float titleH  = 36f;   // space for "YOU DIED" at window top
         float portX   = winX + (winW - portSz) * 0.5f;
-        float portTop = winY + winH - titleH - 16f;
+        float portTop = winY + winH - headerBandH() - 16f;
         portrait.set(portX, portTop - portSz, portSz, portSz);
 
-        // Text anchor Ys.
-        nameY  = portrait.y - 20f;
-        statsY = nameY  - 18f;
-        deathY = statsY - 18f;
+        // Text anchor Ys — derived from live font metrics so they scale with UiFontScale.
+        nameY  = portrait.y - ctx.spacerLargeY();
+        statsY = nameY  - ctx.headerLineH();
+        deathY = statsY - ctx.lineH();
 
         // Buttons — bottom of window.
         float btnH    = 52f;
@@ -99,8 +98,8 @@ public final class V2GameOver extends V2Screen {
         float cx = window.cx();
 
         // "YOU DIED" title.
-        float titleY = window.top() - 8f;
-        TextDraw.centre(ctx, ctx.fontHeader, DIM_WARN, "YOU DIED", cx, titleY);
+        TextDraw.centre(ctx, ctx.fontHeader, DIM_WARN, "YOU DIED", cx,
+                window.top() - ctx.headerLineH());
 
         // Portrait.
         CharacterClass cls = parseClass(record.charClass);

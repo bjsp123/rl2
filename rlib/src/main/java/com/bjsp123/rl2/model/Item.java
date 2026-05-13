@@ -349,8 +349,9 @@ public class Item {
                 || inventoryCategory == InventoryCategory.FOOD;
     }
 
-    /** True if {@code other} is "exactly identical" for stacking purposes — same type
-     *  and level, both stackable categories. Non-stackable items always return false. */
+    /** True if {@code other} is "exactly identical" for stacking purposes — same type,
+     *  both stackable. Bombs ignore level so same-type bombs from different depths
+     *  merge freely; potions and food still require matching levels. */
     public boolean matchesStackKey(Item other) {
         if (other == null || other == this) return false;
         if (!isStackable() || !other.isStackable()) return false;
@@ -361,7 +362,7 @@ public class Item {
 
     public String describe() {
         StringBuilder sb = new StringBuilder(name);
-        if (level > 1)       sb.append(" +").append(level - 1);
+        if (level > 0)        sb.append(" +").append(level);
         if (damage.max() > 0) sb.append(" (").append(damage.min()).append("-").append(damage.max()).append(" dmg)");
         if (armor.max()  > 0) sb.append(" (").append(armor.min()).append("-").append(armor.max()).append(" armor)");
         if (lightRadius > 0) sb.append(" (light ").append((int) lightRadius).append(")");

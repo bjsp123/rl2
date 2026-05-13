@@ -209,6 +209,16 @@ public abstract class V2Screen extends ScreenAdapter {
      *  labels are drawn AFTER this returns. */
     protected abstract void drawBodyText(UiCtx ctx);
 
+    /** Total vertical space to reserve from {@code window.top()} before
+     *  body content begins. The title is always drawn at
+     *  {@code window.top() - ctx.headerLineH()}, so this band encompasses
+     *  that title plus a full regular-line of breathing room below it.
+     *  Both terms scale with {@link com.bjsp123.rl2.ui.skin.UiFontScale},
+     *  making content placement reactive to font-size changes. */
+    protected float headerBandH() {
+        return ctx.headerLineH() + ctx.lineH();
+    }
+
     /** Hook for ESC / device back-button. Default: route through the back
      *  button's click action if one exists; otherwise no-op. */
     protected void onEscape() {

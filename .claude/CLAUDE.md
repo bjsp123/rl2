@@ -14,33 +14,70 @@ rgame renders the game on the screen and operates the UI and presentation.
 - `desktop` — libGDX launcher. Runnable task is `:desktop:run`.
 
 ### rlib packages
-- `model/` — `Tile`, `Point`, `Mob`, `Item`, `Level`, `World`, `Inventory`, `Buff`, `Perk`, `Surface`.
-- `logic/` — `TurnSystem`, `MobSystem`, `LevelFactory`, `ItemSystem`, `InventorySystem`, `LootSystem`, `BuffSystem`, `FireSystem`, `GameBalance`, `MobRegistry`, `ItemRegistry`, `ThemedRoomRegistry`.
+- `model/` — `Tile`, `Point`, `Mob`, `Item`, `Level`, `World`, `Inventory`, `Buff`, `Perk`, `Surface`, `LogEvent`, `HallOfFameEntry`.
+- `logic/` — `TurnSystem`, `MobSystem`, `LevelFactory`, `LevelSystem`, `ItemSystem`, `InventorySystem`, `LootSystem`, `BuffSystem`, `FireSystem`, `MobProgression`, `GameBalance`, `MobRegistry`, `ItemRegistry`, `ThemedRoomRegistry`, `Messages`, `EventLog`.
 - `event/` — `GameEvent` sealed interface; one-way notifications from logic to renderer.
 - `util/` — CSV parsing (`CsvTable`, `CsvRegistryStore`), `SeedCode`, `WorldDumpMain`.
 
 ### rgame packages
-- `screen/` — `Rl2Game`, `PlayScreen` (main loop), `PlayController` (input→action), `TitleScreen`, `MenuScreen`, `ArenaScreen`, `SavesScreen`, `HallOfFameScreen`, `CharacterSelectScreen`.
+- `screen/` — `Rl2Game`, `PlayScreen` (main loop), `PlayController` (input→action). All navigable screens are V2-prefixed and live in `ui/v2/`.
 - `input/` — `GameInput`, `CameraController`, `LookMode`.
-- `world/render/` — `LevelRenderer` / `DefaultLevelRenderer`, `MobSprites`, `ItemSprites`, `TileSprites`, `SurfaceSprites`, `EffectStage`, `FxRenderer`, `Effect`.
+- `world/render/` — `LevelRenderer` / `DefaultLevelRenderer`, `MobSprites`, `ItemSprites`, `TileSprites`, `SurfaceSprites`, `PortraitSprites`, `IconSprites`, `EffectStage`, `FxRenderer`, `Effect`, `BuffIcons`.
 - `world/anim/` — `Animator` (drains `Level.events` per render frame), `MobAnimState`, `AnimQueue`.
-- `ui/hud/` — `ActionBar`, `HudRenderer`.
-- `ui/overlay/` — `LookRenderer`, `TargetingOverlay`.
-- `ui/popup/` — `InventoryRenderer`, `CraftingRenderer`, `CharacterStatsRenderer`, `EncyclopediaRenderer`.
-- `ui/skin/` — `UiScale`, `UiPixelScale`, `UiStyleChoice`, `StoneUi`.
+- `ui/overlay/` — `TargetingOverlay`.
+- `ui/skin/` — `UiScale`, `AnimationSpeed`, `UiFontScale`.
+- `ui/v2/` — entire V2 UI layer (see below).
 - `save/` — `SaveSystem`, `HallOfFame`, `HallOfFameStore`, `ArenaHallOfFame`.
 - `persistence/` — `Persistence` save/load abstraction.
+
+### V2 UI framework (`ui/v2/`)
+All screens and popups use this framework. Never use libGDX Scene2d widgets directly.
+
+**Base classes / screens:**
+- `V2Screen` — base for every navigable screen. Subclass overrides `buildLayout()` (called on show/resize), `drawBodyShape(UiCtx)` (shape pass), `drawBodyText(UiCtx)` (batch/text pass). Owns `List<Btn> buttons`, `Burger burger`, `BackBtn back`. Call `baseInput()` when chaining an `InputMultiplexer` for sub-popups.
+- `V2Popup` interface — `isOpen()` + `renderSelf()`. Wired into `V2Stage` via `V2PopupActor`.
+- `V2Stage` — z-ordered popup layers: `addToSubPopup()`, `addToBurger()`. Renders on top of the screen each frame.
+
+**Screens (all in `ui/v2/`):**
+`V2Title`, `V2Saves`, `V2CharacterSelect`, `V2Settings`, `V2HallOfFame`, `V2GameOver`, `V2Encyclopedia`, `V2Arena`, `V2ArenaSetup`, `V2Credits`, `V2Map`, `V2LevelInfo`, `V2CharacterStats`, `V2Inventory`, `V2Crafting`, `V2Look`, `V2BuffInfo`.
+
+**Popups (also in `ui/v2/`):**
+`V2Log` — scrollable event log; `V2Hud` — in-play HUD overlay.
+
+**Primitives:**
+- `Btn` — rectangular button with shape + text passes. Set `btn.icon` (TextureRegion) to draw an icon instead of label.
+- `Rect` — hit-test rectangle. `contains(vx,vy)`, `cx()`, `cy()`, `top()`, `right()`.
+- `Scroller` — vertical scroll state. `scrollY() > 0` = content pushed up, older entries visible.
+- `TextDraw` — `left/centre/right` draw helpers + `wrap(font, text, maxW, maxLines, List<String>)`.
+- `UiCtx` — shared viewport, batch, shapes, fonts (`fontHeader`, `fontRegular`), `layout` (GlyphLayout), `unprojectX/Y`.
+- `UiColors`, `Pal` — colour palette constants.
+- `Window.drawShape(ctx, x, y, w, h)` — standard window chrome.
+- `Edges.drawTriLine(...)` — three-line border primitive.
+
+**Sub-popup pattern (InputMultiplexer):**
+When a screen hosts a closable popup (e.g. log overlay), override `show()`:
+```java
+Gdx.input.setInputProcessor(new InputMultiplexer(popup.input(), baseInput()));
+```
+The popup's `input()` returns false when closed, so events fall through to the screen.
 
 ### Cross-cutting types
 - `Tile` — terrain enum (FLOOR, WALL, CHASM, DOOR, STAIRS_*, etc.).
 - `Point` — 2D coords; x/col before y/row.
-- `Mob` — every actor: stats, AI mode, inventory, position.
+- `Mob` — every actor: stats, AI mode, inventory, position. `Mob.CharacterClass` is the player-class enum.
 - `Item` / `ItemDefinition` — instance vs. definition (the latter from CSV).
+  - `Item.InventoryCategory` — WEAPON/OFFHAND/ARMOR/AMULET/WAND/ITEM/TOOL go in the Equipment bag group; GEM → Gems; FOOD → Food; POTION/BOMB/ORB → Items. Only POTION/BOMB/FOOD are stackable.
+  - `Item.UseBehavior.POWERUP` — walk-over items; never enter the bag, consumed on tile step.
 - `Level` — one floor: tile grid, mobs, items, surfaces, lighting cache, `events` queue.
 - `GameEvent` — sealed; movement/attack/buff/damage notifications.
 - `GameBalance` — static tunables loaded from `gamebalance.properties`.
 - `TurnSystem` — game-clock driver; `tick(Level)` advances 1 game tick.
 - `Animator` — render-frame consumer of `Level.events`; owns lerp/ghost/FX state.
+- `EventLog` — static process-wide rolling log (max 400 entries). `EventLog.all()` oldest-first. Cleared on new game. Used by `V2Log` and death-message capture.
+- `LogEvent` — single log entry: `text`, `priority` (HIGH/LOW), `involvesPlayer`.
+- `Messages` — factory for all `LogEvent` instances. Add new message types here.
+- `InventorySystem` — all bag/equip mutations (add, remove, equip, unequip). `bagLimitFor(InventoryCategory)` returns the slot cap for a category's bag group.
+- `HallOfFameEntry` — one run record: `charClass`, `score`, `depth`, `equipment`, `deathMessage`, `timestampMillis`. Serialised via libGDX reflective JSON; new fields need a default value.
 
 ### Entry points
 - `desktop/.../DesktopLauncher.java` → `main()` → `new Rl2Game(persistence)`.

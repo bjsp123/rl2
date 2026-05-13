@@ -120,6 +120,20 @@ public final class UiCtx implements Disposable {
     public float worldW() { return viewport.getWorldWidth(); }
     public float worldH() { return viewport.getWorldHeight(); }
 
+    public float spacerSmallY() { return 2f; }
+    public float spacerMediumY() { return 4f; }
+    public float spacerLargeY() { return 8f; }
+
+    /** Standard line height for body text ({@link #fontRegular}), including
+     *  a small inter-line gap. Use this wherever vertical Y offsets between
+     *  consecutive body-text lines were previously hardcoded (e.g. 16f, 18f). */
+    public float lineH() { return fontRegular.getLineHeight() + spacerSmallY(); }
+
+    /** Standard line height for header text ({@link #fontHeader}), including
+     *  a small inter-line gap. Use this wherever vertical Y offsets between
+     *  a header and the next element were previously hardcoded (e.g. 22f, 28f). */
+    public float headerLineH() { return fontHeader.getLineHeight() + spacerMediumY(); }
+
     /** Translate a screen-space pointer location (0,0 at top-left, y-down — the
      *  format Gdx.input gives us) into virtual-world coordinates (y-up, scaled
      *  by the viewport). Used by V2Screen to hit-test buttons. */

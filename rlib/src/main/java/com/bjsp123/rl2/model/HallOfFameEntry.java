@@ -5,6 +5,7 @@ import java.util.List;
 
 public class HallOfFameEntry {
     public String charClass = "";
+    public int    level;
     public int    score;
     public int    depth;
     public List<String> equipment = new ArrayList<>();
@@ -14,8 +15,9 @@ public class HallOfFameEntry {
 
     public HallOfFameEntry() {}
 
-    public HallOfFameEntry(String charClass, int score, int depth, List<String> equipment, long ts) {
+    public HallOfFameEntry(String charClass, int level, int score, int depth, List<String> equipment, long ts) {
         this.charClass       = charClass;
+        this.level           = level;
         this.score           = score;
         this.depth           = depth;
         this.equipment       = equipment;

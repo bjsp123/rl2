@@ -18,6 +18,9 @@ import com.bjsp123.rl2.screen.PlayScreen;
 import com.bjsp123.rl2.util.SeedCode;
 import com.bjsp123.rl2.world.render.MobSprites;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * V2 character-select screen — three big class buttons (Warrior / Rogue /
  * Mage) plus a back affordance. Tapping a class opens a character-detail
@@ -83,8 +86,8 @@ public final class V2CharacterSelect extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - 24f);
-        float winH = Math.min(560f, vh - 120f);
+        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
+        float winH = Math.min(560f, vh - 144f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         back   = new BackBtn(ctx, game::popScreen);
@@ -107,8 +110,10 @@ public final class V2CharacterSelect extends V2Screen {
         float btnW = window.w - 32f;
         float btnH = 64f;
         float gap  = 12f;
-        float colH = CLASSES.length * btnH + (CLASSES.length - 1) * gap;
-        float yTop = window.cy() + colH * 0.5f - btnH;
+        float colH       = CLASSES.length * btnH + (CLASSES.length - 1) * gap;
+        float contentTop = window.top() - headerBandH();
+        float contentCy  = (window.y + contentTop) * 0.5f;
+        float yTop       = contentCy + colH * 0.5f - btnH;
         for (int i = 0; i < CLASSES.length; i++) {
             final CharacterClass c = CLASSES[i];
             float y = yTop - i * (btnH + gap);
@@ -122,8 +127,8 @@ public final class V2CharacterSelect extends V2Screen {
     private void buildCharacterPopup() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float pw = Math.min(360f, vw - 24f);
-        float ph = Math.min(560f, vh - 80f);
+        float pw = Math.min(360f, vw - Pal.PAD_MODAL);
+        float ph = Math.min(560f, vh - 144f);
         charPopup.set((vw - pw) * 0.5f, (vh - ph) * 0.5f, pw, ph);
 
         // Sprite frame — encyclopaedia-style, sized to 2× source max
@@ -136,7 +141,7 @@ public final class V2CharacterSelect extends V2Screen {
         }
         float frameSz = Math.max(64f, srcMax * 2f);
         spriteFrame.set(charPopup.cx() - frameSz * 0.5f,
-                charPopup.top() - 70f - frameSz, frameSz, frameSz);
+                charPopup.top() - headerBandH() - frameSz, frameSz, frameSz);
 
         // Bottom-row buttons: a square SETTINGS-icon Options button on
         // the left, and a wide PLAY button filling the rest. The square
@@ -146,7 +151,7 @@ public final class V2CharacterSelect extends V2Screen {
         float btnGap = 12f;
         float optionsW = btnH;                              // square
         float playW = pw - 2 * 14f - optionsW - btnGap;
-        float btnY = charPopup.y + 14f;
+        float btnY = charPopup.y + Pal.BACK_SIZE + 2 * BackBtn.INSET;
         Btn optionsBtn = new Btn("",
                 charPopup.x + 14f, btnY, optionsW, btnH,
                 () -> { optionsOpen = true; show(); });
@@ -163,14 +168,14 @@ public final class V2CharacterSelect extends V2Screen {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float pw = Math.min(300f, vw - 32f);
-        float ph = Math.min(420f, vh - 80f);
+        float ph = Math.min(420f, vh - 144f);
         optionsPopup.set((vw - pw) * 0.5f, (vh - ph) * 0.5f, pw, ph);
 
         float pad   = 16f;
         float btnH  = 44f;
         float gap   = 10f;
         float btnW  = pw - 2 * pad;
-        float yTop  = optionsPopup.top() - 56f - btnH;
+        float yTop  = optionsPopup.top() - headerBandH() - btnH;
 
         String godLabel = "God Mode: " + (godMode ? "ON" : "OFF");
         buttons.add(new Btn(godLabel, optionsPopup.x + pad, yTop, btnW, btnH,
@@ -302,7 +307,7 @@ public final class V2CharacterSelect extends V2Screen {
 
     private void drawClassListText() {
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Choose Class",
-                window.cx(), window.top() - 22f);
+                window.cx(), window.top() - ctx.fontHeader.getCapHeight() - Pal.HUD_BORDER - 2f);
     }
 
     private void drawCharacterPopupText() {
@@ -312,7 +317,7 @@ public final class V2CharacterSelect extends V2Screen {
         String title = (def != null && def.name != null)
                 ? def.name : selected.displayName;
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, title,
-                charPopup.cx(), charPopup.top() - 22f);
+                charPopup.cx(), charPopup.top() - ctx.fontHeader.getCapHeight() - Pal.HUD_BORDER - 2f);
 
         // Aspect-fit the mob sprite inside the frame, with the same
         // 8-radial silhouette outline encyclopaedia entries use.
@@ -325,15 +330,20 @@ public final class V2CharacterSelect extends V2Screen {
             }
         }
 
-        float left  = charPopup.x + 14f;
-        float right = charPopup.right() - 14f;
-        float top   = spriteFrame.y - 22f;
-        float lineH = 14f;
+        float lh       = ctx.lineH();
+        float left     = charPopup.x + 14f;
+        float right    = charPopup.right() - 14f;
+        float top      = spriteFrame.y - lh;
         float maxLineW = right - left;
+        float guard    = charPopup.y + Pal.BACK_SIZE + 2 * BackBtn.INSET + 48f + lh;
 
         if (def != null && def.description != null && !def.description.isEmpty()) {
-            top = drawWrapped(def.description, left, top, maxLineW, lineH,
-                    /*maxLines=*/3, UiColors.TEXT_DIM);
+            List<String> descLines = new ArrayList<>();
+            TextDraw.wrap(ctx.fontRegular, def.description, maxLineW, 3, descLines);
+            for (String line : descLines) {
+                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, line, left, top);
+                top -= lh;
+            }
             top -= 6f;
         }
 
@@ -349,39 +359,36 @@ public final class V2CharacterSelect extends V2Screen {
 
         if (def != null && def.startingInventory != null
                 && !def.startingInventory.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    "Gear", left, top);
-            top -= 14f;
+            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, "Gear", left, top);
+            top -= lh;
             for (MobDefinition.StartItem si : def.startingInventory) {
-                if (top < charPopup.y + 80f) break;
+                if (top < guard) break;
                 String iname = lookupItemName(si.type);
                 String line = (si.count > 1)
                         ? "  " + iname + " x" + si.count
                         : "  " + iname;
-                TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                        line, left, top);
-                top -= 14f;
+                TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE, line, left, top);
+                top -= lh;
             }
             top -= 4f;
         }
 
         if (def != null && def.startingPerks != null
                 && !def.startingPerks.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                    "Perks", left, top);
-            top -= 14f;
+            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, "Perks", left, top);
+            top -= lh;
             for (Perk p : def.startingPerks) {
-                if (top < charPopup.y + 80f) break;
+                if (top < guard) break;
                 TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
                         "  " + p.displayName(), left, top);
-                top -= 14f;
+                top -= lh;
             }
         }
     }
 
     private void drawOptionsText() {
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Options",
-                optionsPopup.cx(), optionsPopup.top() - 22f);
+                optionsPopup.cx(), optionsPopup.top() - ctx.fontHeader.getCapHeight() - Pal.HUD_BORDER - 2f);
     }
 
     private static String lookupItemName(String type) {
@@ -407,28 +414,7 @@ public final class V2CharacterSelect extends V2Screen {
                 label, x, y);
         TextDraw.right(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
                 value, charPopup.right() - 14f, y);
-        return y - 16f;
-    }
-
-    private float drawWrapped(String text, float left, float top,
-                              float maxWidth, float lineH, int maxLines,
-                              com.badlogic.gdx.graphics.Color colour) {
-        if (text == null || text.isEmpty()) return top;
-        int maxChars = Math.max(8, (int) (maxWidth / 6f));
-        int p = 0;
-        int lines = 0;
-        while (p < text.length() && lines < maxLines) {
-            int end = Math.min(p + maxChars, text.length());
-            if (end < text.length()) {
-                int sp = text.lastIndexOf(' ', end);
-                if (sp > p) end = sp;
-            }
-            TextDraw.left(ctx, ctx.fontRegular, colour,
-                    text.substring(p, end).trim(), left, top - lines * lineH);
-            p = end + 1;
-            lines++;
-        }
-        return top - lines * lineH;
+        return y - ctx.lineH();
     }
 
     private static final float[] OUTLINE_DX = {

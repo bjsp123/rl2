@@ -1,5 +1,6 @@
 package com.bjsp123.rl2.ui.v2;
 
+import com.badlogic.gdx.graphics.Color;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.save.ArenaHallOfFameEntry;
 
@@ -13,6 +14,7 @@ public final class V2ArenaHallOfFame extends V2Screen {
 
     private static final SimpleDateFormat TS_FMT =
             new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT);
+    private static final Color WIN_A_COLOR = new Color(0.4f, 0.85f, 0.4f, 1f);
 
     private final Rl2Game game;
     private final Rect window = new Rect();
@@ -30,7 +32,7 @@ public final class V2ArenaHallOfFame extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(380f, vw - 24f);
+        float winW = Math.min(380f, vw - Pal.PAD_MODAL);
         float winH = Math.min(Pal.VIRTUAL_H - 120f, vh - 120f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -51,44 +53,65 @@ public final class V2ArenaHallOfFame extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         float cx = window.cx();
+        float lh = ctx.lineH();
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Arena Hall",
-                cx, window.top() - 22f);
+                cx, window.top() - ctx.headerLineH());
 
         List<ArenaHallOfFameEntry> entries = game.arenaHallOfFame.entries;
         if (entries.isEmpty()) {
             TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM,
                     "No matchups recorded yet.",
-                    cx, window.top() - 72f);
+                    cx, window.top() - headerBandH() - lh);
             return;
         }
 
-        float left  = window.x + 14f;
-        float right = window.right() - 14f;
-        float headerY = window.top() - 72f;
-        TextDraw.left (ctx, ctx.fontRegular, Pal.DIM, "When  /  Match", left,  headerY);
-        TextDraw.right(ctx, ctx.fontRegular, Pal.DIM, "Survivors",      right, headerY);
+        float badgeSz     = lh * 2f;
+        float badgeX      = window.x + 14f;
+        float contentLeft = badgeX + badgeSz + 8f;
+        float right       = window.right() - 14f;
 
-        // Each entry takes a ~40 px block (timestamp line + match/result line).
-        float blockH = 40f;
-        float visibleTop    = headerY - 22f;
-        float visibleBottom = window.y + 14f;
+        float headerY = window.top() - headerBandH() - lh * 0.5f;
+        TextDraw.left (ctx, ctx.fontRegular, Pal.DIM, "Match",     contentLeft, headerY);
+        TextDraw.right(ctx, ctx.fontRegular, Pal.DIM, "Survivors", right,       headerY);
+
+        float rowH          = lh * 2.5f;
+        float visibleTop    = headerY - lh;
+        float visibleBottom = window.y + Pal.BACK_SIZE + 2 * BackBtn.INSET;
         float visibleH      = visibleTop - visibleBottom;
-        scroller.setMaxScroll(entries.size() * blockH - visibleH);
+        scroller.setMaxScroll(Math.max(0f, entries.size() * rowH - visibleH));
 
         for (int i = 0; i < entries.size(); i++) {
-            float yTop = visibleTop - i * blockH + scroller.scrollY();
-            if (yTop <= visibleBottom) break;
-            if (yTop > visibleTop) continue;
+            float yTop = visibleTop - i * rowH + scroller.scrollY();
+            if (yTop - rowH > visibleTop) continue;
+            if (yTop < visibleBottom) break;
+
             ArenaHallOfFameEntry e = entries.get(i);
+
+            Color badgeColor;
+            String badgeLetter;
+            if (e.winner == 1) {
+                badgeColor  = WIN_A_COLOR;
+                badgeLetter = "A";
+            } else if (e.winner == 2) {
+                badgeColor  = Pal.ACCENT;
+                badgeLetter = "B";
+            } else {
+                badgeColor  = Pal.DIM;
+                badgeLetter = "=";
+            }
+            float badgeBottom = yTop - badgeSz;
+            ctx.batch.setColor(badgeColor);
+            ctx.batch.draw(ctx.whitePixel, badgeX, badgeBottom, badgeSz, badgeSz);
+            ctx.batch.setColor(Color.WHITE);
+            TextDraw.centre(ctx, ctx.fontHeader, Pal.WHITE, badgeLetter,
+                    badgeX + badgeSz * 0.5f, badgeBottom + badgeSz * 0.5f + lh * 0.25f);
+
             String when   = TS_FMT.format(new Date(e.timestampMillis));
             String match  = e.teamADescription + " vs " + e.teamBDescription;
             String result = "A " + e.teamASurvivors + "  /  B " + e.teamBSurvivors;
-            TextDraw.left (ctx, ctx.fontRegular, Pal.WHITE, when, left, yTop);
-            float row2 = yTop - 16f;
-            if (row2 > visibleBottom) {
-                TextDraw.left (ctx, ctx.fontRegular, Pal.DIM,   match,  left,  row2);
-                TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE, result, right, row2);
-            }
+            TextDraw.left (ctx, ctx.fontRegular, Pal.DIM,   when,   contentLeft, yTop - lh * 0.8f);
+            TextDraw.left (ctx, ctx.fontRegular, Pal.WHITE, match,  contentLeft, yTop - lh * 1.8f);
+            TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE, result, right,       yTop - lh * 1.8f);
         }
     }
 

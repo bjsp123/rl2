@@ -30,7 +30,7 @@ public final class V2LevelInfo extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - 24f);
+        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
         float winH = Math.min(540f, vh - 120f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -79,15 +79,15 @@ public final class V2LevelInfo extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        float top = window.top() - 22f;
+        float top = window.top() - ctx.headerLineH();
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Level Info",
                 window.cx(), top);
         top -= 50f;
         for (String s : rows) {
             if (top < window.y + 16f) break;
             TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                    s, window.x + 18f, top);
-            top -= 22f;
+                    s, window.x + Pal.PAD_CONTENT, top);
+            top -= ctx.lineH();
         }
     }
 

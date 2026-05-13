@@ -495,7 +495,7 @@ public final class MobDefinition {
         for (StartItem s : startingInventory) {
             for (int i = 0; i < s.count; i++) {
                 com.bjsp123.rl2.model.Item it = ItemFactory.build(s.type);
-                m.inventory.bag.add(it);
+                InventorySystem.addToBag(m.inventory, it);
                 if (it.isEquippable()) InventorySystem.equip(m.inventory, it);
             }
         }

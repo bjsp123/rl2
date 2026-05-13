@@ -30,7 +30,7 @@ import java.util.List;
 public final class V2Log implements V2Popup {
 
     // ── Constants ────────────────────────────────────────────────────────────
-    private static final float LINE_H       = 14f;
+    private float lineH() { return ctx.lineH(); }
     private static final float LINE_PAD_L   =  8f;
     private static final float BADGE_R      =  3f;   // radius of the priority dot
     private static final float BADGE_COL_W  = 12f;   // horizontal space reserved for dot
@@ -80,11 +80,11 @@ public final class V2Log implements V2Popup {
     /** Snap the scroll so the most-recent entries are visible. */
     public void scrollToBottom() {
         rebuildLines();
-        float totalH = totalPhysicalLines() * LINE_H;
+        float totalH = totalPhysicalLines() * lineH();
         float bodyH  = computeBodyH();
         float max = Math.max(0f, totalH - bodyH);
         scroller.resetTop();
-        scroller.onScrolled(max / Math.max(1f, LINE_H), LINE_H);
+        scroller.onScrolled(max / Math.max(1f, lineH()), lineH());
     }
 
     // ── V2Popup render entry point ────────────────────────────────────────────
@@ -170,7 +170,7 @@ public final class V2Log implements V2Popup {
     }
 
     private void updateScroll() {
-        float totalH = totalPhysicalLines() * LINE_H;
+        float totalH = totalPhysicalLines() * lineH();
         scroller.setMaxScroll(Math.max(0f, totalH - bodyRect.h));
     }
 
@@ -205,7 +205,7 @@ public final class V2Log implements V2Popup {
 
         // Scroll indicator — a thin bar on the right edge of the body when
         // the content is taller than the visible area.
-        float totalH = totalPhysicalLines() * LINE_H;
+        float totalH = totalPhysicalLines() * lineH();
         if (totalH > bodyRect.h && totalH > 0f) {
             float barW    = 3f;
             float ratio   = bodyRect.h / totalH;
@@ -237,14 +237,14 @@ public final class V2Log implements V2Popup {
     private void drawLineBadges(ShapeRenderer s) {
         if (visibleLines.isEmpty()) return;
         float contentBottom = bodyRect.y - scroller.scrollY();
-        float totalH        = totalPhysicalLines() * LINE_H;
+        float totalH        = totalPhysicalLines() * lineH();
         float dotX = bodyRect.x + LINE_PAD_L * 0.5f + BADGE_R;
 
         // Walk entries from oldest (top) to newest (bottom).
         float cursor = contentBottom + totalH; // starts at content top
         for (LogEntry le : visibleLines) {
             float entryTop = cursor;
-            float entryBot = cursor - le.lineCount() * LINE_H;
+            float entryBot = cursor - le.lineCount() * lineH();
             cursor = entryBot;
             float entryMid = (entryTop + entryBot) * 0.5f;
             if (entryMid + BADGE_R < bodyRect.y)     continue;
@@ -290,22 +290,22 @@ public final class V2Log implements V2Popup {
     private void drawLogLines() {
         if (visibleLines.isEmpty()) return;
         float contentBottom = bodyRect.y - scroller.scrollY();
-        float totalH        = totalPhysicalLines() * LINE_H;
+        float totalH        = totalPhysicalLines() * lineH();
         float textX = bodyRect.x + LINE_PAD_L + BADGE_COL_W;
 
         // Walk entries from oldest (top of content) to newest (bottom).
         float cursor = contentBottom + totalH;
         for (LogEntry le : visibleLines) {
             float entryTop = cursor;
-            cursor -= le.lineCount() * LINE_H;
+            cursor -= le.lineCount() * lineH();
             // Skip entries entirely outside the body.
             if (entryTop <= bodyRect.y)     break;
             if (cursor   >= bodyRect.top()) continue;
             Color col = lineColor(le.event);
             for (int j = 0; j < le.lines.size(); j++) {
-                float lineTop = entryTop - j * LINE_H;
+                float lineTop = entryTop - j * lineH();
                 if (lineTop <= bodyRect.y)      break;
-                if (lineTop >  bodyRect.top() + LINE_H) continue;
+                if (lineTop >  bodyRect.top() + lineH()) continue;
                 TextDraw.left(ctx, ctx.fontRegular, col, le.lines.get(j), textX, lineTop);
             }
         }
@@ -387,7 +387,7 @@ public final class V2Log implements V2Popup {
             @Override
             public boolean scrolled(float amountX, float amountY) {
                 if (!open) return false;
-                scroller.onScrolled(amountY, LINE_H);
+                scroller.onScrolled(amountY, lineH());
                 return true;
             }
 

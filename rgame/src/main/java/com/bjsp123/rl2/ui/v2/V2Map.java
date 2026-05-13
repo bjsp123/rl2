@@ -96,7 +96,7 @@ public final class V2Map extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(420f, vw - 24f);
+        float winW = Math.min(420f, vw - Pal.PAD_MODAL);
         float winH = Math.min(Pal.VIRTUAL_H - 120f, vh - 120f);
         float winY = (vh - winH) * 0.5f;
         window.set((vw - winW) * 0.5f, winY, winW, winH);
@@ -329,7 +329,7 @@ public final class V2Map extends V2Screen {
      *  row and the bottom info-pane reservation. Used for scissor
      *  clipping and pan clamping. */
     private Rect graphViewport() {
-        float top    = window.top() - 50f;
+        float top    = window.top() - headerBandH();
         float bottom = window.y + INFO_PANE_H + 16f;
         return new Rect(window.x + 8f, bottom,
                 window.w - 16f, top - bottom);
@@ -436,7 +436,7 @@ public final class V2Map extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Map",
-                window.cx(), window.top() - 22f);
+                window.cx(), window.top() - ctx.headerLineH());
         if (world == null || world.levels == null) return;
 
         // Depth label centred on each box.
@@ -565,7 +565,7 @@ public final class V2Map extends V2Screen {
     private float boxY(Level lvl, float minD, float maxD) {
         // Reserve the bottom of the window for the info pane; the level
         // graph fills the remaining vertical space above it.
-        float topY = window.top() - 60f;
+        float topY = window.top() - headerBandH() - 10f;
         float bottomY = window.y + INFO_PANE_H + 20f;
         int rows = (int) Math.max(1f, maxD - minD + 1);
         float rowSpan = BOX_H + GAP_Y;

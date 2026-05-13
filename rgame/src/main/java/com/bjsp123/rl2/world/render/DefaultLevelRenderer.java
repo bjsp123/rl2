@@ -12,6 +12,7 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFont
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
+import com.bjsp123.rl2.ui.v2.Pal;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
@@ -1786,7 +1787,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         } else {
             System.err.println("No sprite for item " + it.type + " at (" + x + ", " + y + ")");
         }
-        if (it.level > 0) drawItemLevelBadge(it, x, y);
+        int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, null);
+        drawItemLevelBadge(effLvl, x, y);
     }
 
     /** Additive halo drawn behind a POWERUP floor item, using the dedicated
@@ -1836,11 +1838,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
     /** Small {@code +N} marker drawn at the top-right corner of an item's tile to
      *  signal its enchant level. Yellow, half-scale font so it doesn't dominate the
      *  sprite. */
-    private void drawItemLevelBadge(Item it, int x, int y) {
+    private void drawItemLevelBadge(int effLvl, int x, int y) {
+        if (effLvl <=1) return;//no point drawing anything if no plusses
         float prevScale = font.getData().scaleX;
         font.getData().setScale(prevScale * 0.55f);
-        font.setColor(1f, 0.92f, 0.4f, 1f);
-        String text = "+" + it.level;
+        font.setColor(Pal.ACCENT);
+        String text = "+" + (effLvl-1);
         com.badlogic.gdx.graphics.g2d.GlyphLayout layout =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout(font, text);
         // Top-right corner: x = right edge - text width, y = top of cell (font draws

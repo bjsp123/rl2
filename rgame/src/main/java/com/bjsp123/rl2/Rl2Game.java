@@ -93,6 +93,8 @@ public class Rl2Game extends Game {
         loadItemConfig();
         loadBrandConfig();
         loadThemedRoomConfig();
+        loadTipsConfig();
+        loadHelpConfig();
         UiScale.init(persistence);
         UiPixelScale.init(persistence);
         com.bjsp123.rl2.ui.skin.UiFontScale.init(persistence);
@@ -169,6 +171,20 @@ public class Rl2Game extends Game {
                 com.badlogic.gdx.Gdx.files.internal("data/themedrooms.csv");
         if (!fh.exists()) return;
         com.bjsp123.rl2.logic.ThemedRoomRegistry.load(fh.readString());
+    }
+
+    private void loadTipsConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/tips.csv");
+        if (!fh.exists()) return;
+        TipsRegistry.load(fh.readString());
+    }
+
+    private void loadHelpConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/help.csv");
+        if (!fh.exists()) return;
+        GuideRegistry.load(fh.readString());
     }
 
     @Override

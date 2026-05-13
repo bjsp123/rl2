@@ -185,9 +185,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 : Float.NaN;
 
         // "?" buttons — scroll with their respective section headings.
-        float infoSz = 22f;
+        float infoSz   = 22f;
+        float topPad   = ctx.lineH() * 0.5f;
         tileInfoBtn.set(window.right() - 14f - infoSz,
-                caTop + scrollOff - infoSz,          // beside first tile line
+                caTop + scrollOff - topPad - infoSz, // beside tile name header
                 infoSz, infoSz);
         if (mobHeaderContentY >= 0f) {
             mobInfoBtn.set(window.right() - 14f - infoSz,
@@ -206,80 +207,78 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         mobDivContentY    = -1f;
         mobHeaderContentY = -1f;
 
-        float h = 0f;
+        float lh  = ctx.lineH();
+        float hlh = ctx.headerLineH();
+
+        float h = lh * 0.5f; // top padding — breathing room below the separator
         Point cursor = lookMode != null ? lookMode.cursor() : null;
         if (cursor == null || level == null) return h;
         int cx = (int) Math.floor(cursor.x());
         int cy = (int) Math.floor(cursor.y());
         boolean inBounds = cx >= 0 && cy >= 0 && cx < level.width && cy < level.height;
 
-        // Tile section.
-        if (lookedTile != null) h += 18f;
-        if (inBounds && level.surface != null && level.surface[cx][cy] != null) h += 18f;
-        if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) h += 18f;
+        // Tile section — name is the section header.
+        if (lookedTile != null) h += hlh;
+        if (inBounds && level.surface != null && level.surface[cx][cy] != null) h += lh;
+        if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) h += lh;
         if (inBounds && level.cloud != null && level.cloud[cx][cy] != 0
-                && com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]) != null) h += 18f;
-        if (lookedTile != null) h += 4f;
+                && com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]) != null) h += lh;
+        if (lookedTile != null) h += lh * 0.5f; // section gap
 
-        // Floor items.
+        // Floor items — each item name is its own header.
         if (level.items != null) {
             int count = 0;
-            List<String> wrapBuf = new ArrayList<>();
             for (Item it : level.items) {
                 if (it == null || it.location == null) continue;
                 if ((int) Math.floor(it.location.x()) == cx
                         && (int) Math.floor(it.location.y()) == cy) {
-                    if (count == 0) h += 18f; // "Items:" header
-                    wrapBuf.clear();
-                    String iname = itemDisplayName(it);
-                    TextDraw.wrap(ctx.fontRegular, "  " + iname, winW - 28f, 2, wrapBuf);
-                    h += wrapBuf.size() * 16f;
+                    h += hlh;
                     count++;
-                    if (count > 3) break;
+                    if (count >= 3) break;
                 }
             }
         }
 
         // Record where the tile/mob divider goes.
         tileDivContentY = h;
-        if (lookedMob != null) h += 14f; // divider gap
+        if (lookedMob != null) h += lh; // divider gap
 
         if (lookedMob != null) {
             // Flavor text block.
-            h += mobFlavorLines.size() * 16f;
+            h += mobFlavorLines.size() * lh;
             mobDivContentY = h;
-            if (!mobFlavorLines.isEmpty()) h += 10f; // rule gap
+            if (!mobFlavorLines.isEmpty()) h += lh * 0.6f; // rule gap
 
-            // Mob live-detail block.
+            // Mob live-detail block — name is the section header.
             mobHeaderContentY = h;
-            h += 18f; // name header
-            h += 16f; // HP
-            h += 16f; // Att / Def
-            h += 16f; // Dmg / Arm
+            h += hlh; // name header
+            h += lh;  // HP
+            h += lh;  // Att / Def
+            h += lh;  // Dmg / Arm
             StatBlock s = lookedMob.effectiveStats();
-            if (!s.rangedDamage.isZero()) h += 16f;
+            if (!s.rangedDamage.isZero()) h += lh;
             Mob viewer = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
             if (viewer != null && lookedMob != viewer
-                    && attitudeLabel(viewer, lookedMob) != null) h += 16f;
-            if (stateOfMindLabel(lookedMob) != null) h += 16f;
-            if (lookedMob.owner != null) h += 16f;
-            if (lookedMob.buffs != null && !lookedMob.buffs.isEmpty()) h += 22f;
+                    && attitudeLabel(viewer, lookedMob) != null) h += lh;
+            if (stateOfMindLabel(lookedMob) != null) h += lh;
+            if (lookedMob.owner != null) h += lh;
+            if (lookedMob.buffs != null && !lookedMob.buffs.isEmpty()) h += lh;
 
             // Equipped items.
             if (lookedMob.inventory != null) {
                 List<Item> eq = lookedMob.inventory.allEquipped();
                 if (!eq.isEmpty()) {
-                    h += 18f;               // "Equipped:" header
-                    h += eq.size() * 16f;
+                    h += lh;               // "Equipped:" header
+                    h += eq.size() * lh;
                 }
                 // Bag items.
                 int bagCount = 0;
                 for (Item it : lookedMob.inventory.bag) if (it != null) bagCount++;
                 if (bagCount > 0) {
-                    h += 18f;               // "Bag:" header
+                    h += lh;               // "Bag:" header
                     int shown = Math.min(bagCount, MAX_BAG_DISPLAY);
-                    h += shown * 16f;
-                    if (bagCount > MAX_BAG_DISPLAY) h += 16f; // "..." line
+                    h += shown * lh;
+                    if (bagCount > MAX_BAG_DISPLAY) h += lh; // "..." line
                 }
             }
         }
@@ -361,7 +360,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         // Fixed header — always visible, never scrolls.
         TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, "Look",
-                window.cx(), window.top() - 22f);
+                window.cx(), window.top() - ctx.headerLineH());
 
         Point cursor = lookMode != null ? lookMode.cursor() : null;
         if (cursor == null || level == null) {
@@ -380,11 +379,16 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         boolean inBounds = cx >= 0 && cy >= 0 && cx < level.width && cy < level.height;
 
-        // --- TILE SECTION ---
+        float lh  = ctx.lineH();
+        float hlh = ctx.headerLineH();
+
+        drawY -= lh * 0.5f; // top padding
+
+        // --- TILE SECTION --- name is the section header
         if (lookedTile != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                        "Terrain: " + lookedTile.name().toLowerCase(), left, drawY);
+                TextDraw.left(ctx, ctx.fontHeader, UiColors.TEXT_BODY,
+                        lookedTile.name().toLowerCase(), left, drawY);
                 if (encyclopedia != null
                         && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= caBot) {
                     TextDraw.centre(ctx, ctx.fontRegular,
@@ -392,23 +396,23 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             "?", tileInfoBtn.cx(), tileInfoBtn.cy() + 6f);
                 }
             }
-            drawY -= 18f;
+            drawY -= hlh;
         }
 
         if (inBounds && level.surface != null && level.surface[cx][cy] != null) {
             if (inView(drawY, caTop, caBot)) {
                 TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                        "Surface: " + describeSurface(level.surface[cx][cy]), left, drawY);
+                        "  " + describeSurface(level.surface[cx][cy]), left, drawY);
             }
-            drawY -= 18f;
+            drawY -= lh;
         }
 
         if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) {
             if (inView(drawY, caTop, caBot)) {
                 TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                        "Plants: " + describeVegetation(level.vegetation[cx][cy]), left, drawY);
+                        "  " + describeVegetation(level.vegetation[cx][cy]), left, drawY);
             }
-            drawY -= 18f;
+            drawY -= lh;
         }
 
         if (inBounds && level.cloud != null && level.cloud[cx][cy] != 0) {
@@ -417,49 +421,36 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (type != null) {
                 if (inView(drawY, caTop, caBot)) {
                     TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                            "Cloud: " + type.name().toLowerCase().replace('_', ' '),
+                            "  " + type.name().toLowerCase().replace('_', ' '),
                             left, drawY);
                 }
-                drawY -= 18f;
+                drawY -= lh;
             }
         }
 
-        if (lookedTile != null) drawY -= 4f;
+        if (lookedTile != null) drawY -= lh * 0.5f; // section gap
 
-        // Floor items.
+        // Floor items — each name is its own header.
         if (level.items != null) {
             int count = 0;
-            List<String> wrapBuf = new ArrayList<>();
             for (Item it : level.items) {
                 if (it == null || it.location == null) continue;
                 int ix = (int) Math.floor(it.location.x());
                 int iy = (int) Math.floor(it.location.y());
                 if (ix == cx && iy == cy) {
-                    if (count == 0) {
-                        if (inView(drawY, caTop, caBot)) {
-                            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                                    "Items:", left, drawY);
-                        }
-                        drawY -= 18f;
+                    if (inView(drawY, caTop, caBot)) {
+                        TextDraw.left(ctx, ctx.fontHeader, UiColors.TEXT_BODY,
+                                itemDisplayName(it), left, drawY);
                     }
-                    wrapBuf.clear();
-                    TextDraw.wrap(ctx.fontRegular, "  " + itemDisplayName(it),
-                            window.w - 28f, 2, wrapBuf);
-                    for (String line : wrapBuf) {
-                        if (inView(drawY, caTop, caBot)) {
-                            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
-                                    line, left, drawY);
-                        }
-                        drawY -= 16f;
-                    }
+                    drawY -= hlh;
                     count++;
-                    if (count > 3) break;
+                    if (count >= 3) break;
                 }
             }
         }
 
         // Consume the tile/mob divider gap (divider itself is shapes pass).
-        if (lookedMob != null) drawY -= 14f;
+        if (lookedMob != null) drawY -= lh;
 
         // --- MOB SECTION ---
         if (lookedMob != null) {
@@ -469,9 +460,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
                             line, left, drawY);
                 }
-                drawY -= 16f;
+                drawY -= lh;
             }
-            if (!mobFlavorLines.isEmpty()) drawY -= 10f; // rule gap
+            if (!mobFlavorLines.isEmpty()) drawY -= lh * 0.6f; // rule gap
 
             // Live-stats block.
             drawY = renderMobBlockAt(left, drawY, caTop, caBot);
@@ -504,14 +495,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Mob m = lookedMob;
         StatBlock s = m.effectiveStats();
 
-        // Name + level header.
+        // Name — section header.
         String mname  = m.name != null ? m.name : "mob";
-        String header = "Mob: " + mname;
+        String header = mname;
         if (m.characterLevel > 1) header += " (lvl " + m.characterLevel + ")";
         if (inView(drawY, caTop, caBot)) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, header, left, drawY);
+            TextDraw.left(ctx, ctx.fontHeader, UiColors.TEXT_BODY, header, left, drawY);
         }
-        drawY -= 18f;
+        float lh = ctx.lineH();
+        drawY -= ctx.headerLineH();
 
         // HP.
         if (inView(drawY, caTop, caBot)) {
@@ -520,21 +512,21 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                     "HP " + hp + " / " + maxHp, left, drawY);
         }
-        drawY -= 16f;
+        drawY -= lh;
 
         // Att / Def.
         if (inView(drawY, caTop, caBot)) {
             TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                     "Att " + s.accuracy + "   Def " + s.evasion, left, drawY);
         }
-        drawY -= 16f;
+        drawY -= lh;
 
         // Dmg / Arm.
         if (inView(drawY, caTop, caBot)) {
             TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                     "Dmg " + range(s.damage) + "   Arm " + range(s.armor), left, drawY);
         }
-        drawY -= 16f;
+        drawY -= lh;
 
         // Ranged (optional).
         if (!s.rangedDamage.isZero()) {
@@ -543,7 +535,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         "Ranged " + range(s.rangedDamage) + " @ " + s.rangedDistance + " sq",
                         left, drawY);
             }
-            drawY -= 16f;
+            drawY -= lh;
         }
 
         // Attitude toward the player.
@@ -555,7 +547,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     TextDraw.left(ctx, ctx.fontRegular, attitudeColor(viewer, m),
                             al, left, drawY);
                 }
-                drawY -= 16f;
+                drawY -= lh;
             }
         }
 
@@ -565,7 +557,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (inView(drawY, caTop, caBot)) {
                 TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, state, left, drawY);
             }
-            drawY -= 16f;
+            drawY -= lh;
         }
 
         // Loyalty.
@@ -576,7 +568,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                         "Loyal to: " + ownerLabel, left, drawY);
             }
-            drawY -= 16f;
+            drawY -= lh;
         }
 
         // Buff icons row — always rebuild hit rects regardless of visibility
@@ -605,7 +597,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     pendingDots.add(new float[]{ ix + iconSz + 1f, iy, b.durationTurns });
                 }
             }
-            drawY -= 22f;
+            drawY -= lh;
         }
 
         // Equipped items.
@@ -616,14 +608,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                             "Equipped:", left, drawY);
                 }
-                drawY -= 18f;
+                drawY -= lh;
                 for (Item it : eq) {
                     if (it == null) continue;
                     if (inView(drawY, caTop, caBot)) {
                         TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
                                 "  " + itemDisplayName(it), left, drawY);
                     }
-                    drawY -= 16f;
+                    drawY -= lh;
                 }
             }
 
@@ -635,7 +627,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                             "Bag:", left, drawY);
                 }
-                drawY -= 18f;
+                drawY -= lh;
                 int shown = 0;
                 for (Item it : m.inventory.bag) {
                     if (it == null) continue;
@@ -644,7 +636,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
                                     "  ...", left, drawY);
                         }
-                        drawY -= 16f;
+                        drawY -= lh;
                         break;
                     }
                     String iname = itemDisplayName(it);
@@ -653,7 +645,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
                                 "  " + iname, left, drawY);
                     }
-                    drawY -= 16f;
+                    drawY -= lh;
                     shown++;
                 }
             }
@@ -684,7 +676,8 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private static String itemDisplayName(Item it) {
         String name = it.name != null ? it.name : it.type;
-        if (it.level > 1) name += " +" + (it.level - 1);
+        int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, null);
+        if (effLvl > 1) name += " +" + (effLvl-1);
         return name;
     }
 

@@ -10,6 +10,7 @@ import com.bjsp123.rl2.save.Achievement;
 import com.bjsp123.rl2.world.render.IconSprites;
 import com.bjsp123.rl2.world.render.PortraitSprites;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** V2 hall-of-fame screen — two tabs:
@@ -45,8 +46,8 @@ public final class V2HallOfFame extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - 24f);
-        float winH = Math.min(Pal.VIRTUAL_H - 120f, vh - 120f);
+        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
+        float winH = Math.min(Pal.VIRTUAL_H - 144f, vh - 144f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         // Tab strip — square-ish icon buttons just below the header band.
@@ -55,7 +56,7 @@ public final class V2HallOfFame extends V2Screen {
         float pad = 12f;
         float tabH = 36f;
         float tabGap = 6f;
-        float headerBand = ctx.fontHeader.getCapHeight() + 24f;
+        float headerBand = headerBandH();
         float tabsY = window.top() - pad - tabH - headerBand;
         float innerW = winW - 2 * pad;
         float tabW = (innerW - (tabRects.length - 1) * tabGap) / tabRects.length;
@@ -96,7 +97,7 @@ public final class V2HallOfFame extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Hall of Fame",
-                window.cx(), window.top() - 22f);
+                window.cx(), window.top() - ctx.headerLineH());
 
         // Tab icons — drawn in the text pass since icons are sprites.
         IconSprites.Icon[] icons = {
@@ -121,61 +122,94 @@ public final class V2HallOfFame extends V2Screen {
     }
 
     private float bandTop() { return tabRects[0].y - 16f; }
-    private float bandBottom() { return window.y + 14f; }
+    private float bandBottom() { return window.y + Pal.BACK_SIZE + 2 * BackBtn.INSET; }
 
     private void drawHeroesTab(UiCtx ctx) {
         List<HallOfFameEntry> entries = game.hallOfFame.entries;
         float bodyLeft  = window.x + 12f;
         float bodyRight = window.right() - 12f;
+        float lh        = ctx.lineH();
+        float portSz    = 40f;
+        float textLeft  = bodyLeft + portSz + 8f;
+        float maxDeathW = bodyRight - textLeft;
+        float rowGap    = 12f;
+        float rowVPad   = lh * 0.5f;
+
         float visibleTop    = bandTop();
         float visibleBottom = bandBottom();
         float visibleH      = visibleTop - visibleBottom;
 
         if (entries.isEmpty()) {
             TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM,
-                    "No entries yet — die first.",
+                    "No entries yet.",
                     window.cx(), visibleTop - 24f);
             return;
         }
 
-        float rowH    = 48f;
-        float rowGap  = 4f;
-        float portSz  = 40f;
-        float portPad = (rowH - portSz) * 0.5f;
-        float textLeft = bodyLeft + portSz + 8f;
-        float totalH  = entries.size() * (rowH + rowGap) - rowGap;
+        // Pre-pass: measure each row's pixel height from its wrapped death message
+        // (capped at 2 lines so rows don't grow unbounded).
+        float[] rowHeights = new float[entries.size()];
+        for (int i = 0; i < entries.size(); i++) {
+            String dm = entries.get(i).deathMessage;
+            float deathH = 0f;
+            if (dm != null && !dm.isEmpty()) {
+                List<String> tmp = new ArrayList<>();
+                TextDraw.wrap(ctx.fontRegular, dm, maxDeathW, 2, tmp);
+                deathH = tmp.size() * lh;
+            }
+            rowHeights[i] = Math.max(portSz + 2 * rowVPad,
+                    rowVPad + lh + lh * 0.3f + deathH + rowVPad);
+        }
+
+        // Cumulative Y offsets (pixels from visibleTop downward).
+        float[] cumY = new float[entries.size()];
+        float totalH = 0f;
+        for (int i = 0; i < entries.size(); i++) {
+            cumY[i] = totalH;
+            totalH += rowHeights[i] + rowGap;
+        }
+        if (entries.size() > 0) totalH -= rowGap;
         heroesScroller.setMaxScroll(Math.max(0f, totalH - visibleH));
 
         clipBand(ctx, visibleTop, visibleBottom, () -> {
+            float scroll = heroesScroller.scrollY();
             for (int i = 0; i < entries.size(); i++) {
-                float yTop = visibleTop - i * (rowH + rowGap) + heroesScroller.scrollY();
-                float yBot = yTop - rowH;
+                float rh   = rowHeights[i];
+                float yTop = visibleTop - cumY[i] + scroll;
+                float yBot = yTop - rh;
                 if (yBot > visibleTop)     continue;
                 if (yTop <= visibleBottom) break;
                 HallOfFameEntry e = entries.get(i);
 
-                // Portrait on the left.
+                // Portrait on the left, vertically centred in the row.
                 com.bjsp123.rl2.model.Mob.CharacterClass cls = parseClass(e.charClass);
                 if (cls != null) {
                     TextureRegion port = PortraitSprites.regionFor(cls);
                     if (port != null) {
-                        ctx.batch.draw(port, bodyLeft, yBot + portPad, portSz, portSz);
+                        ctx.batch.draw(port, bodyLeft,
+                                yBot + (rh - portSz) * 0.5f, portSz, portSz);
                     }
                 }
 
-                // Upper line: rank + class name on left, score / depth on right.
-                String upper     = (i + 1) + "  " + e.charClass;
-                String scoreStr  = e.score + " / " + e.depth;
-                float  upperY    = yTop - rowH * 0.28f;
-                TextDraw.left (ctx, ctx.fontRegular, Pal.WHITE, upper,    textLeft,  upperY);
-                TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE, scoreStr, bodyRight, upperY);
+                // Upper line: rank + class name / level + depth.
+                float upperY = yTop - rowVPad;
+                TextDraw.left (ctx, ctx.fontRegular, Pal.WHITE,
+                        (i + 1) + "  " + e.charClass, textLeft, upperY);
+                TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE,
+                        "Level:" + e.level + " Depth: " + e.depth, bodyRight, upperY);
 
-                // Lower line: death message in dim colour.
-                if (e.deathMessage != null && !e.deathMessage.isEmpty()) {
-                    float lowerY = yBot + rowH * 0.28f;
-                    TextDraw.left(ctx, ctx.fontRegular, Pal.DIM, e.deathMessage,
-                            textLeft, lowerY);
+                // Death message — word-wrapped, max 2 lines.
+                String dm = e.deathMessage;
+                if (dm == null || dm.isEmpty())
+                    dm = "Died of unknown causes. asdfjadsf asdf dskfjsda fjdsaf ksdjf lksdjf lsdakfj sadlfj asdlkfjasdlf jasdfsad dsf asd fds f";
+                List<String> dmLines = new ArrayList<>();
+                TextDraw.wrap(ctx.fontRegular, dm, maxDeathW, 2, dmLines);
+                float deathY = upperY - lh - lh * 0.5f;
+                for (String line : dmLines) {
+                    TextDraw.left(ctx, ctx.fontRegular, Pal.DIM, line, textLeft, deathY);
+                    deathY -= lh;
                 }
+                
             }
         });
     }
@@ -192,8 +226,8 @@ public final class V2HallOfFame extends V2Screen {
 
     private void drawAchievementsTab(UiCtx ctx) {
         Achievement[] all = Achievement.values();
-        float left  = window.x + 18f;
-        float right = window.right() - 18f;
+        float left  = window.x + Pal.PAD_CONTENT;
+        float right = window.right() - Pal.PAD_CONTENT;
         float visibleTop    = bandTop();
         float visibleBottom = bandBottom();
         float visibleH      = visibleTop - visibleBottom;
@@ -274,7 +308,7 @@ public final class V2HallOfFame extends V2Screen {
 
     @Override
     protected boolean onScrolled(float amountY) {
-        activeScroller().onScrolled(amountY, 22f);
+        activeScroller().onScrolled(amountY, ctx.lineH());
         return true;
     }
 

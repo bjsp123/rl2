@@ -122,6 +122,9 @@ public final class V2Hud {
      *  is too narrow for a single row. Set each frame by {@link #layoutRects()};
      *  read by the render and input passes. */
     private boolean gridLayout;
+    /** Number of rows used in the grid layout (2 or 3). Only meaningful when
+     *  {@link #gridLayout} is true; used to place the log readout above the grid. */
+    private int actionGridRows = 2;
     private int menuItemPressed = -1;
     /** Index of the buff icon currently being held; -1 when none. */
     private int buffIconPressed = -1;
@@ -201,10 +204,16 @@ public final class V2Hud {
         float ax1row = invRect.x - ACTION_GAP - stripW1row;
         gridLayout = ax1row < lookRect.x + lookRect.w + ACTION_GAP;
         if (gridLayout) {
-            int gridRows = n <= 6 ? 2 : 3;
-            int gridCols = (n + gridRows - 1) / gridRows;
-            float gridW = gridCols * ACTION_BTN + (gridCols - 1) * ACTION_GAP;
-            float gx = invRect.x - ACTION_GAP - gridW;
+            // Prefer 2 rows (e.g. 4×2 for 8 slots); fall back to 3 rows only
+            // when the 2-row grid would overlap the look button.
+            int gridCols2 = (n + 1) / 2;
+            float gridW2  = gridCols2 * ACTION_BTN + (gridCols2 - 1) * ACTION_GAP;
+            float gx2     = invRect.x - ACTION_GAP - gridW2;
+            int gridRows  = (gx2 >= lookRect.right() + ACTION_GAP) ? 2 : 3;
+            actionGridRows = gridRows;
+            int gridCols  = (n + gridRows - 1) / gridRows;
+            float gridW   = gridCols * ACTION_BTN + (gridCols - 1) * ACTION_GAP;
+            float gx      = invRect.x - ACTION_GAP - gridW;
             for (int i = 0; i < n; i++) {
                 int col = i % gridCols;
                 int row = i / gridCols;
@@ -430,6 +439,17 @@ public final class V2Hud {
                 ctx.batch.draw(region,
                         r.x + ICON_PAD, r.y + ICON_PAD,
                         r.w - 2 * ICON_PAD, r.h - 2 * ICON_PAD);
+                if (it.count > 1) {
+                    TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE,
+                            Integer.toString(it.count),
+                            r.right() - 3f, r.y + ctx.lineH());
+                }
+                int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, currentPlayer());
+                if (effLvl > 1) {
+                    TextDraw.right(ctx, ctx.fontRegular, Pal.ACCENT,
+                            "+" + (effLvl-1),
+                            r.right() - 3f, r.top() - 2f);
+                }
             }
             // Brand sparks — additive pass over the icons.
             for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
@@ -504,9 +524,9 @@ public final class V2Hud {
             float logRight = invRect.x - ACTION_GAP;
             float logLeft  = MARGIN;
             float logBottom = MARGIN + (gridLayout
-                    ? 2 * ACTION_BTN + ACTION_GAP
+                    ? actionGridRows * ACTION_BTN + (actionGridRows - 1) * ACTION_GAP
                     : ACTION_BTN) + 6f;
-            float lineH = 16f;
+            float lineH = ctx.lineH();
             int maxLines = LogPreferences.expanded() ? 6 : 3;
             // Walk recent entries newest-first; render newest at logBottom
             // and stack older ones upward. tail() returns oldest-first, so

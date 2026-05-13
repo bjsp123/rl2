@@ -256,7 +256,7 @@ public final class LevelFactoryPopulate {
             if (spot == null) break;
             placeItem(level, ItemGenerator.buildItem(type, powerLevel), spot);
         }
-        int clusters = 1 + rng.nextInt(3);
+        int clusters = GameBalance.RANDOM_ITEMS_PER_LEVEL + rng.nextInt(3);
         for (int i = 0; i < clusters; i++) {
             Item template = ItemGenerator.generateItem(powerLevel, level.theme,
                     ItemGenerator.LootCategory.NON_GEM, rng);
@@ -352,7 +352,7 @@ public final class LevelFactoryPopulate {
 
         // ── Regular weighted scatter ──────────────────────────────────────
         if (!pool.isEmpty()) {
-            int hostileTarget = 7 + rng.nextInt(4); // 7..10
+            int hostileTarget = GameBalance.STARTING_MOBS_PER_LEVEL + rng.nextInt(4);
             int hostileCount  = 0;
             // Bound the loop in case the eligible pool is all non-hostile flavor
             // species (deep mouse-only levels, etc.) — without the cap a level whose
