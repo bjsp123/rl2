@@ -29,7 +29,7 @@ import com.bjsp123.rl2.world.render.LevelRenderer;
  *   <li>Tab cycles to the nearest visible hostile.</li>
  *   <li>Escape cancels without firing.</li>
  *   <li>Re-triggering the same source item externally (via {@link #confirm()}) fires at
- *       the current reticle — the calling screen detects the re-trigger and calls it.</li>
+ *       the current reticle - the calling screen detects the re-trigger and calls it.</li>
  * </ul>
  *
  * <p>On confirm, the target cell is recorded into {@link TargetHistory} so the next picker
@@ -129,7 +129,7 @@ public class TargetingOverlay extends InputAdapter {
             Gdx.gl.glEnable(GL20.GL_BLEND);
             Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
-            // Tint pass — very slight yellow fill over every valid tile.
+            // Tint pass - very slight yellow fill over every valid tile.
             shapes.begin(ShapeRenderer.ShapeType.Filled);
             shapes.setColor(1f, 1f, 0.1f, 0.06f);
             for (int x = 0; x < validW; x++) {
@@ -139,7 +139,7 @@ public class TargetingOverlay extends InputAdapter {
             }
             shapes.end();
 
-            // Outer-border pass — 1-px yellow segment on each edge that faces a
+            // Outer-border pass - 1-px yellow segment on each edge that faces a
             // non-valid (or out-of-bounds) neighbour, producing a border around the
             // SET rather than around every individual tile.
             shapes.begin(ShapeRenderer.ShapeType.Line);
@@ -203,7 +203,7 @@ public class TargetingOverlay extends InputAdapter {
 
     /**
      * A mouse click or touch anywhere in the world fires the action immediately at that
-     * tile — no confirm step. Clicks outside the grid are swallowed but do nothing.
+     * tile - no confirm step. Clicks outside the grid are swallowed but do nothing.
      */
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {

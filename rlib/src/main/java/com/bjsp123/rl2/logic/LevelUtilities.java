@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Hub for one-shot queries about a {@link Level} — pathfinding, neighbor sampling, visibility,
+ * Hub for one-shot queries about a {@link Level} - pathfinding, neighbor sampling, visibility,
  * attitude. None of these methods mutate state; they just answer questions callers have about
  * the current world. AI code, effect code, and the renderer all go through here rather than
  * re-implementing the same primitives in five places.
@@ -21,7 +21,7 @@ import java.util.Random;
 public final class LevelUtilities {
 
     /**
-     * Options bundle for {@link #getRandomNeighbor}. Public mutable fields — GWT-compatible
+     * Options bundle for {@link #getRandomNeighbor}. Public mutable fields - GWT-compatible
      * and cheaper than a builder. Construct, tweak, pass.
      *
      * <p>Defaults: 4-way neighbors, no cascade, no surface filter.
@@ -30,7 +30,7 @@ public final class LevelUtilities {
 
         /** How to filter candidates by the {@link Level#surface} grid. */
         public enum SurfaceFilter {
-            /** Ignore surface state — any cell qualifies. */
+            /** Ignore surface state - any cell qualifies. */
             IGNORE,
             /** Only pick cells whose surface matches {@link LevelUtilities.NeighborOptions#surfaceType}. */
             REQUIRE,
@@ -61,7 +61,7 @@ public final class LevelUtilities {
 
     private LevelUtilities() {}
 
-    // ── neighbor sampling ───────────────────────────────────────────────────
+    // -- neighbor sampling ---------------------------------------------------
 
     /**
      * Random floor-like tile adjacent to {@code origin} matching {@code options}. Cardinal
@@ -117,7 +117,7 @@ public final class LevelUtilities {
                         candidates.add(new int[]{nx, ny});
                     } else {
                         // Traverse through non-matching cells so cascade can escape a
-                        // saturated patch — same idea as SurfaceSystem's BFS.
+                        // saturated patch - same idea as SurfaceSystem's BFS.
                         frontier.addLast(new int[]{nx, ny});
                     }
                 }
@@ -130,12 +130,12 @@ public final class LevelUtilities {
         return null;
     }
 
-    // ── random reachable point ──────────────────────────────────────────────
+    // -- random reachable point ----------------------------------------------
 
     /**
      * Random floor-like tile that {@code mob} can reach via pathfinding. Sampling is best-
      * effort: up to {@value #MAX_REACHABLE_ATTEMPTS} random picks, each verified with a
-     * single {@link Pathfinder#nextStep}. Returns null if no pick succeeded — rare, only
+     * single {@link Pathfinder#nextStep}. Returns null if no pick succeeded - rare, only
      * happens when the mob is trapped on a small disconnected island.
      */
     public static Point getRandomReachablePoint(Level level, Mob mob) {
@@ -158,7 +158,7 @@ public final class LevelUtilities {
         return null;
     }
 
-    // ── line of sight ───────────────────────────────────────────────────────
+    // -- line of sight -------------------------------------------------------
 
     /**
      * True when {@code mob} can see {@code target} from its current position, limited by its
@@ -181,11 +181,11 @@ public final class LevelUtilities {
         return fov[ty * w + tx];
     }
 
-    // ── adjacency predicates ────────────────────────────────────────────────
+    // -- adjacency predicates ------------------------------------------------
 
     /**
      * True if any cardinally-adjacent cell of {@code origin} carries the surface {@code s}.
-     * Does <em>not</em> include {@code origin} itself — callers that also care about the
+     * Does <em>not</em> include {@code origin} itself - callers that also care about the
      * source tile should test it separately. Pass {@code null} to check for "no surface".
      */
     public static boolean getAdjacentTo(Level level, Point origin, Surface s) {
@@ -230,11 +230,11 @@ public final class LevelUtilities {
         return false;
     }
 
-    // ── tile predicates ─────────────────────────────────────────────────────
+    // -- tile predicates -----------------------------------------------------
 
     /**
      * Whether {@code mob} can physically enter a cell of tile type {@code tile}. This is
-     * the tile-type check only — it does not consider other mobs occupying the cell or
+     * the tile-type check only - it does not consider other mobs occupying the cell or
      * doors held open by an occupant. Callers that need the full "can enter this cell"
      * check (mobs, doors, etc.) should use {@link MobSystem#blocksMovement}.
      *
@@ -250,7 +250,7 @@ public final class LevelUtilities {
 
     /**
      * Whether light / line-of-sight can pass through a cell of tile type {@code tile}. This
-     * is the tile-type check only — a closed door with a mob standing on it is actually
+     * is the tile-type check only - a closed door with a mob standing on it is actually
      * transparent in-game (handled in {@link LevelSystem#buildBlocking}), so callers that
      * need the full LOS answer should use {@link #getLineOfSight}.
      */
@@ -261,7 +261,7 @@ public final class LevelUtilities {
         return !tile.blocksSight();
     }
 
-    // ── helpers ─────────────────────────────────────────────────────────────
+    // -- helpers -------------------------------------------------------------
 
     private static boolean inBounds(Level level, int x, int y) {
         return x >= 0 && y >= 0 && x < level.width && y < level.height;

@@ -17,7 +17,7 @@ import java.util.Properties;
  * without recompilation. Java-side defaults reproduce the original palette
  * and layout exactly when the properties file is absent.
  *
- * <p>Colors are stored as live {@link Color} instances — the loader mutates
+ * <p>Colors are stored as live {@link Color} instances - the loader mutates
  * them in-place so any code that cached a field reference before load() still
  * sees the updated value. Call {@link #load} once, before any rendering.
  */
@@ -25,12 +25,12 @@ public final class UIVars {
 
     private UIVars() {}
 
-    // ── Border lines (blue-green-tinted greys, 3-line chrome) ────────────────
+    // -- Border lines (blue-green-tinted greys, 3-line chrome) ----------------
     public static Color BORDER_OUTER    = hex(0xb0bab4);
     public static Color BORDER_MID      = hex(0x6c7672);
     public static Color BORDER_INNER    = hex(0x2c3632);
 
-    // ── Background tiers (warm greys, darkest → lightest) ────────────────────
+    // -- Background tiers (warm greys, darkest -> lightest) --------------------
     public static Color WIN_BG          = hex(0x443333);
     public static Color BTN_BG          = hex(0x5a4040);
     public static Color BTN_PRESSED_BG  = hex(0x6e5050);
@@ -39,10 +39,10 @@ public final class UIVars {
     public static Color HUD_BG          = hex(0x665544);
     public static Color SLOT_RECESS     = hex(0x2a1f1f);
 
-    // ── Drop shadow ───────────────────────────────────────────────────────────
+    // -- Drop shadow -----------------------------------------------------------
     public static Color SHADOW          = new Color(0f, 0f, 0f, 0.45f);
 
-    // ── Text + accent ─────────────────────────────────────────────────────────
+    // -- Text + accent ---------------------------------------------------------
     public static Color TEXT_BODY       = hex(0xffffff);
     public static Color TEXT_DIM        = hex(0xc8c4b8);
     public static Color TEXT_WARN       = hex(0xe05050);
@@ -51,16 +51,16 @@ public final class UIVars {
     public static Color WARN_HL         = hex(0xff7878);
     public static Color WARN_SHADE      = hex(0x802020);
 
-    // ── Special item-level badge color ────────────────────────────────────────
-    /** Bright green — level badge when a perk/buff/equipment boosts effective level. */
+    // -- Special item-level badge color ----------------------------------------
+    /** Bright green - level badge when a perk/buff/equipment boosts effective level. */
     public static Color BOOST           = hex(0x33d94d);
 
-    // ── Bar fills ─────────────────────────────────────────────────────────────
+    // -- Bar fills -------------------------------------------------------------
     public static Color BAR_HP          = hex(0xc04040);
     public static Color BAR_XP          = hex(0xffe848);
     public static Color BAR_SATIETY     = hex(0xa08858);
 
-    // ── Charge bar (item cells) ───────────────────────────────────────────────
+    // -- Charge bar (item cells) -----------------------------------------------
     /** Semi-transparent black backdrop behind the charge bar. */
     public static Color BAR_CHARGE_BACKDROP = new Color(0f, 0f, 0f, 0.85f);
     /** Empty slot background. */
@@ -70,13 +70,13 @@ public final class UIVars {
     /** Partially-charged slot fill. */
     public static Color BAR_CHARGE_PARTIAL  = hex(0x1a8026);
 
-    // ── Alpha scalars ─────────────────────────────────────────────────────────
+    // -- Alpha scalars ---------------------------------------------------------
     /** Alpha of the dim overlay drawn behind modal popups (0..1). */
     public static float DIM_ALPHA       = 0.55f;
     /** Alpha of a window's interior fill rectangle (0..1). */
     public static float PANEL_FILL_ALPHA = 0.85f;
 
-    // ── Chrome geometry (virtual pixels) ─────────────────────────────────────
+    // -- Chrome geometry (virtual pixels) -------------------------------------
     public static float SHADOW_OFFSET   = 5f;
     /** Per-line thickness of a window's 3-line border. */
     public static float WIN_LINE_W      = 3f;
@@ -90,30 +90,30 @@ public final class UIVars {
     public static float BACK_SIZE       = 40f;
     /** Square size of the burger-menu button. */
     public static float BURGER_SIZE     = 48f;
-    /** Virtual canvas width — all layout calcs use this. */
+    /** Virtual canvas width - all layout calcs use this. */
     public static float VIRTUAL_W       = 400f;
-    /** Virtual canvas height — all layout calcs use this. */
+    /** Virtual canvas height - all layout calcs use this. */
     public static float VIRTUAL_H       = 720f;
     /** Minimum horizontal/vertical margin when sizing a modal window. */
     public static float PAD_MODAL       = 24f;
     /** Standard inset from a window edge to its body content. */
     public static float PAD_CONTENT     = 18f;
 
-    // ── Typography ────────────────────────────────────────────────────────────
+    // -- Typography ------------------------------------------------------------
     public static int FONT_REGULAR_PX   = 16;
     public static int FONT_HEADER_PX    = 32;
 
-    // ── Derived (recomputed by applyDerived after every load) ────────────────
-    /** Total border width of a window's 3-line chrome: 3 × WIN_LINE_W. */
+    // -- Derived (recomputed by applyDerived after every load) ----------------
+    /** Total border width of a window's 3-line chrome: 3 x WIN_LINE_W. */
     public static float WIN_BORDER;
-    /** Total border width of a HUD / button 3-line chrome: 3 × HUD_LINE_W. */
+    /** Total border width of a HUD / button 3-line chrome: 3 x HUD_LINE_W. */
     public static float HUD_BORDER;
-    /** Synonym for HUD_BORDER — kept for button-sizing call sites. */
+    /** Synonym for HUD_BORDER - kept for button-sizing call sites. */
     public static float BTN_BORDER;
 
     static { applyDerived(); }
 
-    // ── Loading ───────────────────────────────────────────────────────────────
+    // -- Loading ---------------------------------------------------------------
 
     /**
      * Parse {@code text} as a {@code .properties} file and override every

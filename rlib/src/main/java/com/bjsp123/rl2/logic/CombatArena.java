@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Headless combat arena — builds a synthetic single-room {@link Level}, drops
+ * Headless combat arena - builds a synthetic single-room {@link Level}, drops
  * mob teams in, and advances the simulation through the real game systems
  * ({@link TurnSystem}, {@link BuffSystem}, {@link MobSystem}). Used by the
  * Arena UI for "watch a fight" playback and (potentially) by future MobFight
@@ -24,11 +24,11 @@ import java.util.Random;
  * on top; the headless path just calls {@link #tickHeadless} in a loop.
  *
  * <p>The arena Level has no PLAYER-behaviour mob, so {@link TurnSystem#tick}'s
- * "isPlayerTurn" gate never blocks — combat auto-advances every call.
+ * "isPlayerTurn" gate never blocks - combat auto-advances every call.
  */
 public final class CombatArena {
 
-    /** Default arena footprint — comfortable for ~3 mobs per side with room for
+    /** Default arena footprint - comfortable for ~3 mobs per side with room for
      *  ranged volleys. Bumped by callers that pack more mobs in. */
     public static final int DEFAULT_W = 16;
     public static final int DEFAULT_H = 16;
@@ -45,7 +45,7 @@ public final class CombatArena {
     public static Level buildArenaLevel(int w, int h, Random rng) {
         Level level = new Level(w, h);
         level.theme = randomTheme(rng);
-        // Layout (BSP) is the default initialiser on Level — leave alone.
+        // Layout (BSP) is the default initialiser on Level - leave alone.
 
         boolean wallPerimeter = rng.nextBoolean();
         Tile borderTile = wallPerimeter ? Tile.WALL : Tile.CHASM;
@@ -60,7 +60,7 @@ public final class CombatArena {
             }
         }
 
-        // ~50% chance of one vegetation patch — small cluster of grass / mushrooms
+        // ~50% chance of one vegetation patch - small cluster of grass / mushrooms
         // / trees somewhere in the interior. Keeps the room visually varied
         // without dominating the fight.
         if (rng.nextDouble() < 0.5) {
@@ -95,7 +95,7 @@ public final class CombatArena {
 
     /** Make every mob in {@code teamA} mutually hostile to every mob in
      *  {@code teamB}: each side's {@link Mob#attackTypes} gains the opposing
-     *  team's species tags. Idempotent — calling twice is harmless. */
+     *  team's species tags. Idempotent - calling twice is harmless. */
     public static void seedTeamHostility(List<Mob> teamA, List<Mob> teamB) {
         if (teamA == null || teamB == null) return;
         for (Mob a : teamA) {
@@ -131,7 +131,7 @@ public final class CombatArena {
     }
 
     /**
-     * Advance one combat tick — drives {@link TurnSystem#tick} (which handles
+     * Advance one combat tick - drives {@link TurnSystem#tick} (which handles
      * AI, melee, attacks, buff DOTs every {@code STANDARD_TURN_TICKS} ticks)
      * plus the real-time clocks PlayScreen runs each frame. Caller is
      * responsible for the visual layer (Animator + renderer); the headless
@@ -152,7 +152,7 @@ public final class CombatArena {
         // the Animator before this method returns.
     }
 
-    // ── Internals ────────────────────────────────────────────────────────────
+    // -- Internals ------------------------------------------------------------
 
     private static VisualTheme randomTheme(Random rng) {
         VisualTheme[] themes = VisualTheme.values();

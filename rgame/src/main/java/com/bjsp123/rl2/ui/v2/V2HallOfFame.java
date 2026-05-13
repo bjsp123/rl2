@@ -13,10 +13,10 @@ import com.bjsp123.rl2.world.render.PortraitSprites;
 import java.util.ArrayList;
 import java.util.List;
 
-/** V2 hall-of-fame screen — two tabs:
+/** V2 hall-of-fame screen - two tabs:
  *  <ul>
- *    <li><b>Heroes</b> (character icon) — scrolling list of past runs.</li>
- *    <li><b>Achievements</b> (map icon) — list of every achievement,
+ *    <li><b>Heroes</b> (character icon) - scrolling list of past runs.</li>
+ *    <li><b>Achievements</b> (map icon) - list of every achievement,
  *        greyed out when not yet earned.</li>
  *  </ul>
  *  Each tab owns its own {@link Scroller} so switching tabs preserves
@@ -31,8 +31,10 @@ public final class V2HallOfFame extends V2Screen {
     private final boolean[] tabPressed = new boolean[Tab.values().length];
 
     private Tab currentTab = Tab.HEROES;
-    private final Scroller heroesScroller       = new Scroller();
-    private final Scroller achievementsScroller = new Scroller();
+    private final ScrollBand heroesBand       = new ScrollBand();
+    private final ScrollBand achievementsBand = new ScrollBand();
+    private float heroesContentH;
+    private float achievementsContentH;
 
     public V2HallOfFame(Rl2Game game) {
         super(game.ui);
@@ -50,7 +52,7 @@ public final class V2HallOfFame extends V2Screen {
         float winH = Math.min(UIVars.VIRTUAL_H - 144f, vh - 144f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
-        // Tab strip — square-ish icon buttons just below the header band.
+        // Tab strip - square-ish icon buttons just below the header band.
         // Sized off the live header font so a UiFontScale change doesn't
         // collide with the header text.
         float pad = 12f;
@@ -64,6 +66,7 @@ public final class V2HallOfFame extends V2Screen {
             tabRects[i].set(window.x + pad + i * (tabW + tabGap),
                     tabsY, tabW, tabH);
         }
+        configureBands();
 
         back   = new BackBtn(ctx, game::popScreen);
         burger = makeBurger();
@@ -74,7 +77,7 @@ public final class V2HallOfFame extends V2Screen {
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
-        // Tabs — same chrome as the V2CharacterStats tabs.
+        // Tabs - same chrome as the V2CharacterStats tabs.
         ShapeRenderer s = ctx.shapes;
         for (int i = 0; i < tabRects.length; i++) {
             Rect r = tabRects[i];
@@ -90,6 +93,8 @@ public final class V2HallOfFame extends V2Screen {
             s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
                     r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
+        activeBand().drawScrollbar(ctx.shapes,
+                currentTab == Tab.HEROES ? heroesContentH : achievementsContentH);
     }
 
     @Override
@@ -97,7 +102,7 @@ public final class V2HallOfFame extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Hall of Fame",
                 window.cx(), window.top() - ctx.headerLineH());
 
-        // Tab icons — drawn in the text pass since icons are sprites.
+        // Tab icons - drawn in the text pass since icons are sprites.
         IconSprites.Icon[] icons = {
                 IconSprites.Icon.CHARACTER, IconSprites.Icon.MAP
         };
@@ -136,6 +141,7 @@ public final class V2HallOfFame extends V2Screen {
         float visibleTop    = bandTop();
         float visibleBottom = bandBottom();
         float visibleH      = visibleTop - visibleBottom;
+        heroesBand.set(window.x, visibleBottom, window.w, visibleH);
 
         if (entries.isEmpty()) {
             TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
@@ -169,10 +175,11 @@ public final class V2HallOfFame extends V2Screen {
             totalH += rowHeights[i] + rowGap;
         }
         if (entries.size() > 0) totalH -= rowGap;
-        heroesScroller.setMaxScroll(Math.max(0f, totalH - visibleH));
+        heroesContentH = Math.max(0f, totalH);
+        heroesBand.update(heroesContentH);
 
-        clipBand(ctx, visibleTop, visibleBottom, () -> {
-            float scroll = heroesScroller.scrollY();
+        heroesBand.clip(ctx, () -> {
+            float scroll = heroesBand.scroller.scrollY();
             for (int i = 0; i < entries.size(); i++) {
                 float rh   = rowHeights[i];
                 float yTop = visibleTop - cumY[i] + scroll;
@@ -193,29 +200,30 @@ public final class V2HallOfFame extends V2Screen {
 
                 // Upper line: rank + class name / level + depth.
                 float upperY = yTop - rowVPad;
-                TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                        (i + 1) + "  " + e.charClass, textLeft, upperY);
-                TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                        "Level:" + e.level + " Depth: " + e.depth, bodyRight, upperY);
+                float summaryW = 112f;
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                        (i + 1) + "  " + e.charClass, textLeft, upperY,
+                        Math.max(40f, bodyRight - textLeft - summaryW - 8f));
+                TextDraw.rightFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                        "Level:" + e.level + " Depth: " + e.depth, bodyRight, upperY,
+                        summaryW);
 
-                // Stat chips — turns / beasts tamed / favourite perk.
+                // Stat chips - turns / beasts tamed / favourite perk.
                 float nextY = upperY - lh;
                 if (hasStatChips(e)) {
-                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                            statChipLine(e), textLeft, nextY);
+                    TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                            statChipLine(e), textLeft, nextY, maxDeathW);
                     nextY -= lh;
                 }
 
-                // Death message — word-wrapped, max 2 lines.
+                // Death message - word-wrapped, max 2 lines.
                 String dm = e.deathMessage;
                 if (dm == null || dm.isEmpty()) dm = "Died of unknown causes.";
-                List<String> dmLines = new ArrayList<>();
-                TextDraw.wrap(ctx.fontRegular, dm, maxDeathW, 2, dmLines);
+                TextDraw.TextBlock dmLines = TextDraw.block(ctx.fontRegular,
+                        dm, maxDeathW, 2, lh);
                 float deathY = nextY - lh * 0.5f;
-                for (String line : dmLines) {
-                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, line, textLeft, deathY);
-                    deathY -= lh;
-                }
+                TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        dmLines, textLeft, deathY);
 
             }
         });
@@ -260,11 +268,13 @@ public final class V2HallOfFame extends V2Screen {
         float visibleBottom = bandBottom();
         float visibleH      = visibleTop - visibleBottom;
         float rowH          = 36f;
-        achievementsScroller.setMaxScroll(all.length * rowH - visibleH);
+        achievementsBand.set(window.x, visibleBottom, window.w, visibleH);
+        achievementsContentH = all.length * rowH;
+        achievementsBand.update(achievementsContentH);
 
-        clipBand(ctx, visibleTop, visibleBottom, () -> {
+        achievementsBand.clip(ctx, () -> {
             for (int i = 0; i < all.length; i++) {
-                float yTop = visibleTop - i * rowH + achievementsScroller.scrollY();
+                float yTop = visibleTop - i * rowH + achievementsBand.scroller.scrollY();
                 if (yTop <= visibleBottom) break;
                 if (yTop > visibleTop)     continue;
                 Achievement a = all[i];
@@ -275,45 +285,20 @@ public final class V2HallOfFame extends V2Screen {
                 boolean censored = a.hidden && !unlocked;
                 String name = censored ? "???" : a.displayName;
                 String desc = censored
-                        ? "Hidden achievement — keep playing."
+                        ? "Hidden achievement - keep playing."
                         : a.description;
                 com.badlogic.gdx.graphics.Color nameColor =
                         unlocked ? UIVars.TEXT_BODY : UIVars.TEXT_DIM;
-                TextDraw.left(ctx, ctx.fontRegular, nameColor,
-                        name, left, yTop);
+                TextDraw.leftFit(ctx, ctx.fontRegular, nameColor,
+                        name, left, yTop, Math.max(40f, right - left - 58f));
                 if (unlocked) {
                     TextDraw.right(ctx, ctx.fontRegular, UIVars.ACCENT,
                             "earned", right, yTop);
                 }
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        desc, left, yTop - 16f);
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        desc, left, yTop - 16f, right - left);
             }
         });
-    }
-
-    /** Run {@code body} under a glScissor that clips to the band between
-     *  {@code yTop} and {@code yBottom}. The active SpriteBatch is flushed
-     *  before/after so the clip applies cleanly to its draw calls. */
-    private void clipBand(UiCtx ctx, float yTop, float yBottom, Runnable body) {
-        ctx.batch.flush();
-        com.badlogic.gdx.math.Rectangle worldRect = new com.badlogic.gdx.math.Rectangle(
-                window.x, yBottom, window.w, yTop - yBottom);
-        com.badlogic.gdx.math.Rectangle scissor = new com.badlogic.gdx.math.Rectangle();
-        com.badlogic.gdx.utils.viewport.Viewport vp = ctx.viewport;
-        com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.calculateScissors(vp.getCamera(),
-                vp.getScreenX(), vp.getScreenY(), vp.getScreenWidth(), vp.getScreenHeight(),
-                ctx.batch.getTransformMatrix(), worldRect, scissor);
-        if (com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.pushScissors(scissor)) {
-            try {
-                body.run();
-                ctx.batch.flush();
-            } finally {
-                com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.popScissors();
-            }
-        } else {
-            // Scissor was empty — nothing to draw.
-            body.run();
-        }
     }
 
     @Override
@@ -325,23 +310,29 @@ public final class V2HallOfFame extends V2Screen {
             }
         }
         if (!window.contains(vx, vy)) return false;
-        activeScroller().onTouchDown(vy);
-        return true;
+        return activeBand().touchDown(vx, vy);
     }
 
     @Override
     protected boolean onTouchDragged(float vx, float vy) {
-        return activeScroller().onTouchDragged(vy);
+        return activeBand().touchDragged(vy);
     }
 
     @Override
     protected boolean onScrolled(float amountY) {
-        activeScroller().onScrolled(amountY, ctx.lineH());
+        activeBand().scrolled(amountY, ctx.lineH());
         return true;
     }
 
-    private Scroller activeScroller() {
-        return currentTab == Tab.HEROES ? heroesScroller : achievementsScroller;
+    private ScrollBand activeBand() {
+        return currentTab == Tab.HEROES ? heroesBand : achievementsBand;
+    }
+
+    private void configureBands() {
+        float top = bandTop();
+        float bottom = bandBottom();
+        heroesBand.set(window.x, bottom, window.w, top - bottom);
+        achievementsBand.set(window.x, bottom, window.w, top - bottom);
     }
 
     /** Override the input chain by composing the base V2Screen processor

@@ -29,7 +29,7 @@ android {
         main {
             assets.srcDirs += [rootProject.file('assets').absolutePath]
             // Pick up the .so files extracted by copyAndroidNatives into android/libs/
-            // — modern AGP only scans src/main/jniLibs by default, so without this the
+            // - modern AGP only scans src/main/jniLibs by default, so without this the
             // gdx native shared library never lands in the APK and the launcher
             // crashes on dlopen("libgdx.so").
             jniLibs.srcDirs += ['libs']
@@ -47,7 +47,7 @@ dependencies {
     natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
     natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86"
     natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
-    // FreeType native libraries — required by FreeTypeFontGenerator. Each ABI's
+    // FreeType native libraries - required by FreeTypeFontGenerator. Each ABI's
     // libgdx-freetype.so lands in android/libs/<abi>/ alongside libgdx.so via
     // the copyAndroidNatives task below.
     natives "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-armeabi-v7a"

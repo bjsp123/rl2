@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 arena setup — pick a species + level + count for each of two teams.
+ * V2 arena setup - pick a species + level + count for each of two teams.
  * Tap Start Fight to launch {@link V2Arena}, which spawns the chosen mobs
  * onto a fresh arena map and runs the fight.
  */
@@ -30,7 +30,7 @@ public final class V2ArenaSetup extends V2Screen {
         }
     }
 
-    /** Team picked by the user — type + level + count. Consumed by V2Arena
+    /** Team picked by the user - type + level + count. Consumed by V2Arena
      *  to spawn the mobs on the fight map. */
     public static final class TeamSpec {
         public final TeamType type;
@@ -243,8 +243,9 @@ public final class V2ArenaSetup extends V2Screen {
         float cx   = x + w * 0.5f;
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 isA ? "Team A" : "Team B", cx, p[0]);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
-                types().get(isA ? teamAIdx : teamBIdx).label, cx, p[2]);
+        TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.ACCENT,
+                types().get(isA ? teamAIdx : teamBIdx).label, cx, p[2],
+                Math.max(24f, w - 64f));
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Level", cx, p[3]);
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Count", cx, p[5]);
     }

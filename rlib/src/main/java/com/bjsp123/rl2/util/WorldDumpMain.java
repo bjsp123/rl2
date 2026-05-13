@@ -20,7 +20,7 @@ import java.util.Random;
  * {@link WorldTopology#build}, and writes the {@link WorldYamlDump} output to
  * {@code world_dump.yaml} in the working directory (and stdout).
  *
- * <p>Wired up as a Gradle task — see {@code rlib/build.gradle}'s
+ * <p>Wired up as a Gradle task - see {@code rlib/build.gradle}'s
  * {@code dumpWorld} task. Examples:
  * <pre>
  *   ./gradlew :rlib:dumpWorld                  # random seed

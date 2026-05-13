@@ -17,18 +17,18 @@ import java.util.Map;
  *
  * <p>Three flavours of access:
  * <ul>
- *   <li><b>UI regions</b> — {@link #regionFor(Surface)} / {@link #regionFor(Vegetation)}
+ *   <li><b>UI regions</b> - {@link #regionFor(Surface)} / {@link #regionFor(Vegetation)}
  *       return single-tile {@link TextureRegion}s for UI panels (look popup, encyclopaedia).
  *       The encyclopaedia-only ICE / FIRE entries are backed by procedural / first-frame
  *       fallbacks respectively.</li>
- *   <li><b>In-world liquid + vegetation Textures</b> — {@link #liquidTexture(Surface)},
+ *   <li><b>In-world liquid + vegetation Textures</b> - {@link #liquidTexture(Surface)},
  *       {@link #vegetationTextureA(Vegetation)} / {@link #vegetationTextureB(Vegetation)}
  *       return per-tile {@link Texture} instances with the right filter/wrap settings the
  *       in-world renderer needs (Linear+Repeat for liquids' scrolling shader; Nearest for
  *       crisp vegetation pixels).</li>
- *   <li><b>Shore-mask tiles</b> — {@link #maskTexture(int)} returns one of 16 alpha
+ *   <li><b>Shore-mask tiles</b> - {@link #maskTexture(int)} returns one of 16 alpha
  *       masks indexed by the 4-bit N/E/S/W neighbour bitfield.</li>
- *   <li><b>Fire frames</b> — {@link #fire1Texture()} / {@link #fire2Texture()} return
+ *   <li><b>Fire frames</b> - {@link #fire1Texture()} / {@link #fire2Texture()} return
  *       the two 8-frame fire animation sheets used by FxRenderer.</li>
  * </ul>
  */
@@ -38,23 +38,23 @@ public final class SurfaceSprites {
     private static final String FIRE1_PATH    = "sprites/fire 1.png";
     private static final String FIRE2_PATH    = "sprites/fire 2.png";
 
-    /** Liquid tile pitch — matches {@code DefaultLevelRenderer.SURFACE_TILE}. */
+    /** Liquid tile pitch - matches {@code DefaultLevelRenderer.SURFACE_TILE}. */
     public static final int LIQUID_TILE = 64;
-    /** Vegetation cell pitch — matches {@code DefaultLevelRenderer.VEG_SPRITE_PX}. */
+    /** Vegetation cell pitch - matches {@code DefaultLevelRenderer.VEG_SPRITE_PX}. */
     public static final int VEG_CELL    = 32;
     /** Shore-mask tile pitch. */
     public static final int MASK_TILE   = 32;
-    /** y-offset of the mask strip — row 3 of the 64-px liquid grid. */
+    /** y-offset of the mask strip - row 3 of the 64-px liquid grid. */
     private static final int MASK_STRIP_Y = 3 * LIQUID_TILE;
 
-    /** Number of mask variants — 4-bit N/E/S/W bitfield. */
+    /** Number of mask variants - 4-bit N/E/S/W bitfield. */
     public static final int MASK_VARIANTS = 16;
 
-    /** Frame size of one cell in fire 1/2.png — matches {@code FxRenderer.FIRE_SHEET_FRAME_*}. */
+    /** Frame size of one cell in fire 1/2.png - matches {@code FxRenderer.FIRE_SHEET_FRAME_*}. */
     private static final int FIRE_FRAME_W = 32;
     private static final int FIRE_FRAME_H = 48;
 
-    // Raw atlas sheet — kept for UI region access.
+    // Raw atlas sheet - kept for UI region access.
     private static Texture sheet;
     // In-world per-liquid textures (Linear+Repeat for the scroll shader).
     private static Map<Surface, Texture> liquidTextures;
@@ -63,7 +63,7 @@ public final class SurfaceSprites {
     private static Map<Vegetation, Texture> vegB;
     // Shore-mask variants 0..15.
     private static Texture[] maskTextures;
-    // Procedural placeholder for ICE — atlas doesn't ship one.
+    // Procedural placeholder for ICE - atlas doesn't ship one.
     private static Texture iceTex;
     // Fire animation sheets.
     private static Texture fire1Tex, fire2Tex;
@@ -75,7 +75,7 @@ public final class SurfaceSprites {
 
     private SurfaceSprites() {}
 
-    // ── UI region accessors ─────────────────────────────────────────────────
+    // -- UI region accessors -------------------------------------------------
 
     public static TextureRegion regionFor(Surface s) {
         if (surfaceRegions == null) load();
@@ -87,7 +87,7 @@ public final class SurfaceSprites {
         return vegRegions == null ? null : vegRegions.get(v);
     }
 
-    // ── In-world Texture accessors ──────────────────────────────────────────
+    // -- In-world Texture accessors ------------------------------------------
 
     public static Texture liquidTexture(Surface s) {
         if (liquidTextures == null) load();
@@ -123,13 +123,13 @@ public final class SurfaceSprites {
         return fire2Tex;
     }
 
-    // ── Loading ─────────────────────────────────────────────────────────────
+    // -- Loading -------------------------------------------------------------
 
     private static void load() {
         Pixmap sheetPm = null;
         try {
             sheetPm = new Pixmap(Gdx.files.internal(SURFACES_PATH));
-            // Raw atlas Texture for UI regions — Nearest filter so the UI preview
+            // Raw atlas Texture for UI regions - Nearest filter so the UI preview
             // stays crisp at native size.
             sheet = new Texture(sheetPm);
             sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
@@ -139,8 +139,8 @@ public final class SurfaceSprites {
             putLiquid(sheetPm, Surface.WATER, 0, sw, sh);
             putLiquid(sheetPm, Surface.BLOOD, 1, sw, sh);
             putLiquid(sheetPm, Surface.OIL,   2, sw, sh);
-            // ICE — atlas doesn't carry one (in-world reads off the end of the sheet).
-            // Synthesise a 32×32 procedural placeholder; same Texture serves both UI
+            // ICE - atlas doesn't carry one (in-world reads off the end of the sheet).
+            // Synthesise a 32x32 procedural placeholder; same Texture serves both UI
             // and in-world rendering.
             iceTex = buildIceTexture();
             if (iceTex != null) liquidTextures.put(Surface.ICE, iceTex);
@@ -149,10 +149,10 @@ public final class SurfaceSprites {
             vegB = new EnumMap<>(Vegetation.class);
             putVegPair(sheetPm, Vegetation.GRASS,     4, 0, 1, sw, sh);
             putVegPair(sheetPm, Vegetation.MUSHROOMS, 4, 1, 1, sw, sh);
-            // Trees — 32×64 (col 6/7, rows 0..1).
+            // Trees - 32x64 (col 6/7, rows 0..1).
             putVegPair(sheetPm, Vegetation.TREES,     6, 0, 2, sw, sh);
 
-            // Shore-mask tiles — row 3 of the 64-px grid, sliced into 16 32×32 variants.
+            // Shore-mask tiles - row 3 of the 64-px grid, sliced into 16 32x32 variants.
             maskTextures = new Texture[MASK_VARIANTS];
             maskTextures[0] = buildAllWaterMask();
             for (int i = 1; i < MASK_VARIANTS; i++) {
@@ -170,27 +170,27 @@ public final class SurfaceSprites {
                 }
             }
 
-            // UI regions — surface previews are 64×64 single-tile samples; vegetation
+            // UI regions - surface previews are 64x64 single-tile samples; vegetation
             // previews use the 32-px cell pitch.
             surfaceRegions = new EnumMap<>(Surface.class);
             putRegion(surfaceRegions, Surface.WATER, 0, 0, LIQUID_TILE, LIQUID_TILE, sw, sh);
             putRegion(surfaceRegions, Surface.BLOOD, 0, LIQUID_TILE, LIQUID_TILE, LIQUID_TILE, sw, sh);
             putRegion(surfaceRegions, Surface.OIL,   0, 2 * LIQUID_TILE, LIQUID_TILE, LIQUID_TILE, sw, sh);
-            // ICE — point UI at the procedural placeholder.
+            // ICE - point UI at the procedural placeholder.
             if (iceTex != null) surfaceRegions.put(Surface.ICE, new TextureRegion(iceTex));
 
             vegRegions = new EnumMap<>(Vegetation.class);
             putRegion(vegRegions, Vegetation.GRASS,     4 * VEG_CELL, 0,           VEG_CELL, VEG_CELL, sw, sh);
             putRegion(vegRegions, Vegetation.MUSHROOMS, 4 * VEG_CELL, VEG_CELL,    VEG_CELL, VEG_CELL, sw, sh);
-            // Trees: 32×64 — let UI scale to fit.
+            // Trees: 32x64 - let UI scale to fit.
             putRegion(vegRegions, Vegetation.TREES,     6 * VEG_CELL, 0,           VEG_CELL, 2 * VEG_CELL, sw, sh);
         } catch (Exception ignored) {
-            // Atlas missing — fields stay null; accessors return null.
+            // Atlas missing - fields stay null; accessors return null.
         } finally {
             if (sheetPm != null) sheetPm.dispose();
         }
 
-        // Fire sheets — separate files, both optional.
+        // Fire sheets - separate files, both optional.
         fire1Tex = loadIfPresent(FIRE1_PATH);
         fire2Tex = loadIfPresent(FIRE2_PATH);
         // Encyclopaedia FIRE preview rides on fire1's first frame.
@@ -209,7 +209,7 @@ public final class SurfaceSprites {
         p.drawPixmap(sheet, 0, 0, 0, y, LIQUID_TILE, LIQUID_TILE);
         Texture t = new Texture(p);
         p.dispose();
-        // Linear+Repeat — the in-world surface shader scrolls UVs across the tile.
+        // Linear+Repeat - the in-world surface shader scrolls UVs across the tile.
         t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         t.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
         liquidTextures.put(s, t);
@@ -244,7 +244,7 @@ public final class SurfaceSprites {
         into.put(key, new TextureRegion(sheet, x, y, w, h));
     }
 
-    /** Procedural ice tile — soft cyan with a brighter centre highlight. 32×32 to
+    /** Procedural ice tile - soft cyan with a brighter centre highlight. 32x32 to
      *  match the vegetation cell pitch. */
     private static Texture buildIceTexture() {
         int size = 32;
@@ -266,7 +266,7 @@ public final class SurfaceSprites {
         return t;
     }
 
-    /** Fully-transparent mask — under the inverted-alpha convention this means
+    /** Fully-transparent mask - under the inverted-alpha convention this means
      *  "every pixel is water", used as variant 0 (no shores). */
     private static Texture buildAllWaterMask() {
         Pixmap p = new Pixmap(MASK_TILE, MASK_TILE, Pixmap.Format.RGBA8888);

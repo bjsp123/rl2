@@ -2,18 +2,18 @@ package com.bjsp123.rl2.ui.skin;
 import com.bjsp123.rl2.persistence.Persistence;
 
 /**
- * UI "pixel scale" — an integer multiplier applied on top of {@link UiScale} that controls
+ * UI "pixel scale" - an integer multiplier applied on top of {@link UiScale} that controls
  * how chunky the UI pixel art reads. A value of 1 means each source pixel maps to one
  * UiScale-sized screen pixel; 2 doubles the pixel size (nearest-neighbor upscale on top of
  * {@link UiScale}); 3 triples it; etc.
  *
  * <p>How it composes: the scene2d UI stage's {@code unitsPerPixel} is set to
  * {@code 1 / (UiScale.scale() * UiPixelScale.scale())}. Each stage unit therefore covers
- * {@code UiScale × UiPixelScale} screen pixels — textures and widget layout both inflate
+ * {@code UiScale x UiPixelScale} screen pixels - textures and widget layout both inflate
  * equally, so buttons, 9-patches, and icons grow blockier when {@code UiPixelScale} goes up.
  *
  * <p>Text that should stay at its natural screen size regardless of pixel scale (e.g. the
- * scrolling event log — readability beats chunkiness there) compensates by dividing its
+ * scrolling event log - readability beats chunkiness there) compensates by dividing its
  * own font scale by {@code UiPixelScale.scale()} in addition to {@link UiScale}. All other
  * UI text follows {@code UiPixelScale}, which the user explicitly wants: "make all graphics
  * pixelated except the text log".

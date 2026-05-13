@@ -9,14 +9,14 @@ import java.util.Random;
 
 /**
  * Stamping orchestrator: walks the just-carved room rectangles and applies
- * themed-room treatments. All decoration — round rooms, walkways, chasm/light/
- * imp temples, galleries, the new chapel/pedestal/checkerboard rooms, etc. —
+ * themed-room treatments. All decoration - round rooms, walkways, chasm/light/
+ * imp temples, galleries, the new chapel/pedestal/checkerboard rooms, etc. -
  * is data-driven from {@code assets/data/themedrooms.csv}; this class just
  * picks rows that fit and stamps them.
  *
  * <p>Two passes:
  * <ol>
- *   <li>{@link #stampUniqueRoom} — at most one unique row per level. Eligible
+ *   <li>{@link #stampUniqueRoom} - at most one unique row per level. Eligible
  *       candidates are rows flagged {@code unique=true}, not already in
  *       {@link UniqueTracker#rooms}, and whose {@code [powerMin, powerMax]}
  *       band covers the level's depth-fraction. The first room whose dimensions
@@ -24,7 +24,7 @@ import java.util.Random;
  *       regular paint won't touch it), the rectangle is added to
  *       {@link Level#reservedRects} (so random scatter skips it), and the type
  *       is added to {@code unique.rooms}.</li>
- *   <li>{@link #stampRegularThemedRooms} — every non-stair room is decorated
+ *   <li>{@link #stampRegularThemedRooms} - every non-stair room is decorated
  *       with a uniform pick from the {@code unique=false} rows whose dimensions
  *       and powerLevel fit. Doesn't reserve; regulars coexist with random
  *       scatter the same way the decorative {@code RoomKind} variants used
@@ -33,7 +33,7 @@ import java.util.Random;
  *
  * <p>VILLAGE-layout levels finalise their own buildings inside the layout
  * builder, so themed-room stamping is skipped on those entirely. WALKWAY_LEVEL
- * already paints corridors as planks over chasm — stamping additional
+ * already paints corridors as planks over chasm - stamping additional
  * {@code roomShape=WALKWAY} rooms on top would be redundant, so those rows are
  * filtered out on those levels.
  */
@@ -98,7 +98,7 @@ public final class LevelFactoryThemedRooms {
         for (String type : ThemedRoomRegistry.knownTypes()) {
             ThemedRoomDefinition d = ThemedRoomRegistry.get(type);
             if (d == null || d.unique) continue;
-            // WALKWAY_LEVEL paints corridors as planks over chasm — stamping a
+            // WALKWAY_LEVEL paints corridors as planks over chasm - stamping a
             // walkway-shaped room on top would be redundant.
             if (walkwayLevel && d.roomShape == ThemedRoomDefinition.RoomShape.WALKWAY) continue;
             regulars.add(d);
@@ -126,7 +126,7 @@ public final class LevelFactoryThemedRooms {
             ThemedRoomPainter.paint(level, d, r[0], r[1], r[2], r[3], rng);
             ThemedRoomPopulator.populate(level, d, r[0], r[1], r[2], r[3],
                                          spawnLevel, rng);
-            // Regular themed rooms don't reserve — they coexist with random scatter
+            // Regular themed rooms don't reserve - they coexist with random scatter
             // the same way the pre-existing decorative variants did.
             tagSnapshotKind(level, r, d.type);
             rooms.remove(ri);
@@ -153,13 +153,13 @@ public final class LevelFactoryThemedRooms {
         if (d.requireLong) {
             int longSide  = Math.max(w, h);
             int shortSide = Math.min(w, h);
-            if (longSide < shortSide * 3 / 2) return false;   // 1.5×
+            if (longSide < shortSide * 3 / 2) return false;   // 1.5x
         }
         return true;
     }
 
     /** Weight multiplier for a definition's theme relative to the level's theme.
-     *  Null = theme-neutral (1×); matching = 2×; mismatching = 0.5×. */
+     *  Null = theme-neutral (1x); matching = 2x; mismatching = 0.5x. */
     private static double themeMultiplier(ThemedRoomDefinition d, Level level) {
         if (d.theme == null) return 1.0;
         return d.theme == level.theme ? 2.0 : 0.5;
@@ -179,7 +179,7 @@ public final class LevelFactoryThemedRooms {
     }
 
     /** Depth-fraction of {@code level.depth} within the configured dungeon size:
-     *  depth 1 → 0.0, depth {@code DUNGEON_DEPTH} → 1.0. Mirrors
+     *  depth 1 -> 0.0, depth {@code DUNGEON_DEPTH} -> 1.0. Mirrors
      *  {@link LevelFactoryPopulate}'s helper but inlined here so the orchestrator
      *  doesn't reach into the populator's internals. */
     private static double depthFraction(Level level) {

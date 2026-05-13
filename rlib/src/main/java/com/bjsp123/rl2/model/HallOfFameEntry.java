@@ -10,7 +10,7 @@ public class HallOfFameEntry {
     public int    depth;
     public List<String> equipment = new ArrayList<>();
     public long   timestampMillis;
-    /** Last player-relevant log line at the moment of death — the "cause" sentence. */
+    /** Last player-relevant log line at the moment of death - the "cause" sentence. */
     public String deathMessage = "";
     public int    totalTurns   = 0;
     public int    beastsTamed  = 0;

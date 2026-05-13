@@ -7,7 +7,7 @@ import com.bjsp123.rl2.model.Point;
 
 /**
  * Factory for spawning {@link Mob} instances. Both NPCs and players are data-
- * driven — every row in {@code assets/data/mobs.csv} produces a
+ * driven - every row in {@code assets/data/mobs.csv} produces a
  * {@link MobDefinition} in {@link MobRegistry}; {@link #spawn(String, Point)}
  * looks up the definition and applies it. The {@code PLAYER_*} rows hold the
  * per-class kits; {@link #player(Point, CharacterClass)} picks the right one

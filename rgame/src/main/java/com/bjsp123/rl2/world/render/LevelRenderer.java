@@ -21,7 +21,7 @@ public interface LevelRenderer {
     /**
      * Tell the renderer its cached per-level data (fog overlay, item/mob index) is stale
      * vs the current level state. The caller should invoke this after any event that could
-     * have changed visibility, lighting, or the position / presence of a mob or item — in
+     * have changed visibility, lighting, or the position / presence of a mob or item - in
      * practice, on every completed game tick and on every level transition.
      *
      * <p>Default no-op so renderers without per-frame caches don't need to implement it.

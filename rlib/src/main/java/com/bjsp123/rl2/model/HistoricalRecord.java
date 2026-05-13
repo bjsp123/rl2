@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.model;
 
 /**
- * One entry in a character's lifetime history — "slew goblin on turn 42, dungeon level 3",
+ * One entry in a character's lifetime history - "slew goblin on turn 42, dungeon level 3",
  * "reached level 5", "found healing potion". The History tab of the character stats frame
  * scrolls a list of these.
  *
@@ -10,12 +10,12 @@ package com.bjsp123.rl2.model;
  * a single {@code int} via bitfields instead of three primitives, cutting object overhead to
  * one reference ({@link #label}), one enum reference ({@link #kind}), and one int.
  *
- * <p><b>Packed metadata layout.</b> Turn occupies the low 24 bits (≈16M turns — comfortably
- * beyond any session), dungeon depth occupies the next 7 bits (up to 127 floors — plenty),
+ * <p><b>Packed metadata layout.</b> Turn occupies the low 24 bits (~16M turns - comfortably
+ * beyond any session), dungeon depth occupies the next 7 bits (up to 127 floors - plenty),
  * and 1 bit is reserved. This keeps arithmetic on {@link #turn()} / {@link #depth()} trivial
  * (mask + shift) without forcing callers to do the bit math.
  *
- * <p>The short-lived entity description ({@link #label} — species name, item name, new
+ * <p>The short-lived entity description ({@link #label} - species name, item name, new
  * level number) is stored as-is; callers pass {@code mob.name} / {@code item.name} /
  * {@code Integer.toString(level)}, which are already shared references from their source
  * objects so no extra interning is needed.
@@ -54,7 +54,7 @@ public final class HistoricalRecord {
     public int depth() { return (packed >>> DEPTH_SHIFT) & DEPTH_MASK; }
 
     private static int pack(int turn, int depth) {
-        // Clamp silently instead of throwing — a clamped history entry is always preferable
+        // Clamp silently instead of throwing - a clamped history entry is always preferable
         // to crashing the game mid-tick because someone overflowed the counter.
         int t = Math.max(0, Math.min(TURN_MASK, turn));
         int d = Math.max(0, Math.min(DEPTH_MASK, depth));

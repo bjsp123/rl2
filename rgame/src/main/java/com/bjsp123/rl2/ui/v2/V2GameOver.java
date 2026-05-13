@@ -13,7 +13,7 @@ import com.bjsp123.rl2.world.render.PortraitSprites;
 import java.util.ArrayList;
 import java.util.List;
 
-/** V2 game-over screen — shown when the player dies. */
+/** V2 game-over screen - shown when the player dies. */
 public final class V2GameOver extends V2Screen {
 
     private static final Color DIM_WARN = new Color(0.9f, 0.3f, 0.3f, 1f);
@@ -22,7 +22,7 @@ public final class V2GameOver extends V2Screen {
     private final HallOfFameEntry record;
     private final V2Log           log;
 
-    // Layout rects — computed once in buildLayout().
+    // Layout rects - computed once in buildLayout().
     private final Rect window   = new Rect();
     private final Rect portrait = new Rect();
     private float nameY, statsY, deathY;
@@ -34,7 +34,7 @@ public final class V2GameOver extends V2Screen {
         this.log    = new V2Log(game.ui);
     }
 
-    // ── V2Screen lifecycle ────────────────────────────────────────────────────
+    // -- V2Screen lifecycle ----------------------------------------------------
 
     @Override
     public void show() {
@@ -52,18 +52,18 @@ public final class V2GameOver extends V2Screen {
         float winY = (vh - winH) * 0.5f;
         window.set(winX, winY, winW, winH);
 
-        // Portrait box — centred, below "YOU DIED" title.
+        // Portrait box - centred, below "YOU DIED" title.
         float portSz  = 72f;
         float portX   = winX + (winW - portSz) * 0.5f;
         float portTop = winY + winH - headerBandH() - 16f;
         portrait.set(portX, portTop - portSz, portSz, portSz);
 
-        // Text anchor Ys — derived from live font metrics so they scale with UiFontScale.
+        // Text anchor Ys - derived from live font metrics so they scale with UiFontScale.
         nameY  = portrait.y - ctx.spacerLargeY();
         statsY = nameY  - ctx.headerLineH();
         deathY = statsY - ctx.lineH();
 
-        // Buttons — bottom of window.
+        // Buttons - bottom of window.
         float btnH    = 52f;
         float btnGap  = 8f;
         float iconSz  = 52f;
@@ -86,7 +86,7 @@ public final class V2GameOver extends V2Screen {
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
-        // Portrait frame — a simple recessed rect slightly larger than the portrait.
+        // Portrait frame - a simple recessed rect slightly larger than the portrait.
         float pad = 4f;
         ctx.shapes.setColor(UIVars.SLOT_RECESS);
         ctx.shapes.rect(portrait.x - pad, portrait.y - pad,
@@ -117,7 +117,7 @@ public final class V2GameOver extends V2Screen {
         String stats = "Score: " + record.score + "   Depth: " + record.depth;
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, stats, cx, statsY);
 
-        // Death message — word-wrapped up to 2 lines.
+        // Death message - word-wrapped up to 2 lines.
         if (record.deathMessage != null && !record.deathMessage.isEmpty()) {
             float maxW = window.w - 24f;
             List<String> lines = new ArrayList<>();
@@ -142,7 +142,7 @@ public final class V2GameOver extends V2Screen {
         game.setRootScreen(new V2Title(game, ctx));
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // -- Helpers ---------------------------------------------------------------
 
     private static CharacterClass parseClass(String name) {
         if (name == null) return null;

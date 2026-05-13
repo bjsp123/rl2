@@ -2,7 +2,7 @@ package com.bjsp123.rl2.ui;
 
 /**
  * Display-name helpers for the UI layer. Lives in rgame because it's a
- * presentation concern — game logic in rlib stores names verbatim.
+ * presentation concern - game logic in rlib stores names verbatim.
  */
 public final class Names {
 

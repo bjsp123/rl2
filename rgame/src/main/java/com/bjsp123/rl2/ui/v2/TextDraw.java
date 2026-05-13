@@ -4,6 +4,8 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -17,6 +19,24 @@ import java.util.List;
  */
 public final class TextDraw {
     private TextDraw() {}
+
+    public static final class TextBlock {
+        public final List<String> lines;
+        public final boolean truncated;
+        public final float lineHeight;
+
+        private TextBlock(List<String> lines, boolean truncated, float lineHeight) {
+            this.lines = Collections.unmodifiableList(lines);
+            this.truncated = truncated;
+            this.lineHeight = lineHeight;
+        }
+
+        public int lineCount() { return lines.size(); }
+
+        public float height() { return lines.size() * lineHeight; }
+
+        public boolean isEmpty() { return lines.isEmpty(); }
+    }
 
     /** Draw {@code text} left-aligned at {@code (x, y)} where y is the line
      *  TOP. Useful when laying out from the top of a window down. */
@@ -42,6 +62,77 @@ public final class TextDraw {
         font.setColor(colour);
         ctx.layout.setText(font, text);
         font.draw(ctx.batch, text, xRight - ctx.layout.width, yTop);
+    }
+
+    public static void leftFit(UiCtx ctx, BitmapFont font, Color colour,
+                               String text, float x, float yTop,
+                               float maxWidthPx) {
+        left(ctx, font, colour, ellipsize(font, text, maxWidthPx), x, yTop);
+    }
+
+    public static void centreFit(UiCtx ctx, BitmapFont font, Color colour,
+                                 String text, float cx, float yTop,
+                                 float maxWidthPx) {
+        centre(ctx, font, colour, ellipsize(font, text, maxWidthPx), cx, yTop);
+    }
+
+    public static void rightFit(UiCtx ctx, BitmapFont font, Color colour,
+                                String text, float xRight, float yTop,
+                                float maxWidthPx) {
+        right(ctx, font, colour, ellipsize(font, text, maxWidthPx), xRight, yTop);
+    }
+
+    public static void wrapped(UiCtx ctx, BitmapFont font, Color colour,
+                               TextBlock block, float x, float yTop) {
+        float y = yTop;
+        for (String line : block.lines) {
+            left(ctx, font, colour, line, x, y);
+            y -= block.lineHeight;
+        }
+    }
+
+    public static void wrappedCentre(UiCtx ctx, BitmapFont font, Color colour,
+                                     TextBlock block, float cx, float yTop) {
+        float y = yTop;
+        for (String line : block.lines) {
+            centre(ctx, font, colour, line, cx, y);
+            y -= block.lineHeight;
+        }
+    }
+
+    public static String ellipsize(BitmapFont font, String text, float maxWidthPx) {
+        if (text == null) return "";
+        if (maxWidthPx <= 0f) return "";
+        GlyphLayout layout = SCRATCH.get();
+        layout.setText(font, text);
+        if (layout.width <= maxWidthPx) return text;
+        String suffix = "...";
+        layout.setText(font, suffix);
+        if (layout.width > maxWidthPx) return "";
+        int hi = text.length();
+        while (hi > 0) {
+            String candidate = text.substring(0, hi).trim() + suffix;
+            layout.setText(font, candidate);
+            if (layout.width <= maxWidthPx) return candidate;
+            hi--;
+        }
+        return suffix;
+    }
+
+    public static TextBlock block(BitmapFont font, String text,
+                                  float maxWidthPx, int maxLines,
+                                  float lineHeight) {
+        ArrayList<String> lines = new ArrayList<>();
+        if (text == null || text.isEmpty() || maxLines <= 0 || maxWidthPx <= 0f) {
+            return new TextBlock(lines, false, lineHeight);
+        }
+        wrap(font, text, maxWidthPx, maxLines, lines);
+        boolean truncated = consumedLessThanAll(font, text, maxWidthPx, lines);
+        if (truncated && !lines.isEmpty()) {
+            int last = lines.size() - 1;
+            lines.set(last, ellipsize(font, lines.get(last) + "...", maxWidthPx));
+        }
+        return new TextBlock(lines, truncated, lineHeight);
     }
 
     /** Word-wrap {@code text} into {@code out} so every emitted line measures
@@ -77,7 +168,7 @@ public final class TextDraw {
                 i++;
                 continue;
             }
-            // Adding char i pushes the line past maxWidthPx — emit the line
+            // Adding char i pushes the line past maxWidthPx - emit the line
             // we have so far. Prefer breaking at the last whitespace; if
             // there isn't one inside this line, hard-break before i so a
             // single long word still gets split.
@@ -97,6 +188,18 @@ public final class TextDraw {
         if (out.size() < maxLines && lineStart < n) {
             out.add(text.substring(lineStart));
         }
+    }
+
+    private static boolean consumedLessThanAll(BitmapFont font, String text,
+                                               float maxWidthPx,
+                                               List<String> lines) {
+        if (text == null || text.isEmpty()) return false;
+        StringBuilder joined = new StringBuilder();
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) joined.append(' ');
+            joined.append(lines.get(i));
+        }
+        return joined.length() < text.trim().length();
     }
 
     /** Per-thread {@link GlyphLayout} so wrap measurements don't allocate

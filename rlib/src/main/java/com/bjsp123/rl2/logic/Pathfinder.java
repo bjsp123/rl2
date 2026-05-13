@@ -84,7 +84,7 @@ public class Pathfinder {
         // either explored OR that are 8-adjacent to an explored tile, so a
         // tap can step ONE tile into the fog (peeking around a corner) but
         // can't auto-walk a full corridor through territory they've never
-        // seen. AI mobs ignore this check — they're omniscient about the
+        // seen. AI mobs ignore this check - they're omniscient about the
         // geometry.
         if (mover.behavior == Behavior.PLAYER
                 && level.explored != null
@@ -95,7 +95,7 @@ public class Pathfinder {
         for (Mob m : level.mobs) {
             if (m.position.tileX() != x || m.position.tileY() != y) continue;
             if (m == mover) continue;
-            // Hostile target — pathing through the tile is fine; the movement system
+            // Hostile target - pathing through the tile is fine; the movement system
             // resolves arrival as an attack via stepTowardTarget. Inanimate
             // occupants follow the same rule (so anthills + other hostile
             // inanimates can be melee'd by stepping into them); otherwise
@@ -103,11 +103,11 @@ public class Pathfinder {
             if (MobSystem.getAttitudeToMob(mover, m) == Attitude.ATTACK) continue;
             if (m.behavior == Behavior.INANIMATE) return false;
             // Player movers keep their old gate: the player can step onto a non-hostile
-            // mob's tile (for things like wand-of-dog summon adjacency) — swap-places is
-            // a non-player AI behaviour. We only special-case the player→player case
+            // mob's tile (for things like wand-of-dog summon adjacency) - swap-places is
+            // a non-player AI behaviour. We only special-case the player->player case
             // here as a no-op since mover != m guarantees it's a different mob.
             if (mover.behavior == Behavior.PLAYER) continue;
-            // Non-player mover, occupant is a non-hostile mob — impassable unless the
+            // Non-player mover, occupant is a non-hostile mob - impassable unless the
             // mover is strictly larger, in which case swap-places kicks in (handled in
             // stepTowardTarget on arrival). Equal-size or smaller cannot push past.
             if (mover.effectiveStats().size > m.effectiveStats().size) continue;
@@ -118,8 +118,8 @@ public class Pathfinder {
 
     /** True when any of the 8 neighbours of {@code (x, y)} is in-bounds and
      *  flagged explored. Used to relax the player-pathing gate so the
-     *  player can step ONE tile into the fog from any explored cell — a
-     *  peek around the corner — without being able to auto-travel through
+     *  player can step ONE tile into the fog from any explored cell - a
+     *  peek around the corner - without being able to auto-travel through
      *  unseen territory. */
     private static boolean hasExploredNeighbour(Level level, int x, int y) {
         if (level.explored == null) return false;

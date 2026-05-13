@@ -13,7 +13,7 @@ import java.util.Map;
  * stat-modifying affixes that can be applied to weapons, offhands, armor,
  * and amulets at generation time.
  *
- * <p>{@link #element} reuses {@link Item.ItemEffect} — only the values
+ * <p>{@link #element} reuses {@link Item.ItemEffect} - only the values
  * {@code FIRE}, {@code LIGHTNING}, {@code FREEZE}, and {@code POISONCLOUD}
  * are meaningful here; a null element means "stat brand only".
  */
@@ -21,7 +21,7 @@ public final class BrandDefinition {
 
     /** CSV key (e.g. {@code "FLAME"}). */
     public String brand;
-    /** Display suffix appended to the item name (e.g. {@code "flame"} → "sword of flame"). */
+    /** Display suffix appended to the item name (e.g. {@code "flame"} -> "sword of flame"). */
     public String name;
     /** Relative weight for random selection. Higher = more common. */
     public double rarity = 1.0;
@@ -31,7 +31,7 @@ public final class BrandDefinition {
     /** Flavor text shown in the item lore panel. */
     public String description = "";
 
-    // ── Stat bonuses ─────────────────────────────────────────────────────────
+    // -- Stat bonuses ---------------------------------------------------------
     public int    accuracy;
     public int    evasion;
     /** Flat damage bonus (added to dst.damage as a fixed MinMax). */
@@ -47,7 +47,7 @@ public final class BrandDefinition {
     /** Knockback squares added to the wielder's knockback stat. */
     public int    knockback;
 
-    // ── Elemental on-hit ─────────────────────────────────────────────────────
+    // -- Elemental on-hit -----------------------------------------------------
     /** On-hit elemental effect. Null = stat brand only. Meaningful values:
      *  FIRE, LIGHTNING, FREEZE, POISONCLOUD. */
     public Item.ItemEffect element;
@@ -55,7 +55,7 @@ public final class BrandDefinition {
      *  lightning chain damage cap). */
     public int elementpower;
 
-    // ── Resistance / utility flags (stored for future use) ───────────────────
+    // -- Resistance / utility flags (stored for future use) -------------------
     public boolean resistFire;
     public boolean resistPoison;
     public boolean sorcery;
@@ -63,7 +63,7 @@ public final class BrandDefinition {
     /** Packed RGB color for particle and outline-pulse effects (0xRRGGBB). Default: white. */
     public int colorHex = 0xFFFFFF;
 
-    // ── Parsing ──────────────────────────────────────────────────────────────
+    // -- Parsing --------------------------------------------------------------
 
     public static List<BrandDefinition> parseAll(String csv) {
         CsvTable table = CsvTable.parse(csv);

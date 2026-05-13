@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * Small CSV reader for the project's data files (mobs.csv, items.csv,
- * mob_sprites.csv, item_sprites.csv). Self-contained — no third-party
+ * mob_sprites.csv, item_sprites.csv). Self-contained - no third-party
  * dependency.
  *
  * <p>Format:
@@ -20,12 +20,12 @@ import java.util.Map;
  *   <li>The first non-comment, non-blank line is the column header.</li>
  *   <li>Quoted fields ({@code "..."}) handle embedded commas. Doubled quotes
  *       inside a quoted field ({@code ""}) emit a single quote.</li>
- *   <li>Empty cell → empty string (callers turn this into the field default).</li>
+ *   <li>Empty cell -> empty string (callers turn this into the field default).</li>
  *   <li>Sub-list separator inside a cell: {@code |}. e.g. {@code MOUSE|CAT}.</li>
  * </ul>
  *
  * <p>{@link #rows} is indexed by column name (case-sensitive) so callers can
- * read columns by name instead of position — handy when the CSV grows.
+ * read columns by name instead of position - handy when the CSV grows.
  */
 public final class CsvTable {
 
@@ -44,7 +44,7 @@ public final class CsvTable {
         List<Map<String, String>> rows = new ArrayList<>();
         for (String line : lines) {
             if (line.isEmpty()) continue;
-            // Comment lines are anchored at column 0 — a line whose first
+            // Comment lines are anchored at column 0 - a line whose first
             // non-whitespace char is '#' counts.
             String stripped = line.stripLeading();
             if (stripped.startsWith("#")) continue;
@@ -106,7 +106,7 @@ public final class CsvTable {
         return out;
     }
 
-    // ── Typed cell accessors ────────────────────────────────────────────────
+    // -- Typed cell accessors ------------------------------------------------
 
     public static String str(Map<String, String> row, String key, String def) {
         String v = row.get(key);
@@ -168,7 +168,7 @@ public final class CsvTable {
         };
     }
 
-    /** Parsed entry from a spawn-spec list cell — a reference (mob type, item
+    /** Parsed entry from a spawn-spec list cell - a reference (mob type, item
      *  type, or {@code @category}) plus an optional {@code [min, max]} count
      *  range. Used by both {@code MobDefinition.startingInventory} and the
      *  themed-room mob/item columns; the syntax is the same across all of them. */
@@ -185,13 +185,13 @@ public final class CsvTable {
 
     /** Parse a pipe-separated spawn-spec cell. Each entry takes the form
      *  {@code <ref>}, {@code <ref>*<count>}, or {@code <ref>*<min>_<max>}. The
-     *  reference may be a literal mob/item type or an {@code @category} token —
+     *  reference may be a literal mob/item type or an {@code @category} token -
      *  this parser treats it as opaque text. Examples:
      *  <pre>
-     *  DAGGER                                  → ref=DAGGER,         min=1, max=1
-     *  KOBOLD_GENERAL*3                        → ref=KOBOLD_GENERAL, min=3, max=3
-     *  LOATHESOME_BUG*2_3                      → ref=LOATHESOME_BUG, min=2, max=3
-     *  &#64;potion*1                           → ref=&#64;potion,    min=1, max=1
+     *  DAGGER                                  -> ref=DAGGER,         min=1, max=1
+     *  KOBOLD_GENERAL*3                        -> ref=KOBOLD_GENERAL, min=3, max=3
+     *  LOATHESOME_BUG*2_3                      -> ref=LOATHESOME_BUG, min=2, max=3
+     *  &#64;potion*1                           -> ref=&#64;potion,    min=1, max=1
      *  </pre>
      *  Empty / null cells return an empty list. */
     public static List<SpawnSpec> parseSpawnSpecList(String cell) {
@@ -220,7 +220,7 @@ public final class CsvTable {
         return out;
     }
 
-    /** Parsed entry from a drop-spec list cell — a keyword (item type, category
+    /** Parsed entry from a drop-spec list cell - a keyword (item type, category
      *  name, {@code NONE}, or {@code STUFF}) plus an optional explicit plus-level
      *  ({@code +n}) and a fractional count ({@code *n}). The integer part of
      *  {@code count} is the guaranteed number of items; the fractional remainder
@@ -248,12 +248,12 @@ public final class CsvTable {
      *  {@link com.bjsp123.rl2.logic.ItemGenerator.LootCategory} name, or a
      *  literal item type. Examples:
      *  <pre>
-     *  NONE              → no drop
-     *  STUFF             → 1 random item, power-derived level
-     *  STUFF*2.5         → 2–3 random items (2 guaranteed, 50% chance of third)
-     *  EQUIPMENT+2       → 1 equipment item forced to +2
-     *  HEALING_POTION*0.5 → 50% chance of one healing potion
-     *  STUFF+3*2         → 2 random items each forced to +3
+     *  NONE              -> no drop
+     *  STUFF             -> 1 random item, power-derived level
+     *  STUFF*2.5         -> 2-3 random items (2 guaranteed, 50% chance of third)
+     *  EQUIPMENT+2       -> 1 equipment item forced to +2
+     *  HEALING_POTION*0.5 -> 50% chance of one healing potion
+     *  STUFF+3*2         -> 2 random items each forced to +3
      *  </pre>
      *  Empty / null cells return an empty list. */
     public static List<DropSpec> parseDropSpecList(String cell) {
@@ -283,7 +283,7 @@ public final class CsvTable {
     }
 
     /** Sub-list cells use {@code |} as the separator. {@code MOUSE|CAT|RAT}
-     *  → {@code [MOUSE, CAT, RAT]}. Empty cell → empty list. */
+     *  -> {@code [MOUSE, CAT, RAT]}. Empty cell -> empty list. */
     public static List<String> listCell(Map<String, String> row, String key) {
         String v = row.get(key);
         if (v == null || v.isEmpty()) return Collections.emptyList();

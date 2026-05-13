@@ -24,7 +24,7 @@ import com.bjsp123.rl2.ui.skin.UiScale;
  * two fonts (header + regular) the entire V2 UI uses. One instance is built
  * by {@link com.bjsp123.rl2.Rl2Game} and shared across every {@link V2Screen}.
  *
- * <p>Two fonts only — no per-call font scaling, no skin chrome, no bitmaps.
+ * <p>Two fonts only - no per-call font scaling, no skin chrome, no bitmaps.
  * Panels and buttons are drawn from {@link UIVars} colours via the ShapeRenderer.
  */
 public final class UiCtx implements Disposable {
@@ -34,11 +34,11 @@ public final class UiCtx implements Disposable {
     public final GlyphLayout   layout      = new GlyphLayout();
     public final BitmapFont    fontRegular;
     public final BitmapFont    fontHeader;
-    /** 1×1 white pixel for colored rect drawing (brand sparks, charge bars, etc.). */
+    /** 1x1 white pixel for colored rect drawing (brand sparks, charge bars, etc.). */
     public final TextureRegion whitePixel;
     private final Texture      whiteTex;
     public final OrthographicCamera camera = new OrthographicCamera();
-    /** ScreenViewport — 1 world unit ≈ 1 screen pixel, so UI controls
+    /** ScreenViewport - 1 world unit ~ 1 screen pixel, so UI controls
      *  drawn at fixed world dimensions (UIVars.BTN_W, UIVars.BTN_H, etc.) keep
      *  their on-screen size as the window grows or shrinks. The world
      *  width / height is whatever the screen currently is, so layouts use
@@ -47,7 +47,7 @@ public final class UiCtx implements Disposable {
      *  to scale every control uniformly when the user wants bigger /
      *  smaller chrome. */
     public final ScreenViewport    viewport    = new ScreenViewport(camera);
-    /** Shared back-history stack — every screen and popup pushes onto
+    /** Shared back-history stack - every screen and popup pushes onto
      *  this one stack, and every back gesture pops a single entry. See
      *  {@link WindowStack}. */
     public final WindowStack       stack       = new WindowStack();
@@ -104,7 +104,7 @@ public final class UiCtx implements Disposable {
         }
     }
 
-    /** Configure both axes' projection matrices from the viewport — call inside
+    /** Configure both axes' projection matrices from the viewport - call inside
      *  every {@link V2Screen#render(float)} BEFORE shapes.begin / batch.begin. */
     public void applyProjection() {
         camera.update();
@@ -134,7 +134,7 @@ public final class UiCtx implements Disposable {
      *  a header and the next element were previously hardcoded (e.g. 22f, 28f). */
     public float headerLineH() { return fontHeader.getLineHeight() + spacerMediumY(); }
 
-    /** Translate a screen-space pointer location (0,0 at top-left, y-down — the
+    /** Translate a screen-space pointer location (0,0 at top-left, y-down - the
      *  format Gdx.input gives us) into virtual-world coordinates (y-up, scaled
      *  by the viewport). Used by V2Screen to hit-test buttons. */
     public float unprojectX(int screenX, int screenY) {

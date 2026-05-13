@@ -14,7 +14,7 @@ import java.util.Iterator;
  * <h3>Apply contract</h3>
  * Calling {@link #apply(Level, Mob, BuffType, int, int, Mob)} on a mob that already
  * carries a buff of the same type updates the existing instance to the <em>greater</em>
- * of the existing and incoming values for both level and duration — re-applying a buff
+ * of the existing and incoming values for both level and duration - re-applying a buff
  * never makes it weaker. The mob also gets a floating "buff name" effect rising above
  * its head so the player gets visible feedback.
  *
@@ -37,7 +37,7 @@ public final class BuffSystem {
     /** Per-turn HP loss for the {@link BuffType#ON_FIRE} buff at {@code level}. */
     public static final int FIRE_DAMAGE_PER_TURN = 5;
 
-    /** ─── Queries ──────────────────────────────────────────────────────────── */
+    /** --- Queries ------------------------------------------------------------ */
 
     public static boolean hasBuff(Mob mob, BuffType type) {
         return get(mob, type) != null;
@@ -50,13 +50,13 @@ public final class BuffSystem {
         return null;
     }
 
-    /** Convenience — level of the buff if present, else 0. */
+    /** Convenience - level of the buff if present, else 0. */
     public static int level(Mob mob, BuffType type) {
         Buff b = get(mob, type);
         return b == null ? 0 : b.level;
     }
 
-    /** ─── Apply / remove ───────────────────────────────────────────────────── */
+    /** --- Apply / remove ----------------------------------------------------- */
 
     /**
      * Apply a buff to {@code target}. If a buff of {@code type} already exists, it's
@@ -71,7 +71,7 @@ public final class BuffSystem {
                              int buffLevel, int durationTurns, Mob source) {
         if (target == null || type == null) return null;
         if (target.buffs == null) target.buffs = new java.util.ArrayList<>();
-        // Hope grants immunity to FRIGHTENED — silently swallow incoming fear while
+        // Hope grants immunity to FRIGHTENED - silently swallow incoming fear while
         // hope is active. Likewise fireImmune mobs don't take ON_FIRE.
         if (type == BuffType.FRIGHTENED && (hasBuff(target, BuffType.HOPE) || !target.effectiveStats().terrifiable)) {
             return null;
@@ -90,7 +90,7 @@ public final class BuffSystem {
         Buff buff = new Buff(type, newLevel, newDuration, source);
         target.buffs.add(buff);
         spawnApplyVfx(level, target, type);
-        // Hope wipes any active fear — adding hope after a fright should free the mob.
+        // Hope wipes any active fear - adding hope after a fright should free the mob.
         if (type == BuffType.HOPE) {
             removeBuff(target, BuffType.FRIGHTENED);
         }
@@ -109,7 +109,7 @@ public final class BuffSystem {
         return false;
     }
 
-    /** ─── Per-turn driver ─────────────────────────────────────────────────── */
+    /** --- Per-turn driver --------------------------------------------------- */
 
     /**
      * Run all per-turn buff effects on every mob in the level, then decrement durations
@@ -124,11 +124,11 @@ public final class BuffSystem {
     public static void tickPerTurn(Level level) {
         if (level == null || level.mobs == null) return;
         // Snapshot the mob list once for both passes: applyPerTurnEffect can call
-        // MobSystem.processAttack → killMob, which removes the dying mob from
+        // MobSystem.processAttack -> killMob, which removes the dying mob from
         // level.mobs synchronously. Without the snapshot the live iterator throws
         // ConcurrentModificationException as soon as a fire DOT lands a kill.
         java.util.List<Mob> snapshot = new java.util.ArrayList<>(level.mobs);
-        // First pass — terrifying mobs apply FRIGHTENED to terrifiable neighbours
+        // First pass - terrifying mobs apply FRIGHTENED to terrifiable neighbours
         // within Chebyshev range 1. apply() respects HOPE immunity and the
         // terrifiable=false short-circuit, so this just enumerates and applies.
         for (Mob src : snapshot) {
@@ -150,7 +150,7 @@ public final class BuffSystem {
                 m.buffs.clear();
                 continue;
             }
-            // Snapshot — applyEffect can mutate buffs (e.g. invisibility cancel via
+            // Snapshot - applyEffect can mutate buffs (e.g. invisibility cancel via
             // attack) but the per-turn tick itself just reads.
             for (Buff b : new java.util.ArrayList<>(m.buffs)) {
                 applyPerTurnEffect(level, m, b);
@@ -192,7 +192,7 @@ public final class BuffSystem {
                 if (killed) logDotDeath(m, "succumbs to poison");
             }
             case BLEEDING -> {
-                // (level × duration) / 2 HP / turn — strong at first then
+                // (level x duration) / 2 HP / turn - strong at first then
                 // tapers as the duration counts down. Read durationTurns
                 // BEFORE the post-effect decrement so the first tick uses
                 // the full duration the user-source applied.
@@ -209,18 +209,18 @@ public final class BuffSystem {
                 }
             }
             default -> {
-                /* Passive buffs — read by other systems (movement, vision, damage
+                /* Passive buffs - read by other systems (movement, vision, damage
                  * resolution, AI). No per-turn HP delta on this side. */
             }
         }
     }
 
-    /** ─── Damage mitigation ──────────────────────────────────────────────── */
+    /** --- Damage mitigation ------------------------------------------------ */
 
     /** Anti-magic divides incoming damage by {@code 2^level}, floored at 1 if the
      *  original was positive. Routed via {@link MobSystem#processAttack} for damage
      *  with {@link MobSystem.DamageElement#MAGIC} or {@link MobSystem.DamageElement#FIRE}.
-     *  Don't call directly from new sites — pass the right element to processAttack. */
+     *  Don't call directly from new sites - pass the right element to processAttack. */
     public static int mitigateMagicDamage(Mob target, int dmg) {
         return mitigate(target, dmg, BuffType.ANTI_MAGIC);
     }
@@ -244,19 +244,19 @@ public final class BuffSystem {
         if (dmg <= 0) return dmg;
         int lvl = level(target, type);
         if (lvl <= 0) return dmg;
-        // Integer divide by 2^level — at level 1 halves, level 2 quarters, etc.
+        // Integer divide by 2^level - at level 1 halves, level 2 quarters, etc.
         int mitigated = dmg >> Math.min(lvl, 30);
         // If the original damage was positive, leave at least 1 so the hit still
         // registers (otherwise high-level resists silently swallow the entire attack).
         return Math.max(mitigated, dmg > 0 ? 1 : 0);
     }
 
-    /** ─── Stat modifiers ─────────────────────────────────────────────────── */
+    /** --- Stat modifiers --------------------------------------------------- */
 
     /**
      * Single contributor entry-point for the StatBlock pipeline. Adds every active
      * buff's stat contribution into {@code dst} in place. Replaces the historical
-     * per-stat helpers — accuracy/evasion bonuses now flow through here. CHILLED is the
+     * per-stat helpers - accuracy/evasion bonuses now flow through here. CHILLED is the
      * one exception: its move/attack-cost penalty stays as an action-time modifier in
      * {@link #chilledCostPenalty} so the ranged-cost path (which doesn't go through the
      * StatBlock) gets the same treatment as melee.
@@ -306,7 +306,7 @@ public final class BuffSystem {
         return c == null ? 0 : 50 + c.level * 10;
     }
 
-    /** True if the mob takes double damage from fire — i.e. carries the
+    /** True if the mob takes double damage from fire - i.e. carries the
      *  {@link BuffType#OILY} buff. Read by {@link #applyPerTurnEffect} and any caller
      *  resolving fire damage. */
     public static boolean takesDoubleFireDamage(Mob mob) {
@@ -320,10 +320,10 @@ public final class BuffSystem {
         return level(user, BuffType.SORCERY);
     }
 
-    /** ─── Visuals ───────────────────────────────────────────────────────── */
+    /** --- Visuals --------------------------------------------------------- */
 
     /** Log a "X burns to a cinder" / "X succumbs to poison" message when a damage-over-
-     *  time buff is the killing blow. Player-target gets the second-person "you …"
+     *  time buff is the killing blow. Player-target gets the second-person "you ..."
      *  framing routed through the existing event-log helpers. */
     private static void logDotDeath(Mob deadMob, String verbPhrase) {
         if (deadMob == null) return;
@@ -336,7 +336,7 @@ public final class BuffSystem {
                 player));
     }
 
-    /** Per-turn DOT damage event — the rgame Animator picks the floating-text tint
+    /** Per-turn DOT damage event - the rgame Animator picks the floating-text tint
      *  from the buff type (orange for fire, green for poison). */
     private static void emitPeriodicDamage(Level level, Mob m, BuffType buff, int amount) {
         if (level == null || level.events == null) return;
@@ -410,7 +410,7 @@ public final class BuffSystem {
             case HEAL_COOLDOWN     -> "Can't cast heal again until this wears off.";
             case HIDING            -> "Hidden from enemies. Moving or attacking will cancel this.";
             case KILLER            -> "Striking with deadly precision.";
-            case BLEEDING          -> "Open wound — losing HP each turn until it clots.";
+            case BLEEDING          -> "Open wound - losing HP each turn until it clots.";
         };
     }
 
@@ -429,7 +429,7 @@ public final class BuffSystem {
         return sb.toString();
     }
 
-    /** ─── Death message helper ───────────────────────────────────────────── */
+    /** --- Death message helper --------------------------------------------- */
 
     /** Returns a short cause-of-death string when the mob's killing blow came from a
      *  damage-over-time buff that's still on it (fire / poison). Empty when the mob

@@ -19,21 +19,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 character stats popup — modal window with two tabs:
+ * V2 character stats popup - modal window with two tabs:
  * <ul>
- *   <li>Character — laid out exactly like a mob encyclopaedia entry: name
- *       header, framed sprite at 2× source size, stat lines + active buffs.</li>
- *   <li>Perks — per-perk row showing name + level + a square INFO button
+ *   <li>Character - laid out exactly like a mob encyclopaedia entry: name
+ *       header, framed sprite at 2x source size, stat lines + active buffs.</li>
+ *   <li>Perks - per-perk row showing name + level + a square INFO button
  *       that opens the encyclopaedia at the perk's page; remaining perk
  *       points appear in the section header.</li>
  * </ul>
  */
-public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
+public final class V2CharacterStats extends BasePopup {
 
     private enum Tab { CHARACTER, PERKS }
 
-    private final UiCtx ctx;
-    private boolean open;
     private Mob player;
     private Tab currentTab = Tab.CHARACTER;
     /** Optional jump target for the perks tab's per-row info buttons. */
@@ -41,19 +39,18 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     /** Buff-detail popup opened when a buff icon is tapped. */
     private V2BuffInfo buffInfo;
 
-    private final Rect window = new Rect();
     private final Rect[] tabRects = new Rect[Tab.values().length];
     private final boolean[] tabPressed = new boolean[Tab.values().length];
 
-    /** Sprite frame for the Character tab — light-warm-grey backdrop +
+    /** Sprite frame for the Character tab - light-warm-grey backdrop +
      *  tri-line border, computed from the player's mob sprite size so the
      *  layout mirrors {@link V2Encyclopedia}'s mob detail page. */
     private final Rect characterFrame = new Rect();
 
-    /** Per-perk info-button rects — rebuilt every frame from the live
+    /** Per-perk info-button rects - rebuilt every frame from the live
      *  perk map. Index aligned with {@link #perksOrdered}. */
     private final List<Rect> perkInfoRects = new ArrayList<>();
-    /** Per-perk plus-button rects — rebuilt every frame, index aligned
+    /** Per-perk plus-button rects - rebuilt every frame, index aligned
      *  with {@link #perksOrdered}. The button is hit-tested even when
      *  the player has no perk points; the touchUp handler short-circuits
      *  in that case so the button reads as disabled. */
@@ -72,32 +69,28 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     private int buffIconPressed = -1;
 
     public V2CharacterStats(UiCtx ctx) {
-        this.ctx = ctx;
+        super(ctx);
         for (int i = 0; i < tabRects.length; i++) tabRects[i] = new Rect();
     }
 
     public void setPlayer(Mob p) { this.player = p; }
     public void setEncyclopedia(V2Encyclopedia enc) { this.encyclopedia = enc; }
     public void setBuffInfo(V2BuffInfo bi) { this.buffInfo = bi; }
-    public boolean isOpen() { return open; }
-    public void toggle() { open = !open; }
-    public void close()  {
-        open = false;
+
+    @Override
+    protected void onClosed() {
         perkInfoPressed = -1;
         perkPlusPressed = -1;
         buffIconPressed = -1;
     }
 
     @Override
-    public void renderSelf() {
-        if (!open) return;
-        layoutRects();
-        renderShapesPass();
-        renderTextPass();
+    protected void afterRender() {
         renderDotColumns();
     }
 
-    private void layoutRects() {
+    @Override
+    protected void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float winW = Math.min(340f, vw - UIVars.PAD_MODAL);
@@ -106,7 +99,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
 
         // Tab strip across the top of the window's interior. Header sits
         // ABOVE the tabs in a band sized to the live header-font cap height
-        // so a 1.5×/2× UiFontScale doesn't overlap the tab strip — same
+        // so a 1.5x/2x UiFontScale doesn't overlap the tab strip - same
         // approach the encyclopaedia uses.
         float pad = 12f;
         float tabH = 32f;
@@ -120,8 +113,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     tabsY, tabW, tabH);
         }
 
-        // Character-tab sprite frame — same shape the encyclopaedia uses
-        // for its mob detail page. Frame size = 2× source max with a
+        // Character-tab sprite frame - same shape the encyclopaedia uses
+        // for its mob detail page. Frame size = 2x source max with a
         // 64-px floor; centred horizontally just below the tabs.
         if (currentTab == Tab.CHARACTER && player != null) {
             TextureRegion region = MobSprites.regionFor(player);
@@ -136,7 +129,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             characterFrame.set(frameX, frameY, frameSz, frameSz);
         }
 
-        // Perks-tab buttons — every Perk gets a row with a Plus button +
+        // Perks-tab buttons - every Perk gets a row with a Plus button +
         // an Info button on the right. The Plus button is hit-tested but
         // visually disabled when the player has no remaining perk points.
         perkInfoRects.clear();
@@ -163,7 +156,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         }
     }
 
-    private void renderShapesPass() {
+    @Override
+    protected void renderShapesPass() {
         ctx.applyProjection();
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
@@ -190,7 +184,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
 
-        // Character-tab sprite frame chrome — light-warm-grey backdrop
+        // Character-tab sprite frame chrome - light-warm-grey backdrop
         // + tri-line border. Sprite paints aspect-fit in the text pass.
         if (currentTab == Tab.CHARACTER && player != null) {
             Rect f = characterFrame;
@@ -200,7 +194,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     f.w - 2 * UIVars.HUD_BORDER, f.h - 2 * UIVars.HUD_BORDER);
         }
 
-        // Perks-tab buttons — same chrome as a regular Btn (tri-line
+        // Perks-tab buttons - same chrome as a regular Btn (tri-line
         // border + warm fill, brighter when pressed). The Plus button
         // dims to the window-bg fill when the player has no perk points
         // so the affordance reads as disabled.
@@ -235,7 +229,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    private void renderTextPass() {
+    @Override
+    protected void renderTextPass() {
         pendingDots.clear();
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Character",
@@ -257,7 +252,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             }
         }
 
-        // Perk-tab info-button icons — drawn in the text pass since the
+        // Perk-tab info-button icons - drawn in the text pass since the
         // INFO glyph is a sprite. Tinted yellow when pressed, white otherwise.
         for (int i = 0; i < perkInfoRects.size(); i++) {
             Rect r = perkInfoRects.get(i);
@@ -272,7 +267,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             ctx.batch.setColor(1f, 1f, 1f, 1f);
         }
 
-        // Perk-tab plus-button glyphs — a centred "+" character. Dimmed
+        // Perk-tab plus-button glyphs - a centred "+" character. Dimmed
         // when the player has no perk points or the perk is already at level 5.
         boolean hasPoints = player != null && player.perkPoints > 0;
         for (int i = 0; i < perkPlusRects.size(); i++) {
@@ -324,7 +319,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         top = row(left, top, "Satiety",   player.satiety
                 + " / " + com.bjsp123.rl2.logic.GameBalance.STARTING_SATIETY);
 
-        // Buff list — section heading + per-buff icon + name + duration.
+        // Buff list - section heading + per-buff icon + name + duration.
         // Each row is a hit target that opens the encyclopedia at the
         // corresponding buff page.
         buffIconRects.clear();
@@ -345,9 +340,10 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     ctx.batch.draw(bregion, left, top - 16f, 16f, 16f);
                 }
                 String buffName = BuffSystem.displayName(b.type);
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         buffName + " (lvl " + b.level + ")",
-                        left + 22f, top);
+                        left + 22f, top,
+                        window.right() - UIVars.PAD_CONTENT - (left + 22f));
                 if (b.durationTurns > 0) {
                     pendingDots.add(new float[]{ left + 17f, top - 16f, b.durationTurns });
                 }
@@ -364,7 +360,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         float left = window.x + UIVars.PAD_CONTENT;
         float top  = tabRects[0].y - 24f;
 
-        // Header: "Available: N" — remaining perk points the player can
+        // Header: "Available: N" - remaining perk points the player can
         // spend. Drawn even when the perk map is empty so the count is
         // always visible.
         TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
@@ -374,7 +370,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                 window.right() - UIVars.PAD_CONTENT, top);
         top -= 28f;
 
-        // One row per Perk in the catalog — name on the left, current
+        // One row per Perk in the catalog - name on the left, current
         // level (or "--" when 0) just left of the buttons, plus + info
         // buttons rendered in the shape/text passes.
         for (int i = 0; i < perksOrdered.size(); i++) {
@@ -382,11 +378,11 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             Perk p = perksOrdered.get(i);
             int lvl = (player.perks != null && player.perks.get(p) != null)
                     ? player.perks.get(p) : 0;
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    p.displayName(), left, top);
             float lvlRight = perkPlusRects.size() > i
                     ? perkPlusRects.get(i).x - 8f
                     : window.right() - UIVars.PAD_CONTENT;
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    p.displayName(), left, top, Math.max(24f, lvlRight - 8f - left));
             String lvlText = lvl > 0 ? Integer.toString(lvl) : "--";
             TextDraw.right(ctx, ctx.fontRegular,
                     lvl > 0 ? UIVars.ACCENT : UIVars.TEXT_DIM,
@@ -396,9 +392,12 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     }
 
     private float row(float x, float y, String label, String value) {
-        TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM,   label, x, y);
-        TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY, value,
-                window.right() - UIVars.PAD_CONTENT, y);
+        float right = window.right() - UIVars.PAD_CONTENT;
+        float valueW = Math.min(110f, Math.max(40f, (right - x) * 0.45f));
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                label, x, y, Math.max(24f, right - valueW - 8f - x));
+        TextDraw.rightFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY, value,
+                right, y, valueW);
         return y - ctx.lineH();
     }
 
@@ -420,7 +419,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    /** 8-tap unit circle for the silhouette outline — same constants as
+    /** 8-tap unit circle for the silhouette outline - same constants as
      *  the encyclopaedia helper so player and mob entries read with the
      *  same rim. */
     private static final float[] OUTLINE_DX = {
@@ -459,7 +458,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         return new InputAdapter() {
             @Override
             public boolean touchDown(int sx, int sy, int p, int b) {
-                if (!open) return false;
+                if (!isOpen()) return false;
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
                 for (int i = 0; i < tabRects.length; i++) {
@@ -492,7 +491,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
 
             @Override
             public boolean touchUp(int sx, int sy, int p, int b) {
-                if (!open) return false;
+                if (!isOpen()) return false;
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
                 if (perkInfoPressed >= 0) {
@@ -510,7 +509,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                         close();
                         if (encyclopedia != null && perk != null) {
                             encyclopedia.openTo(perk, () -> {
-                                open = true;
+                                open();
                                 currentTab = Tab.PERKS;
                             });
                         }
@@ -560,12 +559,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
 
             @Override
             public boolean keyDown(int keycode) {
-                if (!open) return false;
-                if (keycode == Input.Keys.ESCAPE || keycode == Input.Keys.BACK) {
-                    close();
-                    return true;
-                }
-                return false;
+                return closeOnBack(keycode);
             }
         };
     }

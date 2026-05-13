@@ -36,18 +36,18 @@ public final class ItemDefinition {
     public MinMax damagePerLevel = MinMax.ZERO;
     public MinMax armor  = MinMax.ZERO;
     public MinMax armorPerLevel  = MinMax.ZERO;
-    /** AP damage range — see {@link Item#apDamage}. */
+    /** AP damage range - see {@link Item#apDamage}. */
     public MinMax apDamage = MinMax.ZERO;
     public MinMax apDamagePerLevel = MinMax.ZERO;
-    /** Magic-resistance range — see {@link Item#magicResist}.
+    /** Magic-resistance range - see {@link Item#magicResist}.
      *  CSV column is {@code antiMagic}. */
     public MinMax magicResist = MinMax.ZERO;
     public MinMax magicResistPerLevel = MinMax.ZERO;
-    /** Flat accuracy / evasion bonuses — see {@link Item#accuracy} /
+    /** Flat accuracy / evasion bonuses - see {@link Item#accuracy} /
      *  {@link Item#evasion}. */
     public int accuracy;
     public int evasion;
-    /** Speed multipliers — see {@link Item#attackSpeed}. */
+    /** Speed multipliers - see {@link Item#attackSpeed}. */
     public double attackSpeed = Item.ATTACK_SPEED_DEFAULT;
     public double moveSpeed   = Item.MOVE_SPEED_DEFAULT;
     public double lightRadius;
@@ -58,7 +58,7 @@ public final class ItemDefinition {
 
     /** What happens when this item is thrown; null means it just lands on the floor. */
     public ItemEffect throwEffect;
-    /** Per-CSV-row throw-result. Blank cell → {@link Item.ThrowResult#NOTHING}. */
+    /** Per-CSV-row throw-result. Blank cell -> {@link Item.ThrowResult#NOTHING}. */
     public Item.ThrowResult throwResult = Item.ThrowResult.NOTHING;
     public UseBehavior useBehavior = UseBehavior.NONE;
     public String      useVerb;
@@ -76,7 +76,7 @@ public final class ItemDefinition {
      *  means the item has no buff component. */
     public java.util.List<Buff.BuffType> appliesBuff = new java.util.ArrayList<>();
 
-    /** Generic magnitude knob — see {@link Item#abilityPower} for the
+    /** Generic magnitude knob - see {@link Item#abilityPower} for the
      *  per-useBehavior interpretation. Float so fractional powers fit. */
     public float abilityPower;
 
@@ -91,10 +91,10 @@ public final class ItemDefinition {
     /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
     public int knockbackSquares;
 
-    /** Floor-twinkle flag — see {@link Item#glows}. */
+    /** Floor-twinkle flag - see {@link Item#glows}. */
     public boolean glows;
 
-    /** Authoritative item-kind tag — see {@link Item#inventoryCategory}. */
+    /** Authoritative item-kind tag - see {@link Item#inventoryCategory}. */
     public InventoryCategory inventoryCategory;
 
     /** Where in the dungeon this item is meant to appear. Expressed as a
@@ -202,7 +202,7 @@ public final class ItemDefinition {
         d.tameOnThrow = new java.util.ArrayList<>(CsvTable.listCell(row, "tameOnThrow"));
         d.summonsWhenUsed = CsvTable.str(row, "summonsWhenUsed", null);
 
-        // Pipe-separated list (e.g. "POISONED|CHILLED") — single-buff
+        // Pipe-separated list (e.g. "POISONED|CHILLED") - single-buff
         // entries parse to a 1-element list.
         d.appliesBuff = new java.util.ArrayList<>();
         for (String name : CsvTable.listCell(row, "appliesBuff")) {

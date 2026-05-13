@@ -14,12 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 game-log popup — full-screen-dimming modal overlay that shows the
+ * V2 game-log popup - full-screen-dimming modal overlay that shows the
  * scrollable event log with two filter toggles (low-priority / non-player).
  *
  * <p>Render lifecycle: {@link #render()} draws nothing while {@link #isOpen()}
  * is false; PlayScreen calls it after the HUD pass. Input is captured via
- * {@link #input()} — returns an {@link InputProcessor} that consumes all
+ * {@link #input()} - returns an {@link InputProcessor} that consumes all
  * events when open.
  *
  * <p>Scroll convention follows {@link Scroller}: {@code scrollY > 0} means
@@ -29,7 +29,7 @@ import java.util.List;
  */
 public final class V2Log implements V2Popup {
 
-    // ── Constants ────────────────────────────────────────────────────────────
+    // -- Constants ------------------------------------------------------------
     private float lineH() { return ctx.lineH(); }
     private static final float LINE_PAD_L   =  8f;
     private static final float BADGE_R      =  3f;   // radius of the priority dot
@@ -39,11 +39,11 @@ public final class V2Log implements V2Popup {
     private static final float FILTER_GAP   =  4f;
     private static final Color LOW_COLOR    = new Color(0.4f, 0.4f, 0.4f, 1f);
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    // -- State -----------------------------------------------------------------
     private final UiCtx ctx;
     private boolean open;
 
-    // Layout rects — recomputed each frame while open.
+    // Layout rects - recomputed each frame while open.
     private final Rect window      = new Rect();
     private final Rect headerRect  = new Rect();
     private final Rect closeBtn    = new Rect();
@@ -54,16 +54,16 @@ public final class V2Log implements V2Popup {
     // Scroll state.
     private final Scroller scroller = new Scroller();
 
-    // Filtered entry cache — rebuilt each frame so filter toggles take effect
+    // Filtered entry cache - rebuilt each frame so filter toggles take effect
     // immediately. Each entry may occupy several physical display lines.
     private final List<LogEntry> visibleLines = new ArrayList<>();
 
-    // ── Constructor ───────────────────────────────────────────────────────────
+    // -- Constructor -----------------------------------------------------------
     public V2Log(UiCtx ctx) {
         this.ctx = ctx;
     }
 
-    // ── V2Popup / public API ──────────────────────────────────────────────────
+    // -- V2Popup / public API --------------------------------------------------
     @Override public boolean isOpen() { return open; }
 
     public void toggle() { if (open) close(); else open(); }
@@ -87,7 +87,7 @@ public final class V2Log implements V2Popup {
         scroller.onScrolled(max / Math.max(1f, lineH()), lineH());
     }
 
-    // ── V2Popup render entry point ────────────────────────────────────────────
+    // -- V2Popup render entry point --------------------------------------------
     @Override
     public void renderSelf() {
         if (!open) return;
@@ -100,13 +100,13 @@ public final class V2Log implements V2Popup {
         renderTextPass();
     }
 
-    /** Convenience non-V2Popup render — equivalent to {@link #renderSelf()}.
+    /** Convenience non-V2Popup render - equivalent to {@link #renderSelf()}.
      *  PlayScreen may call this directly if it doesn't use the V2Stage. */
     public void render() {
         renderSelf();
     }
 
-    // ── Layout ────────────────────────────────────────────────────────────────
+    // -- Layout ----------------------------------------------------------------
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
@@ -117,7 +117,7 @@ public final class V2Log implements V2Popup {
         float winY = (vh - winH) * 0.5f;
         window.set(winX, winY, winW, winH);
 
-        // Header strip — top of window interior (inside WIN_BORDER inset).
+        // Header strip - top of window interior (inside WIN_BORDER inset).
         float inset = UIVars.WIN_BORDER;
         float innerX = winX + inset;
         float innerTop = winY + winH - inset;
@@ -125,17 +125,17 @@ public final class V2Log implements V2Popup {
 
         headerRect.set(innerX, innerTop - HEADER_H, innerW, HEADER_H);
 
-        // Close button — square at the right end of the header strip.
+        // Close button - square at the right end of the header strip.
         float closeSz = HEADER_H;
         closeBtn.set(headerRect.right() - closeSz, headerRect.y, closeSz, closeSz);
 
-        // Filter bar — directly below header.
+        // Filter bar - directly below header.
         float filterY = headerRect.y - FILTER_H - 2f;
         float filterW = (innerW - FILTER_GAP) * 0.5f;
         filterLow.set(innerX,               filterY, filterW, FILTER_H);
         filterNon.set(innerX + filterW + FILTER_GAP, filterY, filterW, FILTER_H);
 
-        // Body — everything below filter bar down to window bottom.
+        // Body - everything below filter bar down to window bottom.
         float bodyTop = filterY - 2f;
         float bodyY   = winY + inset;
         bodyRect.set(innerX, bodyY, innerW, bodyTop - bodyY);
@@ -152,7 +152,7 @@ public final class V2Log implements V2Popup {
         return filterBarBottom - (winY + inset);
     }
 
-    // ── Line list ─────────────────────────────────────────────────────────────
+    // -- Line list -------------------------------------------------------------
     private void rebuildLines() {
         visibleLines.clear();
         List<LogEvent> all = EventLog.all();
@@ -174,7 +174,7 @@ public final class V2Log implements V2Popup {
         scroller.setMaxScroll(Math.max(0f, totalH - bodyRect.h));
     }
 
-    // ── Shape pass ────────────────────────────────────────────────────────────
+    // -- Shape pass ------------------------------------------------------------
     private void renderShapesPass() {
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
@@ -203,7 +203,7 @@ public final class V2Log implements V2Popup {
         // Priority dots for visible lines.
         drawLineBadges(s);
 
-        // Scroll indicator — a thin bar on the right edge of the body when
+        // Scroll indicator - a thin bar on the right edge of the body when
         // the content is taller than the visible area.
         float totalH = totalPhysicalLines() * lineH();
         if (totalH > bodyRect.h && totalH > 0f) {
@@ -255,7 +255,7 @@ public final class V2Log implements V2Popup {
         }
     }
 
-    // ── Text pass ─────────────────────────────────────────────────────────────
+    // -- Text pass -------------------------------------------------------------
     private void renderTextPass() {
         ctx.batch.begin();
 
@@ -265,9 +265,9 @@ public final class V2Log implements V2Popup {
                 headerRect.cx(),
                 headerRect.top() - 2f);
 
-        // Close button "✕".
+        // Close button "x".
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
-                "✕",
+                "x",
                 closeBtn.cx(),
                 closeBtn.top() - 2f);
 
@@ -318,7 +318,7 @@ public final class V2Log implements V2Popup {
         return LOW_COLOR;
     }
 
-    // ── Input processor ───────────────────────────────────────────────────────
+    // -- Input processor -------------------------------------------------------
     public InputProcessor input() {
         return new InputAdapter() {
 
@@ -403,9 +403,9 @@ public final class V2Log implements V2Popup {
         };
     }
 
-    // ── Internal helpers ──────────────────────────────────────────────────────
+    // -- Internal helpers ------------------------------------------------------
 
-    /** Max usable text width for a log line — text starts after badge column. */
+    /** Max usable text width for a log line - text starts after badge column. */
     private float wrapWidth() {
         float winW  = ctx.worldW() * 0.90f;
         float inset = UIVars.WIN_BORDER;

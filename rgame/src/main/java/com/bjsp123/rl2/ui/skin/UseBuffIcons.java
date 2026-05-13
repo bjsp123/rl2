@@ -7,7 +7,7 @@ import com.bjsp123.rl2.persistence.Persistence;
  * {@code sprites/buffs16.png} instead of the buff's display name. When false, every
  * buff surface falls back to plain text.
  *
- * <p>Defaults to {@link #DEFAULT} (ON) per the user's spec — the icons are the intended
+ * <p>Defaults to {@link #DEFAULT} (ON) per the user's spec - the icons are the intended
  * presentation. Toggleable via the in-game settings screen so a colour-blind user (or
  * anyone who simply prefers reading the words) can flip back to text.
  *

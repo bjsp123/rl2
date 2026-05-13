@@ -4,16 +4,16 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
- * Three-line concentric border drawing — every chromed V2 element wears
+ * Three-line concentric border drawing - every chromed V2 element wears
  * the same 3-line frame: a {@code lineW}-thick outer line, a {@code lineW}-
  * thick middle line, and a {@code lineW}-thick inner line, painted from
  * lightest (outer) through mid to darkest (inner). Total border width is
- * {@code 3 × lineW}.
+ * {@code 3 x lineW}.
  *
  * <p>Implementation paints three nested filled rectangles. The inner ones
  * overpaint the centres of the outer ones, leaving each colour visible
  * only as a 1-line ring. The interior of the innermost ring is left
- * untouched — the caller fills it with their panel / button / slot
+ * untouched - the caller fills it with their panel / button / slot
  * colour separately.
  *
  * <p>Caller is inside a {@link ShapeRenderer.ShapeType#Filled} block.

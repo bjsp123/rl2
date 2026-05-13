@@ -12,18 +12,18 @@ package com.bjsp123.rl2.ui.skin;
  */
 public final class LogPreferences {
 
-    /** Master switch — false hides every log line regardless of the per-line
+    /** Master switch - false hides every log line regardless of the per-line
      *  priority / non-player filters. Default true so a fresh install shows
      *  the log. */
     private static volatile boolean logOn = true;
     /** When false, lines tagged {@code LogEvent.EventPriority.LOW} are dropped
      *  (e.g. minor combat misses, identity-already-known notices). Default
-     *  false — keep the log focused on noteworthy events. */
+     *  false - keep the log focused on noteworthy events. */
     private static volatile boolean showLowPriority = false;
     /** When false, lines whose source isn't the player are dropped (mob-vs-mob
      *  events, ambient world chatter). Default false. */
     private static volatile boolean showNonPlayer = false;
-    /** Expanded mode — show ~10 lines instead of ~2. Toggled by the user when
+    /** Expanded mode - show ~10 lines instead of ~2. Toggled by the user when
      *  they want to scan the recent backlog; collapses again by default. */
     private static volatile boolean expanded = false;
 

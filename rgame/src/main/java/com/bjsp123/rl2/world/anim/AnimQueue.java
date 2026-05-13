@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.world.anim;
 /**
  * Render-frame scheduling for visible game-action animations. PlayScreen consults
- * {@link #freezeFrames} as the single tick gate — while &gt; 0 the world holds.
+ * {@link #freezeFrames} as the single tick gate - while &gt; 0 the world holds.
  *
  * <p>Three modes match the engine's animation semantics:
  * <ul>
@@ -26,14 +26,14 @@ public final class AnimQueue {
 
     /** Frames remaining until every queued visible animation finishes. */
     public float freezeFrames;
-    /** Start delay of the most recently queued sequential slot — for ride-along callers. */
+    /** Start delay of the most recently queued sequential slot - for ride-along callers. */
     public float currentSlotStart;
-    /** Length of the most recently queued sequential slot — for ride-along callers. */
+    /** Length of the most recently queued sequential slot - for ride-along callers. */
     public float currentSlotLength;
     /** Set whenever {@link #sequential} or an extending {@link #rideLastSlot}
      *  fires. The AI-catch-up loop in PlayController consults this via
-     *  {@link #consumeSequentialFlag} so that ONLY a sequential anim — not
-     *  a pile of concurrent mob slides — breaks the loop, letting many
+     *  {@link #consumeSequentialFlag} so that ONLY a sequential anim - not
+     *  a pile of concurrent mob slides - breaks the loop, letting many
      *  mobs move simultaneously with the player on a single render frame. */
     private boolean sawSequential;
     /** Count of sequential slots pushed during the current drain pass.
@@ -49,7 +49,7 @@ public final class AnimQueue {
     }
 
     /** Drain {@code n} frames at once. Used by PlayScreen to honour the "animation
-     *  speed" setting — when the {@link com.bjsp123.rl2.world.anim.Animator} is
+     *  speed" setting - when the {@link com.bjsp123.rl2.world.anim.Animator} is
      *  advancing N animation frames per render frame, the freeze gate has to drain
      *  at the same pace or the game-tick gate stays closed too long. */
     public void tick(float n) {
@@ -65,7 +65,7 @@ public final class AnimQueue {
 
     public int sequentialCount() { return sequentialCount; }
 
-    /** Reset the sequential counter — call once at the start of each drain pass. */
+    /** Reset the sequential counter - call once at the start of each drain pass. */
     public void resetSequentialCount() { sequentialCount = 0; }
 
     public float sequential(float frames) {

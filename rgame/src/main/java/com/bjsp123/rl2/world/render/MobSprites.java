@@ -12,15 +12,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Single source of truth for {@code sprites/mobs_simple.png}. Mob → atlas
+ * Single source of truth for {@code sprites/mobs_simple.png}. Mob -> atlas
  * region mappings are loaded from the sprite columns of {@code assets/data/mobs.csv}
  * via {@link #loadFromCsv(String)} (called once at startup from
  * {@code Rl2Game.create()}). The texture itself is loaded lazily on first
  * {@link #regionFor} call.
  *
- * <p>Source layout: 32-px grid. Most mobs occupy a 1×1 or 1×2 cell block; a handful
- * (blobs, ant hills) are 2×2. Returned regions are the full source rects at native
- * pixel size — callers scale to their target footprint.
+ * <p>Source layout: 32-px grid. Most mobs occupy a 1x1 or 1x2 cell block; a handful
+ * (blobs, ant hills) are 2x2. Returned regions are the full source rects at native
+ * pixel size - callers scale to their target footprint.
  */
 public final class MobSprites {
 
@@ -34,7 +34,7 @@ public final class MobSprites {
 
     private MobSprites() {}
 
-    /** Populate the mob → atlas-coord map from the sprite columns of
+    /** Populate the mob -> atlas-coord map from the sprite columns of
      *  {@code mobs.csv}. Called once at startup, before any {@link #regionFor}
      *  call. Reads only the {@code type, spriteCol, spriteRow, spriteW,
      *  spriteH} columns; gameplay columns are ignored. */
@@ -54,7 +54,7 @@ public final class MobSprites {
         }
     }
 
-    /** Region for the given mob — players (any {@link Mob#characterClass}) get the
+    /** Region for the given mob - players (any {@link Mob#characterClass}) get the
      *  per-class sprite; everything else looks up its row in {@code mobs.csv}.
      *  Returns {@code null} if the texture didn't load or the mob's type has no mapping. */
     public static TextureRegion regionFor(Mob mob) {
@@ -64,7 +64,7 @@ public final class MobSprites {
     }
 
     /** Region for a non-player mob type, or {@code null} if the type has no mapping
-     *  or the texture didn't load. Player rows are skipped — use the
+     *  or the texture didn't load. Player rows are skipped - use the
      *  {@link #regionFor(CharacterClass)} overload instead. */
     public static TextureRegion regionFor(String type) {
         if (type == null) return null;
@@ -87,7 +87,7 @@ public final class MobSprites {
     }
 
     /** Source-of-truth atlas Texture. {@code DefaultLevelRenderer} and the HUD
-     *  portrait helper share this same instance — there's no benefit to loading the
+     *  portrait helper share this same instance - there's no benefit to loading the
      *  ~150 KB sheet several times. Returns {@code null} if the asset didn't load. */
     public static Texture sheetTexture() {
         ensureLoaded();
@@ -107,7 +107,7 @@ public final class MobSprites {
             return;
         }
         // Player class poses live in the same atlas. Same triple share the
-        // single double-height (1×2) sprite — the simple-style atlas doesn't
+        // single double-height (1x2) sprite - the simple-style atlas doesn't
         // ship per-class art today.
         playerRegions = new EnumMap<>(CharacterClass.class);
         playerRegions.put(CharacterClass.WARRIOR, mobRegion(3, 0, 1, 2));

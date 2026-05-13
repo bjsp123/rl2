@@ -36,7 +36,7 @@ public class Rl2Game extends Game {
      *  listener via {@link AchievementSystem#setListener}. */
     public AchievementSystem achievementSystem;
     public SaveSystem  saveSystem;
-    /** Shared V2 UI rendering context — fonts, ShapeRenderer, SpriteBatch.
+    /** Shared V2 UI rendering context - fonts, ShapeRenderer, SpriteBatch.
      *  Held by {@link Rl2Game} so every V2 screen reuses the same instance. */
     public UiCtx       ui;
 
@@ -46,7 +46,7 @@ public class Rl2Game extends Game {
     private long lastResizePersistMs;
     private int  lastPersistedW, lastPersistedH;
 
-    /** Navigate forward — push a "restore previous screen" entry onto the
+    /** Navigate forward - push a "restore previous screen" entry onto the
      *  shared {@link com.bjsp123.rl2.ui.v2.WindowStack} (in {@link #ui})
      *  and switch to {@code next}. The current screen instance is captured
      *  so a later {@link #popScreen} returns to the exact same state.
@@ -61,7 +61,7 @@ public class Rl2Game extends Game {
         setScreen(next);
     }
 
-    /** Navigate back — pop the most recent entry from the shared
+    /** Navigate back - pop the most recent entry from the shared
      *  {@link com.bjsp123.rl2.ui.v2.WindowStack}. The popped runnable
      *  closes the current window and restores whatever was beneath it
      *  (could be a screen or a popup). No-op when the stack is empty.
@@ -70,9 +70,9 @@ public class Rl2Game extends Game {
         return ui.stack.back();
     }
 
-    /** Navigate to a root screen — clear the entire back-history stack
+    /** Navigate to a root screen - clear the entire back-history stack
      *  (screens AND popup callbacks) and switch. Used for "Title" /
-     *  "Quit to Title" / "Begin game" / "Game Over" — destinations
+     *  "Quit to Title" / "Begin game" / "Game Over" - destinations
      *  where back-navigation shouldn't return to the previous window. */
     public void setRootScreen(com.badlogic.gdx.Screen root) {
         if (ui != null) ui.stack.clear();
@@ -85,7 +85,7 @@ public class Rl2Game extends Game {
 
     @Override
     public void create() {
-        // Data-driven configs — read once at startup, before any factory call or
+        // Data-driven configs - read once at startup, before any factory call or
         // gameplay code reads a balance number. Game-balance loads first because
         // some Mob field initializers reference GameBalance.STARTING_SATIETY etc.
         loadGameBalance();
@@ -109,8 +109,8 @@ public class Rl2Game extends Game {
         com.bjsp123.rl2.world.anim.Animator.setIconPreferenceSupplier(
                 com.bjsp123.rl2.ui.skin.UseBuffIcons::enabled);
         // Same pattern: the Animator advances {@code framesPerRender()} animation
-        // frames per render frame so the user-facing animation-speed setting (1×,
-        // 2×, 4×) shortens authored durations uniformly.
+        // frames per render frame so the user-facing animation-speed setting (1x,
+        // 2x, 4x) shortens authored durations uniformly.
         com.bjsp123.rl2.world.anim.Animator.setAnimationSpeedSupplier(
                 com.bjsp123.rl2.ui.skin.AnimationSpeed::framesPerRender);
         hallOfFame      = HallOfFameStore.load(persistence);
@@ -118,9 +118,9 @@ public class Rl2Game extends Game {
         achievements    = AchievementsStore.load(persistence);
         achievementSystem = new AchievementSystem(achievements, persistence);
         saveSystem = new SaveSystem(persistence);
-        // V2 UI — single shared UiCtx (fonts, ShapeRenderer, SpriteBatch) used
+        // V2 UI - single shared UiCtx (fonts, ShapeRenderer, SpriteBatch) used
         // by every V2 screen and in-game popup. The full V2 menu chain is now
-        // wired in: title → saves → character select → game; settings,
+        // wired in: title -> saves -> character select -> game; settings,
         // hall-of-fame, arena, credits, map, level-info all V2 too.
         ui = new UiCtx();
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
@@ -138,7 +138,7 @@ public class Rl2Game extends Game {
     }
 
     /** Read {@code assets/data/gamebalance.properties} and override matching
-     *  {@link com.bjsp123.rl2.logic.GameBalance} fields. Missing file is non-fatal —
+     *  {@link com.bjsp123.rl2.logic.GameBalance} fields. Missing file is non-fatal -
      *  the Java-side baselines stand. */
     private void loadGameBalance() {
         com.badlogic.gdx.files.FileHandle fh =
@@ -150,7 +150,7 @@ public class Rl2Game extends Game {
     /** Read {@code assets/data/mobs.csv} and feed it into both the gameplay-side
      *  {@link com.bjsp123.rl2.logic.MobRegistry} and the renderer-side
      *  {@link com.bjsp123.rl2.world.render.MobSprites}. Same file, two consumers
-     *  — rlib reads the gameplay columns, rgame reads the sprite columns. */
+     *  - rlib reads the gameplay columns, rgame reads the sprite columns. */
     private void loadMobConfig() {
         String csv = com.badlogic.gdx.Gdx.files.internal("data/mobs.csv").readString();
         com.bjsp123.rl2.logic.MobRegistry.load(csv);
@@ -158,7 +158,7 @@ public class Rl2Game extends Game {
     }
 
     /** Read {@code assets/data/items.csv} into {@link com.bjsp123.rl2.logic.ItemRegistry}.
-     *  Sprite columns are NOT in this file — those live in the rgame-side
+     *  Sprite columns are NOT in this file - those live in the rgame-side
      *  {@code item_sprites.csv} loaded by {@code ItemSprites}. */
     private void loadItemConfig() {
         String csv = com.badlogic.gdx.Gdx.files.internal("data/items.csv").readString();
@@ -174,7 +174,7 @@ public class Rl2Game extends Game {
     }
 
     /** Read {@code assets/data/themedrooms.csv} into
-     *  {@link com.bjsp123.rl2.logic.ThemedRoomRegistry}. Missing file is non-fatal —
+     *  {@link com.bjsp123.rl2.logic.ThemedRoomRegistry}. Missing file is non-fatal -
      *  the registry stays empty and themed-room stamping silently no-ops. */
     private void loadThemedRoomConfig() {
         com.badlogic.gdx.files.FileHandle fh =
@@ -220,7 +220,7 @@ public class Rl2Game extends Game {
 
     @Override
     public void dispose() {
-        // Final flush — guarantees the size after the user's last drag (which may have been
+        // Final flush - guarantees the size after the user's last drag (which may have been
         // dropped by the throttle) is written before exit.
         if (persistence != null
                 && com.badlogic.gdx.Gdx.graphics != null

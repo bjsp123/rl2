@@ -11,9 +11,9 @@ import com.bjsp123.rl2.world.render.ItemSprites;
  *
  * <p>Badge layout (positions never overlap):
  * <ul>
- *   <li>Top-right — enchant level {@code "+N"} when effectiveLevel &gt; 0</li>
- *   <li>Bottom-right — stack count when {@code item.count &gt; 1}</li>
- *   <li>Bottom strip — charge bar when {@code showCharge} and the item has charges</li>
+ *   <li>Top-right - enchant level {@code "+N"} when effectiveLevel &gt; 0</li>
+ *   <li>Bottom-right - stack count when {@code item.count &gt; 1}</li>
+ *   <li>Bottom strip - charge bar when {@code showCharge} and the item has charges</li>
  * </ul>
  */
 public final class ItemCell {
@@ -39,7 +39,7 @@ public final class ItemCell {
             ctx.batch.draw(region, x + PAD, y + PAD, w - 2 * PAD, h - 2 * PAD);
         }
 
-        // Level badge — top-right; green when a buff/perk/gear is boosting above base
+        // Level badge - top-right; green when a buff/perk/gear is boosting above base
         int lvl     = ItemSystem.effectiveLevel(item, holder);
         int baseLvl = Math.max(0, item.level);
         if (lvl > 0) {
@@ -49,19 +49,19 @@ public final class ItemCell {
                     "+" + lvl, x + w - 2f, y + h - 4f);
         }
 
-        // Stack count — bottom-right
+        // Stack count - bottom-right
         if (item.count > 1) {
             TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                     Integer.toString(item.count), x + w - 2f, y + ctx.lineH());
         }
 
-        // Charge bar — bottom strip via whitePixel tinting
+        // Charge bar - bottom strip via whitePixel tinting
         if (showCharge && item.baseChargeMax > 0) {
             drawChargeBar(ctx, item, holder, x, y, w);
         }
     }
 
-    /** Convenience overload — no charge bar (map, info screens). */
+    /** Convenience overload - no charge bar (map, info screens). */
     public static void draw(UiCtx ctx, Item item, Mob holder,
                             float x, float y, float w, float h) {
         draw(ctx, item, holder, x, y, w, h, false);

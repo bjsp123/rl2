@@ -22,9 +22,9 @@ import java.util.Random;
 public class MobSystem {
 
     /** What mob A wants to do with mob B when they meet. Drives target selection (flee
-     *  targets are preferred over attack targets) and collision behaviour (ATTACK → strike,
-     *  FLEE / NOTHING / ALLY → swap positions). {@code ALLY} is the "we're on the same
-     *  side, don't fight, but we're not strangers" answer — used by collision-swap rules
+     *  targets are preferred over attack targets) and collision behaviour (ATTACK -> strike,
+     *  FLEE / NOTHING / ALLY -> swap positions). {@code ALLY} is the "we're on the same
+     *  side, don't fight, but we're not strangers" answer - used by collision-swap rules
      *  and by code that wants a quick "is this mob friendly?" check. */
     public enum Attitude {
         NOTHING, FLEE, ATTACK, ALLY
@@ -34,7 +34,7 @@ public class MobSystem {
      * Cardinal facing for a mob. Used by renderers that pick a directional sprite per
      * frame; non-directional sprites ignore it. A mob updates its facing when it takes a
      * step that has a non-zero delta in x or y (diagonals pick the axis with the larger
-     * delta — see {@link #fromDelta}).
+     * delta - see {@link #fromDelta}).
      */
     public enum Direction {
         NORTH, SOUTH, EAST, WEST;
@@ -56,7 +56,7 @@ public class MobSystem {
         THROWN,
         /** Ranged magical effect (e.g. magic missile). */
         MAGIC,
-        /** No attacker — pit trap, starvation, drowning, etc. */
+        /** No attacker - pit trap, starvation, drowning, etc. */
         ENVIRONMENTAL
     }
 
@@ -64,7 +64,7 @@ public class MobSystem {
      *  resists {@link #PHYSICAL}; {@link Buff.BuffType#ANTI_MAGIC} resists
      *  {@link #MAGIC} and {@link #FIRE}; {@link #POISON}, {@link #SHOCK}, and
      *  {@link #STARVATION} are unmitigated by buffs. Independent of {@link AttackType}
-     *  (mechanism) — a fire bomb's impact damage is THROWN/PHYSICAL while its DOT is
+     *  (mechanism) - a fire bomb's impact damage is THROWN/PHYSICAL while its DOT is
      *  ENVIRONMENTAL/FIRE. */
     public enum DamageElement {
         PHYSICAL, MAGIC, POISON, FIRE, SHOCK, STARVATION
@@ -97,7 +97,7 @@ public class MobSystem {
 
     /** Default duration in turns that the {@link com.bjsp123.rl2.model.Buff.BuffType#OILY}
      *  buff lasts when a mob steps onto an OIL surface. The buff system tracks the
-     *  countdown — see {@link BuffSystem#tickPerTurn}. */
+     *  countdown - see {@link BuffSystem#tickPerTurn}. */
     public static final int OIL_STEP_BUFF_TURNS = 3;
 
     /** Default duration in turns that the {@link com.bjsp123.rl2.model.Buff.BuffType#WET}
@@ -106,15 +106,7 @@ public class MobSystem {
 
     /** Returns true if a non-INANIMATE mob or wall blocks the given tile. */
     public static boolean blocksMovement(Level level, Mob self, Point p) {
-        int x = p.tileX(), y = p.tileY();
-        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return true;
-        if (level.tiles[x][y].blocksMovement()) return true;
-        if (level.tiles[x][y] == Tile.CHASM && !self.effectiveStats().flying) return true;
-        for (Mob m : level.mobs) {
-            if (m == self) continue;
-            if (m.position.tileX() == x && m.position.tileY() == y) return true;
-        }
-        return false;
+        return MobQueries.blocksMovement(level, self, p);
     }
 
     /**
@@ -132,7 +124,7 @@ public class MobSystem {
             return;
         }
 
-        // Jump perk — player can leap directly to any tile within Chebyshev radius 2
+        // Jump perk - player can leap directly to any tile within Chebyshev radius 2
         // for one move tick, ignoring intervening obstacles. Falls through to normal
         // pathing if the destination tile itself is blocked or occupied.
         if (mob.behavior == Behavior.PLAYER
@@ -163,7 +155,7 @@ public class MobSystem {
         }
 
         int nx = next.tileX(), ny = next.tileY();
-        // FRIGHTENED gate — if the mover is the player and frightened, refuse to step
+        // FRIGHTENED gate - if the mover is the player and frightened, refuse to step
         // toward any visible terrifying mob. Hands control back to the player so they
         // can pick a different escape route. Uses Chebyshev distance: if the proposed
         // tile is strictly closer to a terrifying source than the current tile, abort.
@@ -196,14 +188,14 @@ public class MobSystem {
             }
             // Non-player movers only displace strictly smaller non-hostile mobs (matches
             // Pathfinder's canEnter gate). Same-size or larger blocks the step entirely
-            // — the mover idles for one tick. The PLAYER ignores the size gate so a
+            // - the mover idles for one tick. The PLAYER ignores the size gate so a
             // non-hostile critter never blocks the player's intended move.
             if (mob.behavior != Behavior.PLAYER && mob.effectiveStats().size <= occupant.effectiveStats().size) {
                 mob.targetPosition = null;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
                 return;
             }
-            // FLEE or NOTHING against a non-player — swap positions. Mover pays a regular
+            // FLEE or NOTHING against a non-player - swap positions. Mover pays a regular
             // move tick; the other mob gets a free ride so we don't chain time costs per swap.
             // Both mobs are visibly travelling a tile, so both kick a step animation.
             Point myOld = mob.position;
@@ -217,7 +209,7 @@ public class MobSystem {
             // tryInteract (space / tap-on-self) so they don't get railroaded into
             // collecting every loot pile they walk through.
             if (mob.behavior != Behavior.PLAYER) pickupAtFeet(level, mob);
-            // Both swappers visibly stepped onto a new tile — apply door-leave / door-enter
+            // Both swappers visibly stepped onto a new tile - apply door-leave / door-enter
             // bookkeeping symmetrically so a mouse-vs-cat shuffle through a doorway behaves
             // the same as a regular step.
             onMobLeftTile(level, mob,      myOld.tileX(),       myOld.tileY());
@@ -263,7 +255,7 @@ public class MobSystem {
     /** Total real-time duration of the teleport fade, ms. Split evenly between fade-out
      *  at origin (first half) and fade-in at destination (second half). */
     public static final int TELEPORT_FADE_TOTAL_MS = 1000;
-    /** Half of {@link #TELEPORT_FADE_TOTAL_MS} — phase transition threshold. */
+    /** Half of {@link #TELEPORT_FADE_TOTAL_MS} - phase transition threshold. */
     public static final int TELEPORT_FADE_HALF_MS  = TELEPORT_FADE_TOTAL_MS / 2;
 
     /**
@@ -282,13 +274,13 @@ public class MobSystem {
         Point origin = mob.position;
         int oldX = origin.tileX(), oldY = origin.tileY();
         int newX = dest.tileX(),   newY = dest.tileY();
-        // Instant relocate — no step interpolation, since this is a teleport, not a slide.
+        // Instant relocate - no step interpolation, since this is a teleport, not a slide.
         mob.position = dest;
         // Re-run the same per-step bookkeeping so a horror that lands on a closed door,
         // an oil pool, etc. picks up the correct state.
         onMobLeftTile(level, mob, oldX, oldY);
         onMobEnteredTile(level, mob, newX, newY);
-        // Visual feedback — green vertical streaks rising from the departure tile, the
+        // Visual feedback - green vertical streaks rising from the departure tile, the
         // mob fading out at origin over 250 ms, then green streaks raining onto the
         // destination tile and the mob fading in over another 250 ms. The arrival
         // streaks are deferred to the phase transition by tickTeleportFadesRealTime so
@@ -297,7 +289,7 @@ public class MobSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobTeleported(
                     mob, oldX, oldY, newX, newY));
         }
-        // Move cost is the caller's concern — {@code tryCastAbilities} already
+        // Move cost is the caller's concern - {@code tryCastAbilities} already
         // bills attackCost after a successful cast, so we don't double-charge.
         return true;
     }
@@ -344,7 +336,7 @@ public class MobSystem {
         // Water drip: a sufficiently big WET non-flying mob (size > 4) on
         // a bare-floor tile (no surface) leaves a small puddle 1/3 of the
         // time. Lets a soaked dragon track water onto adjacent tiles
-        // until it dries off — a free conduit for follow-up lightning
+        // until it dries off - a free conduit for follow-up lightning
         // strikes.
         if (mob.effectiveStats().size > 4 && !mob.effectiveStats().flying
                 && BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.WET)
@@ -352,7 +344,7 @@ public class MobSystem {
                 && RANDOM.nextDouble() < (1.0 / 3.0)) {
             SurfaceSystem.addSurface(level, new Point(nx, ny), Surface.WATER);
         }
-        // POWERUP pickup-trigger — stepping onto a tile with a POWERUP
+        // POWERUP pickup-trigger - stepping onto a tile with a POWERUP
         // item destroys the item and applies its wandEffect to the
         // stepper. Player-only by spec; other mobs walk over them.
         if (mob.behavior == Behavior.PLAYER) {
@@ -378,7 +370,7 @@ public class MobSystem {
     }
 
     /** Step-animation length for a mob with the default move cost
-     *  ({@link GameBalance#PLAYER_MOVE_COST}). 5 ≈ 83 ms at 60 fps — user-spec is "the
+     *  ({@link GameBalance#PLAYER_MOVE_COST}). 5 ~ 83 ms at 60 fps - user-spec is "the
      *  player with 100 move cost takes 5 frames per tile". Mobs with lower move cost
      *  step faster proportionally; mobs with higher move cost are CAPPED at
      *  {@link #STEP_ANIMATION_FRAMES_MAX} so a sluggish creature visibly drags between
@@ -391,7 +383,7 @@ public class MobSystem {
     /** Kick the step-interpolation animation on {@code mob}: it has just been logically
      *  teleported to {@code (toX, toY)} but the renderer should draw it sliding from
      *  {@code (fromX, fromY)} over a number of frames proportional to its
-     *  {@link com.bjsp123.rl2.model.StatBlock#moveCost}. Schedules concurrently — multiple
+     *  {@link com.bjsp123.rl2.model.StatBlock#moveCost}. Schedules concurrently - multiple
      *  mobs that step on the same tick all start sliding on the same render frame, and
      *  the freeze gate stretches to cover the longest of them. */
     public static void startStepAnimation(Level level, Mob mob,
@@ -405,7 +397,7 @@ public class MobSystem {
 
     /** Floor on step-animation length, in render frames. Fast mobs (mouse, kitten) would
      *  otherwise compute ~3 frames at 60 fps which looks closer to a teleport than a slide;
-     *  clamping up to {@value} gives them a visibly travelled tile (~67 ms) — about 50%
+     *  clamping up to {@value} gives them a visibly travelled tile (~67 ms) - about 50%
      *  more frames than the unclamped scaling produced. */
     public static final int STEP_ANIMATION_FRAMES_MIN = 4;
 
@@ -414,7 +406,7 @@ public class MobSystem {
     /**
      * Move cost a mob pays to step onto tile {@code (x,y)}. Doubles the base
      * {@link Mob#moveCost} when the destination carries an OIL surface and the mob isn't
-     * flying — slick footing slows ground walkers but flyers ignore it. Other surfaces
+     * flying - slick footing slows ground walkers but flyers ignore it. Other surfaces
      * (water, blood) currently don't modify cost; add a switch here when they should.
      */
     private static int moveCostOnto(Mob mob, Level level, int x, int y) {
@@ -428,25 +420,25 @@ public class MobSystem {
 
     /**
      * What mob {@code a} wants to do about mob {@code b}: ATTACK (chase & hit), FLEE (move
-     * away), ALLY (won't fight, can swap places), or NOTHING (ignore). Purely one-sided —
+     * away), ALLY (won't fight, can swap places), or NOTHING (ignore). Purely one-sided -
      * a dog's attitude toward a cat can be ATTACK while the cat's attitude toward the dog
      * is FLEE. Callers must evaluate both directions when deciding collision behaviour.
      *
      * <p>Resolution order:
      * <ol>
-     *   <li>self / null → NOTHING</li>
-     *   <li>owner-based ALLY — pet ↔ master, two pets sharing a master</li>
-     *   <li>FRIGHTENED buff → FLEE everything (player exempt)</li>
-     *   <li>shared {@link Mob#faction} tag → ALLY</li>
-     *   <li>explicit {@link Mob#fleeTypes} membership → FLEE (priority over ATTACK)</li>
-     *   <li>explicit {@link Mob#attackTypes} membership → ATTACK</li>
-     *   <li>owner-inherited hostility — pet attacks what its master attacks</li>
-     *   <li>ally-defense transitivity → ATTACK anyone hostile to {@code a} or any
+     *   <li>self / null -> NOTHING</li>
+     *   <li>owner-based ALLY - pet <-> master, two pets sharing a master</li>
+     *   <li>FRIGHTENED buff -> FLEE everything (player exempt)</li>
+     *   <li>shared {@link Mob#faction} tag -> ALLY</li>
+     *   <li>explicit {@link Mob#fleeTypes} membership -> FLEE (priority over ATTACK)</li>
+     *   <li>explicit {@link Mob#attackTypes} membership -> ATTACK</li>
+     *   <li>owner-inherited hostility - pet attacks what its master attacks</li>
+     *   <li>ally-defense transitivity -> ATTACK anyone hostile to {@code a} or any
      *       mob in {@code a}'s faction ({@link #defendsAlly})</li>
      *   <li>otherwise NOTHING</li>
      * </ol>
      *
-     * <p>Same-{@link Behavior} no longer implies ALLY — alliance is purely the
+     * <p>Same-{@link Behavior} no longer implies ALLY - alliance is purely the
      * shared-faction-tag relationship, with lone-wolf species carrying a null
      * faction.
      */
@@ -472,7 +464,7 @@ public class MobSystem {
         if (b.faction != null && a.enemyFactions.contains(b.faction)) return Attitude.ATTACK;
         if (a.fleeTypes   != null && b.mobType != null && a.fleeTypes  .contains(b.mobType)) return Attitude.FLEE;
         if (a.attackTypes != null && b.mobType != null && a.attackTypes.contains(b.mobType)) return Attitude.ATTACK;
-        // Loyalty — a tame mob inherits its owner's hostilities. If the owner wants to
+        // Loyalty - a tame mob inherits its owner's hostilities. If the owner wants to
         // attack b's species (either by spec or via combat memory) or b's faction, the pet does too.
         if (a.owner != null && a.owner != b
                 && b.mobType != null && a.owner.attackTypes != null
@@ -490,7 +482,7 @@ public class MobSystem {
         return Attitude.NOTHING;
     }
 
-    /** True iff {@code b} would treat {@code a} as a hostile target — covers
+    /** True iff {@code b} would treat {@code a} as a hostile target - covers
      *  {@code b.attackTypes} containing {@code a}'s species or any species
      *  sharing {@code a}'s {@link Mob#faction}, and {@code b.enemyFactions}
      *  including {@code a}'s faction. Powers the ally-defense rule in
@@ -509,7 +501,7 @@ public class MobSystem {
     }
 
     /**
-     * Record that {@code a} and {@code b} have been in combat — bidirectional. Each side
+     * Record that {@code a} and {@code b} have been in combat - bidirectional. Each side
      * learns to attack the other's species on sight, and drops any fear of it (combat
      * overrides flee). Attack/flee identity is keyed on {@link com.bjsp123.rl2.model.Mob.MobType}
      * so behavior code never has to consult the glyph.
@@ -547,7 +539,7 @@ public class MobSystem {
      *  altar, throne, lamp). The shooter's own tile is always skipped so
      *  a caster doesn't block their own missile. Used by both wand fire
      *  and item throw so a projectile aimed beyond an obstacle clips to
-     *  that obstacle and resolves its effect there — bombs detonate
+     *  that obstacle and resolves its effect there - bombs detonate
      *  against walls / statues, magic missiles strike the first body in
      *  the line, etc. Returns {@code to} when the trajectory is clear. */
     public static Point firstMobBlocking(Level level, Point from, Point to, Mob shooter) {
@@ -561,7 +553,7 @@ public class MobSystem {
         int x = x0, y = y0;
         while (true) {
             if (!(x == x0 && y == y0)) {
-                // Mob first — a body in the way takes the hit.
+                // Mob first - a body in the way takes the hit.
                 for (Mob m : level.mobs) {
                     if (m == shooter) continue;
                     if (m.position == null) continue;
@@ -641,70 +633,55 @@ public class MobSystem {
     }
 
     public static Mob mobAt(Level level, Point p) {
-        int x = p.tileX(), y = p.tileY();
-        for (Mob m : level.mobs) {
-            if (m.position.tileX() == x && m.position.tileY() == y) return m;
-        }
-        return null;
+        return MobQueries.mobAt(level, p);
     }
 
     /** True iff the level can accept a new effect-driven mob. Centralised so the
      *  three magical-spawn sites (wand of dog, kissyblob eat-spawn, mouse
      *  mushroom-eat-spawn) read off the same gate. */
     public static boolean levelHasRoomForSpawn(Level level) {
-        return level != null && level.mobs != null
-                && level.mobs.size() < GameBalance.MAX_MOBS_ON_LEVEL;
+        return MobQueries.levelHasRoomForSpawn(level);
     }
 
     /** Count live mobs of {@code type} currently on the level. O(N) over level.mobs. */
     public static int countMobsOfType(Level level, String type) {
-        if (level == null || level.mobs == null || type == null) return 0;
-        int n = 0;
-        for (Mob m : level.mobs) if (type.equals(m.mobType)) n++;
-        return n;
+        return MobQueries.countMobsOfType(level, type);
     }
 
     /** Probability that {@code attacker} lands a hit on {@code target}. Reads the
-     *  fully-rolled-up effective accuracy and evasion from each side's StatBlock — so
+     *  fully-rolled-up effective accuracy and evasion from each side's StatBlock - so
      *  HOPE / INVISIBLE / GHOSTLY buffs and any future accuracy-bonus items automatically
      *  flow through. */
     public static double hitChance(Mob attacker, Mob target) {
-        int acc = attacker.effectiveStats().accuracy;
-        int eva = target.effectiveStats().evasion;
-        int denom = acc + eva;
-        return denom <= 0 ? 0.0 : (double) acc / denom;
+        return MobStats.hitChance(attacker, target);
     }
 
-    /** Min and max damage the attacker outputs before resistance — pulled directly from
+    /** Min and max damage the attacker outputs before resistance - pulled directly from
      *  the StatBlock pipeline. Per-item level scaling, equipped-slot summation, and any
      *  future buff contributions are folded in by {@link MobSystem#writeEffectiveStats}. */
     public static MinMax rawDamageRange(Mob attacker) {
-        return attacker.effectiveStats().damage;
+        return MobStats.rawDamageRange(attacker);
     }
 
     /** Min and max damage the target resists. */
     public static MinMax resistRange(Mob target) {
-        return target.effectiveStats().armor;
+        return MobStats.resistRange(target);
     }
 
     /** Min and max bonus damage the attacker lands ignoring armour. */
     public static MinMax apDamageRange(Mob attacker) {
-        return attacker.effectiveStats().apDamage;
+        return MobStats.apDamageRange(attacker);
     }
 
     /** Min and max magic resistance the target rolls per non-physical hit. */
     public static MinMax magicResistRange(Mob target) {
-        return target.effectiveStats().magicResist;
+        return MobStats.magicResistRange(target);
     }
 
     /** Min and max damage attacker can land on target after resistance, floored at 0,
      *  plus the AP bonus. */
     public static MinMax netDamageRange(Mob attacker, Mob target) {
-        MinMax dmg = rawDamageRange(attacker);
-        MinMax res = resistRange(target);
-        MinMax ap  = apDamageRange(attacker);
-        return new MinMax(Math.max(0, dmg.min() - res.max()) + ap.min(),
-                          Math.max(0, dmg.max() - res.min()) + ap.max());
+        return MobStats.netDamageRange(attacker, target);
     }
 
     /** Roll a uniform integer in {@code [range.min, range.max]} using the shared combat
@@ -712,27 +689,20 @@ public class MobSystem {
      *  FireSystem fire damage) can apply magic resist without having to maintain their
      *  own RNG. */
     public static int rollRange(MinMax range) {
-        return range.max() > range.min()
-                ? range.min() + RANDOM.nextInt(range.max() - range.min() + 1)
-                : range.min();
+        return MobStats.rollRange(range);
     }
 
     /**
      * Single rollup for a mob's effective stats. Copies the intrinsic block, then folds
      * in every contributor in declaration order: character-level bonus, equipped items,
-     * active buffs. Writes into {@code dst} in place — no allocation beyond the MinMax
+     * active buffs. Writes into {@code dst} in place - no allocation beyond the MinMax
      * record per per-stat plus.
      *
      * <p>Called from {@link Mob#effectiveStats()} when {@link Mob#statsDirty} is set.
      * Don't invoke directly unless you want to bypass the cache.
      */
     public static void writeEffectiveStats(Mob mob, com.bjsp123.rl2.model.StatBlock dst) {
-        dst.copyFrom(mob.intrinsic);
-        characterLevelBonusInto(dst, mob);
-        for (Item eq : mob.inventory.allEquipped()) {
-            ItemSystem.contributeInto(dst, eq);
-        }
-        BuffSystem.contributeInto(dst, mob);
+        MobStats.writeEffectiveStats(mob, dst);
     }
 
     /** Character-level contribution. Reads {@link Mob#characterLevel} and adds the
@@ -740,15 +710,15 @@ public class MobSystem {
      *  the per-level bonus table is moved here. The contributor is wired now so the
      *  rollup shape is final and no future signature changes are needed. */
     private static void characterLevelBonusInto(com.bjsp123.rl2.model.StatBlock dst, Mob mob) {
-        // Intentionally empty — placeholder for future MobProgression migration.
+        // Intentionally empty - placeholder for future MobProgression migration.
     }
 
     /** Roll to-hit, compute damage, apply, spawn floating text. Kills target if HP drops to 0.
      *  Visual side-effects (lunge animation, floating-text, particle bursts) are suppressed
-     *  when neither participant is in the player's current FOV — there's no point flickering
+     *  when neither participant is in the player's current FOV - there's no point flickering
      *  damage numbers off-screen. */
     public static void attack(Level level, Mob attacker, Mob target) {
-        // Attacking ends INVISIBLE — cancel BEFORE hit-rolls so the +20 evasion drops
+        // Attacking ends INVISIBLE - cancel BEFORE hit-rolls so the +20 evasion drops
         // for the hit being rolled now too. Per the user's spec: any attack, hit or
         // miss, ends invisibility.
         BuffSystem.removeBuff(attacker, com.bjsp123.rl2.model.Buff.BuffType.INVISIBLE);
@@ -765,7 +735,7 @@ public class MobSystem {
                         attacker, target, /*hit=*/false, /*dealt=*/0));
             }
             logAttackOutcome(level, attacker, target, 0, /*miss*/ true, /*killed*/ false);
-            // Tuning log for the missed swing — rolled=0 collapses the body to "miss".
+            // Tuning log for the missed swing - rolled=0 collapses the body to "miss".
             emitDamageRollLog(level, attacker, target,
                     new DamageBreakdown(DamageElement.PHYSICAL, 0), 0);
             return;
@@ -787,7 +757,7 @@ public class MobSystem {
                     attacker, target, /*hit=*/true, rawDealt));
         }
         // Knockback fires BEFORE the melee damage so even a killing blow
-        // shows the shove — the slide animation queues sequentially and
+        // shows the shove - the slide animation queues sequentially and
         // the death-fade plays at the destination tile. A knockback
         // collision can itself kill the target via environmental damage;
         // we guard the subsequent melee damage so we don't double-kill.
@@ -818,8 +788,8 @@ public class MobSystem {
     }
 
     /**
-     * Single entry point for any damage done to a mob. Every path — melee, thrown item, magic
-     * missile, starvation or other environmental harm — routes through here so HP reduction,
+     * Single entry point for any damage done to a mob. Every path - melee, thrown item, magic
+     * missile, starvation or other environmental harm - routes through here so HP reduction,
      * kill resolution, death-history bookkeeping, and flinch animation stay in lockstep.
      *
      * <p>Does NOT spawn floating text or particle bursts. Those vary per source (melee wants
@@ -866,7 +836,7 @@ public class MobSystem {
             case MAGIC, FIRE       -> BuffSystem.mitigateMagicDamage(target, rawDealt);
             case POISON, SHOCK, STARVATION -> rawDealt;
         };
-        // BLUNT floater — emitted ahead of the HIT/MISS floater whenever a defensive
+        // BLUNT floater - emitted ahead of the HIT/MISS floater whenever a defensive
         // buff ate part of the hit, so the renderer plays the dim "blunt" first.
         if (dealt < rawDealt && rawDealt > 0 && level != null && level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
@@ -885,7 +855,7 @@ public class MobSystem {
         // so a god-mode target never dies. Set on the player Mob from
         // the character-select pre-game options popup.
         if (target.godMode && target.hp < 1) target.hp = 1;
-        // A blow always wakes the target — anything from sleeping through hiding snaps
+        // A blow always wakes the target - anything from sleeping through hiding snaps
         // to AWAKE so the AI can react this turn instead of staying ASLEEP / HIDING /
         // SEEKING_HIDING through the hit. Zero-damage blows still wake; the mob noticed
         // the swing. AWAKE / FOLLOWING mobs don't need transitioning.
@@ -901,13 +871,13 @@ public class MobSystem {
         }
         // Hostility from damage: a mob that takes real damage from an attacker promotes
         // that attacker into its attackTypes (and recordCombatMemory's reciprocal does the
-        // same the other way). A miss leaves attitudes unchanged — only damaging blows
+        // same the other way). A miss leaves attitudes unchanged - only damaging blows
         // count, so a sparring kitten that scratches without breaking skin doesn't turn
         // the household feral. Environmental damage has no attacker and is skipped.
         if (dealt > 0 && attacker != null) {
             recordCombatMemory(level, attacker, target, "attacked");
         }
-        // Floating combat text — every visible blow produces a number ("-N" red for a
+        // Floating combat text - every visible blow produces a number ("-N" red for a
         // hit, "miss" yellow for a glancing/zero-damage strike). Heal text is added by
         // the heal helper. Centralised here so every damage source (melee, throw, ranged
         // missile, environmental) lights up the same indicator without each call site
@@ -920,7 +890,7 @@ public class MobSystem {
                             : com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
                     attacker));
         }
-        // Only flinch when real damage lands — a 0-damage blow doesn't visually stagger the
+        // Only flinch when real damage lands - a 0-damage blow doesn't visually stagger the
         // target. Environmental damage has no attacker and therefore no direction to recoil
         // from. Off-screen flinches are suppressed for the same reason as off-screen lunges:
         // no observer means no animation.
@@ -930,13 +900,13 @@ public class MobSystem {
         }
         // Poison-on-hit. Spiders carry {@code intrinsic.poisonsOnAttack} so any blow
         // they land applies POISONED at level = attacker character level, duration
-        // = level × 3 turns. Fires on any landed hit even if armour absorbed it —
+        // = level x 3 turns. Fires on any landed hit even if armour absorbed it -
         // a 1-damage spider bite vs scale mail still injects venom.
         //
         // Gated on PHYSICAL damage so the per-turn POISON DOT (which routes
         // back through {@link #processAttack} with element = POISON, attacker =
         // the buff's source) doesn't re-credit the spider and refresh the
-        // POISONED duration on every tick — that turned the poison buff
+        // POISONED duration on every tick - that turned the poison buff
         // permanent until the spider died.
         if (attacker != null
                 && attacker.effectiveStats().poisonsOnAttack
@@ -959,7 +929,7 @@ public class MobSystem {
             FireSystem.ignite(level, tx,     ty + 1);
             FireSystem.ignite(level, tx,     ty - 1);
         }
-        // Brand on-hit elemental effect — fired when a melee blow lands, using
+        // Brand on-hit elemental effect - fired when a melee blow lands, using
         // the attacker's equipped weapon brand (if any).
         if (dealt > 0 && attacker != null && attacker.inventory != null) {
             com.bjsp123.rl2.model.Item weapon = attacker.inventory.weapon;
@@ -992,14 +962,14 @@ public class MobSystem {
         return false;
     }
 
-    /** Legacy shim — kept callable so {@code MobSystem.attack} doesn't need a same-PR
+    /** Legacy shim - kept callable so {@code MobSystem.attack} doesn't need a same-PR
      *  rewrite. The actual lunge animation is scheduled by rgame's {@code Animator}
      *  when it consumes the {@code MobMeleeAttacked} event. */
     public static void startMeleeLunge(Level level, Mob attacker, Mob target) {
-        // Intentionally empty — Animator drives the visual.
+        // Intentionally empty - Animator drives the visual.
     }
 
-    /** Legacy shim — see {@link #startMeleeLunge}. {@code MobHitFlinched} is the event
+    /** Legacy shim - see {@link #startMeleeLunge}. {@code MobHitFlinched} is the event
      *  that triggers rgame's flinch animation. */
     public static void startHitFlinch(Level level, Mob target, Mob hitSource) {
         if (target == null || hitSource == null
@@ -1049,7 +1019,7 @@ public class MobSystem {
     }
 
     /** Move every item under the mob's feet from the ground into its bag (until the bag is full).
-     *  Returns the number of items actually picked up — callers use this to decide whether
+     *  Returns the number of items actually picked up - callers use this to decide whether
      *  to charge a move tick. */
     public static int pickupAtFeet(Level level, Mob mob) {
         int x = mob.position.tileX(), y = mob.position.tileY();
@@ -1061,7 +1031,7 @@ public class MobSystem {
             Item item = it.next();
             if (item.location == null) continue;
             if (item.location.tileX() != x || item.location.tileY() != y) continue;
-            // POWERUP items are player-only — they're consumed on touch
+            // POWERUP items are player-only - they're consumed on touch
             // by the player's own onMobEnteredTile path, never picked up
             // into anyone's bag. Non-player mobs leave them untouched.
             if (item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.POWERUP) {
@@ -1097,12 +1067,12 @@ public class MobSystem {
      * <ol>
      *   <li>Scatters bagged + equipped items onto nearby floor tiles.</li>
      *   <li>Splashes blood if the mob is flesh.</li>
-     *   <li>Awards XP (and score) to {@code killer} — level-ups cascade automatically via
+     *   <li>Awards XP (and score) to {@code killer} - level-ups cascade automatically via
      *       {@link MobProgression#awardXp}. Pass {@code null} for environmental deaths where
      *       no mob should be credited.</li>
      *   <li>Removes the mob from the level.</li>
      * </ol>
-     * Callers must not perform any of these steps themselves — they all live here.
+     * Callers must not perform any of these steps themselves - they all live here.
      */
     public static void killMob(Level level, Mob mob, Mob killer) {
         // Drain inventory + equipment, roll drop-quality loot, scatter on adjacent
@@ -1171,11 +1141,11 @@ public class MobSystem {
      *
      * <p>Outcomes per tile stepped:
      * <ul>
-     *   <li>Free floor — mob moves, continues.</li>
-     *   <li>CHASM (non-flying mob) — mob dies; its items emit {@code ItemFallingIntoChasm}
+     *   <li>Free floor - mob moves, continues.</li>
+     *   <li>CHASM (non-flying mob) - mob dies; its items emit {@code ItemFallingIntoChasm}
      *       events instead of normal loot scatter.</li>
-     *   <li>Wall / blocking terrain — mob takes {@code remaining * 4} impact damage, stops.</li>
-     *   <li>Another mob — both take {@code remaining * 4} damage; the collided mob is
+     *   <li>Wall / blocking terrain - mob takes {@code remaining * 4} impact damage, stops.</li>
+     *   <li>Another mob - both take {@code remaining * 4} damage; the collided mob is
      *       knocked back by {@code remaining} squares (cascade capped at depth 3).</li>
      * </ul>
      */
@@ -1257,7 +1227,7 @@ public class MobSystem {
     /** Resolve a non-flying mob falling into a chasm. If the level has a
      *  down-stairs link AND the mob's half-max-HP impact damage doesn't
      *  kill it, the mob is moved to the next dungeon level (the
-     *  staircase target) — losing half of its max HP from the fall. If
+     *  staircase target) - losing half of its max HP from the fall. If
      *  the fall would kill (or there's no next level / no arrival tile),
      *  the mob's items revolve-shrink-fade into the chasm and the mob
      *  dies on impact at the source level. The visual revolve-fade of
@@ -1290,7 +1260,7 @@ public class MobSystem {
         boolean wouldKill = next == null || arrival == null
                 || mob.hp - dmg <= 0;
 
-        // Revolve-shrink-fade visual at the source tile — same shape as
+        // Revolve-shrink-fade visual at the source tile - same shape as
         // a falling item, but driven by the mob's sprite.
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobFellThroughChasm(
@@ -1305,7 +1275,7 @@ public class MobSystem {
             return;
         }
 
-        // Survivor — relocate to the next level + apply impact damage there.
+        // Survivor - relocate to the next level + apply impact damage there.
         level.mobs.remove(mob);
         mob.position = arrival;
         mob.targetPosition = null;
@@ -1349,13 +1319,13 @@ public class MobSystem {
 
     public static void processAiTurn(Mob mob, Level level) {
         if (mob.ticksTillMove > 0) return;
-        // Player has no AI of its own — short-circuit so the wake gate below can't
+        // Player has no AI of its own - short-circuit so the wake gate below can't
         // accidentally bill the player's turn (which would freeze input).
         if (mob.behavior == Behavior.PLAYER) return;
 
         boolean inanimate = (mob.behavior == Behavior.INANIMATE);
 
-        // Sleep gate — applied uniformly to every behaviour so mice / dogs / cats /
+        // Sleep gate - applied uniformly to every behaviour so mice / dogs / cats /
         // blobs / anthills are dormant until a relevant target wanders into their
         // wake radius. INANIMATE mobs use the inverse perspective (wake when a
         // hostile is incoming) since their own attackTypes is empty.
@@ -1371,7 +1341,7 @@ public class MobSystem {
                 }
             } else {
                 mob.intent = Mob.Intent.IDLE;
-                // Only mobile mobs need a sleep cooldown — INANIMATE never has its
+                // Only mobile mobs need a sleep cooldown - INANIMATE never has its
                 // ticksTillMove decremented (TurnSystem.tick), so paying a move cost
                 // would freeze them out of future wake checks forever.
                 if (!inanimate) {
@@ -1388,7 +1358,7 @@ public class MobSystem {
             return;
         }
 
-        // Support-cast abilities (kobold general's haste/heal, etc.) — runs before
+        // Support-cast abilities (kobold general's haste/heal, etc.) - runs before
         // behaviour dispatch so any mob carrying an ability list casts before
         // defaulting to its normal AI step. Off-cooldown casts consume the turn.
         if (tryCastAbilities(mob, level)) {
@@ -1397,7 +1367,7 @@ public class MobSystem {
         }
 
         // Inventory item use (potions, magic-missile wand, dog wand, bombs).
-        // Each usable item rolls 50% per turn — cheap heuristic that gives a
+        // Each usable item rolls 50% per turn - cheap heuristic that gives a
         // mob carrying a healing potion a steady chance to drink when low,
         // and a rogue carrying bombs a steady chance to lob one. Skips
         // anything that would harm self or an ally.
@@ -1521,9 +1491,9 @@ public class MobSystem {
         return best;
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // AI ITEM USE — wands, potions, bombs in a mob's inventory
-    // ════════════════════════════════════════════════════════════════════════
+    // ========================================================================
+    // AI ITEM USE - wands, potions, bombs in a mob's inventory
+    // ========================================================================
 
     /** Per-item probability a mob's AI rolls each turn that it'll actually use
      *  the item (after the safety / utility gate). 50% gives the rogue a
@@ -1537,12 +1507,12 @@ public class MobSystem {
      * Run the AI item-use heuristic for {@code mob}: walk the bag, find the
      * first item that's both usable and won't harm self/allies, roll
      * {@link #AI_USE_ITEM_CHANCE}, and on success apply it. The use consumes
-     * the mob's turn — caller short-circuits.
+     * the mob's turn - caller short-circuits.
      */
     private static boolean tryUseInventoryItem(Mob mob, Level level) {
         if (mob == null || mob.inventory == null) return false;
         if (mob.inventory.bag == null || mob.inventory.bag.isEmpty()) return false;
-        // Ranged-behavior mobs always use a usable item if the safety gate clears —
+        // Ranged-behavior mobs always use a usable item if the safety gate clears -
         // otherwise a kobold mage with a wand of magic missile would idle half its
         // turns next to a melee enemy. Other mobs roll AI_USE_ITEM_CHANCE.
         boolean alwaysUse = mob.behavior == Behavior.RANGED_MOB_DUMB
@@ -1576,7 +1546,7 @@ public class MobSystem {
         };
     }
 
-    /** Heuristic for {@code DRINK} potions — only quaff if it'll actually help.
+    /** Heuristic for {@code DRINK} potions - only quaff if it'll actually help.
      *  Damaging potions (non-zero {@code item.damage}, e.g. potion of poison)
      *  are never drunk; buff potions are useful when the buff isn't already
      *  up; the REGENERATION buff additionally requires the mob to actually
@@ -1611,7 +1581,7 @@ public class MobSystem {
     }
 
     /** Element-wand AI gate. Only single-target / ally-creating elements pass
-     *  in this first cut — element wands with AOE / friendly-fire risk
+     *  in this first cut - element wands with AOE / friendly-fire risk
      *  (water, oil, grass, fungus, fire, detonation, banishment) are deferred. */
     private static boolean isWandUsableByAi(Mob mob, com.bjsp123.rl2.model.Item wand, Level level) {
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
@@ -1768,7 +1738,7 @@ public class MobSystem {
     private static final int STANDOFF_BUBBLE_TILES = 2;
 
     /**
-     * RANGED_MOB_DUMB AI — same wake / flee / attack-target / follow / wander structure as
+     * RANGED_MOB_DUMB AI - same wake / flee / attack-target / follow / wander structure as
      * {@link #processMobAi}, but if the mob has a ranged attack ready and the chosen
      * attack target is in range + LOS but not adjacent, the mob fires a projectile
      * instead of stepping.
@@ -1793,7 +1763,7 @@ public class MobSystem {
         }
         Mob attackTarget = nearestAttackTarget(mob, level);
         if (attackTarget != null) {
-            // Per-spec: DUMB shoots only when not adjacent — at adjacent it prefers
+            // Per-spec: DUMB shoots only when not adjacent - at adjacent it prefers
             // melee (the closing-step path swings on contact via the mob-occupant
             // resolution in stepTowardTarget).
             int cheb = LevelFactoryUtils.chebyshev(mob.position, attackTarget.position);
@@ -1823,7 +1793,7 @@ public class MobSystem {
     }
 
     /**
-     * RANGED_MOB_STANDOFF AI — kite the target. If the mob is within
+     * RANGED_MOB_STANDOFF AI - kite the target. If the mob is within
      * {@link #STANDOFF_BUBBLE_TILES} tiles of an attack target it tries to back away
      * (the AI sets a target tile farther from the enemy and steps toward it). Otherwise
      * it tries the same ranged-shot path as {@link #processRangedMobDumbAi}; failing
@@ -1850,7 +1820,7 @@ public class MobSystem {
         Mob attackTarget = nearestAttackTarget(mob, level);
         if (attackTarget != null) {
             int cheb = LevelFactoryUtils.chebyshev(mob.position, attackTarget.position);
-            // Adjacent target — never retreat. Try a point-blank ranged shot if the cooldown
+            // Adjacent target - never retreat. Try a point-blank ranged shot if the cooldown
             // is up; otherwise melee on bump. Without this branch the imp kites every turn
             // the cooldown is on, and the player can never close the gap to fight back.
             if (cheb <= 1) {
@@ -1863,7 +1833,7 @@ public class MobSystem {
                 stepOrIdle(mob, level);
                 return;
             }
-            // Shoot first — a stand-off ranged mob prefers to fire over moving when the
+            // Shoot first - a stand-off ranged mob prefers to fire over moving when the
             // shot is available. Only on cooldown does the standoff/retreat/close logic
             // run, and even then only outside melee range.
             if (tryRangedShot(mob, attackTarget, level)) {
@@ -1878,7 +1848,7 @@ public class MobSystem {
                     stepOrIdle(mob, level);
                     return;
                 }
-                // Cornered — fall through to closing distance + melee.
+                // Cornered - fall through to closing distance + melee.
             }
             mob.intent = Mob.Intent.PURSUING;
             mob.targetPosition = attackTarget.position;
@@ -1911,13 +1881,13 @@ public class MobSystem {
         com.bjsp123.rl2.model.StatBlock ss = shooter.effectiveStats();
         if (ss.rangedDamage.max() <= 0) return false;
         int cheb = LevelFactoryUtils.chebyshev(shooter.position, target.position);
-        // No point-blank gate here — the standoff imp needs to fire while the player is
+        // No point-blank gate here - the standoff imp needs to fire while the player is
         // adjacent (otherwise the player chases and the imp kites forever, never
         // shooting). Per-behaviour callers that prefer melee at adjacent
         // (RANGED_MOB_DUMB) gate on adjacency themselves before invoking tryRangedShot.
         if (ss.rangedDistance > 0 && cheb > ss.rangedDistance) return false;
         if (!LevelUtilities.getLineOfSight(level, shooter, target.position)) return false;
-        // Cooldown gate — present-RANGED_COOLDOWN-buff means "still recharging".
+        // Cooldown gate - present-RANGED_COOLDOWN-buff means "still recharging".
         if (BuffSystem.hasBuff(shooter, com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN)) {
             return false;
         }
@@ -2025,7 +1995,7 @@ public class MobSystem {
 
     /**
      * Mob this one should treat as its non-combat leader. Returns the mob's
-     * {@link Mob#owner} if it has one and the owner is still on the level — covers
+     * {@link Mob#owner} if it has one and the owner is still on the level - covers
      * both tame mobs (owner = player) and kittens (owner = parent cat). Returns
      * null otherwise. Self-heals a stale owner reference (e.g. after the owner
      * died) by clearing it and stepping any FOLLOWING state back to AWAKE.
@@ -2034,7 +2004,7 @@ public class MobSystem {
         if (self.owner == null) return null;
         Mob own = self.owner;
         if (level.mobs.contains(own)) return own;
-        // Owner died or left the level — drop loyalty so the mob doesn't path toward
+        // Owner died or left the level - drop loyalty so the mob doesn't path toward
         // a corpse forever, and exit the FOLLOWING state so the regular AI takes over.
         self.owner = null;
         if (self.stateOfMind == StateOfMind.FOLLOWING) {
@@ -2044,7 +2014,7 @@ public class MobSystem {
     }
 
     /**
-     * Pick a tile adjacent to {@code leader} as the path destination — the leader's own
+     * Pick a tile adjacent to {@code leader} as the path destination - the leader's own
      * tile is impassable to the follower (non-hostile mobs can't path through the player
      * or any leader, see {@link Pathfinder#canEnter}). Picks the leader-adjacent tile
      * with the smallest Chebyshev distance to {@code self} so the follower naturally
@@ -2082,7 +2052,7 @@ public class MobSystem {
         int lx = leader.position.tileX(), ly = leader.position.tileY();
         int cheb = Math.max(Math.abs(lx - sx), Math.abs(ly - sy));
         if (cheb <= 1) {
-            // Already next to the leader — stay put, but advance the clock so we don't
+            // Already next to the leader - stay put, but advance the clock so we don't
             // re-enter the AI in a tight loop.
             mob.targetPosition = null;
             TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
@@ -2094,7 +2064,7 @@ public class MobSystem {
         // return as "fully handled, intent = FOLLOWING_LEADER" without needing to
         // fall through to their own wander/step path. Previously this returned
         // false after setting targetPosition, which left the caller to step but
-        // record the intent as WANDERING — making the look screen show a pet that
+        // record the intent as WANDERING - making the look screen show a pet that
         // was actually following its master as "Awake (Wandering)".
         mob.targetPosition = dest;
         stepOrIdle(mob, level);
@@ -2107,11 +2077,11 @@ public class MobSystem {
     /**
      * AI for {@link Behavior#EXPLORE_HIDE} mobs. The flee flavour of the mouse:
      * <ul>
-     *   <li>Mob this one FLEEs within vision → run to the nearest tile the feared mob can't
+     *   <li>Mob this one FLEEs within vision -> run to the nearest tile the feared mob can't
      *       see; once there, enter {@link StateOfMind#HIDING} for a few turns.</li>
-     *   <li>Mob this one wants to ATTACK within vision → target it (mouse that's learned to
+     *   <li>Mob this one wants to ATTACK within vision -> target it (mouse that's learned to
      *       hate a mob via combat memory).</li>
-     *   <li>Otherwise → random wander.</li>
+     *   <li>Otherwise -> random wander.</li>
      * </ul>
      */
     private static void processExploreHideAi(Mob mob, Level level) {
@@ -2124,8 +2094,8 @@ public class MobSystem {
                 mob.targetPosition = hide;
                 mob.stateOfMind = StateOfMind.SEEKING_HIDING;
             } else {
-                // No tile is out of the threat's LOS (open room, arena floor, …).
-                // Fall back to a plain retreat — same straight-away-from-threat
+                // No tile is out of the threat's LOS (open room, arena floor, ...).
+                // Fall back to a plain retreat - same straight-away-from-threat
                 // pick that HUNTER mobs use, with a side-step fallback when the
                 // direct line is blocked. Without this the mouse's targetPosition
                 // would stay stale and "fleeing" would be cosmetic.
@@ -2186,8 +2156,8 @@ public class MobSystem {
 
     /**
      * AI for {@link Behavior#HUNTER} mobs. Same attitude-driven target selection as
-     * {@link #processMobAi} (FLEE → run away, else ATTACK → chase, else wander) minus the
-     * wake-on-sight gate — predators are active by default.
+     * {@link #processMobAi} (FLEE -> run away, else ATTACK -> chase, else wander) minus the
+     * wake-on-sight gate - predators are active by default.
      */
     private static void processHunterAi(Mob mob, Level level) {
         Mob.Intent prevIntent = mob.intent;
@@ -2246,7 +2216,7 @@ public class MobSystem {
 
     /** True iff any other mob within {@code radius} (Chebyshev) has ATTACK
      *  attitude toward {@code target}. Used as the wake gate for INANIMATE mobs
-     *  (anthills) — their own attackTypes is empty, so the regular wake gate
+     *  (anthills) - their own attackTypes is empty, so the regular wake gate
      *  never fires; this checks "is something coming for me" instead. STEALTH
      *  perk applies the same halved-radius rule as the regular wake gate. */
     private static boolean hasIncomingAttackerWithin(Mob target, Level level, double radius) {
@@ -2305,10 +2275,10 @@ public class MobSystem {
 
     /**
      * If a mob {@code self} fears is in sight, return a floor tile it can path to that
-     * moves it directly away — position reflected through self across the threat axis and
+     * moves it directly away - position reflected through self across the threat axis and
      * clamped to the level bounds and to walkable tiles. When the straight-line away path
      * is blocked, falls back to {@link #findRetreatTile} which picks any 8-neighbour tile
-     * that increases distance from the threat — fleeing into a side-step beats freezing
+     * that increases distance from the threat - fleeing into a side-step beats freezing
      * up against a wall and reverting to wander. Null only if no escape direction
      * improves distance at all (genuinely cornered).
      */
@@ -2335,7 +2305,7 @@ public class MobSystem {
 
     /**
      * Nearest floor-like tile that {@code threat} cannot currently see, measured from
-     * {@code self}'s position. Uses the player's visibility grid as a proxy — "not visible"
+     * {@code self}'s position. Uses the player's visibility grid as a proxy - "not visible"
      * is the closest thing we have to "out of the threat's line of sight" right now.
      */
     /** Closest floor tile (Manhattan from {@code self}) that {@code threat} cannot
@@ -2354,7 +2324,7 @@ public class MobSystem {
                 Point candidate = new Point(x, y);
                 // LOS from the *threat*, not the player's fog-of-war. The previous
                 // implementation read level.visible, which only reflects what the
-                // player can see — a tile in the cat's line of sight but outside
+                // player can see - a tile in the cat's line of sight but outside
                 // the player's FOV would falsely qualify as a hiding spot.
                 if (LevelUtilities.getLineOfSight(level, threat, candidate)) continue;
                 int d = Math.abs(x - cx) + Math.abs(y - cy);
@@ -2368,7 +2338,7 @@ public class MobSystem {
      * AI-safe wrapper around {@link #stepTowardTarget}. Guarantees that the mob's clock
      * advances even in the degenerate cases where the real step function early-returns
      * without charging a tick (null target, already-at-target). Without this, an AI mob
-     * that forgot to set a target would sit at {@code ticksTillMove == 0} forever — every
+     * that forgot to set a target would sit at {@code ticksTillMove == 0} forever - every
      * call to {@link TurnSystem#tick} would re-run its AI without making progress.
      */
     private static void stepOrIdle(Mob mob, Level level) {
@@ -2381,7 +2351,7 @@ public class MobSystem {
 
     /**
      * Step the mob one tile toward its target, then apply per-species post-move effects. For
-     * the mouse (glyph {@code "m"}): a 10% roll when it lands on a mushroom tile — on success,
+     * the mouse (glyph {@code "m"}): a 10% roll when it lands on a mushroom tile - on success,
      * the mushroom is eaten (vegetation cleared) and a fresh mouse spawns at the tile it just
      * left (skipped if another mob already occupies that tile). Uses {@link #stepOrIdle} so
      * the clock advances even when no move actually happened.
@@ -2433,7 +2403,7 @@ public class MobSystem {
      *  projectile event immediately so the inventory + the move-cost gate
      *  reflect the throw, but DEFERS the actual impact (damage, knockback,
      *  ignition, surface paint, etc.) to the moment the projectile
-     *  visually arrives — see {@link #applyThrowImpact}. The Animator
+     *  visually arrives - see {@link #applyThrowImpact}. The Animator
      *  wires a {@code PendingImpact} from the {@code ItemThrown} event
      *  back to {@code applyThrowImpact} so the world only mutates after
      *  the visual lands. */
@@ -2454,12 +2424,12 @@ public class MobSystem {
     }
 
     /**
-     * Apply the world-state mutations of a throw — door open, damage, bomb /
+     * Apply the world-state mutations of a throw - door open, damage, bomb /
      * potion / cloud effects, tame-on-throw, knockback, and the
      * {@link Item.ThrowResult} fate (consume / return / drop). Called from
      * the Animator's {@code PendingImpact} callback when the projectile
-     * arc finishes so the visual sequence reads cleanly: arc flies →
-     * impact resolves → subsequent visual events (ignite tiles, knock
+     * arc finishes so the visual sequence reads cleanly: arc flies ->
+     * impact resolves -> subsequent visual events (ignite tiles, knock
      * back survivors, drop the item) all play AFTER the projectile lands.
      */
     public static void applyThrowImpact(Level level, Mob thrower, Item it, Point dst) {
@@ -2469,7 +2439,7 @@ public class MobSystem {
         ItemEffect te = it.throwEffect;
         boolean inBounds = tx >= 0 && ty >= 0 && tx < level.width && ty < level.height;
 
-        // A thrown item that lands on a closed door pops it open — works for any throw kind.
+        // A thrown item that lands on a closed door pops it open - works for any throw kind.
         if (inBounds && level.tiles[tx][ty] == Tile.DOOR) {
             level.tiles[tx][ty] = Tile.DOOR_OPEN;
         }
@@ -2478,7 +2448,7 @@ public class MobSystem {
         // + damage). Throwing splashes that effect onto every mob within
         // Chebyshev range 1 of the impact tile, then short-circuits the
         // standard DAMAGE / bomb branches so a thrown POTION_POISON applies
-        // POISONED + damage in a 3×3 disc rather than just on the centre tile.
+        // POISONED + damage in a 3x3 disc rather than just on the centre tile.
         if (it.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.DRINK) {
             if (inBounds) ItemSystem.applyPotionImpact(level, dst, it, thrower);
             return;
@@ -2494,12 +2464,12 @@ public class MobSystem {
                 processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL);
             }
         }
-        // Tame-on-throw — items list the mob types they tame; throwing one at a
+        // Tame-on-throw - items list the mob types they tame; throwing one at a
         // matching mob converts it to a tame ally of the thrower. Done as a
         // separate branch (not gated on ThrownBehavior) so the same item can
         // carry an additional behaviour like NOTHING (drops on the ground)
         // without the two paths interfering. A successful tame consumes the
-        // item — the mob "eats" the bait, so the food shouldn't also land on
+        // item - the mob "eats" the bait, so the food shouldn't also land on
         // the ground.
         boolean consumedByTame = false;
         if (!it.tameOnThrow.isEmpty() && inBounds) {
@@ -2573,7 +2543,7 @@ public class MobSystem {
                     if (level.events != null) {
                         level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(p));
                     }
-                    // 0..3-duration smoke per tile — when the roll lands on
+                    // 0..3-duration smoke per tile - when the roll lands on
                     // 0 the tile gets no cloud at all, so a blast on open
                     // floor leaves an irregular soot pattern rather than a
                     // perfect smoky disc.
@@ -2594,7 +2564,7 @@ public class MobSystem {
             }
         } else if (te == ItemEffect.APPLYBUFFS && inBounds
                 && it.appliesBuff != null && !it.appliesBuff.isEmpty()) {
-            // APPLYBUFFS — every buff in the item's pipe-list is applied
+            // APPLYBUFFS - every buff in the item's pipe-list is applied
             // to every mob in a Chebyshev radius 1 disc around the impact
             // tile. Item level + abilityPower scale via the standard
             // ItemSystem helpers.
@@ -2610,7 +2580,7 @@ public class MobSystem {
                 }
             }
         } else if (te == ItemEffect.POISONCLOUD && inBounds) {
-            // POISONCLOUD — drop a persistent poison cloud over the disc.
+            // POISONCLOUD - drop a persistent poison cloud over the disc.
             // The cloud layer (see {@link CloudSystem}) re-applies POISONED
             // to mobs standing in it on each per-turn pass, so a longer
             // cloud lifetime keeps poisoning whoever lingers in it. The
@@ -2634,7 +2604,7 @@ public class MobSystem {
         } else if (te == ItemEffect.FREEZE && inBounds) {
             // Freeze bomb: bomb damage to the target, CHILLED applied to every mob in
             // the freeze disc. Removes fire vegetation in the disc. Water-to-ice
-            // conversion is blocked on a new ICE surface type — TODO.
+            // conversion is blocked on a new ICE surface type - TODO.
             Mob target = mobAt(level, dst);
             if (target != null) {
                 processAttack(level, thrower, target, bombDamage, AttackType.THROWN, DamageElement.PHYSICAL);
@@ -2666,10 +2636,10 @@ public class MobSystem {
         // The item's fate after impact is now driven entirely by the
         // {@link Item.ThrowResult} CSV column rather than category-specific
         // hard-coding:
-        //   NOTHING — drop on the target tile (skipped over chasm so the
+        //   NOTHING - drop on the target tile (skipped over chasm so the
         //             item falls in instead of resting on air).
-        //   CONSUME — the item ceases to exist (bombs, shatterers).
-        //   RETURN  — the item bounces back to a free tile adjacent to
+        //   CONSUME - the item ceases to exist (bombs, shatterers).
+        //   RETURN  - the item bounces back to a free tile adjacent to
         //             the thrower so it can be picked up.
         com.bjsp123.rl2.model.Item.ThrowResult fate =
                 consumedByTame
@@ -2684,7 +2654,7 @@ public class MobSystem {
                     it.location = landing;
                     level.items.add(it);
                 }
-                // No free adjacent tile → item is lost (rare — only when
+                // No free adjacent tile -> item is lost (rare - only when
                 // the thrower is fully boxed in by walls / mobs / chasms).
             }
             case NOTHING -> {
@@ -2695,12 +2665,12 @@ public class MobSystem {
             }
         }
         // Move cost is charged in {@link #throwItem} immediately at throw
-        // time, not here — the deferred-impact path keeps the player's
+        // time, not here - the deferred-impact path keeps the player's
         // turn-cost model unchanged regardless of how long the visual
         // arc takes.
     }
 
-    // eat / drinkPotion moved to ItemSystem — they're item-effect dispatchers, not
+    // eat / drinkPotion moved to ItemSystem - they're item-effect dispatchers, not
     // mob-system primitives. ItemSystem.eat / ItemSystem.drinkPotion are the live
     // entry points; the helpers they need (removeFromInventory, processAttack,
     // applyWandImpact, igniteDisc, paintMixedFloraDisc, paintVegetationDisc,
@@ -2740,7 +2710,7 @@ public class MobSystem {
     }
 
     /** Like {@link #igniteDisc} but only sets fire to tiles that are
-     *  intrinsically flammable — oil-coated or grass / mushroom / tree
+     *  intrinsically flammable - oil-coated or grass / mushroom / tree
      *  vegetation. Bare floor and stone don't catch. Used by the
      *  wand-of-blast / DETONATION path so a concussive blast only
      *  spreads fire where there's actually something to burn. */
@@ -2783,7 +2753,7 @@ public class MobSystem {
     }
 
     /** Wand-of-vegetation paint: each cell of the disc rolls grass-or-tree independently
-     *  so the result reads as a small thicket — usually a tree at the centre with grass
+     *  so the result reads as a small thicket - usually a tree at the centre with grass
      *  around it, but occasionally the other way around. The centre cell skews tree-heavy;
      *  cells further out skew grass-heavy so the player isn't drowning in trunks. */
     static void paintMixedFloraDisc(Level level, int cx, int cy, int radius) {
@@ -2796,7 +2766,7 @@ public class MobSystem {
                 if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
                 if (!level.tiles[x][y].isFloorLike()) continue;
                 if (level.surface[x][y] != null) continue;
-                // Centre + immediate neighbours skew tree (≤1 tile away); rest skew grass.
+                // Centre + immediate neighbours skew tree (<=1 tile away); rest skew grass.
                 double treeChance = distSq <= 1 ? 0.6 : 0.25;
                 Level.Vegetation v = RANDOM.nextDouble() < treeChance
                         ? Level.Vegetation.TREES
@@ -2814,7 +2784,7 @@ public class MobSystem {
         removeFromInventory(mob, it);
     }
 
-    /** Consume one unit of {@code it} — decrements the bag stack (drops the entry if
+    /** Consume one unit of {@code it} - decrements the bag stack (drops the entry if
      *  this was the last one) or unequips it from any slot it occupies. The "consume
      *  one" semantics apply to throw / eat / drink / use callers; {@link Inventory#bag}
      *  entries with {@code count > 1} represent stacks, so we do NOT remove the whole

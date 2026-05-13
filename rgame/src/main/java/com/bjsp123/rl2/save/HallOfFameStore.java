@@ -11,11 +11,11 @@ import java.util.ArrayList;
 /**
  * Persistence I/O for {@link HallOfFame}. Static load + save against the
  * {@link Persistence} key {@link #KEY}; serialisation uses libGDX
- * {@code Json} (reflective — {@link HallOfFameEntry} has the no-arg ctor
+ * {@code Json} (reflective - {@link HallOfFameEntry} has the no-arg ctor
  * required for round-trip).
  *
  * <p>Decoupled from {@link HallOfFame} so the data class stays free of
- * persistence dependencies — callers that just want to read or mutate the
+ * persistence dependencies - callers that just want to read or mutate the
  * leaderboard don't have to know about the JSON format or the persistence
  * key.
  */

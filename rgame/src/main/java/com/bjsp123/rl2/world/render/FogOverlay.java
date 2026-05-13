@@ -10,7 +10,7 @@ import com.bjsp123.rl2.model.Tile;
 /**
  * Soft-edge fog-of-war overlay. Maintains a pixmap at 2 pixels
  * per tile (so each pixel covers 8 screen pixels of a 16px tile) and draws it on top of the map
- * with linear filtering — adjacent pixels of different fog densities blend smoothly during the
+ * with linear filtering - adjacent pixels of different fog densities blend smoothly during the
  * upscale, giving the characteristic soft gradient at visibility boundaries.
  *
  * A wall with another wall immediately to its south is
@@ -18,7 +18,7 @@ import com.bjsp123.rl2.model.Tile;
  * neighbor + south-diagonal if that neighbor is also a wall). Camera-facing walls (wall with
  * non-wall south) pick the darker of self and the cell south of them. This is what makes a wall
  * appear fully opaque when the cell beyond it has never been seen, and soften naturally when the
- * far side is known — the "far side rule".
+ * far side is known - the "far side rule".
  *
  *  We use a 4th fog level between LIT and EXPLORED so the
  * soft gradient also smooths the lit/visible-but-unlit transition.
@@ -40,8 +40,8 @@ public class FogOverlay {
     // before but aren't currently in view, and fully opaque for unexplored.
     private static final int[] FOG_ARGB = {
             0x00000000, // LIT:      fully transparent (full brightness + lamp additive glow)
-            0x30000000, // VISIBLE:  ~19% black — slight dim, clearly brighter than EXPLORED
-            0xA0000000, // EXPLORED: ~63% black — noticeably dim
+            0x30000000, // VISIBLE:  ~19% black - slight dim, clearly brighter than EXPLORED
+            0xA0000000, // EXPLORED: ~63% black - noticeably dim
             0xFF000000, // UNSEEN:   fully opaque black
     };
 
@@ -53,7 +53,7 @@ public class FogOverlay {
     private static final int LIGHT_DIM_ARGB  = 0x08FFE69A; // ~3% alpha
     private static final int LIGHT_FULL_ARGB = 0x24FFE69A; // ~14% alpha
 
-    // Returned by cellLightLevel — ordinals matter (Math.max picks the brighter in corner sampling).
+    // Returned by cellLightLevel - ordinals matter (Math.max picks the brighter in corner sampling).
     private static final int LIGHT_NONE = 0;
     private static final int LIGHT_DIM  = 1;
     private static final int LIGHT_FULL = 2;
@@ -91,13 +91,13 @@ public class FogOverlay {
         lightRegion.flip(false, true);
 
         created = true;
-        // Fresh pixmaps — need a full population on the next update(), regardless of the
+        // Fresh pixmaps - need a full population on the next update(), regardless of the
         // caller's dirty tracking.
         dirty = true;
     }
 
     /** Flag the fog + light pixmaps as stale vs the level. The caller (PlayScreen) is
-     *  responsible for calling this whenever visibility or lighting could have changed —
+     *  responsible for calling this whenever visibility or lighting could have changed -
      *  primarily after a game tick, an amulet pickup/drop, or a level transition. */
     public void markDirty() { this.dirty = true; }
 
@@ -155,10 +155,10 @@ public class FogOverlay {
     }
 
     /**
-     * Fill the 4 pixmap pixels of a cell's 2×2 block by corner-sampling. Each pixel picks the
+     * Fill the 4 pixmap pixels of a cell's 2x2 block by corner-sampling. Each pixel picks the
      * darkest fog (and OR of lit) from its own cell plus the 3 diagonal-adjacent cells that share
      * that corner. This makes the fog gradient START inside an explored cell when its neighbor is
-     * unseen — so by the time the rendered image reaches the cell boundary (where the underlying
+     * unseen - so by the time the rendered image reaches the cell boundary (where the underlying
      * terrain abruptly ends), the fog alpha has already saturated to opaque black and the
      * "terrain-suddenly-disappears" hard edge is hidden by the dark fog. Same reason the lit/unlit
      * transition is soft: it's the pixmap values themselves that bleed across boundaries.
@@ -176,7 +176,7 @@ public class FogOverlay {
 
             // Light corner-sampled, but EXCLUDING the wall's own lit state. Walls stop light, so
             // a wall shouldn't propagate its own "lit" status. Each pixmap corner only picks up
-            // light from the 3 non-self cells sharing it — meaning the south corners light up
+            // light from the 3 non-self cells sharing it - meaning the south corners light up
             // when a lit floor is south of the wall, but the north corners stay dark and no
             // light bleeds through to unseen cells beyond.
             for (int iy = 0; iy < 2; iy++) {
@@ -197,7 +197,7 @@ public class FogOverlay {
         // giving the blurry visibility boundary we want for floors/chasms/water.
         // Exception: when the center tile is currently visible (including ESP-revealed mob
         // tiles), neighbouring unexplored cells must not dominate the max and make the
-        // corner fully opaque — that would bury the mob behind a solid black overlay.
+        // corner fully opaque - that would bury the mob behind a solid black overlay.
         int selfFog = cellFog(level, x, y);
         for (int iy = 0; iy < 2; iy++) {
             int dy = (iy == 0) ? -1 : +1;
@@ -228,7 +228,7 @@ public class FogOverlay {
 
     private int cellLightLevel(Level level, int x, int y) {
         if (x < 0 || y < 0 || x >= mapW || y >= mapH) return LIGHT_NONE;
-        // Walls block light — they never emit it, even if their `lit` flag got set by
+        // Walls block light - they never emit it, even if their `lit` flag got set by
         // propagateToWalls. Excluding them here stops the corner-sampler from walking light
         // along a wall row and then into unseen cells on the far side.
         if (level.tiles[x][y] == Tile.WALL) return LIGHT_NONE;

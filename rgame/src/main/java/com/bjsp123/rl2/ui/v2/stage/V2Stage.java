@@ -14,12 +14,12 @@ import com.bjsp123.rl2.ui.v2.UiCtx;
  *
  * <p>Three stable z-layer Groups are inserted on construction:
  * <ol>
- *   <li>{@link #popupLayer} — primary popups (inventory, encyclopedia,
+ *   <li>{@link #popupLayer} - primary popups (inventory, encyclopedia,
  *       look, character stats, crafting, map, level info, hall of fame,
  *       game over).</li>
- *   <li>{@link #subPopupLayer} — popups that overlay a primary popup
+ *   <li>{@link #subPopupLayer} - popups that overlay a primary popup
  *       (inventory item-detail, V2Saves delete-confirm).</li>
- *   <li>{@link #burgerLayer} — the burger drop-down. Always on top so
+ *   <li>{@link #burgerLayer} - the burger drop-down. Always on top so
  *       its scrim hides everything below.</li>
  * </ol>
  *
@@ -40,7 +40,7 @@ public final class V2Stage implements Disposable {
     public final Group burgerLayer   = new Group();
 
     public V2Stage(UiCtx ctx) {
-        // Reuse the existing batch — we don't want a second SpriteBatch
+        // Reuse the existing batch - we don't want a second SpriteBatch
         // hanging off the Stage with its own font texture binding.
         this.stage = new Stage(ctx.viewport, ctx.batch);
         stage.addActor(popupLayer);
@@ -61,13 +61,13 @@ public final class V2Stage implements Disposable {
 
     /** Per-frame heartbeat. Call BEFORE {@link #draw} so each
      *  {@link V2PopupActor#act} can flip its visibility based on
-     *  {@code isOpen()} this frame — otherwise a freshly-opened popup
+     *  {@code isOpen()} this frame - otherwise a freshly-opened popup
      *  waits a frame to appear. */
     public void act(float delta) { stage.act(delta); }
 
     /** Walk the stage and draw every visible actor. Each
      *  {@link V2PopupActor#draw} pauses the Stage's batch, calls the
-     *  popup's own renderSelf, then resumes — see that class for why. */
+     *  popup's own renderSelf, then resumes - see that class for why. */
     public void draw() { stage.draw(); }
 
     /** Forward a viewport resize to the Stage. {@link UiCtx#resize}
@@ -80,7 +80,7 @@ public final class V2Stage implements Disposable {
     @Override
     public void dispose() {
         // The Stage doesn't own the SpriteBatch (we passed in
-        // ctx.batch), so its dispose() won't dispose the batch — fine.
+        // ctx.batch), so its dispose() won't dispose the batch - fine.
         stage.dispose();
     }
 }

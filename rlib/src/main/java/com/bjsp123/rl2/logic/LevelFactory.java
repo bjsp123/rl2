@@ -15,8 +15,8 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * Level generation orchestrator. The actual work — corridor routing, room shapes, surface
- * and mob population — is split across {@link LevelFactoryUtils}, {@link LevelFactoryRooms}
+ * Level generation orchestrator. The actual work - corridor routing, room shapes, surface
+ * and mob population - is split across {@link LevelFactoryUtils}, {@link LevelFactoryRooms}
  * and {@link LevelFactoryPopulate}; this file glues the stages together.
  *
  * <p>Pipeline per level:
@@ -29,36 +29,36 @@ import java.util.Set;
  *   <li>Place stairs in the first and last rooms; populate water, vegetation, items, mobs.</li>
  * </ol>
  *
- * Every stage is driven by a single {@link Random} seeded once at entry — generating the
+ * Every stage is driven by a single {@link Random} seeded once at entry - generating the
  * same level twice from the same seed is the contract callers should be able to rely on.
  */
 public final class LevelFactory {
 
     /**
      * Macro-shape archetype rolled at level-generation time. Drives which placement algorithm
-     * is used to seed room rectangles. Each layout produces a very different feel — a BSP
+     * is used to seed room rectangles. Each layout produces a very different feel - a BSP
      * dungeon plays nothing like a poisson-disc scatter.
      *
-     * <p>Layouts are about the SHAPE of the level — corridor and room placement strategy.
-     * The contents of each room (regular, round, walkway, grass-farm, …) are picked
+     * <p>Layouts are about the SHAPE of the level - corridor and room placement strategy.
+     * The contents of each room (regular, round, walkway, grass-farm, ...) are picked
      * separately per room and live in {@link LevelFactoryRooms.RoomKind}.
      */
     public enum Layout {
         /** Recursive binary partition of the level into room-sized rectangles, each carved
          *  as a room. Rooms are connected via a minimum-spanning-tree of their centres plus
-         *  a few extra edges for loops. Looks like a classic Rogue dungeon — tight, every
+         *  a few extra edges for loops. Looks like a classic Rogue dungeon - tight, every
          *  space accounted for, mostly orthogonal. */
         BSP,
         /** Poisson-disc scatter of room centres across the level, then each centre grows
          *  into a rectangle of random size, then a minimum-spanning-tree of L-corridors
-         *  connects them. Looks more "organic" — rooms can be small islands far apart. */
+         *  connects them. Looks more "organic" - rooms can be small islands far apart. */
         POISSON,
         /** SPD-style figure-eight: two loops of rooms sharing a single pivot room in the
-         *  middle. Reads as a horizontal "8" — the player can pick either side of the cross
+         *  middle. Reads as a horizontal "8" - the player can pick either side of the cross
          *  and orbit it before threading through the pivot to the other side. */
         FIGURE_EIGHT,
         /** Village: one large irregular floor area with a handful of rectangular buildings
-         *  carved into it. Each building is walled, with a single door — the rest of the
+         *  carved into it. Each building is walled, with a single door - the rest of the
          *  level is open ground (treated as one big "outside" room for population). */
         VILLAGE,
         /** Two-sides: two small clusters of rooms sit at opposite halves of the level,
@@ -67,7 +67,7 @@ public final class LevelFactory {
         /** Packed: rooms grow off each other to tile the level with as little dead space
          *  as possible, then doors / very short corridors join touching neighbours. A
          *  reachability sweep adds extra connections until every room is reachable from
-         *  the stair-up room. Reads as a tightly-cellular layout — no long corridors,
+         *  the stair-up room. Reads as a tightly-cellular layout - no long corridors,
          *  every tile inside a room. */
         PACKED
     }
@@ -84,7 +84,7 @@ public final class LevelFactory {
     // Public API
     // -------------------------------------------------------------------------
 
-    /** Generate a level with a freshly-rolled seed. The player is not placed by this method —
+    /** Generate a level with a freshly-rolled seed. The player is not placed by this method -
      *  the caller positions the player on the appropriate stair on entry. The
      *  {@code unique} tracker, when non-null, is consulted at themed-room generation time
      *  so unique rooms only appear once per game. {@code depth} is stamped on the new
@@ -97,14 +97,14 @@ public final class LevelFactory {
         return createDungeonLevel(w, h, depth, hasUp, hasDown, unique, ROOT_RNG.nextLong());
     }
 
-    /** Seeded variant — same seed → same level, modulo class-loaded factory state. */
+    /** Seeded variant - same seed -> same level, modulo class-loaded factory state. */
     public static Level createDungeonLevel(int w, int h, int depth,
                                            boolean hasUp, boolean hasDown,
                                            com.bjsp123.rl2.model.UniqueTracker unique,
                                            long seed) {
         Random rng = new Random(seed);
 
-        // Roll flags FIRST — BIGLEVEL has to be known before the tile grid is allocated,
+        // Roll flags FIRST - BIGLEVEL has to be known before the tile grid is allocated,
         // since it scales the level's dimensions up.
         Set<LevelFlag> flags = rollFlags(rng);
         if (flags.contains(LevelFlag.BIGLEVEL)) {
@@ -112,11 +112,11 @@ public final class LevelFactory {
             h = (int) Math.round(h * 1.5);
         }
         Level level = new Level(w, h);
-        level.depth = depth;        // before population — populate reads depth-fraction.
+        level.depth = depth;        // before population - populate reads depth-fraction.
         level.flags.addAll(flags);
 
         level.layout = Layout.values()[rng.nextInt(Layout.values().length)];
-        // Equal 1/3 chance per registered theme — VisualTheme.values() drives the
+        // Equal 1/3 chance per registered theme - VisualTheme.values() drives the
         // distribution so adding a fourth theme will rebalance automatically.
         VisualTheme[] themes = VisualTheme.values();
         level.theme = themes[rng.nextInt(themes.length)];
@@ -135,7 +135,7 @@ public final class LevelFactory {
                 + " rooms=" + rooms.size()
                 + " flags=" + level.flags);
         if (rooms.isEmpty()) {
-            // Degenerate fallback — every layout had a bad roll. Carve the whole interior.
+            // Degenerate fallback - every layout had a bad roll. Carve the whole interior.
             LevelFactoryUtils.carveRect(level, 1, 1, w - 2, h - 2);
             rooms.add(new int[]{1, 1, w - 2, h - 2});
         }
@@ -143,7 +143,7 @@ public final class LevelFactory {
         // On WALKWAY_LEVEL, connectTwo paints corridors as FLOOR_WOOD; the L-shape passes
         // through the source/dest room interiors on the way out, leaving plank cells inside
         // rooms. Revert those to FLOOR so only the chasm-spanning portion of each corridor
-        // reads as a plank bridge — rooms themselves stay normal floor.
+        // reads as a plank bridge - rooms themselves stay normal floor.
         if (level.flags.contains(LevelFlag.WALKWAY_LEVEL)) {
             for (int[] r : rooms) {
                 for (int x = r[0]; x < r[0] + r[2]; x++) {
@@ -154,16 +154,16 @@ public final class LevelFactory {
             }
         }
 
-        // Walls and doors first — interiors paint AFTER, so decorative chasms (CHASM,
+        // Walls and doors first - interiors paint AFTER, so decorative chasms (CHASM,
         // WALKWAY) aren't eaten by wallInFloors and walkway plank-painting can rely on the
-        // doors already being placed. Every decorative variant — round rooms, walkways,
-        // chasm/light/imp temples, galleries, etc. — is now expressed as a non-unique
+        // doors already being placed. Every decorative variant - round rooms, walkways,
+        // chasm/light/imp temples, galleries, etc. - is now expressed as a non-unique
         // themed room in {@code assets/data/themedrooms.csv}; the orchestrator below picks
         // and stamps them. VILLAGE-layout levels finalise their own buildings inside the
         // builder, so themed-room stamping is skipped on VILLAGE inside the orchestrator.
         LevelFactoryUtils.wallInFloors(level);
         placeDoors(level, rooms);
-        // Snapshot the room rectangles for diagnostic dumps (WorldYamlDump etc.) —
+        // Snapshot the room rectangles for diagnostic dumps (WorldYamlDump etc.) -
         // stamping below mutates the working list (claimed unique rooms get
         // removed), but the snapshot preserves the full layout.
         for (int[] r : rooms) level.rooms.add(new Level.RoomSnapshot(r[0], r[1], r[2], r[3]));
@@ -205,7 +205,7 @@ public final class LevelFactory {
      */
     /** Per-level room target. Picks a value in {@code [TARGET-1, TARGET+1]} so
      *  no two adjacent levels feel mechanically identical, but every level stays
-     *  within ±1 of the configured target. Used as the {@code targetCount} arg
+     *  within +/-1 of the configured target. Used as the {@code targetCount} arg
      *  to {@link #topUpPackedRooms} and as the placement cap in
      *  {@link #buildPoisson}. */
     private static int perLevelRoomTarget(Random rng) {
@@ -247,15 +247,15 @@ public final class LevelFactory {
     /**
      * Poisson layout: scatter room centres with a minimum spacing, then grow each into a
      * rectangle of random size. Centres that don't have room for a rect (or whose rect
-     * overlaps an existing room) are discarded — final room count is data-driven. Connects
+     * overlaps an existing room) are discarded - final room count is data-driven. Connects
      * with an MST plus a few extra edges for loops.
      */
     private static List<int[]> buildPoisson(Level level, Random rng) {
         int w = level.width, h = level.height;
-        // minDist is the Poisson-disc spacing between room centres — directly determines
+        // minDist is the Poisson-disc spacing between room centres - directly determines
         // how far apart rooms sit, and therefore how long the MST corridors between them
         // are. Derived from area / target (with a 2.0 fudge factor for centres-per-room
-        // empirically — many candidate centres fail the overlap check) so room count
+        // empirically - many candidate centres fail the overlap check) so room count
         // stays near the target regardless of level dimensions.
         int target = perLevelRoomTarget(rng);
         double minDist = poissonSpacingForTarget(w, h, target);
@@ -264,9 +264,9 @@ public final class LevelFactory {
         List<Point> centres = LevelFactoryUtils.poissonDiskPoints(w, h, minDist, rng);
         List<int[]> rooms = new ArrayList<>();
         for (Point c : centres) {
-            // Cap placement at the per-level target — Poisson without this cap
+            // Cap placement at the per-level target - Poisson without this cap
             // happily over-shoots when the disc-sampler is generous, and the
-            // user wants every level inside the target ± 1 band.
+            // user wants every level inside the target +/- 1 band.
             if (rooms.size() >= target) break;
             int rw = minSize + rng.nextInt(maxSize - minSize + 1);
             int rh = minSize + rng.nextInt(maxSize - minSize + 1);
@@ -282,7 +282,7 @@ public final class LevelFactory {
             rooms.add(new int[]{rx, ry, rw, rh});
         }
         connectMst(level, rooms, rng);
-        // Bottom side too — Poisson sometimes under-shoots if the disc sampler
+        // Bottom side too - Poisson sometimes under-shoots if the disc sampler
         // happens to place few centres; top up so every level lands at target.
         topUpPackedRooms(level, rooms, rng, target);
         return rooms;
@@ -291,7 +291,7 @@ public final class LevelFactory {
     /**
      * Figure-eight layout: a pivot room in the middle of the level plus two cycles of rooms
      * arranged on its left and right, each cycle including the pivot. Walking either cycle
-     * brings you back to the pivot, from which you can cross to the opposite side — the
+     * brings you back to the pivot, from which you can cross to the opposite side - the
      * level reads as a horizontal "8".
      */
     private static List<int[]> buildFigureEight(Level level, Random rng) {
@@ -318,11 +318,11 @@ public final class LevelFactory {
         rooms.add(new int[]{prx, pry, prw, prh});
         final int pivot = 0;
 
-        // Left and right loops — each places n rooms on a half-circle, then connects in a
-        // cycle that goes pivot → first → … → last → pivot. The arc radius is small (~9
-        // cells on a 48×48 level), so cramming 6+ rooms per arc forces them to overlap
-        // and fail placement. Cap n at 4 — total rooms = 2*4 + 1 = 9 — which is what
-        // 9-radius arcs of 5×5..10×10 rooms can host without collisions. Lower target
+        // Left and right loops - each places n rooms on a half-circle, then connects in a
+        // cycle that goes pivot -> first -> ... -> last -> pivot. The arc radius is small (~9
+        // cells on a 48x48 level), so cramming 6+ rooms per arc forces them to overlap
+        // and fail placement. Cap n at 4 - total rooms = 2*4 + 1 = 9 - which is what
+        // 9-radius arcs of 5x5..10x10 rooms can host without collisions. Lower target
         // counts shrink linearly with a floor of 2.
         int n = Math.max(2, Math.min(4, (GameBalance.LEVEL_TARGET_ROOMS - 1) / 2));
         List<Integer> leftIdx  = placeArc(level, rooms, rng, aCx, cy, radius,
@@ -335,7 +335,7 @@ public final class LevelFactory {
         // Stitch each arc into a cycle through the pivot.
         connectArcCycle(level, rooms, leftIdx,  pivot, rng);
         connectArcCycle(level, rooms, rightIdx, pivot, rng);
-        // The arc radius is small (~9 cells on 48×48), capping each lobe at 4
+        // The arc radius is small (~9 cells on 48x48), capping each lobe at 4
         // rooms before they start overlapping. Top up with packed rooms in the
         // remaining empty space (mostly along the level's top + bottom edges)
         // so the per-level target is reliably reached.
@@ -374,7 +374,7 @@ public final class LevelFactory {
         return idx;
     }
 
-    /** Carve a cycle: pivot → arc[0] → arc[1] → … → arc[k-1] → pivot. */
+    /** Carve a cycle: pivot -> arc[0] -> arc[1] -> ... -> arc[k-1] -> pivot. */
     private static void connectArcCycle(Level level, List<int[]> rooms, List<Integer> arc,
                                         int pivot, Random rng) {
         if (arc.isEmpty()) return;
@@ -389,7 +389,7 @@ public final class LevelFactory {
      * Village layout: most of the level interior is one big floor "green" with a jaggy
      * organic outline, and a handful of walled rectangular buildings sit inside it. Each
      * building has exactly one door on a non-corner wall cell. Rooms list is
-     * {@code [green, building0, building1, …]} so stair placement uses the green for up and
+     * {@code [green, building0, building1, ...]} so stair placement uses the green for up and
      * a building for down.
      */
     private static List<int[]> buildVillage(Level level, Random rng) {
@@ -415,10 +415,10 @@ public final class LevelFactory {
         rooms.add(new int[]{gx0, gy0, gx1 - gx0 + 1, gy1 - gy0 + 1});
 
         // Place LEVEL_TARGET_ROOMS - 1 buildings (one room is the central green
-        // itself), with ±1 jitter, retrying overlaps. Each is a fully-walled
+        // itself), with +/-1 jitter, retrying overlaps. Each is a fully-walled
         // rectangle that sits entirely on FLOOR (so no building wall floats over
         // the irregular boundary), with one door on a non-corner perimeter cell.
-        // Building sizes stay at 4..6 — VILLAGE houses are intentionally smaller
+        // Building sizes stay at 4..6 - VILLAGE houses are intentionally smaller
         // than the global ROOM_MAX_SIZE.
         int target = Math.max(2, GameBalance.LEVEL_TARGET_ROOMS - 1 + rng.nextInt(3) - 1);
         int tries  = target * 8;
@@ -464,7 +464,7 @@ public final class LevelFactory {
             rooms.add(new int[]{bx, by, bw, bh});
         }
 
-        // Scatter a few trees on the green for ambience — they block sight, are flammable,
+        // Scatter a few trees on the green for ambience - they block sight, are flammable,
         // and don't grow on their own. Skipped on cells touching a building wall so the
         // door is always visually approachable.
         int trees = 6 + rng.nextInt(8);
@@ -473,7 +473,7 @@ public final class LevelFactory {
             int ty = gy0 + 1 + rng.nextInt(gy1 - gy0 - 1);
             if (level.tiles[tx][ty] != Tile.FLOOR) continue;
             if (level.vegetation[tx][ty] != null) continue;
-            // Skip any tile adjacent to a wall — keeps a clean approach path to building doors.
+            // Skip any tile adjacent to a wall - keeps a clean approach path to building doors.
             boolean nearWall = false;
             for (int dx = -1; dx <= 1 && !nearWall; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
@@ -501,7 +501,7 @@ public final class LevelFactory {
         int gapL = w / 3, gapR = 2 * w / 3;
 
         List<int[]> rooms = new ArrayList<>();
-        // Each end of the central walkway gets a tightly-packed cluster — the same
+        // Each end of the central walkway gets a tightly-packed cluster - the same
         // greedy growth as {@link Layout#PACKED}, just confined to one half of the
         // level. The packed connector inside each cluster keeps corridors short
         // (rooms share walls; connectPacked punches doors through the shared wall
@@ -551,7 +551,7 @@ public final class LevelFactory {
     }
 
     /** BSP leaf side length that yields roughly {@code target} leaves in a
-     *  {@code (w-2) × (h-2)} interior. Floored at {@code maxRoom + 2} so a max-
+     *  {@code (w-2) x (h-2)} interior. Floored at {@code maxRoom + 2} so a max-
      *  sized room plus its 1-tile margin always fits in any leaf the partition
      *  produces. Larger levels get larger leaves, keeping room count near target. */
     private static int leafSizeForTarget(int w, int h, int maxRoom, int target) {
@@ -561,7 +561,7 @@ public final class LevelFactory {
     }
 
     /** Poisson-disc minimum spacing that yields roughly {@code target} accepted
-     *  rooms on a {@code (w-2) × (h-2)} interior. The 2.0 fudge factor accounts
+     *  rooms on a {@code (w-2) x (h-2)} interior. The 2.0 fudge factor accounts
      *  for centres that fail the post-placement overlap / bounds checks
      *  (empirically ~half of candidate centres survive into a placed room).
      *  Floored at {@code ROOM_MAX_SIZE} so adjacent rooms never overlap. */
@@ -576,7 +576,7 @@ public final class LevelFactory {
      * so the level tiles up like a brick wall. After greedy growth saturates, every pair
      * of wall-adjacent rooms gets a door punched through, then a reachability sweep adds
      * doors / short corridors until every room is reachable from the stair-up room.
-     * Reads as a tightly cellular floorplan — no long corridors, almost every interior
+     * Reads as a tightly cellular floorplan - no long corridors, almost every interior
      * tile inside a room.
      */
     private static List<int[]> buildPacked(Level level, Random rng) {
@@ -598,7 +598,7 @@ public final class LevelFactory {
      * when they happen to share a wall).
      *
      * <p>Used as a post-pass on {@link #buildBsp}, {@link #buildPoisson}, and
-     * {@link #buildFigureEight} — those builders place rooms with their own
+     * {@link #buildFigureEight} - those builders place rooms with their own
      * geometric constraints (BSP partition, Poisson spacing, half-circle arcs)
      * and frequently produce fewer rooms than {@link GameBalance#LEVEL_TARGET_ROOMS}.
      * This helper closes the gap without requiring a redesign of those layouts.
@@ -661,7 +661,7 @@ public final class LevelFactory {
             // Connect the new room to its nearest existing neighbour: a wall-door
             // if they happen to share a wall (carveDoorBetween succeeds), otherwise
             // a single L-corridor through whatever's between them. The closest
-            // neighbour is usually the anchor itself but isn't always — picking
+            // neighbour is usually the anchor itself but isn't always - picking
             // the truly-nearest avoids weird zig-zags when the anchor sits on the
             // far side of a room.
             int best = -1;
@@ -682,7 +682,7 @@ public final class LevelFactory {
     }
 
     /**
-     * Greedy packed-room growth confined to {@code [x0, x0+regionW) × [y0, y0+regionH)}
+     * Greedy packed-room growth confined to {@code [x0, x0+regionW) x [y0, y0+regionH)}
      * of the level. Drops a randomly-sized seed near the region's centre, then keeps
      * extending random anchors with a 1-tile gap until {@code targetCount} rooms have
      * landed or the failure budget is exhausted. Used by {@link #buildPacked} for
@@ -704,7 +704,7 @@ public final class LevelFactory {
 
         int countBefore = rooms.size();
 
-        // Seed room — randomly sized, planted near the region's centre so growth has
+        // Seed room - randomly sized, planted near the region's centre so growth has
         // space to expand in every direction.
         int seedW = minSize + rng.nextInt(maxSize - minSize + 1);
         int seedH = minSize + rng.nextInt(maxSize - minSize + 1);
@@ -718,7 +718,7 @@ public final class LevelFactory {
         LevelFactoryUtils.carveRect(level, seedX, seedY, seedW, seedH);
         rooms.add(new int[]{seedX, seedY, seedW, seedH});
 
-        // Greedy growth: pick a random anchor (only from rooms we placed in THIS region —
+        // Greedy growth: pick a random anchor (only from rooms we placed in THIS region -
         // anchors from other regions would walk the candidate out of bounds), pick a
         // side, drop a candidate alongside with a 1-tile gap, accept if it stays in
         // the region and doesn't collide. The failure budget governs density.
@@ -773,7 +773,7 @@ public final class LevelFactory {
     /**
      * Connect packed rooms. First pass punches a door through every wall-adjacent pair
      * (rooms separated by exactly one wall column or row, with non-empty perpendicular
-     * overlap). Second pass BFSes from room 0 — any orphan group is wired in via the
+     * overlap). Second pass BFSes from room 0 - any orphan group is wired in via the
      * shortest available adjacency, falling back to a short L-corridor when the orphan
      * doesn't actually touch the connected component.
      */
@@ -791,7 +791,7 @@ public final class LevelFactory {
             }
         }
 
-        // First pass — wall-punch every adjacent pair. carveDoorBetween writes a single
+        // First pass - wall-punch every adjacent pair. carveDoorBetween writes a single
         // FLOOR tile into the wall column/row; placeDoors() promotes it to DOOR later.
         boolean[] connectedToZero = new boolean[n];
         for (int i = 0; i < n; i++) {
@@ -850,13 +850,13 @@ public final class LevelFactory {
      *  (1-tile gap) AND overlap on the perpendicular axis. Mirrors the placement rule
      *  enforced by {@link #rectsOverlap} with pad = 1. */
     private static boolean areWallAdjacent(int[] a, int[] b) {
-        // Horizontal neighbour — wall column between them
+        // Horizontal neighbour - wall column between them
         if (b[0] == a[0] + a[2] + 1 || a[0] == b[0] + b[2] + 1) {
             int yLo = Math.max(a[1], b[1]);
             int yHi = Math.min(a[1] + a[3] - 1, b[1] + b[3] - 1);
             return yHi >= yLo;
         }
-        // Vertical neighbour — wall row between them
+        // Vertical neighbour - wall row between them
         if (b[1] == a[1] + a[3] + 1 || a[1] == b[1] + b[3] + 1) {
             int xLo = Math.max(a[0], b[0]);
             int xHi = Math.min(a[0] + a[2] - 1, b[0] + b[2] - 1);
@@ -1012,7 +1012,7 @@ public final class LevelFactory {
         }
         if (hasDown) {
             Point p = randomFloorIn(level, rooms.get(downIdx), rng);
-            // Only one room → up and down would collide; shuffle the down-stair onto a
+            // Only one room -> up and down would collide; shuffle the down-stair onto a
             // different tile in the same room.
             if (p != null && p.equals(level.stairsUp)) {
                 Point alt = randomFloorIn(level, rooms.get(downIdx), rng);
@@ -1037,7 +1037,7 @@ public final class LevelFactory {
      *
      * <p>The W/E assignment is implicit: whichever of {@code stairsDown} / {@code stairsDownAlt}
      * has the smaller X coordinate is treated as the "west" stair by callers, but the
-     * picker here just maximises distance — the caller can swap the two fields if it
+     * picker here just maximises distance - the caller can swap the two fields if it
      * wants a deterministic mapping.
      */
     public static void addAltStairsDown(Level level) {
@@ -1079,14 +1079,14 @@ public final class LevelFactory {
     }
 
     private static Point randomFloorIn(Level level, int[] r, Random rng) {
-        // Strict pass — interior cells (skip the 1-cell perimeter ring) that aren't
+        // Strict pass - interior cells (skip the 1-cell perimeter ring) that aren't
         // cardinally adjacent to a door. This is the preferred slot for a stair so the
         // glyph isn't pressed against a wall or jammed in a doorway.
         List<Point> strict   = new ArrayList<>();
-        // Relaxed pass — any interior FLOOR cell, including door-adjacent. Used only as
+        // Relaxed pass - any interior FLOOR cell, including door-adjacent. Used only as
         // a fallback when the strict pass found nothing (small or door-heavy rooms).
         List<Point> relaxed  = new ArrayList<>();
-        // Loose pass — any FLOOR cell at all, edge or otherwise. Last-ditch so a stair
+        // Loose pass - any FLOOR cell at all, edge or otherwise. Last-ditch so a stair
         // never silently fails to place.
         List<Point> anywhere = new ArrayList<>();
         int x0 = r[0], y0 = r[1], w = r[2], h = r[3];

@@ -11,7 +11,7 @@ import java.util.Map;
  * One row from {@code assets/data/themedrooms.csv} parsed into a typed POJO.
  * Themed rooms layer specific decoration + mob/item content onto an otherwise-
  * regular generated room. The schema splits room composition into orthogonal
- * axes ({@link RoomShape} × {@link ChasmShape} × {@link Vegetation} ×
+ * axes ({@link RoomShape} x {@link ChasmShape} x {@link Vegetation} x
  * {@link Decoration} list) so any combination is expressible without inventing
  * a new {@code RoomKind}.
  *
@@ -62,10 +62,10 @@ public final class ThemedRoomDefinition {
     public enum Vegetation { NONE, GRASS_FILL, MUSHROOM_PATCH, MUSHROOMS_DRY_FILL }
 
     /** Floor-surface pattern. {@link #BLOOD_POOL_CENTER} drops a central blood
-     *  patch (~40% of the interior area) — used by the shroom-farm layout. */
+     *  patch (~40% of the interior area) - used by the shroom-farm layout. */
     public enum Surface { NONE, BLOOD_POOL_CENTER }
 
-    /** Special-floor pattern. {@link #CENTER_4X4} drops a 4×4 patch in the lower-
+    /** Special-floor pattern. {@link #CENTER_4X4} drops a 4x4 patch in the lower-
      *  middle of the room (chapel-style); {@link #INSET_RECTANGLE} fills every
      *  interior FLOOR cell except the 1-tile strip ringing the walls (pedestal-
      *  style); {@link #CHECKERBOARD} alternates by parity for a chess-board look. */
@@ -77,7 +77,7 @@ public final class ThemedRoomDefinition {
         STATUES_SMALL_CORNERS, STATUES_LARGE_CORNERS, STATUES_LARGE_CARDINAL,
         STATUE_AVENUE_SMALL, STATUE_AVENUE_LARGE, STATUE_CENTER_LARGE,
         LAMPS_CORNERS, LAMPS_CARDINAL, LAMP_CENTER,
-        /** 2-6 small statues scattered randomly on interior floor — count
+        /** 2-6 small statues scattered randomly on interior floor - count
          *  scales with room area. Mirrors the pre-existing SMALL_STATUE_ROOM. */
         SMALL_STATUES_SCATTERED,
         /** Altar 1 cell south of the top wall, centred horizontally; two lamps
@@ -91,7 +91,7 @@ public final class ThemedRoomDefinition {
      *  so a chasm-centred room still finds the floor ring). {@link #OPPOSITE_ENDS}
      *  splits the spec list and seeds each half from the west / east edges
      *  (used by ant-war for the two anthills). {@link #CHASM_OK} BFSes from the
-     *  centre but also collects chasm tiles — for flying mobs in the Belfry. */
+     *  centre but also collects chasm tiles - for flying mobs in the Belfry. */
     public enum Placement  { CENTER, OPPOSITE_ENDS, CHASM_OK }
 
     public static List<ThemedRoomDefinition> parseAll(String csv) {

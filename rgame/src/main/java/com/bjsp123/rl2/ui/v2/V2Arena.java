@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * V2 arena screen — combat between two AI teams, drawn with V2 chrome.
+ * V2 arena screen - combat between two AI teams, drawn with V2 chrome.
  * World-setup logic is delegated to {@link CombatArena}; the HUD + result
  * banner are primitive ShapeRenderer + SpriteBatch elements drawn directly
  * by this screen.
@@ -217,7 +217,7 @@ public final class V2Arena extends ScreenAdapter {
             }
         }
 
-        // V2 chrome — HUD across the top, plus banner if the fight is over.
+        // V2 chrome - HUD across the top, plus banner if the fight is over.
         ctx.applyProjection();
         renderHud();
         if (fightOver) renderBanner();
@@ -290,7 +290,7 @@ public final class V2Arena extends ScreenAdapter {
                     : (m.mobType != null ? m.mobType.toLowerCase() : "?");
             counts.merge(name, 1, Integer::sum);
         }
-        if (counts.isEmpty()) return "—";
+        if (counts.isEmpty()) return "-";
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, Integer> e : counts.entrySet()) {
             if (sb.length() > 0) sb.append(", ");
@@ -299,7 +299,7 @@ public final class V2Arena extends ScreenAdapter {
         return sb.toString();
     }
 
-    // ── V2 chrome rendering ────────────────────────────────────────────────
+    // -- V2 chrome rendering ------------------------------------------------
 
     private void renderHud() {
         // Layout the four HUD buttons in a row across the top of the viewport.
@@ -370,18 +370,20 @@ public final class V2Arena extends ScreenAdapter {
         String headline =
                 winner == 1 ? "Team A wins"
               : winner == 2 ? "Team B wins"
-              : standardTurnsElapsed >= MAX_STANDARD_TURNS ? "Draw — turn limit"
+              : standardTurnsElapsed >= MAX_STANDARD_TURNS ? "Draw - turn limit"
               : "Mutual wipe";
 
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, headline,
                 bannerWindow.cx(), bannerWindow.top() - ctx.headerLineH());
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+        TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "Team A: " + describeSurvivors(teamA),
-                bannerWindow.cx(), bannerWindow.top() - 64f);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                bannerWindow.cx(), bannerWindow.top() - 64f,
+                bannerWindow.w - 28f);
+        TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "Team B: " + describeSurvivors(teamB),
-                bannerWindow.cx(), bannerWindow.top() - 86f);
+                bannerWindow.cx(), bannerWindow.top() - 86f,
+                bannerWindow.w - 28f);
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Fight again",
                 bannerFightAgain.cx(), bannerFightAgain.cy() + 6f);
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Back to setup",
@@ -396,7 +398,7 @@ public final class V2Arena extends ScreenAdapter {
                 r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
-    // ── Input ──────────────────────────────────────────────────────────────
+    // -- Input --------------------------------------------------------------
 
     private InputAdapter hudInput() {
         return new InputAdapter() {
@@ -408,7 +410,7 @@ public final class V2Arena extends ScreenAdapter {
                 if (fightOver) {
                     if (bannerFightAgain.contains(vx, vy)) { bannerFightAgainPressed = true; return true; }
                     if (bannerBack.contains(vx, vy))       { bannerBackPressed = true;       return true; }
-                    if (!bannerWindow.contains(vx, vy))    return true;   // modal — eat the touch
+                    if (!bannerWindow.contains(vx, vy))    return true;   // modal - eat the touch
                     return true;
                 }
 

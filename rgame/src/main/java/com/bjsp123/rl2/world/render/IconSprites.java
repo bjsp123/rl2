@@ -5,10 +5,10 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 
 /**
  * UI icon sheet sourced from {@code assets/ui/icons.png}. The atlas is a single
- * row of 32×32 cells; {@link Icon} enumerates each slot by name so callers can
+ * row of 32x32 cells; {@link Icon} enumerates each slot by name so callers can
  * just say {@code IconSprites.regionFor(Icon.BOOK)} without sweeping the
  * column index through their own code. Lazy-loaded the same way every other
- * sprite sheet in the game is — first {@link #regionFor} call pulls the PNG
+ * sprite sheet in the game is - first {@link #regionFor} call pulls the PNG
  * off disk and caches the per-cell {@link TextureRegion}s.
  *
  * <p>Drop the new icon you want into the next free column on the right, add
@@ -17,7 +17,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
  */
 public final class IconSprites {
 
-    /** Cell size on {@code ui/icons.png} — every icon is the same square. */
+    /** Cell size on {@code ui/icons.png} - every icon is the same square. */
     private static final int CELL = 32;
 
     /** Path under the libGDX internal-files root. */

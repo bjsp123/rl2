@@ -16,16 +16,16 @@ import java.util.function.Predicate;
  * Single-source item generator. Every dungeon-side path that needs to roll a
  * fresh {@link Item} (level scatter, themed-room drops, mob loot tables,
  * crafting outcomes, future random-event drops) routes through here so the
- * power-level ↔ plusses contract and category-filter set live in exactly
+ * power-level <-> plusses contract and category-filter set live in exactly
  * one place.
  *
  * <p>The two entry points are:
  * <ul>
- *   <li>{@link #generateItem(double, VisualTheme, LootCategory, Random)} —
+ *   <li>{@link #generateItem(double, VisualTheme, LootCategory, Random)} -
  *       roll one item subject to power-level, theme, and category filters.
  *       Returns {@code null} when no eligible item exists for the request.</li>
  *   <li>{@link #generateItems(double, double, VisualTheme, LootCategory, Random)}
- *       — wrap {@code generateItem} to return a list of size {@code count}.
+ *       - wrap {@code generateItem} to return a list of size {@code count}.
  *       The integer part of {@code count} is the guaranteed count; the
  *       fractional part is the probability of one extra item (so
  *       {@code count = 2.3} yields 2 items 70% of the time and 3 items 30%
@@ -61,7 +61,7 @@ public final class ItemGenerator {
      * can carry a category by name.
      */
     public enum LootCategory {
-        /** Any item — non-gem and gem species mix. Empty / null tokens parse to this. */
+        /** Any item - non-gem and gem species mix. Empty / null tokens parse to this. */
         ANY,
         /** Every non-gem item type. Mirrors today's level-scatter pool. */
         NON_GEM,
@@ -69,7 +69,7 @@ public final class ItemGenerator {
         GEM,
         /** Wearables: weapon / shield (offhand) / armor. */
         EQUIPMENT,
-        /** Wand or amulet — what a mage caches in their tower. */
+        /** Wand or amulet - what a mage caches in their tower. */
         MAGIC_ITEMS,
         /** Edible (carries an EAT use-behavior). */
         FOOD,
@@ -77,11 +77,11 @@ public final class ItemGenerator {
         POTIONS,
         /** Throwable bombs (IGNITE / OIL_SPLASH / BLAST / FREEZE thrown behaviors). */
         BOMBS,
-        /** Food + potions + bombs — the "supplies stash" bucket. */
+        /** Food + potions + bombs - the "supplies stash" bucket. */
         CONSUMABLES;
 
-        /** Token → category. Whitespace-trimmed, case-insensitive. {@code null}
-         *  or empty strings ⇒ {@link #ANY}. Unknown strings ⇒ {@code null} so
+        /** Token -> category. Whitespace-trimmed, case-insensitive. {@code null}
+         *  or empty strings => {@link #ANY}. Unknown strings => {@code null} so
          *  callers (themed-room item refs, loot-table cells) can tell a category
          *  name apart from a literal item type and route to {@code buildItem}
          *  on miss. */
@@ -97,13 +97,13 @@ public final class ItemGenerator {
         }
     }
 
-    // ── Public API ───────────────────────────────────────────────────────────
+    // -- Public API -----------------------------------------------------------
 
     /** Roll {@code itemCount} items. Integer part = guaranteed count; the
      *  fractional part is the probability of one bonus item (e.g.
-     *  {@code 2.3} → 2 items 70% of the time, 3 items 30%). Returns an empty
+     *  {@code 2.3} -> 2 items 70% of the time, 3 items 30%). Returns an empty
      *  list when no eligible item exists for the (theme, category, power)
-     *  triple — callers can tell "no eligible candidates" apart from "rolled
+     *  triple - callers can tell "no eligible candidates" apart from "rolled
      *  zero" by passing whole-number counts and checking the list size. */
     public static List<Item> generateItems(double itemCount, double powerLevel,
                                            VisualTheme theme, LootCategory cat,
@@ -122,20 +122,20 @@ public final class ItemGenerator {
 
     /** Roll a single item. The category gates the candidate set; theme +
      *  power-level then weight the pick. Returns {@code null} when the
-     *  category has no eligible candidates for this theme — e.g. asking for
+     *  category has no eligible candidates for this theme - e.g. asking for
      *  a GEM on a theme with no gem table. */
     public static Item generateItem(double powerLevel, VisualTheme theme,
                                     LootCategory cat, Random rng) {
         if (rng == null) return null;
         LootCategory c = (cat == null) ? LootCategory.ANY : cat;
 
-        // GEM is a separate code path — gems are procedural (no items.csv
+        // GEM is a separate code path - gems are procedural (no items.csv
         // row) and route through GemSystem instead of ItemRegistry.
         if (c == LootCategory.GEM) return rollGem(theme, rng);
 
         // ANY mixes a gem path in with the non-gem pool. The probability of
         // landing on the gem path is set to roughly the gem fraction of the
-        // available registry — e.g. ~10-15% on a typical themed level. We
+        // available registry - e.g. ~10-15% on a typical themed level. We
         // compute it as nGems / (nGems + nItems) where both numbers are
         // theme-filtered; if a theme has no gems, ANY collapses to NON_GEM.
         if (c == LootCategory.ANY && rng.nextDouble() < gemFraction(theme)) {
@@ -178,7 +178,7 @@ public final class ItemGenerator {
         return it;
     }
 
-    // ── Plusses ──────────────────────────────────────────────────────────────
+    // -- Plusses --------------------------------------------------------------
 
     /**
      * Compute {@code +N} for an item whose definition has the given power
@@ -204,9 +204,9 @@ public final class ItemGenerator {
         return plusses;
     }
 
-    // ── Internals ────────────────────────────────────────────────────────────
+    // -- Internals ------------------------------------------------------------
 
-    /** Cache: category → eligible (non-gem) types. Built lazily on first
+    /** Cache: category -> eligible (non-gem) types. Built lazily on first
      *  generator call, then reused for the JVM lifetime. {@link ItemRegistry}
      *  is loaded once at startup so the cache never goes stale during normal
      *  play; tests that reload the registry should call {@link #clearCache}. */
@@ -225,7 +225,7 @@ public final class ItemGenerator {
         for (String type : ItemRegistry.knownTypes()) {
             ItemDefinition d = ItemRegistry.get(type);
             if (d == null) continue;
-            // Gems are excluded from every non-GEM bucket — the GEM bucket is
+            // Gems are excluded from every non-GEM bucket - the GEM bucket is
             // the only legitimate gem path.
             if (d.inventoryCategory == InventoryCategory.GEM) continue;
             if (p.test(d)) out.add(type);
@@ -325,7 +325,7 @@ public final class ItemGenerator {
 
     /** Triangle weight over {@code [min, max]}, peaking at the midpoint and
      *  floored at {@link #POWER_EDGE_WEIGHT} inside the band. Mirrors the
-     *  helper in {@link LevelFactoryPopulate} — duplicated here so the
+     *  helper in {@link LevelFactoryPopulate} - duplicated here so the
      *  generator doesn't have to reach into the populator's internals.
      *  TODO: extract to {@code GameMath} once we have a third caller. */
     private static double powerWeight(double powerMin, double powerMax, double levelF) {
@@ -340,8 +340,8 @@ public final class ItemGenerator {
     private static final double POWER_EDGE_WEIGHT = 0.05;
 
     /** Weight multiplier for a definition's theme relative to the level's theme.
-     *  Null theme = theme-neutral (1×); matching = twice as likely (2×);
-     *  mismatching = half as likely (0.5×). */
+     *  Null theme = theme-neutral (1x); matching = twice as likely (2x);
+     *  mismatching = half as likely (0.5x). */
     private static double themeMultiplier(VisualTheme defTheme, VisualTheme levelTheme) {
         if (defTheme == null) return 1.0;
         return defTheme == levelTheme ? 2.0 : 0.5;

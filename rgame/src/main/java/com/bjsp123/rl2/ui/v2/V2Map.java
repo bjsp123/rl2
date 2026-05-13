@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * V2 map screen — schematic of the world's level graph. Each level renders
+ * V2 map screen - schematic of the world's level graph. Each level renders
  * as a small trapezoidal mini-map (slight perspective tilt) coloured by
  * tile type for the explored area, with arrows between depths showing the
  * staircase graph. Tap a visited level to bring up an info panel at the
@@ -36,9 +36,9 @@ public final class V2Map extends V2Screen {
     private static final float BOX_H = 44f;
     private static final float GAP_X = 12f;
     private static final float GAP_Y = 22f;
-    /** Top-edge inset (per side) of each mini-map's trapezoid — pulls the
+    /** Top-edge inset (per side) of each mini-map's trapezoid - pulls the
      *  top of the map inward to fake a "tilted away from viewer"
-     *  perspective. Total visible top width = BOX_W − 2 × TOP_INSET. */
+     *  perspective. Total visible top width = BOX_W - 2 x TOP_INSET. */
     private static final float TOP_INSET = 8f;
     /** Height of the bottom info pane, drawn under the map graph when a
      *  visited level is selected. */
@@ -63,7 +63,7 @@ public final class V2Map extends V2Screen {
     private final List<Integer> boxIndex = new ArrayList<>();
 
     /** Pan offset applied to the level graph (post-zoom). Drag-in-body
-     *  shifts these. Zero by default — graph centred on the window. */
+     *  shifts these. Zero by default - graph centred on the window. */
     private float panX, panY;
     /** Zoom factor for the level graph. 1.0 is the design size; the
      *  mouse wheel multiplies / divides this. Clamped to {@link #ZOOM_MIN}
@@ -77,7 +77,7 @@ public final class V2Map extends V2Screen {
      *  release-then-redrag pairs. */
     private float dragLastX, dragLastY;
     private boolean dragging;
-    /** Reusable scissor scratch — the graph viewport's bounding rect.
+    /** Reusable scissor scratch - the graph viewport's bounding rect.
      *  Computed each frame in drawBodyShape from {@link #graphViewport}
      *  and pushed onto {@link com.badlogic.gdx.scenes.scene2d.utils.ScissorStack}
      *  so a zoomed-out / panned graph can't bleed into the title or
@@ -111,7 +111,7 @@ public final class V2Map extends V2Screen {
 
     @Override
     protected boolean onTouchDownInBody(float vx, float vy) {
-        // Reset drag tracking — onTouchDragged will detect motion past the
+        // Reset drag tracking - onTouchDragged will detect motion past the
         // ~2-pixel threshold and start panning then. A clean touch release
         // (no drag) leaves dragging=false, so the box-tap below still fires.
         dragLastX = vx;
@@ -121,7 +121,7 @@ public final class V2Map extends V2Screen {
             if (boxRects.get(i).contains(vx, vy)) {
                 int worldIdx = boxIndex.get(i);
                 Level lvl = world.levels[worldIdx];
-                // Only visited levels open the info pane — unexplored
+                // Only visited levels open the info pane - unexplored
                 // levels have nothing to report.
                 if (lvl != null && lvl.visited) {
                     selected = (selected == worldIdx) ? -1 : worldIdx;
@@ -159,14 +159,14 @@ public final class V2Map extends V2Screen {
 
     @Override
     protected boolean onScrolled(float amountY) {
-        // Mouse-wheel zoom — zoom out when scrolled down, in when up. A
+        // Mouse-wheel zoom - zoom out when scrolled down, in when up. A
         // multiplicative step keeps the feel symmetric near zoom=1.
         float prevZoom = zoom;
         if (amountY > 0) zoom /= ZOOM_STEP;
         else             zoom *= ZOOM_STEP;
         if (zoom < ZOOM_MIN) zoom = ZOOM_MIN;
         if (zoom > ZOOM_MAX) zoom = ZOOM_MAX;
-        // Anchor the zoom on the graph centre — pan stays the same in
+        // Anchor the zoom on the graph centre - pan stays the same in
         // logical coords across the change. Good enough; zoom-toward-cursor
         // is a refinement we can add later if it matters.
         if (zoom != prevZoom) clampPan();
@@ -207,7 +207,7 @@ public final class V2Map extends V2Screen {
         boolean clipped = com.badlogic.gdx.scenes.scene2d.utils.ScissorStack
                 .pushScissors(scissorOut);
 
-        // Pass A — connection arrows under the level boxes. Bright accent
+        // Pass A - connection arrows under the level boxes. Bright accent
         // colour so the staircase graph reads through the dim chrome.
         s.setColor(ARROW_TINT);
         for (Level src : world.levels) {
@@ -216,7 +216,7 @@ public final class V2Map extends V2Screen {
             drawArrowBetween(s, src, src.stairsDownAltTarget, minCol, maxCol, minD, maxD);
         }
 
-        // Pass B — level mini-maps drawn as trapezoids with tile-type
+        // Pass B - level mini-maps drawn as trapezoids with tile-type
         // tinted cells. Position + size feed through {@link #transformBox}
         // so pan + zoom apply uniformly.
         float bw = BOX_W * zoom;
@@ -250,7 +250,7 @@ public final class V2Map extends V2Screen {
             com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.popScissors();
         }
 
-        // Bottom info pane — drawn as a sub-window inside the map window
+        // Bottom info pane - drawn as a sub-window inside the map window
         // when a visited level is selected. Pure chrome here; text
         // populates in drawBodyText.
         if (selected >= 0 && selected < world.levels.length) {
@@ -328,7 +328,7 @@ public final class V2Map extends V2Screen {
         return new float[] { scrCx - bw * 0.5f, scrCy - bh * 0.5f };
     }
 
-    /** Visible band the graph is allowed to occupy — between the title
+    /** Visible band the graph is allowed to occupy - between the title
      *  row and the bottom info-pane reservation. Used for scissor
      *  clipping and pan clamping. */
     private Rect graphViewport() {
@@ -338,11 +338,11 @@ public final class V2Map extends V2Screen {
                 window.w - 16f, top - bottom);
     }
 
-    /** Keep the pan within sane bounds — the graph's bounding box must
+    /** Keep the pan within sane bounds - the graph's bounding box must
      *  retain at least a small overlap with the viewport so the user
      *  can't pan it entirely off-screen. */
     private void clampPan() {
-        // Soft cap proportional to viewport — generous, only kicks in
+        // Soft cap proportional to viewport - generous, only kicks in
         // when the user pans really far. The graph stays at least
         // half-visible no matter how far the pan tries to go.
         Rect vp = graphViewport();
@@ -355,7 +355,7 @@ public final class V2Map extends V2Screen {
 
     /** Paint the level's tile grid into a trapezoidal footprint. The bottom
      *  of the trapezoid is the full {@code w}; the top is narrowed by
-     *  {@code 2 × topInset} so the box reads as if tilted away from the
+     *  {@code 2 x topInset} so the box reads as if tilted away from the
      *  viewer. Each tile row interpolates its x extent linearly between
      *  bottom and top widths. Cells are colour-coded by tile type for
      *  explored cells; unexplored cells use the fog tint. */
@@ -365,7 +365,7 @@ public final class V2Map extends V2Screen {
         boolean[][] explored = lvl.explored;
         int lw = lvl.width, lh = lvl.height;
         if (lh <= 0 || lw <= 0) return;
-        // Step values — cellH is constant, cellW shrinks with row.
+        // Step values - cellH is constant, cellW shrinks with row.
         float cellH = h / (float) lh;
         for (int ty = 0; ty < lh; ty++) {
             float v = ty / (float) lh;          // 0 = bottom, 1 = top
@@ -386,7 +386,7 @@ public final class V2Map extends V2Screen {
                 Color tint = tileTint(tiles[tx][ty],
                         explored != null && explored[tx][ty]);
                 s.setColor(tint);
-                // Quadrilateral cell — bottom edge wider than top, matching
+                // Quadrilateral cell - bottom edge wider than top, matching
                 // the trapezoid. Two triangles approximate the cell.
                 float xR  = xL  + cellW;
                 float xRN = xLN + cellWN;
@@ -400,15 +400,15 @@ public final class V2Map extends V2Screen {
         }
     }
 
-    /** Tint for one mini-map cell. Floor-like → warm grey; chasm →
-     *  near-black; wall / blocking → mid grey; unexplored → fog. */
+    /** Tint for one mini-map cell. Floor-like -> warm grey; chasm ->
+     *  near-black; wall / blocking -> mid grey; unexplored -> fog. */
     private static Color tileTint(Tile t, boolean explored) {
         if (!explored) return FOG_TINT;
         if (t == null) return CHASM_TINT;
         if (t == Tile.CHASM)         return CHASM_TINT;
         if (t.isFloorLike())         return FLOOR_TINT;
         if (t.blocksMovement())      return WALL_TINT;
-        // Doors, statues etc — treat as wall-equivalent for the mini-map.
+        // Doors, statues etc - treat as wall-equivalent for the mini-map.
         return WALL_TINT;
     }
 
@@ -482,7 +482,7 @@ public final class V2Map extends V2Screen {
             com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.popScissors();
         }
 
-        // Bottom info pane text — only when a visited level is selected.
+        // Bottom info pane text - only when a visited level is selected.
         if (selected >= 0 && selected < world.levels.length) {
             Level lvl = world.levels[selected];
             if (lvl != null && lvl.visited) {
@@ -506,23 +506,24 @@ public final class V2Map extends V2Screen {
         if (lvl.theme != null) {
             header += "   " + lvl.theme.name().toLowerCase();
         }
-        TextDraw.left(ctx, ctx.fontRegular, UIVars.ACCENT, header, left, top);
+        float textW = info.right() - left - 12f;
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.ACCENT, header, left, top, textW);
         top -= 18f;
 
-        // Unique themed rooms — scan level.rooms for rooms whose kind is
+        // Unique themed rooms - scan level.rooms for rooms whose kind is
         // flagged unique in the registry.
         String roomsLine = collectUniqueRooms(lvl);
         if (!roomsLine.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    "Rooms: " + roomsLine, left, top);
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    "Rooms: " + roomsLine, left, top, textW);
             top -= 16f;
         }
 
         // Unique mob species present.
         String mobsLine = collectUniqueMobs(lvl);
         if (!mobsLine.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    "Mobs:  " + mobsLine, left, top);
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    "Mobs:  " + mobsLine, left, top, textW);
         }
     }
 

@@ -24,7 +24,7 @@ public class GameInput extends InputAdapter {
     private Runnable onLookToggle;
     private Runnable onCharacterToggle;
     /** Invoked with a 0-based action-bar slot index when the user presses a number key
-     *  (1 → slot 0, 2 → slot 1, …, up to {@link com.bjsp123.rl2.ui.hud.ActionBar#SLOTS}). */
+     *  (1 -> slot 0, 2 -> slot 1, ..., up to {@link com.bjsp123.rl2.ui.hud.ActionBar#SLOTS}). */
     private java.util.function.IntConsumer onActionSlot;
 
     public GameInput(World world, OrthographicCamera camera, CameraController cameraController) {
@@ -39,7 +39,7 @@ public class GameInput extends InputAdapter {
 
     /** Wired by PlayScreen to {@link com.bjsp123.rl2.ui.popup.InventoryRenderer#toggle}. The
      *  inventory's own scene2d listener handles {@code i} only after it has keyboard focus
-     *  (i.e. after the user has already opened it some other way) — this keeps the hotkey
+     *  (i.e. after the user has already opened it some other way) - this keeps the hotkey
      *  responsive on the very first press, before any focus transfer has happened. */
     public void setInventoryToggle(Runnable onInventoryToggle) {
         this.onInventoryToggle = onInventoryToggle;
@@ -64,11 +64,11 @@ public class GameInput extends InputAdapter {
         this.onActionSlot = onActionSlot;
     }
 
-    // ── Keyboard ─────────────────────────────────────────────────────────────
+    // -- Keyboard -------------------------------------------------------------
 
     @Override
     public boolean keyDown(int keycode) {
-        // Hotkeys that must respond regardless of whose turn it is — checked before the
+        // Hotkeys that must respond regardless of whose turn it is - checked before the
         // active-player guard so they fire during AI ticks too.
         if (keycode == Input.Keys.I) {
             if (onInventoryToggle != null) { onInventoryToggle.run(); return true; }
@@ -79,9 +79,9 @@ public class GameInput extends InputAdapter {
         if (keycode == Input.Keys.C) {
             if (onCharacterToggle != null) { onCharacterToggle.run(); return true; }
         }
-        // Number-row 1..6 → action-bar slots 0..5. Numpad number keys are reserved for the
+        // Number-row 1..6 -> action-bar slots 0..5. Numpad number keys are reserved for the
         // 8-way movement diamond, so this is top-row-only. Fires regardless of whose turn
-        // it is — triggerActionSlot itself gates on isPlayerTurn and the animation queue.
+        // it is - triggerActionSlot itself gates on isPlayerTurn and the animation queue.
         int slot = numberKeyToSlot(keycode);
         if (slot >= 0) {
             if (onActionSlot != null) { onActionSlot.accept(slot); return true; }
@@ -126,7 +126,7 @@ public class GameInput extends InputAdapter {
         };
     }
 
-    // ── Touch / click ─────────────────────────────────────────────────────────
+    // -- Touch / click ---------------------------------------------------------
 
     @Override
     public boolean touchDown(int x, int y, int pointer, int button) {

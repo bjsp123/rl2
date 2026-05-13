@@ -7,13 +7,13 @@ import com.bjsp123.rl2.ui.v2.UIVars;
 import com.bjsp123.rl2.ui.v2.UiCtx;
 
 /**
- * Reusable full-screen modal-dim helper. Not an Actor — popups call
+ * Reusable full-screen modal-dim helper. Not an Actor - popups call
  * {@link #draw} as the first thing inside their {@code renderSelf} so
  * everything below them in the Stage's draw walk is darkened before
  * the popup paints its chrome.
  *
  * <p>Why static rather than an Actor: keeping each popup self-contained
- * means a single popup is one Stage child — easier to reason about,
+ * means a single popup is one Stage child - easier to reason about,
  * easier to add / remove. The dim is just a one-liner inside the
  * popup's existing shape pass.
  */
@@ -30,7 +30,7 @@ public final class Scrim {
         draw(ctx, UIVars.DIM_ALPHA);
     }
 
-    /** Variant with explicit alpha — used by sub-popups (e.g. inventory
+    /** Variant with explicit alpha - used by sub-popups (e.g. inventory
      *  item-detail) that want a heavier dim than the default. */
     public static void draw(UiCtx ctx, float alpha) {
         ctx.applyProjection();

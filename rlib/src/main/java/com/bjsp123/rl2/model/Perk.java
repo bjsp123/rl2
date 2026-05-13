@@ -5,7 +5,7 @@ package com.bjsp123.rl2.model;
  * with perk points; each perk's behaviour is hard-coded in the system that owns the
  * affected mechanic ({@code MobSystem.attack}, {@code ItemSystem.applyWandImpact},
  * {@code MobSystem.processVisionFor}, etc.) so adding a new one means writing a
- * dedicated handler — same pattern as the {@code Buff.BuffType} enum.
+ * dedicated handler - same pattern as the {@code Buff.BuffType} enum.
  *
  * <p>Each player carries a {@code Map<Perk, Integer>} of perk levels in
  * {@link Mob#perks}; level 0 / absence means the perk isn't taken. Most perks scale

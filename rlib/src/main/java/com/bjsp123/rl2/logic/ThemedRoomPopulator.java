@@ -93,7 +93,7 @@ final class ThemedRoomPopulator {
                 : LevelFactoryPopulate.adjacentTilesPermeable(level, seed, budget);
     }
 
-    // ── Mob spawning ───────────────────────────────────────────────────────
+    // -- Mob spawning -------------------------------------------------------
 
     private static void spawnMobs(Level level, List<CsvTable.SpawnSpec> specs,
                                   List<Point> spots, int spawnLevel, Random rng) {
@@ -108,7 +108,7 @@ final class ThemedRoomPopulator {
         }
     }
 
-    // ── Item spawning ──────────────────────────────────────────────────────
+    // -- Item spawning ------------------------------------------------------
 
     private static void spawnItems(Level level, List<CsvTable.SpawnSpec> specs,
                                    List<Point> spots, Random rng) {
@@ -139,7 +139,7 @@ final class ThemedRoomPopulator {
         return ItemGenerator.buildItem(ref, powerLevel, rng);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // -- Helpers ------------------------------------------------------------
 
     private static int rollRange(CsvTable.SpawnSpec spec, Random rng) {
         int lo = Math.max(0, spec.min);

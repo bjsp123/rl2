@@ -17,7 +17,7 @@ public final class LevelFactoryRooms {
 
     private LevelFactoryRooms() {}
 
-    // ── Statue helpers ─────────────────────────────────────────────────────
+    // -- Statue helpers -----------------------------------------------------
 
     static Tile randomSmallStatue(Random rng) {
         return rng.nextBoolean() ? Tile.STATUE_SMALL_L : Tile.STATUE_SMALL_R;
@@ -28,7 +28,7 @@ public final class LevelFactoryRooms {
     }
 
     /** Drop a statue at (x, y) only if the cell is plain FLOOR and not adjacent to a door
-     *  — statues next to doorways read as obstacles blocking the passage. Guards against
+     *  - statues next to doorways read as obstacles blocking the passage. Guards against
      *  painting over chasm, walls, doors, lamps, or another statue we just placed.
      *  Package-private so {@code ThemedRoomPainter} can stamp statue patterns through
      *  the same safety check. */
@@ -39,7 +39,7 @@ public final class LevelFactoryRooms {
         level.tiles[x][y] = statue;
     }
 
-    /** Drop a LAMP tile at (x, y) under the same rules as {@link #placeStatue} — FLOOR-only,
+    /** Drop a LAMP tile at (x, y) under the same rules as {@link #placeStatue} - FLOOR-only,
      *  and never adjacent to a doorway (so an arched door doesn't get a lamp post bolted
      *  onto its threshold). Package-private. */
     static void placeLamp(Level level, int x, int y) {
@@ -49,7 +49,7 @@ public final class LevelFactoryRooms {
         level.tiles[x][y] = Tile.LAMP;
     }
 
-    // ── ROUND ──────────────────────────────────────────────────────────────
+    // -- ROUND --------------------------------------------------------------
 
     /** Round the corners of the room: any FLOOR cell outside the inscribed ellipse becomes
      *  WALL. Walls and doors are already in place by the time this runs, so painting WALL
@@ -57,7 +57,7 @@ public final class LevelFactoryRooms {
      *
      *  <p>One subtlety: doors live on the rectangle's outer perimeter. The cell directly
      *  inside a door (one step into the rect) is on a corner of the rectangle for a
-     *  door near a corner, and that corner cell sits OUTSIDE the inscribed ellipse —
+     *  door near a corner, and that corner cell sits OUTSIDE the inscribed ellipse -
      *  walling it would orphan the door, leaving a doorframe that opens onto solid wall.
      *  We detect that case and keep the cell as FLOOR so the door has a 1-tile alcove
      *  reaching into the round room interior. */
@@ -74,7 +74,7 @@ public final class LevelFactoryRooms {
                 double dx = (i - cx) / rx;
                 double dy = (j - cy) / ry;
                 if (dx * dx + dy * dy <= 1.0) continue;
-                // Outside the ellipse — would normally wall in. Skip if a door sits on
+                // Outside the ellipse - would normally wall in. Skip if a door sits on
                 // any cardinal neighbour (i.e. on the rectangle's outer ring), so the
                 // door retains a FLOOR alcove leading into the room.
                 if (hasAdjacentDoor(level, i, j)) continue;
@@ -97,7 +97,7 @@ public final class LevelFactoryRooms {
         return false;
     }
 
-    // ── WALKWAY ────────────────────────────────────────────────────────────
+    // -- WALKWAY ------------------------------------------------------------
 
     /**
      * Walkway room: interior becomes CHASM, then a FLOOR_WOOD L-corridor is carved from the
@@ -128,7 +128,7 @@ public final class LevelFactoryRooms {
     }
 
     /** If {@code (dx, dy)} is a DOOR, carve a FLOOR_WOOD L-corridor from its inside neighbour
-     *  {@code (dx + ix, dy + iy)} to {@code (cx, cy)}. Idempotent — overlapping carves are
+     *  {@code (dx + ix, dy + iy)} to {@code (cx, cy)}. Idempotent - overlapping carves are
      *  harmless. */
     private static void carveWalkwayFromDoor(Level level, int dx, int dy, int ix, int iy,
                                              int cx, int cy) {
@@ -143,7 +143,7 @@ public final class LevelFactoryRooms {
         if (LevelFactoryUtils.inBounds(level, x, y)) level.tiles[x][y] = Tile.FLOOR_WOOD;
     }
 
-    // ── CHASM ──────────────────────────────────────────────────────────────
+    // -- CHASM --------------------------------------------------------------
 
     /** A chasm patch in the middle of the room that does not reach the edges. */
     static void paintChasm(Level level, int x, int y, int w, int h, Random rng) {
@@ -159,12 +159,12 @@ public final class LevelFactoryRooms {
                     level.tiles[i][j] = Tile.CHASM;
     }
 
-    // ── SUBROOM ────────────────────────────────────────────────────────────
+    // -- SUBROOM ------------------------------------------------------------
 
     /**
      * A smaller walled rectangle inside the main room with a single door on its perimeter.
      * The interior of the subroom stays FLOOR; only the perimeter (minus one door) becomes
-     * WALL. Needs at least a 5×5 outer rect to fit a 3×3 inner with margin.
+     * WALL. Needs at least a 5x5 outer rect to fit a 3x3 inner with margin.
      */
     static void paintSubroom(Level level, int x, int y, int w, int h, Random rng) {
         if (w < 5 || h < 5) return;

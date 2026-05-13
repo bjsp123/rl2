@@ -10,7 +10,7 @@ public final class ShadowCaster {
 
     public static final int MAX_DISTANCE = 20;
 
-    // Max column index per row for each vision distance — clips the square FOV into a circle.
+    // Max column index per row for each vision distance - clips the square FOV into a circle.
     private static final int[][] rounding;
     static {
         rounding = new int[MAX_DISTANCE + 1][];
@@ -38,7 +38,7 @@ public final class ShadowCaster {
             scanOctant(distance, fov, blocking, 1, x, y, w, 0.0, 1.0, -1, -1, false);
         } catch (Exception e) {
             // Preserve whatever FOV the successful octants already wrote. Wiping to all-false on
-            // any octant's unexpected error would black out the whole view — worse than a
+            // any octant's unexpected error would black out the whole view - worse than a
             // partial view with one missing octant.
         }
     }
@@ -53,7 +53,7 @@ public final class ShadowCaster {
         int[] roundingAtDist;
         if (distance == 2) {
             // At vision radius 2, fill in corners so diagonals aren't disproportionately punished.
-            // GWT doesn't support `.clone()` on primitive arrays — use Arrays.copyOf instead.
+            // GWT doesn't support `.clone()` on primitive arrays - use Arrays.copyOf instead.
             int[] src = rounding[distance];
             roundingAtDist = Arrays.copyOf(src, src.length);
             roundingAtDist[2] = 2;

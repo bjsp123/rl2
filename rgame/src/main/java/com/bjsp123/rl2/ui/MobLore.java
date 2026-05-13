@@ -12,7 +12,7 @@ import com.bjsp123.rl2.model.StatBlock;
  * scaling deltas, ability list, and faction tags off the {@link Mob} itself.
  *
  * <p>Sections are separated by blank lines and only emitted when they have
- * something to show — a vanilla mouse won't print a "Ranged" section, a mob
+ * something to show - a vanilla mouse won't print a "Ranged" section, a mob
  * with no abilities skips the abilities header. Lives in rgame because it's a
  * presentation concern; rlib's {@link Mob} / {@link StatBlock} stay free of UI
  * strings.
@@ -21,7 +21,7 @@ public final class MobLore {
 
     private MobLore() {}
 
-    /** Flavor paragraph(s) for {@code m} — the unique-mob banner (when the
+    /** Flavor paragraph(s) for {@code m} - the unique-mob banner (when the
      *  species is flagged unique in mobs.csv) plus the free-form
      *  {@link Mob#description} blurb. Used as the bright-text portion above
      *  the divider rule on the encyclopedia and look-popup detail panels.
@@ -54,7 +54,7 @@ public final class MobLore {
         StatBlock s = m.effectiveStats();
         StringBuilder sb = new StringBuilder();
 
-        // ── Combat ──────────────────────────────────────────────────────────
+        // -- Combat ----------------------------------------------------------
         line(sb, "Max HP: ",       Integer.toString((int) Math.round(s.maxHp)), m.hpPerLevel>0, " plus " + m.hpPerLevel + " per level");
         line(sb, "Attack: ",   ""+s.accuracy, m.accuracyPerLevel > 0, " plus " + m.accuracyPerLevel + " per level");
         line(sb, "Defense: ",  ""+s.evasion, m.evasionPerLevel > 0, " plus " + m.evasionPerLevel + " per level");
@@ -65,7 +65,7 @@ public final class MobLore {
         if (s.knockbackSquares > 0)  line(sb, "Knockback: ",   s.knockbackSquares + " sq");
         if (s.healRate > 0)          line(sb, "Heal rate: ",   trim(s.healRate) + " HP/turn");
 
-        // ── Ranged ──────────────────────────────────────────────────────────
+        // -- Ranged ----------------------------------------------------------
         if (!s.rangedDamage.isZero() || s.rangedDistance > 0) {
             sb.append('\n');
             line(sb, "This creature has a ranged attack with damage ",   range(s.rangedDamage));
@@ -73,13 +73,13 @@ public final class MobLore {
             if (s.rangedRateOfFire > 0) line(sb, "It can fire every", s.rangedRateOfFire + " turns.");
         }
 
-        // ── Perception + lighting ───────────────────────────────────────────
+        // -- Perception + lighting -------------------------------------------
         sb.append('\n');
         flag(sb, "Sees for " + trim(s.visionRadius) + " tiles, may wake if foe within " + s.wakeRadius + " tiles.");
         if (s.lightRadius > 0) 
             flag(sb, "This creature glows with light!");
 
-        // ── Movement / body ─────────────────────────────────────────────────
+        // -- Movement / body -------------------------------------------------
         sb.append('\n');
         if(s.moveCost > 140){
             flag(sb, "This creature is extemely sluggish.");
@@ -113,7 +113,7 @@ public final class MobLore {
             flag(sb, "This creature is large.");
         }
 
-        // ── Special behaviours / immunities (each is a one-liner) ───────────
+        // -- Special behaviours / immunities (each is a one-liner) -----------
         StringBuilder flags = new StringBuilder();
         if (s.flying)             flag(flags, "This is a flying creature.");
         if (s.fireImmune)         flag(flags, "This creature is immune to fire.");
@@ -137,16 +137,16 @@ public final class MobLore {
             sb.append('\n').append(flags);
         }
 
-        // ── Abilities ───────────────────────────────────────────────────────
+        // -- Abilities -------------------------------------------------------
         if (m.abilities != null && !m.abilities.isEmpty()) {
             sb.append('\n').append("Abilities:\n");
             for (Mob.MobAbility a : m.abilities) {
-                sb.append("• ").append(describeAbility(a)).append('\n');
+                sb.append("* ").append(describeAbility(a)).append('\n');
             }
         }
 
-        // ── Faction tags (encyclopedia value; trims down to nothing for solo
-        //    species so the player stats screen stays clean) ────────────────
+        // -- Faction tags (encyclopedia value; trims down to nothing for solo
+        //    species so the player stats screen stays clean) ----------------
         StringBuilder fac = new StringBuilder();
         if (m.faction != null && !m.faction.isEmpty()) {
             fac.append("Faction: ").append(m.faction).append('\n');
@@ -168,8 +168,8 @@ public final class MobLore {
             sb.append('\n').append(fac);
         }
 
-        // ── Carried inventory ───────────────────────────────────────────────
-        // Equipped gear and bag contents — useful at a glance when the
+        // -- Carried inventory -----------------------------------------------
+        // Equipped gear and bag contents - useful at a glance when the
         // player is debating whether to engage. Skipped for empty
         // inventories so vanilla mobs don't get a "carries: nothing" line.
         StringBuilder inv = new StringBuilder();
@@ -191,7 +191,7 @@ public final class MobLore {
 
     /** Render a comma-separated list of item names with " +N" enchantment
      *  badges for items above the design baseline level. Stack counts
-     *  ({@code count > 1}) print as "name ×N". */
+     *  ({@code count > 1}) print as "name xN". */
     private static String joinItemNames(java.util.List<com.bjsp123.rl2.model.Item> items) {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
@@ -203,7 +203,7 @@ public final class MobLore {
                     : (it.type != null ? it.type.toLowerCase() : "item");
             sb.append(name);
             if (it.level > 1) sb.append(" +").append(it.level - 1);
-            if (it.count > 1) sb.append(" ×").append(it.count);
+            if (it.count > 1) sb.append(" x").append(it.count);
         }
         return sb.toString();
     }

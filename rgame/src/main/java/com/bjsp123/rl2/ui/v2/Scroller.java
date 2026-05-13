@@ -6,16 +6,16 @@ package com.bjsp123.rl2.ui.v2;
  * clamps it against a caller-supplied {@code maxScrollY}, and converts
  * touch / wheel input deltas into scroll movement.
  *
- * <p>Sign convention — {@code scrollY > 0} means content has been pushed
+ * <p>Sign convention - {@code scrollY > 0} means content has been pushed
  * UP (entries from the bottom of the master list become visible). Finger
  * dragging up (worldY increasing) increases {@code scrollY}; wheel-down
  * (positive {@code amountY}) does the same.
  *
- * <p>Drag detection — the scroller flips into "dragging" mode only after
+ * <p>Drag detection - the scroller flips into "dragging" mode only after
  * the cumulative movement on a single touch exceeds
  * {@link #DRAG_THRESHOLD} pixels. Until then, {@link #onTouchDragged}
  * returns {@code false} and the caller's tap-detection state is preserved
- * — once {@code true} comes back, the caller should clear any pending
+ * - once {@code true} comes back, the caller should clear any pending
  * tap captures so a scroll gesture doesn't fire a row click on release.
  */
 public final class Scroller {
@@ -41,7 +41,7 @@ public final class Scroller {
         if (scrollY > maxScrollY) scrollY = maxScrollY;
     }
 
-    /** Snap to top — used when switching tabs / categories so the new
+    /** Snap to top - used when switching tabs / categories so the new
      *  list's first entry is visible. */
     public void resetTop() {
         scrollY  = 0f;
@@ -75,7 +75,7 @@ public final class Scroller {
     }
 
     /** Mouse-wheel scroll. {@code pixelsPerTick} is the per-tick step in
-     *  virtual coordinates — typically one row's height. */
+     *  virtual coordinates - typically one row's height. */
     public void onScrolled(float amountY, float pixelsPerTick) {
         scrollY += amountY * pixelsPerTick;
         if (scrollY < 0f)         scrollY = 0f;

@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.ui.skin;
 import com.bjsp123.rl2.persistence.Persistence;
 
-/** Persistent quickslot-count preference — how many action slots appear on
+/** Persistent quickslot-count preference - how many action slots appear on
  *  the HUD and are bindable in the inventory detail view. */
 public class QuickslotCount {
     private static final String KEY = "rl2-quickslot-count";

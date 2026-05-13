@@ -60,7 +60,7 @@ public final class AchievementToast {
     }
 
     /** Advance the countdown by {@code dtMs} and draw the banner if one
-     *  is active. Caller is OUTSIDE any active SpriteBatch — this method
+     *  is active. Caller is OUTSIDE any active SpriteBatch - this method
      *  manages its own batch + shape begin/end. */
     public void render(int dtMs) {
         if (currentText == null) return;
@@ -83,7 +83,7 @@ public final class AchievementToast {
         float bannerX = (vw - bannerW) * 0.5f;
         float bannerY = vh - TOP_INSET_PX - BANNER_H;
 
-        // Shape pass — Window.drawShape paints the shadow + tri-line
+        // Shape pass - Window.drawShape paints the shadow + tri-line
         // border + warm fill in one call; we wrap it in a single
         // begin()/end() block. The fade-to-zero is carried via the
         // fill's alpha argument; the shadow / border lines stay full
@@ -99,7 +99,7 @@ public final class AchievementToast {
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
-        // Text pass — accent yellow, faded by alpha.
+        // Text pass - accent yellow, faded by alpha.
         ctx.batch.begin();
         Color tint = UIVars.ACCENT;
         TextDraw.centre(ctx, ctx.fontRegular,

@@ -28,7 +28,7 @@ tasks.named('run') {
 // (see the explicit `from(rootProject.file('assets'))` line) so the live-edit and
 // shipping paths can be configured independently.
 
-// Force LWJGL 3.4.1 — required for Java 25 JNI compatibility
+// Force LWJGL 3.4.1 - required for Java 25 JNI compatibility
 configurations.all {
     resolutionStrategy {
         force "org.lwjgl:lwjgl:$lwjglVersion"
@@ -43,7 +43,7 @@ dependencies {
     implementation project(':rgame')
     implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
-    // FreeType native libraries — required by FreeTypeFontGenerator on the desktop
+    // FreeType native libraries - required by FreeTypeFontGenerator on the desktop
     // backend; mirrors the gdx-platform natives line above.
     implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
     // Explicit LWJGL 3.4.1 natives for desktop
@@ -59,7 +59,7 @@ jar {
         attributes 'Main-Class': 'com.bjsp123.rl2.desktop.DesktopLauncher'
     }
     from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
-    // Explicit asset bundling for the shipping fat jar — done here, NOT via resources, so
+    // Explicit asset bundling for the shipping fat jar - done here, NOT via resources, so
     // dev runs continue to read from the live `assets/` filesystem copy (see workingDir
     // above). When `gradle :desktop:jar` packages a release, the assets directory contents
     // are copied into the JAR root so libgdx's Gdx.files.internal("sprites/foo.png")

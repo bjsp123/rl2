@@ -11,24 +11,24 @@ public class LevelSystem {
 
     /** Fixed light radius for a LAMP tile. */
     private static final int LAMP_LIGHT_RADIUS = 5;
-    /** Fixed light radius for a FIRE-tagged vegetation tile — flames are dim sources, so
+    /** Fixed light radius for a FIRE-tagged vegetation tile - flames are dim sources, so
      *  one tile of glow is the user-spec footprint. */
     private static final int FIRE_LIGHT_RADIUS = 1;
     /** Average ms between mote emissions per visible LAMP tile. Tuned so each lamp emits
-     *  ~one mote every couple of seconds — enough to read as "alive" without flooding
+     *  ~one mote every couple of seconds - enough to read as "alive" without flooding
      *  rooms with sparkles. Only visible tiles emit; off-screen lamps stay quiet. */
     private static final int LIGHT_MOTE_INTERVAL_MS = 1800;
-    /** Faster cadence for power-orb sparkles — magical loot should glint noticeably
+    /** Faster cadence for power-orb sparkles - magical loot should glint noticeably
      *  more than ambient lamps so the player's eye snaps to it across a room. */
     private static final int POWER_ORB_SPARKLE_INTERVAL_MS = 700;
     private static final java.util.Random LIGHT_MOTE_RNG = new java.util.Random();
 
     /** Mark every tile of {@code level} as explored, so the renderer paints
      *  the whole map (in remembered-but-not-currently-visible state).
-     *  Vision (FOV) is unchanged — currently-lit tiles still show in full
+     *  Vision (FOV) is unchanged - currently-lit tiles still show in full
      *  colour, dark tiles in the explored-but-fogged tint. Used by the
      *  {@link com.bjsp123.rl2.model.Buff.BuffType#INSIGHT} per-turn
-     *  handler. Idempotent — re-stamping already-true flags has no effect. */
+     *  handler. Idempotent - re-stamping already-true flags has no effect. */
     public static void markAllExplored(Level level) {
         if (level == null || level.explored == null) return;
         for (int x = 0; x < level.width; x++) {
@@ -55,7 +55,7 @@ public class LevelSystem {
         }
 
         // Items dropped on the floor emit their own light (amulets of light, for example).
-        // Same radius as when equipped — the amulet keeps glowing whether someone's wearing
+        // Same radius as when equipped - the amulet keeps glowing whether someone's wearing
         // it or not. Picked-up items have location == null and are skipped.
         if (level.items != null) {
             for (Item it : level.items) {
@@ -97,7 +97,7 @@ public class LevelSystem {
      * {@code dtMs / LIGHT_MOTE_INTERVAL_MS} per call to spit out a faint upward mote.
      * Lives on the wall-clock domain (like {@link com.bjsp123.rl2.logic.FireSystem#tickRealTime})
      * so the sparkle keeps trickling while the game is paused on input. Off-screen lamps
-     * are skipped — there's no point burning effect slots on rooms the player can't see.
+     * are skipped - there's no point burning effect slots on rooms the player can't see.
      */
     public static void tickLightMotesRealTime(Level level, int dtMs) {
         if (level == null || level.tiles == null || level.events == null) return;
@@ -113,7 +113,7 @@ public class LevelSystem {
                         new com.bjsp123.rl2.model.Point(x, y)));
             }
         }
-        // Glowing items (power orbs and friends) sparkle on the same channel — same
+        // Glowing items (power orbs and friends) sparkle on the same channel - same
         // upward-drifting LIGHT_MOTE visual, just emitted faster so the item catches
         // the eye as a pickup.
         if (level.items != null) {
@@ -149,7 +149,7 @@ public class LevelSystem {
 
         writeBack(level, level.visible, accum);
         propagateToWalls(level, level.visible);
-        // ESP override — if the player carries the buff, every mob's tile becomes
+        // ESP override - if the player carries the buff, every mob's tile becomes
         // visible regardless of FOV. Doesn't reveal terrain, just bodies; the renderer
         // pairs this with explored=true for those cells so the mob sprite doesn't render
         // over an unexplored void.
@@ -172,7 +172,7 @@ public class LevelSystem {
 
     /**
      * Flat blocking bitmap for the shadowcaster. Wall tiles and (closed) door tiles always
-     * block — that's the static "scenery is opaque" layer. Mobs and tree-canopy vegetation
+     * block - that's the static "scenery is opaque" layer. Mobs and tree-canopy vegetation
      * additionally block <i>light</i> propagation but not <i>sight</i>: lamps don't shine
      * through trees or past a mob, but the player can still spot what's behind them as long
      * as there's some other light source. {@code forLight} switches between the two:
@@ -180,18 +180,18 @@ public class LevelSystem {
      * (mobs + trees off). A closed door is opened up for both passes if a mob is standing
      * on it.
      *
-     * <p>The 1-cell border of the map is forced to "blocks" — normal levels already have
+     * <p>The 1-cell border of the map is forced to "blocks" - normal levels already have
      * walls there, but {@link com.bjsp123.rl2.model.Level.LevelFlag#WALKWAY_LEVEL} can leave
      * CHASM at the edge with no adjacent FLOOR to wall it in, and the shadowcaster has no
      * bounds check, so an unblocked edge lets it index past the array end and the
      * try/catch wipes the FOV.
      *
      * <p>The shadowcaster sets the source cell visible before scanning, so a mob's own tile
-     * being flagged "blocks" is harmless — the bit only matters when light tries to pass
+     * being flagged "blocks" is harmless - the bit only matters when light tries to pass
      * <i>through</i> that cell to a farther one.
      *
      * <p>Package-accessible so {@link LevelUtilities#getLineOfSight} can reuse the same
-     * bitmap rules for ad-hoc LOS queries — sight queries should pass {@code forLight=false}.
+     * bitmap rules for ad-hoc LOS queries - sight queries should pass {@code forLight=false}.
      */
     static boolean[] buildBlocking(Level level, boolean forLight) {
         int w = level.width, h = level.height;
@@ -215,7 +215,7 @@ public class LevelSystem {
                 Tile t = level.tiles[x][y];
                 boolean blocks = t.blocksSight();
                 // A LARGE mob's silhouette is tall enough to occlude sight (and therefore
-                // light too) regardless of whatever the underlying tile would do — wins over
+                // light too) regardless of whatever the underlying tile would do - wins over
                 // both the door-transparency hack and the open-floor case.
                 if (hasLargeMob[idx]) {
                     blocks = true;
@@ -228,7 +228,7 @@ public class LevelSystem {
                     Vegetation v = level.vegetation[x][y];
                     if (v != null && v.blocksLight()) blocks = true;
                 }
-                // Smoke clouds block both sight and light — opaque to FOV
+                // Smoke clouds block both sight and light - opaque to FOV
                 // (so a smoky room hides whatever's inside) and to lamps
                 // (so a torch can't shine through a plume). Steam and
                 // poison are see-through. Projectile traces don't consult
@@ -253,7 +253,7 @@ public class LevelSystem {
     /**
      * Mark walls adjacent to a flag-true NON-WALL 8-neighbor as flag-true too. This promotes
      * just the first ring of walls bordering the visible floor area (the only walls the player
-     * is looking at directly). We intentionally do NOT propagate through walls — that extra ring
+     * is looking at directly). We intentionally do NOT propagate through walls - that extra ring
      * reveals the outer layer of wall masses between rooms, which the player shouldn't see.
      */
     private static void propagateToWalls(Level level, boolean[][] flag) {

@@ -11,7 +11,7 @@ import java.util.Random;
 
 /**
  * Runtime mutations to a {@link Level}'s surface layer (water / blood / oil). Level-generation
- * code in {@link LevelFactory} writes {@link Level#surface} directly — those placements are
+ * code in {@link LevelFactory} writes {@link Level#surface} directly - those placements are
  * deliberate and don't need spreading.
  *
  * <p>The single public call is {@link #addSurface(Level, int, int, Surface)}: place a surface
@@ -38,7 +38,7 @@ public final class SurfaceSystem {
         int x = p.tileX(), y = p.tileY();
         if (!canHoldSurface(level, x, y)) return;
 
-        // Simple case: target cell is empty (or has a different surface) — write it and done.
+        // Simple case: target cell is empty (or has a different surface) - write it and done.
         if (level.surface[x][y] != surface) {
             level.surface[x][y] = surface;
             emitSurfaceChanged(level, x, y, surface);
@@ -46,7 +46,7 @@ public final class SurfaceSystem {
         }
 
         // Saturated at the source. Walk outward through cardinally-adjacent cells that already
-        // have this surface, collecting ring-by-ring candidates — floor-like neighbours whose
+        // have this surface, collecting ring-by-ring candidates - floor-like neighbours whose
         // surface differs. Place on a random candidate from the first non-empty ring.
         int w = level.width, h = level.height;
         boolean[][] visited = new boolean[w][h];
@@ -67,7 +67,7 @@ public final class SurfaceSystem {
                     visited[nx][ny] = true;
                     if (!canHoldSurface(level, nx, ny)) continue;
                     if (level.surface[nx][ny] == surface) {
-                        // Already saturated — extend the search through this cell.
+                        // Already saturated - extend the search through this cell.
                         frontier.addLast(new int[]{nx, ny});
                     } else {
                         candidates.add(new int[]{nx, ny});
@@ -81,7 +81,7 @@ public final class SurfaceSystem {
                 return;
             }
         }
-        // Entire reachable region already holds the surface — nothing we can do.
+        // Entire reachable region already holds the surface - nothing we can do.
     }
 
     private static boolean canHoldSurface(Level level, int x, int y) {

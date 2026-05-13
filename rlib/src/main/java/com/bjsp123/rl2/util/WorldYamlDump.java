@@ -58,7 +58,7 @@ public final class WorldYamlDump {
         sb.append("seed: ").append(com.bjsp123.rl2.util.SeedCode.encode(world.seed))
           .append("    # long=").append(world.seed).append('\n');
 
-        // Group levels by depth (low → high), preserving World.levels index per
+        // Group levels by depth (low -> high), preserving World.levels index per
         // entry so the YAML records original positions in the topology.
         Map<Integer, List<Integer>> byDepth = new TreeMap<>();
         for (int i = 0; i < world.levels.length; i++) {

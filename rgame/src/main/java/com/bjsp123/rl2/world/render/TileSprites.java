@@ -17,7 +17,7 @@ import java.util.Map;
  * autotile bases, and deterministic variant pickers.
  *
  * <p>Atlas grids share a {@link #TERRAIN_COLS}-wide layout. Source pixel pitch varies
- * between themes (some sheets ship 16-px cells and others 32-px) — auto-detected per
+ * between themes (some sheets ship 16-px cells and others 32-px) - auto-detected per
  * atlas at load time from the sheet's width.
  *
  * <h2>TILE ATLAS LAYOUT REFERENCE</h2>
@@ -27,67 +27,67 @@ import java.util.Map;
  * <p>KEEP THIS IN SYNC whenever a tile, sprite, or row is added.
  *
  * <pre>
- *   (cols 0..2, row 1) — stone FLOOR variants, picked randomly per tile. Col 0 is
+ *   (cols 0..2, row 1) - stone FLOOR variants, picked randomly per tile. Col 0 is
  *                     the canonical slot; cols 1 and 2 are alternates.
- *   (cols 0..2, row 2) — FLOOR_WOOD variants, picked randomly per tile. Col 0 is
+ *   (cols 0..2, row 2) - FLOOR_WOOD variants, picked randomly per tile. Col 0 is
  *                     the canonical slot; cols 1 and 2 are alternates.
- *   (col 6, row  1) — FLOOR_SPECIAL base (decorative floor variant).
- *   (col 7, row  1) — FLOOR_SPECIAL edge overlay drawn on top of a regular FLOOR
+ *   (col 6, row  1) - FLOOR_SPECIAL base (decorative floor variant).
+ *   (col 7, row  1) - FLOOR_SPECIAL edge overlay drawn on top of a regular FLOOR
  *                     whose neighbour to the WEST is FLOOR_SPECIAL.
- *   (col 7, row  2) — FLOOR_SPECIAL edge overlay, neighbour-to-EAST is special.
- *   (col 8, row  1) — FLOOR_SPECIAL edge overlay, neighbour-to-SOUTH is special.
- *   (col 8, row  2) — FLOOR_SPECIAL edge overlay, neighbour-to-NORTH is special.
- *   (col 9, row  1) — FLOOR_SPECIAL corner overlay, diagonal-SE is special.
- *   (col 10, row 1) — FLOOR_SPECIAL corner overlay, diagonal-SW is special.
- *   (col 9, row  2) — FLOOR_SPECIAL corner overlay, diagonal-NE is special.
- *   (col 10, row 2) — FLOOR_SPECIAL corner overlay, diagonal-NW is special.
- *   (cols 12..14, row 4) — ALTAR (3×1 sprite); the centre cell is the anchor and
+ *   (col 7, row  2) - FLOOR_SPECIAL edge overlay, neighbour-to-EAST is special.
+ *   (col 8, row  1) - FLOOR_SPECIAL edge overlay, neighbour-to-SOUTH is special.
+ *   (col 8, row  2) - FLOOR_SPECIAL edge overlay, neighbour-to-NORTH is special.
+ *   (col 9, row  1) - FLOOR_SPECIAL corner overlay, diagonal-SE is special.
+ *   (col 10, row 1) - FLOOR_SPECIAL corner overlay, diagonal-SW is special.
+ *   (col 9, row  2) - FLOOR_SPECIAL corner overlay, diagonal-NE is special.
+ *   (col 10, row 2) - FLOOR_SPECIAL corner overlay, diagonal-NW is special.
+ *   (cols 12..14, row 4) - ALTAR (3x1 sprite); the centre cell is the anchor and
  *                     the sprite extends one cell west and one cell east of it.
- *   (col 15, rows 0..1) — THRONE (1×2 sprite, west-facing source); same overhang
+ *   (col 15, rows 0..1) - THRONE (1x2 sprite, west-facing source); same overhang
  *                     anchoring as the lamp / large statue. {@code _R} variant
  *                     produced by horizontal flip at draw time.
- *   (col 0, row  3) — WALLS_OVERHANG (top cap of a raised wall, drawn one cell
+ *   (col 0, row  3) - WALLS_OVERHANG (top cap of a raised wall, drawn one cell
  *                     NORTH of the wall so it overhangs entities behind it).
- *   (col 1, row  3) — WALLS_OVERHANG, right-south-open variant   (+1)
- *   (col 2, row  3) — WALLS_OVERHANG, left-south-open variant    (+2)
- *   (col 3, row  3) — WALLS_OVERHANG, both-open                  (+1+2)
- *   (col 0, row  4) — RAISED_WALL (solid wall body, stitch-0) — random pick per
+ *   (col 1, row  3) - WALLS_OVERHANG, right-south-open variant   (+1)
+ *   (col 2, row  3) - WALLS_OVERHANG, left-south-open variant    (+2)
+ *   (col 3, row  3) - WALLS_OVERHANG, both-open                  (+1+2)
+ *   (col 0, row  4) - RAISED_WALL (solid wall body, stitch-0) - random pick per
  *                     tile with the alternates at cols 5, 6, 7 of row 4.
- *   (col 1, row  4) — RAISED_WALL, right-open variant            (+1)
- *   (col 2, row  4) — RAISED_WALL, left-open variant             (+2)
- *   (col 3, row  4) — RAISED_WALL, both-open                     (+1+2)
- *   (cols 5..7, row 4) — extra solid-wall art chosen randomly alongside (col 0).
- *   (cols 0..15, row 6) — WALLS_INTERNAL autotile variants. Bitfield:
+ *   (col 1, row  4) - RAISED_WALL, right-open variant            (+1)
+ *   (col 2, row  4) - RAISED_WALL, left-open variant             (+2)
+ *   (col 3, row  4) - RAISED_WALL, both-open                     (+1+2)
+ *   (cols 5..7, row 4) - extra solid-wall art chosen randomly alongside (col 0).
+ *   (cols 0..15, row 6) - WALLS_INTERNAL autotile variants. Bitfield:
  *                         +1 right, +2 right-south, +4 left-south, +8 left.
- *   (col 2, row  7) — alternate WALLS_INTERNAL for bitfield 2 (right-south
- *                     open) — picked randomly per tile alongside (col 2, row 6).
- *   (col 4, row  7) — alternate WALLS_INTERNAL for bitfield 4 (left-south
- *                     open) — picked randomly per tile alongside (col 4, row 6).
- *   (col 0, row  8) — RAISED_DOOR (north/south-facing CLOSED door body).
- *   (col 1, row  8) — DOOR_OVERHANG (arched top of a N/S-facing door, drawn in
- *                     the cell ABOVE the door body — appears for both open and closed).
- *   (col 2, row  8) — RAISED_DOOR_SIDEWAYS (E/W-facing door body — same sprite
+ *   (col 2, row  7) - alternate WALLS_INTERNAL for bitfield 2 (right-south
+ *                     open) - picked randomly per tile alongside (col 2, row 6).
+ *   (col 4, row  7) - alternate WALLS_INTERNAL for bitfield 4 (left-south
+ *                     open) - picked randomly per tile alongside (col 4, row 6).
+ *   (col 0, row  8) - RAISED_DOOR (north/south-facing CLOSED door body).
+ *   (col 1, row  8) - DOOR_OVERHANG (arched top of a N/S-facing door, drawn in
+ *                     the cell ABOVE the door body - appears for both open and closed).
+ *   (col 2, row  8) - RAISED_DOOR_SIDEWAYS (E/W-facing door body - same sprite
  *                     for both open and closed; the open variant just drops its overlays).
- *   (cols 3..6, row 8) — DOOR_SIDEWAYS_OVERHANG_CLOSED variants (closed-only).
+ *   (cols 3..6, row 8) - DOOR_SIDEWAYS_OVERHANG_CLOSED variants (closed-only).
  *                        Bitfield: +1 right-south, +2 left-south (4 variants).
- *   (col 7, row  8) — DOOR_SIDEWAYS (wall-over-sideways-door cutout — closed only;
+ *   (col 7, row  8) - DOOR_SIDEWAYS (wall-over-sideways-door cutout - closed only;
  *                     dropped when the door is open so the wall above renders normally).
- *   (col 0, row  9) — RAISED_DOOR_OPEN (N/S-facing door body when open — one row
+ *   (col 0, row  9) - RAISED_DOOR_OPEN (N/S-facing door body when open - one row
  *                     below the closed body sprite).
- *   (col 17, row 1) — STATUE_SMALL (small statue, 1 cell, west-facing source —
+ *   (col 17, row 1) - STATUE_SMALL (small statue, 1 cell, west-facing source -
  *                     east-facing variant produced by horizontal flip at draw time).
- *   (col 18, rows 0..1) — LAMP ornament (1×2 cells); drawn anchored at the floor
+ *   (col 18, rows 0..1) - LAMP ornament (1x2 cells); drawn anchored at the floor
  *                     cell so the upper half overhangs into the cell above.
- *   (col 19, rows 0..1) — STATUE_LARGE (tall statue, 1×2 cells); same overhang
+ *   (col 19, rows 0..1) - STATUE_LARGE (tall statue, 1x2 cells); same overhang
  *                     anchoring as the lamp, plus L/R facing flip at draw.
- *   (cols 0..1, rows 10..11) — STAIRS_UP ladder, 2×2 cells. Drawn on top of a
+ *   (cols 0..1, rows 10..11) - STAIRS_UP ladder, 2x2 cells. Drawn on top of a
  *                     regular floor underlay, anchored at the bottom of the stair cell.
- *   (cols 2..3, rows 10..11) — STAIRS_DOWN ladder, 2×2 cells, same conventions.
- *   (col 0, row 12) — CHASM_FLOOR (floor dripping into chasm, N edge).
- *   (col 1, row 12) — CHASM_WALL  (wall dripping into chasm, N edge).
- *   (col 2, row 12) — CHASM_WATER (water dripping into chasm, N edge).
- *   (col 3, row 12) — CHASM_WOOD  (wood floor dripping into chasm, N edge).
- *   (cols 0..15, row 14) — WATER autotile variants. Bitfield:
+ *   (cols 2..3, rows 10..11) - STAIRS_DOWN ladder, 2x2 cells, same conventions.
+ *   (col 0, row 12) - CHASM_FLOOR (floor dripping into chasm, N edge).
+ *   (col 1, row 12) - CHASM_WALL  (wall dripping into chasm, N edge).
+ *   (col 2, row 12) - CHASM_WATER (water dripping into chasm, N edge).
+ *   (col 3, row 12) - CHASM_WOOD  (wood floor dripping into chasm, N edge).
+ *   (cols 0..15, row 14) - WATER autotile variants. Bitfield:
  *                          +1 north, +2 east, +4 south, +8 west.
  * </pre>
  */
@@ -96,7 +96,7 @@ public final class TileSprites {
     /** Number of columns in every terrain atlas. */
     public static final int TERRAIN_COLS = 20;
 
-    // ── Flat-index bases for each tile family. The renderer composes a final
+    // -- Flat-index bases for each tile family. The renderer composes a final
     //    flat index by adding an autotile bitfield: e.g. WATER + (+1 north, +2 east,
     //    +4 south, +8 west). Variant pickers below produce stable per-tile slots
     //    inside families that ship multiple alternates.
@@ -108,7 +108,7 @@ public final class TileSprites {
     public static final int RAISED_DOOR_SIDEWAYS          =  8 * TERRAIN_COLS + 2;
     public static final int DOOR_SIDEWAYS_OVERHANG_CLOSED =  8 * TERRAIN_COLS + 3; // +1 r-s, +2 l-s
     public static final int DOOR_SIDEWAYS                 =  8 * TERRAIN_COLS + 7; // wall-over-sideways-door cutout
-    /** Open-door body for the front-facing variant — one row below {@link #RAISED_DOOR}. */
+    /** Open-door body for the front-facing variant - one row below {@link #RAISED_DOOR}. */
     public static final int RAISED_DOOR_OPEN              =  9 * TERRAIN_COLS + 0;
     public static final int CHASM_FLOOR                   = 12 * TERRAIN_COLS + 0;
     public static final int CHASM_WALL                    = 12 * TERRAIN_COLS + 1;
@@ -116,7 +116,7 @@ public final class TileSprites {
     public static final int CHASM_WOOD                    = 12 * TERRAIN_COLS + 3;
     public static final int WATER                         = 14 * TERRAIN_COLS + 0; // +1 n, +2 e, +4 s, +8 w
 
-    // ── Variant tables. Private — picks go through the helpers below so callers
+    // -- Variant tables. Private - picks go through the helpers below so callers
     //    don't see the index arithmetic. Each entry is a flat index into the
     //    per-cell TextureRegion[] grid (col + row * TERRAIN_COLS).
     private static final int[] FLOOR_VARIANTS = {
@@ -135,7 +135,7 @@ public final class TileSprites {
             2 * TERRAIN_COLS + 4,
             2 * TERRAIN_COLS + 5,
     };
-    /** Stitch-0 (no neighbours open) only — bits 1..3 keep their unique slots. */
+    /** Stitch-0 (no neighbours open) only - bits 1..3 keep their unique slots. */
     private static final int[] RAISED_WALL_VARIANTS = {
             4 * TERRAIN_COLS + 0,
             4 * TERRAIN_COLS + 5,
@@ -149,9 +149,9 @@ public final class TileSprites {
     };
 
 
-    // ── Top-right ornament source coords (statues + lamp + stairs). The lamp and
-    //    tall statue are 1-cell wide × 2-cells tall — drawn anchored at the floor
-    //    cell with the upper half overhanging into the cell above. Stairs are 2×2.
+    // -- Top-right ornament source coords (statues + lamp + stairs). The lamp and
+    //    tall statue are 1-cell wide x 2-cells tall - drawn anchored at the floor
+    //    cell with the upper half overhanging into the cell above. Stairs are 2x2.
     private static final int STATUE_SMALL_COL = 17;
     private static final int STATUE_SMALL_ROW = 1;
     private static final int LAMP_COL         = 18;
@@ -176,7 +176,7 @@ public final class TileSprites {
             {8, 1},  // S neighbour is special
             {8, 2},  // N neighbour is special
     };
-    /** {@code SPECIAL_FLOOR_CORNER[corner]} — overlay for a regular FLOOR cell
+    /** {@code SPECIAL_FLOOR_CORNER[corner]} - overlay for a regular FLOOR cell
      *  whose diagonal neighbour is FLOOR_SPECIAL. Order matches {@link Corner}. */
     private static final int[][] SPECIAL_FLOOR_CORNER = {
             {9,  1},  // SE
@@ -184,7 +184,7 @@ public final class TileSprites {
             {9,  2},  // NE
             {10, 2},  // NW
     };
-    private static final int ALTAR_COL  = 12;   // leftmost cell — sprite spans cols 12..14
+    private static final int ALTAR_COL  = 12;   // leftmost cell - sprite spans cols 12..14
     private static final int ALTAR_ROW  = 4;
     private static final int ALTAR_W_CELLS = 3;
     private static final int THRONE_COL = 15;
@@ -249,38 +249,38 @@ public final class TileSprites {
         return ornament(smallStatueByTheme, theme);
     }
 
-    /** Tall-statue ornament region (1×2 cells, anchored at the floor cell). */
+    /** Tall-statue ornament region (1x2 cells, anchored at the floor cell). */
     public static TextureRegion largeStatue(VisualTheme theme) {
         if (largeStatueByTheme == null) load();
         return ornament(largeStatueByTheme, theme);
     }
 
-    /** Lamp ornament region (1×2 cells, anchored at the floor cell). */
+    /** Lamp ornament region (1x2 cells, anchored at the floor cell). */
     public static TextureRegion lampOrnament(VisualTheme theme) {
         if (lampByTheme == null) load();
         return ornament(lampByTheme, theme);
     }
 
-    /** Up-ladder ornament region (2×2 cells, anchored at the bottom of the stair cell). */
+    /** Up-ladder ornament region (2x2 cells, anchored at the bottom of the stair cell). */
     public static TextureRegion stairsUp(VisualTheme theme) {
         if (stairsUpByTheme == null) load();
         return ornament(stairsUpByTheme, theme);
     }
 
-    /** Down-ladder ornament region (2×2 cells). */
+    /** Down-ladder ornament region (2x2 cells). */
     public static TextureRegion stairsDown(VisualTheme theme) {
         if (stairsDownByTheme == null) load();
         return ornament(stairsDownByTheme, theme);
     }
 
-    /** Altar ornament region (3×1 cells, anchored at the central tile so the
+    /** Altar ornament region (3x1 cells, anchored at the central tile so the
      *  sprite extends one cell west and one cell east). */
     public static TextureRegion altar(VisualTheme theme) {
         if (altarByTheme == null) load();
         return ornament(altarByTheme, theme);
     }
 
-    /** Throne ornament region (1×2 cells, west-facing source — east-facing
+    /** Throne ornament region (1x2 cells, west-facing source - east-facing
      *  variant produced by horizontal flip at draw time, like statues). */
     public static TextureRegion throne(VisualTheme theme) {
         if (throneByTheme == null) load();
@@ -369,7 +369,7 @@ public final class TileSprites {
         };
     }
 
-    // ── Variant pickers — take a deterministic per-tile hash from {@link #variantHash}
+    // -- Variant pickers - take a deterministic per-tile hash from {@link #variantHash}
     //    so the same (x, y) keeps the same pick across frames. Splitting the picker
     //    from the hash lets callers hash on whatever they want (e.g. animation frame).
 
@@ -442,12 +442,12 @@ public final class TileSprites {
                 wallTintByTheme .put(e.getKey(), sampleAverage(pm, srcCell, 4, 6, 1));
                 pm.dispose();
             } catch (Exception ignored) {
-                // Skip missing/broken atlases — accessors return null for that theme.
+                // Skip missing/broken atlases - accessors return null for that theme.
             }
         }
     }
 
-    /** Average opaque-pixel colour over {@code cols} × {@code rows} cells starting
+    /** Average opaque-pixel colour over {@code cols} x {@code rows} cells starting
      *  at atlas grid position {@code (0, startRow)}, in {@code srcCell}-pixel units.
      *  Transparent pixels are ignored so the variant cells (which often have alpha
      *  edges) don't bleed black into the average. */
@@ -476,7 +476,7 @@ public final class TileSprites {
                 rSum / 255f / n, gSum / 255f / n, bSum / 255f / n, 1f);
     }
 
-    /** Slice {@code tex} into per-cell regions and pull out the 1×2 / 2×2 ornaments
+    /** Slice {@code tex} into per-cell regions and pull out the 1x2 / 2x2 ornaments
      *  the renderer accesses by name. Out-of-bounds rows (older atlases without an
      *  ornament slot) just leave the corresponding map entry empty. */
     private static void buildRegions(VisualTheme theme, Texture tex, int srcCell) {

@@ -78,7 +78,7 @@ public class SaveSystem {
                 return result;
             }
             private Class<? extends Enum> keyClassOf(EnumMap m) {
-                // Empty maps still need to round-trip — get the class via reflection
+                // Empty maps still need to round-trip - get the class via reflection
                 // on EnumMap's private keyType field. Falls back to inspecting the
                 // first entry if the JVM blocks reflective access (unlikely on the
                 // default --add-opens-free runtime but defensive).

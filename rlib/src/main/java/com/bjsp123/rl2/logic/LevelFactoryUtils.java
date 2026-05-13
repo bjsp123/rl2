@@ -10,16 +10,16 @@ import java.util.Random;
 
 /**
  * Generation-time geometry and topology helpers used by {@link LevelFactory}, the room
- * painters, and the populate stage. Stateless — every method takes the {@link Level},
+ * painters, and the populate stage. Stateless - every method takes the {@link Level},
  * {@link Random}, and any inputs explicitly. Three families of helpers live here:
  *
  * <ul>
  *   <li><b>Corridor routing.</b> {@link #carveCorridorL}, {@link #carveCorridorDiagonal},
- *       {@link #carveCorridorRough} — turn a "from → to" pair into floor tiles.</li>
+ *       {@link #carveCorridorRough} - turn a "from -> to" pair into floor tiles.</li>
  *   <li><b>Room-centre distributions.</b> {@link #poissonDiskPoints},
- *       {@link #bspPartition} — produce sets of well-spaced rectangles or points within a
+ *       {@link #bspPartition} - produce sets of well-spaced rectangles or points within a
  *       bounding rect.</li>
- *   <li><b>Open-space generators.</b> {@link #cellularCave}, {@link #diffusionCave} —
+ *   <li><b>Open-space generators.</b> {@link #cellularCave}, {@link #diffusionCave} -
  *       blob-shaped natural caves.</li>
  * </ul>
  *
@@ -30,7 +30,7 @@ public final class LevelFactoryUtils {
 
     private LevelFactoryUtils() {}
 
-    // ── Tile primitives ─────────────────────────────────────────────────────
+    // -- Tile primitives -----------------------------------------------------
 
     /** Carve a rectangle of FLOOR. Bounds-checked. */
     public static void carveRect(Level level, int x, int y, int w, int h) {
@@ -67,12 +67,12 @@ public final class LevelFactoryUtils {
         return t == Tile.DOOR || t == Tile.DOOR_OPEN;
     }
 
-    // ── Corridor routing ────────────────────────────────────────────────────
+    // -- Corridor routing ----------------------------------------------------
 
     /**
      * L-shape corridor. Carves a 1-wide path of {@code tile} from {@code from} to {@code to}
      * that turns once: either horizontal-then-vertical or vertical-then-horizontal (50/50
-     * chance). Both endpoints inclusive. Idempotent — overlapping carves are harmless. */
+     * chance). Both endpoints inclusive. Idempotent - overlapping carves are harmless. */
     public static void carveCorridorL(Level level, Point from, Point to, Tile tile, Random rng) {
         int x1 = from.tileX(), y1 = from.tileY();
         int x2 = to.tileX(),   y2 = to.tileY();
@@ -85,7 +85,7 @@ public final class LevelFactoryUtils {
         }
     }
 
-    /** Diagonal Bresenham corridor — chunky 1-wide line of {@code tile} from A to B with
+    /** Diagonal Bresenham corridor - chunky 1-wide line of {@code tile} from A to B with
      *  staircase-style steps. Produces shorter total distance than an L corridor. */
     public static void carveCorridorDiagonal(Level level, Point from, Point to, Tile tile) {
         int x0 = from.tileX(), y0 = from.tileY();
@@ -103,7 +103,7 @@ public final class LevelFactoryUtils {
         }
     }
 
-    /** Rough corridor — random walk of {@code tile} that drifts toward the goal. Each step
+    /** Rough corridor - random walk of {@code tile} that drifts toward the goal. Each step
      *  picks the axis with the larger remaining distance and steps along it 80% of the
      *  time, otherwise steps perpendicular. Produces a wandering path that looks natural
      *  rather than surgical. Capped at {@code w*h} steps as a safety. */
@@ -134,7 +134,7 @@ public final class LevelFactoryUtils {
         for (int y = lo; y <= hi; y++) setTile(level, x, y, tile);
     }
 
-    // ── Room-centre distributions ──────────────────────────────────────────
+    // -- Room-centre distributions ------------------------------------------
 
     /**
      * Poisson-disc sample of points inside the rect (1, 1, w-2, h-2), enforcing a minimum
@@ -183,7 +183,7 @@ public final class LevelFactoryUtils {
      * Recursive binary space partition of {@code (x, y, w, h)}. Each leaf rect satisfies
      * {@code w >= minSize && h >= minSize}; intermediate splits stop when neither child
      * would meet the minimum. Returns the leaf rectangles as {@code int[]{x, y, w, h}}.
-     * Splits are 30%–70% along the longer axis, with random axis-flip when w ≈ h.
+     * Splits are 30%-70% along the longer axis, with random axis-flip when w ~ h.
      */
     public static List<int[]> bspPartition(int x, int y, int w, int h, int minSize, Random rng) {
         List<int[]> leaves = new ArrayList<>();
@@ -218,13 +218,13 @@ public final class LevelFactoryUtils {
         }
     }
 
-    // ── Open-space (cave) generators ────────────────────────────────────────
+    // -- Open-space (cave) generators ----------------------------------------
 
     /**
      * Cellular-automata cave generator. Seeds an {@code (w, h)} grid with random cells
      * filled at {@code initFill} probability, then runs {@code iterations} smoothing
-     * passes (B5678/S45678 — a cell becomes solid if it has ≥5 solid neighbours, stays
-     * solid if it has ≥4). Returns a boolean grid where {@code true} = floor.
+     * passes (B5678/S45678 - a cell becomes solid if it has >=5 solid neighbours, stays
+     * solid if it has >=4). Returns a boolean grid where {@code true} = floor.
      */
     public static boolean[][] cellularCave(int w, int h, double initFill, int iterations,
                                            Random rng) {
@@ -266,7 +266,7 @@ public final class LevelFactoryUtils {
     /**
      * Diffusion-limited random walker. Starts at the centre, takes {@code steps} random
      * 8-direction steps, marking each visited cell as floor. Cheap and produces blobby,
-     * organic shapes — good for small caves or "rough room" interiors.
+     * organic shapes - good for small caves or "rough room" interiors.
      */
     public static boolean[][] diffusionCave(int w, int h, int steps, Random rng) {
         boolean[][] g = new boolean[w][h];
@@ -280,11 +280,11 @@ public final class LevelFactoryUtils {
         return g;
     }
 
-    // ── Cleanup passes ──────────────────────────────────────────────────────
+    // -- Cleanup passes ------------------------------------------------------
 
     /** Wall in any CHASM tile that touches a FLOOR cell. Run this after carving rooms and
      *  corridors so the boundary of every FLOOR area becomes a sealed wall. FLOOR_WOOD is
-     *  intentionally NOT a trigger — that's how {@link com.bjsp123.rl2.model.Level.LevelFlag#WALKWAY_LEVEL}
+     *  intentionally NOT a trigger - that's how {@link com.bjsp123.rl2.model.Level.LevelFlag#WALKWAY_LEVEL}
      *  corridors stay as plank bridges with chasm to either side. */
     public static void wallInFloors(Level level) {
         int w = level.width, h = level.height;
@@ -311,7 +311,7 @@ public final class LevelFactoryUtils {
     }
 
     /** Final-pass cleanup: a door that doesn't have walls flanking it on a single axis is
-     *  not a real door — convert to floor. Specifically the door must have walls both N
+     *  not a real door - convert to floor. Specifically the door must have walls both N
      *  and S, OR walls both E and W. Otherwise it's an opening on a corner / open area
      *  and reads better as floor. */
     public static void pruneOrphanDoors(Level level) {
@@ -341,7 +341,7 @@ public final class LevelFactoryUtils {
 
     /** Pick a random FLOOR tile, weighted toward enclosed interiors (small rooms,
      *  village buildings, subrooms). Samples {@code k} uniform-random floor candidates
-     *  and returns the one with the most walls in its 5×5 neighbourhood — a cheap
+     *  and returns the one with the most walls in its 5x5 neighbourhood - a cheap
      *  heuristic that biases against open corridors and large open green spaces. */
     public static Point randomInnerFloorTile(Level level, Random rng, int k) {
         Point best = null;

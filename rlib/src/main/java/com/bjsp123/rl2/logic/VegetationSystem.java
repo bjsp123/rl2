@@ -12,16 +12,16 @@ import java.util.Random;
  * Per-turn vegetation spread. Every <b>game turn</b> (see {@link #tickPerTurn}), each cell
  * that already holds vegetation gets a single roll to grow the same species onto a random
  * cardinally-adjacent empty floor. The chance is computed from the <em>target</em> cell's
- * conditions — not the source — so spread tracks lighting and surface geography rather
+ * conditions - not the source - so spread tracks lighting and surface geography rather
  * than how the source patch started.
  *
  * <h3>Rates</h3>
  * <ul>
  *   <li>{@link Vegetation#GRASS}: 0% base. +0.2% if lit, +0.2% if cardinally adjacent to a
  *       water tile, plus a +0.6% synergy bonus when both conditions hold (a sunlit
- *       streamside cell creeps roughly 5× faster than either factor alone).</li>
+ *       streamside cell creeps roughly 5x faster than either factor alone).</li>
  *   <li>{@link Vegetation#MUSHROOMS}: 0.125% base in the dark. Within Chebyshev range 2 of a
- *       blood surface jumps to 2%, and an unlit blood-adjacent cell doubles again to 4% —
+ *       blood surface jumps to 2%, and an unlit blood-adjacent cell doubles again to 4% -
  *       so dark fleshy corners seed the fastest.</li>
  *   <li>Existing grass / mushroom tiles that pick up an {@link Surface#OIL} surface
  *       (typically from an oil splash thrown over them) wither at
@@ -45,7 +45,7 @@ public final class VegetationSystem {
     /** Per-turn chance that a lit mushroom tile withers away and becomes bare floor. */
     private static final double MUSHROOM_LIT_DECAY_CHANCE = 0.01;
     /** Per-turn chance that a grass/mushroom tile sitting on an OIL surface withers.
-     *  Oil-doused vegetation rots fast — moderate per-tile chance, so a thrown
+     *  Oil-doused vegetation rots fast - moderate per-tile chance, so a thrown
      *  oil-splash bomb visibly clears flora over the next handful of turns. */
     private static final double OIL_DECAY_CHANCE = 0.05;
     /** Display copy of {@link #OIL_DECAY_CHANCE} for the class Javadoc. */
@@ -61,7 +61,7 @@ public final class VegetationSystem {
             for (int y = 0; y < h; y++) {
                 Vegetation v = snap[x][y];
                 if (v == null) continue;
-                // Oil rot — applies to grass and mushrooms alike. Trees and fire
+                // Oil rot - applies to grass and mushrooms alike. Trees and fire
                 // vegetation are immune. Rolled before the lit-decay/spread paths so a
                 // dying tile doesn't get one last seeding roll on the way out.
                 if ((v == Vegetation.GRASS || v == Vegetation.MUSHROOMS)
@@ -70,7 +70,7 @@ public final class VegetationSystem {
                     level.vegetation[x][y] = null;
                     continue;
                 }
-                // Mushrooms wither in light — rolled per-tile, per-turn, using the snapshot
+                // Mushrooms wither in light - rolled per-tile, per-turn, using the snapshot
                 // so a mushroom seeded this same tick gets its first decay roll next tick.
                 if (v == Vegetation.MUSHROOMS
                         && level.lit != null && level.lit[x][y]
@@ -90,7 +90,7 @@ public final class VegetationSystem {
             if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
             if (!level.tiles[nx][ny].isFloorLike()) continue;
             if (snap[nx][ny] != null) continue;
-            // Liquids drown flora — grass and mushrooms can't take root on a water/blood/oil
+            // Liquids drown flora - grass and mushrooms can't take root on a water/blood/oil
             // tile. Pre-seeded vegetation placed by LevelFactory is untouched by this rule.
             if (level.surface[nx][ny] != null) continue;
             candidates.add(new int[]{nx, ny});
@@ -133,7 +133,7 @@ public final class VegetationSystem {
                 return c;
             }
             case MUSHROOMS: {
-                // Base rate is 1/8 of the previous flat 0.01 — fungi creep slowly when
+                // Base rate is 1/8 of the previous flat 0.01 - fungi creep slowly when
                 // out in the open. Within Chebyshev distance 2 of a blood surface the
                 // rate jumps to 2% (lit blood-adjacent corners) and 4% in the dark, so a
                 // shaded corpse pile is the densest seeding ground in the dungeon.

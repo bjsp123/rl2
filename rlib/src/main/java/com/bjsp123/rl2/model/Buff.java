@@ -18,7 +18,7 @@ package com.bjsp123.rl2.model;
  */
 public class Buff {
     /** Each enum value is one stackable status effect a mob can carry. The set is
-     *  intentionally closed — adding a new buff type means writing the per-turn /
+     *  intentionally closed - adding a new buff type means writing the per-turn /
      *  per-event handler in {@code BuffSystem}, so the enum doubles as the dispatch
      *  table. */
     public enum BuffType {
@@ -60,7 +60,7 @@ public class Buff {
          *  effect is idempotent (subsequent ticks re-stamp the same flag). */
         INSIGHT,
         /** Cold-slowed. Adds {@code 50 + level * 10} to both moveCost and attackCost
-         *  while active — every action takes longer. Applied by freeze bombs. */
+         *  while active - every action takes longer. Applied by freeze bombs. */
         CHILLED,
         /** Slick with oil. Takes double damage from fire. If size > 2 and not flying,
          *  has a 50% chance per step to leave an OIL surface in the cell it left.
@@ -70,17 +70,17 @@ public class Buff {
         WET,
         /** Player has run out of food. Heal regen is suppressed while active; the buff
          *  drops as soon as satiety rises above 0 again (drink a potion, eat a pear).
-         *  Player-only — NPCs sit at satiety 0 harmlessly. */
+         *  Player-only - NPCs sit at satiety 0 harmlessly. */
         STARVING,
-        /** Cooldown buffs — present means "can't fire yet"; duration counts down per
+        /** Cooldown buffs - present means "can't fire yet"; duration counts down per
          *  standard turn until the buff drops and the action becomes available again.
          *  Replace the legacy {@code MobCooldowns} fields. They share a single
          *  recharging-glyph icon cell since players don't need to distinguish
-         *  them at a glance — each is just "this action is recharging". */
+         *  them at a glance - each is just "this action is recharging". */
         TELEPORT_COOLDOWN,
         RANGED_COOLDOWN,
         /** Recharging haste-cast ability (kobold general, etc.). Same dispatch
-         *  pattern as the other cooldown buffs — present means "can't cast yet". */
+         *  pattern as the other cooldown buffs - present means "can't cast yet". */
         HASTE_COOLDOWN,
         /** Recharging heal-cast ability (kobold general, etc.). */
         HEAL_COOLDOWN,
@@ -92,7 +92,7 @@ public class Buff {
          *  by 20%. Duration 10 standard turns. */
         KILLER,
         /** Open-wound DOT. Per turn the mob loses
-         *  {@code (level * durationTurns) / 2} HP — strong at first then
+         *  {@code (level * durationTurns) / 2} HP - strong at first then
          *  tapers as the duration counts down. Doesn't stack with itself
          *  (apply takes the max of level / duration via the standard
          *  {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
@@ -108,7 +108,7 @@ public class Buff {
     public int durationTurns;
     /** Mob that originally applied this buff (e.g. the player who drank a sorcery
      *  potion, or the kissyblob that frightened a kobold). Used by death messages and
-     *  history logs for attribution. Transient — references aren't persisted on save. */
+     *  history logs for attribution. Transient - references aren't persisted on save. */
     public transient Mob source;
 
     public Buff() {}

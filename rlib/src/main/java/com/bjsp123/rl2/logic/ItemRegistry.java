@@ -12,7 +12,7 @@ import java.util.function.Predicate;
  * Static registry of every item known to the game. Loaded once at startup from
  * {@code assets/data/items.csv} via {@link #load(String)}.
  *
- * <p>Procedural items (gems) are intentionally NOT in the CSV — they're built
+ * <p>Procedural items (gems) are intentionally NOT in the CSV - they're built
  * dynamically per-level by {@code GemSystem} and have a {@code null} type
  * since their identity is carried by the {@code gemSpecies} + {@code gemSize}
  * fields.
@@ -29,7 +29,7 @@ public final class ItemRegistry {
     private ItemRegistry() {}
 
     /** Parse {@code csv} and populate the registry. Replaces any prior
-     *  contents — calling twice is idempotent. */
+     *  contents - calling twice is idempotent. */
     public static void load(String csv) { STORE.load(csv); }
 
     /** Lookup a definition by item-type string. Returns {@code null} for
@@ -52,7 +52,7 @@ public final class ItemRegistry {
         return out;
     }
 
-    /** Insertion-order index of {@code type} in the registry — i.e. the row
+    /** Insertion-order index of {@code type} in the registry - i.e. the row
      *  position in {@code items.csv}. Used by inventory sort to keep stacks of
      *  related items grouped in their CSV order. Returns {@link Integer#MAX_VALUE}
      *  for unknown / null types so they sort to the end. */

@@ -14,17 +14,17 @@ import com.bjsp123.rl2.model.Point;
  *
  * <p>Three cadences interact:
  * <ul>
- *   <li><b>Game ticks</b> — {@link #tick} drains one tick per call and dispatches AI.</li>
- *   <li><b>Game turns</b> — every {@link #STANDARD_TURN_TICKS}th tick, {@link #tick}
+ *   <li><b>Game ticks</b> - {@link #tick} drains one tick per call and dispatches AI.</li>
+ *   <li><b>Game turns</b> - every {@link #STANDARD_TURN_TICKS}th tick, {@link #tick}
  *       runs {@link #tickStandardTurn}.</li>
- *   <li><b>Real time</b> — {@link #advanceEffects} and {@link MobSystem#advanceMobAnimations}
+ *   <li><b>Real time</b> - {@link #advanceEffects} and {@link MobSystem#advanceMobAnimations}
  *       run once per render frame, independent of the game clock.</li>
  * </ul>
  */
 public class TurnSystem {
 
-    /** Game ticks in one "standard turn" — the cadence on which discrete per-turn rolls
-     *  (vegetation spread, mushroom decay, fire spread, smoke emit, …) all fire from
+    /** Game ticks in one "standard turn" - the cadence on which discrete per-turn rolls
+     *  (vegetation spread, mushroom decay, fire spread, smoke emit, ...) all fire from
      *  {@link #tickStandardTurn}. Independent of any individual mob's {@link Mob#moveCost}
      *  so a fast or slow player doesn't accelerate world-state churn. */
     public static final int STANDARD_TURN_TICKS = 100;
@@ -33,7 +33,7 @@ public class TurnSystem {
      * Advance the world by exactly one game tick:
      * <ol>
      *   <li>If the player is already ready ({@code ticksTillMove == 0}), return {@code false}
-     *       without advancing — the caller should wait for input.</li>
+     *       without advancing - the caller should wait for input.</li>
      *   <li>Drain one tick from every non-INANIMATE, non-dying mob's
      *       {@link Mob#ticksTillMove} (clamped at zero).</li>
      *   <li>Run {@link MobSystem#processAllAiTurns} so any AI mob now at zero acts.</li>
@@ -72,7 +72,7 @@ public class TurnSystem {
     private static void tickStandardTurn(Level level) {
         // Per-turn spawn (e.g. ant hills budding off ants). Runs for INANIMATE mobs too,
         // since those are exactly the things that spawn-but-don't-act. Keep the mobs list
-        // snapshot stable while rolling — newly-spawned mobs append to level.mobs and we
+        // snapshot stable while rolling - newly-spawned mobs append to level.mobs and we
         // don't want them rolling their own spawn on the same turn they were created.
         int rollUpTo = level.mobs.size();
         for (int i = 0; i < rollUpTo; i++) {
@@ -96,8 +96,8 @@ public class TurnSystem {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(bud, spawnPos));
             }
         }
-        // Snapshot the mob list — advanceSatiety can starve the player (which routes
-        // through processAttack → killMob → level.mobs.remove now), so iterating the
+        // Snapshot the mob list - advanceSatiety can starve the player (which routes
+        // through processAttack -> killMob -> level.mobs.remove now), so iterating the
         // live list throws ConcurrentModificationException.
         java.util.List<Mob> heartbeat = new java.util.ArrayList<>(level.mobs);
         for (Mob mob : heartbeat) {
@@ -114,11 +114,11 @@ public class TurnSystem {
                         mob.hp + STANDARD_TURN_TICKS * s.healRate);
             }
             // Satiety drains by one full turn's worth of ticks (and may cascade into
-            // starvation HP loss for the player — see advanceSatiety).
+            // starvation HP loss for the player - see advanceSatiety).
             advanceSatiety(level, mob, STANDARD_TURN_TICKS);
             // INSIGHT: while the buff is active, re-stamp every tile as
             // explored so the player's map stays revealed for the duration.
-            // Player-only — NPCs don't have a personal map.
+            // Player-only - NPCs don't have a personal map.
             if (mob.behavior == Behavior.PLAYER
                     && BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.INSIGHT)) {
                 LevelSystem.markAllExplored(level);
@@ -131,7 +131,7 @@ public class TurnSystem {
         // (fire damage interval = standard turn, fire lifetime measured in ticks but only
         // decayed at this beat).
         FireSystem.tickGameTicks(level, STANDARD_TURN_TICKS);
-        // Per-cell stochastic rolls — spread, smoke, mob/tile propagation; vegetation
+        // Per-cell stochastic rolls - spread, smoke, mob/tile propagation; vegetation
         // spread + mushroom decay.
         FireSystem.tickPerTurn(level);
         VegetationSystem.tickPerTurn(level);
@@ -149,7 +149,7 @@ public class TurnSystem {
 
     /**
      * Count down the mob's {@code satiety} by {@code gameTicks} <b>game ticks</b>.
-     * Non-players are unaffected once satiety hits 0 — the counter just sits there. The
+     * Non-players are unaffected once satiety hits 0 - the counter just sits there. The
      * player, once starving, accumulates ticks and loses 1 HP for every
      * {@link GameBalance#STARVATION_TICKS_PER_HP} ticks elapsed; the death is credited to
      * no one (environmental damage, no XP).
@@ -169,7 +169,7 @@ public class TurnSystem {
             }
         }
         if (mob.satiety > 0) return;
-        // Hit zero — apply STARVING (player only). NPCs sit at zero harmlessly.
+        // Hit zero - apply STARVING (player only). NPCs sit at zero harmlessly.
         // STARVING blocks heal regen but doesn't drain HP; it stays on until satiety
         // ticks back up. Re-apply each turn so it doesn't expire under the per-turn
         // duration drain in BuffSystem.tickPerTurn.

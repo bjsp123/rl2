@@ -7,18 +7,18 @@ import com.bjsp123.rl2.persistence.Persistence;
  * {@link StoneUi#newDefaultFont()}. Every {@code Label} and {@code TextButton}
  * derives its on-screen size from this base, so a single setting rescales the
  * entire UI's text. Per-call {@code setFontScale()} multipliers (e.g. titles
- * at 1.6×) compose multiplicatively on top of this.
+ * at 1.6x) compose multiplicatively on top of this.
  *
- * <p>Independent of {@link LogFontScale} — that one applies on top of the
+ * <p>Independent of {@link LogFontScale} - that one applies on top of the
  * already-scaled base, so a player who finds the body text comfortable but
  * wants the message log even larger can do so without bumping everything else.
  */
 public class UiFontScale {
 
-    /** Selectable multipliers exposed by Settings → Graphics → UI Font Size. */
+    /** Selectable multipliers exposed by Settings -> Graphics -> UI Font Size. */
     public static final float[] CHOICES = { 0.75f, 1.0f, 1.5f, 2.0f };
 
-    /** Persistence key — the {@code -v2} suffix invalidates the prior
+    /** Persistence key - the {@code -v2} suffix invalidates the prior
      *  {@code -v1} key after CHOICES + DEFAULT were retuned in the V2 UI
      *  rebuild, so a leftover {@code 1.5} value doesn't keep fonts at 150%
      *  on first launch. */
@@ -34,7 +34,7 @@ public class UiFontScale {
         if (raw != null) {
             try {
                 float v = Float.parseFloat(raw);
-                // Accept only values that match a current choice — defensive
+                // Accept only values that match a current choice - defensive
                 // against tampered persistence or a CHOICES array narrowed in
                 // a future revision. Out-of-list values fall back to default.
                 for (float c : CHOICES) {

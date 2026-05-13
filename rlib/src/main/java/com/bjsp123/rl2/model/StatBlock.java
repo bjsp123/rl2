@@ -7,7 +7,7 @@ package com.bjsp123.rl2.model;
  * <pre>
  *     effective = mob.intrinsic
  *               + characterLevelBonus(mob)
- *               + Σ ItemSystem.contributeInto(equipped slot)
+ *               + sum ItemSystem.contributeInto(equipped slot)
  *               + BuffSystem.contributeInto(active buff)
  * </pre>
  *
@@ -16,14 +16,14 @@ package com.bjsp123.rl2.model;
  * Adding a new stat is "add a field here + extend mergeIn"; adding a new contributor is
  * "write a method that takes a destination StatBlock and writes its contribution into it."
  *
- * <p>Mutable on purpose — every read of a mob's effective stats reuses one cached block,
+ * <p>Mutable on purpose - every read of a mob's effective stats reuses one cached block,
  * so AI loops doing a thousand {@code hitChance} calls per turn don't allocate. MinMax
  * fields still allocate one record per merge (records are immutable); this is acceptable
  * given young-gen GC characteristics and can be revisited if a profile points here.
  */
 public final class StatBlock {
 
-    // ── Combat numbers ──────────────────────────────────────────────────────
+    // -- Combat numbers ------------------------------------------------------
     /** Defaults preserve the old Mob.java field defaults so a species factory that
      *  doesn't override (e.g. a generic mob baseline) still gets sensible values. */
     public int    accuracy = 10;
@@ -33,18 +33,18 @@ public final class StatBlock {
     public MinMax apDamage    = MinMax.ZERO;
     public MinMax magicResist = MinMax.ZERO;
 
-    // ── Vital + economy ─────────────────────────────────────────────────────
+    // -- Vital + economy -----------------------------------------------------
     public double maxHp = 10;
     public double healRate = 0;   // HP per turn, applied at the end of the mob's turn after all actions resolve
     public int    attackCost = 100;
     public int    moveCost = 100;
 
-    // ── Ranged attack ───────────────────────────────────────────────────────
+    // -- Ranged attack -------------------------------------------------------
     /** Damage range of a ranged shot. {@code rangedDamage.max() > 0} is the gate that
-     *  says "this mob has a ranged attack at all" — every other ranged-* field is
+     *  says "this mob has a ranged attack at all" - every other ranged-* field is
      *  irrelevant when it's zero. Composes by sum so a ring of accuracy could land. */
     public MinMax rangedDamage = MinMax.ZERO;
-    /** Standard turns between shots — 1 = every turn, 2 = every other. Composes by sum,
+    /** Standard turns between shots - 1 = every turn, 2 = every other. Composes by sum,
      *  so a "ring of slowness" raising it works directly; a hasted-style faster-shoot
      *  contribution would be a negative addition (or this field gets a multiplicative
      *  modifier later if that's needed). */
@@ -57,14 +57,14 @@ public final class StatBlock {
      *  range +2" plugs in directly. */
     public int rangedDistance;
 
-    // ── Perception + lighting ───────────────────────────────────────────────
+    // -- Perception + lighting -----------------------------------------------
     public double visionRadius = 8;
     public double wakeRadius = 6;
-    /** Light emission. Composes by max — the brightest source wins (an amulet of light
+    /** Light emission. Composes by max - the brightest source wins (an amulet of light
      *  doesn't "stack" on top of a wand of true sight). */
     public double lightRadius;
 
-    // ── Body + species abilities ────────────────────────────────────────────
+    // -- Body + species abilities --------------------------------------------
     /** Body size, 1..10. Drives sight blocking, oil drip, swap rules. Composes by sum
      *  (a future "potion of growth" could plausibly add to it). Most species set this
      *  intrinsically; modifiers haven't shown up yet but the slot is here. */
@@ -81,13 +81,13 @@ public final class StatBlock {
      *  adjacent tile. Used by ant hills (20% per turn). Composes by sum (callers clamp). */
     public double turnSpawnChance = 0   ;
 
-    // ── Boolean capabilities ────────────────────────────────────────────────
+    // -- Boolean capabilities ------------------------------------------------
     public boolean flying =false;   
     public boolean fireImmune = false;;
     /** When the mob takes a damaging blow, ignite a small area around it. OR-merged. */
     public boolean fireSpreadOnAttack = false;;
     /** When this mob lands a damaging blow, applies a {@code POISONED} buff to the
-     *  target. Buff level = the mob's character level; duration = level × 3 turns.
+     *  target. Buff level = the mob's character level; duration = level x 3 turns.
      *  OR-merged so an item or buff that grants "poisoned weapon" composes with a
      *  species (e.g. spider) that already has it. */
     public boolean poisonsOnAttack = false;;
@@ -95,10 +95,10 @@ public final class StatBlock {
      *  (weapon + intrinsic both contribute). */
     public int knockbackSquares = 0;
 
-    /** "Especially frightening" — terrifiable observers always flee. OR-merged. */
+    /** "Especially frightening" - terrifiable observers always flee. OR-merged. */
     public boolean terrifying = false;
     /** Susceptible to terrifying mobs. OR-merged so a "ring of fearlessness" can clear
-     *  it (well, not quite — OR-merging a true clears nothing; if anyone needs to
+     *  it (well, not quite - OR-merging a true clears nothing; if anyone needs to
      *  *suppress* terrifiable, that's a separate "fearlessness" boolean). Default true,
      *  factories clear it on terrifying mobs themselves. */
     public boolean terrifiable = true;

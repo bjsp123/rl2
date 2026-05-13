@@ -1,51 +1,51 @@
 package com.bjsp123.rl2.world.anim;
 /**
  * Per-mob visual / animation state owned by {@code rgame}'s {@link Animator}. Replaces
- * the engine-side {@code MobRenderState} — {@code rlib} has no presentation state.
+ * the engine-side {@code MobRenderState} - {@code rlib} has no presentation state.
  *
  * <p>All values are render-frame counters or pixel offsets; nothing here is
  * persisted (the {@code Animator}'s map is rebuilt from level state on load).
  */
 public final class MobAnimState {
 
-    /** Frames to wait before the queued anim begins playing — set from the
+    /** Frames to wait before the queued anim begins playing - set from the
      *  {@link AnimQueue} return value at queue time. */
     public float delayFrames;
 
-    // ── Step interpolation ──────────────────────────────────────────────────
+    // -- Step interpolation --------------------------------------------------
     /** Tile-units offset toward the mob's previous position, advanced toward zero
      *  as {@link #stepFrame} ramps to {@link #stepTotal}. */
     public float stepFromDx, stepFromDy;
     public int   stepFrame;
     public int   stepTotal;
 
-    // ── Visual lunge / flinch ───────────────────────────────────────────────
+    // -- Visual lunge / flinch -----------------------------------------------
     public float animPeakX, animPeakY;
     public int   animFrame;
     public int   animPeakFrame;
     public int   animEndFrame;
 
-    // ── Teleport fade (real-time ms) ────────────────────────────────────────
+    // -- Teleport fade (real-time ms) ----------------------------------------
     public int teleportFadeMs;
     public int teleportFromX, teleportFromY;
 
-    // ── Real-time particle countdowns (ms) ──────────────────────────────────
+    // -- Real-time particle countdowns (ms) ----------------------------------
     public int fireParticleCountdownMs;
     public int sleepZCountdownMs;
     /** Wall-clock countdown until the next levitating-mob foot-puff. Zeroed
      *  out when the mob loses the LEVITATING buff. */
     public int levitatePuffCountdownMs;
 
-    // ── Powerup pickup border flash ─────────────────────────────────────────
+    // -- Powerup pickup border flash -----------------------------------------
     /** Remaining frames for the white-border flash on powerup pickup.
      *  Decremented each frame by {@link Animator}; renderer outlines the
      *  player sprite while {@code > 0}. */
     public int borderFlashFrames;
-    /** Duration of the white border flash — 0.5 s at the default
+    /** Duration of the white border flash - 0.5 s at the default
      *  framesPerRender cadence. */
     public static final int BORDER_FLASH_FRAMES = 30;
 
-    // ── Spawn-grow ─────────────────────────────────────────────────────────
+    // -- Spawn-grow ---------------------------------------------------------
     /** Frames elapsed in the spawn-grow animation. {@code 0} when no spawn anim
      *  is active. The renderer scales the mob's sprite from {@code 0} to {@code 1}
      *  over {@link #spawnTotalFrames}, anchored to the tile's bottom edge so the
@@ -57,7 +57,7 @@ public final class MobAnimState {
      *  framesPerRender=1 cadence. */
     public static final int SPAWN_GROW_FRAMES = 30;
 
-    /** Death-animation timing — flicker twice (4 phases × 6 frames = 24 frames),
+    /** Death-animation timing - flicker twice (4 phases x 6 frames = 24 frames),
      *  then linear fade over 30 frames (~half a second at 60fps). */
     public static final int   DEATH_FLICKER_HALF_FRAMES = 6;
     public static final int   DEATH_FLICKER_FRAMES      = DEATH_FLICKER_HALF_FRAMES * 4;

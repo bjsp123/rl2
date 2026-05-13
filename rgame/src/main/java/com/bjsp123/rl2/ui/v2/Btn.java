@@ -23,7 +23,7 @@ public final class Btn {
     public final Rect rect = new Rect();
     public String label;
     public Runnable onClick;
-    /** Optional icon — when non-null, drawn centred in the button rect
+    /** Optional icon - when non-null, drawn centred in the button rect
      *  INSTEAD of the label. Used by {@link com.bjsp123.rl2.ui.v2.V2Settings}
      *  for tab buttons (icon strip across the top of the panel). */
     public TextureRegion icon;
@@ -72,7 +72,7 @@ public final class Btn {
     }
 
     /** Draw the centred label or icon. Caller is inside a SpriteBatch
-     *  begin/end. If {@link #icon} is non-null the label is suppressed —
+     *  begin/end. If {@link #icon} is non-null the label is suppressed -
      *  the icon is drawn centred at 60% of the button's smaller side,
      *  tinted yellow when pressed/checked and white otherwise. */
     public void drawText(UiCtx ctx) {
@@ -90,13 +90,15 @@ public final class Btn {
         BitmapFont font = header ? ctx.fontHeader : ctx.fontRegular;
         font.setColor(warn ? (hot ? UIVars.WARN_HL : UIVars.TEXT_WARN)
                            : (hot ? UIVars.ACCENT : UIVars.TEXT_BODY));
-        ctx.layout.setText(font, label);
+        String shown = TextDraw.ellipsize(font, label,
+                rect.w - 2f * (UIVars.HUD_BORDER + 4f));
+        ctx.layout.setText(font, shown);
         float tx = rect.x + (rect.w - ctx.layout.width)  * 0.5f;
         // y is the BASELINE position in libGDX; we want the visible text
         // vertically centred in the button. layout.height excludes descenders
         // so add a small fudge so descenders don't push the line low.
         float ty = rect.y + (rect.h + ctx.layout.height) * 0.5f;
-        font.draw(ctx.batch, label, tx, ty);
+        font.draw(ctx.batch, shown, tx, ty);
     }
 
     public boolean hit(float px, float py) { return rect.contains(px, py); }

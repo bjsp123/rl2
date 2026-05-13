@@ -28,19 +28,19 @@ import java.util.List;
 public abstract class V2Screen extends ScreenAdapter {
 
     protected final UiCtx ctx;
-    /** Buttons hit-tested by the input pipeline — subclass populates in
+    /** Buttons hit-tested by the input pipeline - subclass populates in
      *  {@link #buildLayout()}. */
     protected final List<Btn> buttons = new ArrayList<>();
     protected Burger burger;
     protected BackBtn back;
 
-    /** Bottom-anchored origin for laying out a vertical-button menu — used
+    /** Bottom-anchored origin for laying out a vertical-button menu - used
      *  as a starting Y for screens that stack big buttons. Subclasses are
      *  free to ignore this and lay out from any point. */
     protected float layoutCursor;
 
-    // ── Burger menu state (auto-driven by V2Screen) ─────────────────────────
-    /** {@code true} when the burger drop-down panel is up — gates input so
+    // -- Burger menu state (auto-driven by V2Screen) -------------------------
+    /** {@code true} when the burger drop-down panel is up - gates input so
      *  taps on menu items fire instead of falling through to the body. */
     protected boolean burgerOpen;
     /** Items added by subclasses via {@link #addBurgerItem}. The action runs
@@ -52,8 +52,8 @@ public abstract class V2Screen extends ScreenAdapter {
     private int burgerItemPressed = -1;
     /** Popup actor that renders the burger overlay (scrim + panel + items)
      *  on the V2 stage's burger layer. Owned by every V2Screen so the
-     *  drop-down sits on top of everything below — including any
-     *  sub-popups — without per-screen rendering glue. */
+     *  drop-down sits on top of everything below - including any
+     *  sub-popups - without per-screen rendering glue. */
     private final BurgerOverlayPopup burgerOverlay = new BurgerOverlayPopup();
     private final com.bjsp123.rl2.ui.v2.stage.V2PopupActor burgerOverlayActor =
             new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(burgerOverlay);
@@ -64,7 +64,7 @@ public abstract class V2Screen extends ScreenAdapter {
             float vx = ctx.unprojectX(sx, sy);
             float vy = ctx.unprojectY(sx, sy);
 
-            // Burger drop-down — when open, intercepts everything. Tap on
+            // Burger drop-down - when open, intercepts everything. Tap on
             // an item captures it; tap outside the panel + outside the
             // burger button closes the menu.
             if (burgerOpen) {
@@ -82,17 +82,17 @@ public abstract class V2Screen extends ScreenAdapter {
                 return true;
             }
 
-            // Burger and back take priority — they sit ON TOP of body buttons
+            // Burger and back take priority - they sit ON TOP of body buttons
             // visually so they take input first.
             if (burger != null && burger.hit(vx, vy)) { burger.pressed = true; return true; }
             if (back   != null && back.hit(vx, vy))   { back.pressed = true;   return true; }
             for (Btn b : buttons) {
                 if (b.hit(vx, vy)) { b.pressed = true; return true; }
             }
-            // Subclass body hook — scrollable screens claim the touch here
+            // Subclass body hook - scrollable screens claim the touch here
             // so subsequent touchDragged events route to them.
             if (onTouchDownInBody(vx, vy)) return true;
-            // Tap outside the screen's modal window acts like Back —
+            // Tap outside the screen's modal window acts like Back -
             // matches the V2 popup convention. Subclasses expose their
             // window via {@link #modalWindow}; default returns null and
             // the screen ignores stray taps.
@@ -109,7 +109,7 @@ public abstract class V2Screen extends ScreenAdapter {
             float vx = ctx.unprojectX(sx, sy);
             float vy = ctx.unprojectY(sx, sy);
 
-            // Burger menu item release — fire the bound action and close
+            // Burger menu item release - fire the bound action and close
             // the menu. The action runs AFTER closing so a navigation
             // target rebuilds layout cleanly.
             if (burgerItemPressed >= 0) {
@@ -125,7 +125,7 @@ public abstract class V2Screen extends ScreenAdapter {
             }
 
             // Fire only if the release is over the same control that captured
-            // the press — drag-off cancels, matching native button behaviour.
+            // the press - drag-off cancels, matching native button behaviour.
             if (burger != null && burger.pressed) {
                 burger.pressed = false;
                 if (burger.hit(vx, vy)) burger.click();
@@ -195,16 +195,16 @@ public abstract class V2Screen extends ScreenAdapter {
         this.ctx = ctx;
     }
 
-    /** One-time layout — populate {@link #buttons}, build the burger / back
+    /** One-time layout - populate {@link #buttons}, build the burger / back
      *  helpers, and stash any per-screen rect maths the body draw needs. */
     protected abstract void buildLayout();
 
-    /** Frame body. Called inside the ShapeRenderer.Filled pass — subclasses
+    /** Frame body. Called inside the ShapeRenderer.Filled pass - subclasses
      *  paint window chrome, divider lines, etc. The buttons + burger + back
      *  are drawn AFTER this returns, so body rects sit underneath them. */
     protected abstract void drawBodyShape(UiCtx ctx);
 
-    /** Frame body text. Called inside the SpriteBatch pass — subclasses paint
+    /** Frame body text. Called inside the SpriteBatch pass - subclasses paint
      *  any text outside the button labels (titles, descriptions). Button
      *  labels are drawn AFTER this returns. */
     protected abstract void drawBodyText(UiCtx ctx);
@@ -244,7 +244,7 @@ public abstract class V2Screen extends ScreenAdapter {
     /** Subclass-accessible handle on the V2Screen's base input adapter so a
      *  screen with its own popup-owned InputProcessor can chain it ahead
      *  via an {@link com.badlogic.gdx.InputMultiplexer}. Most screens never
-     *  call this — only screens with a sub-popup that needs first dibs on
+     *  call this - only screens with a sub-popup that needs first dibs on
      *  taps (V2Saves's delete-confirm) do. */
     protected com.badlogic.gdx.InputProcessor baseInput() { return input; }
 
@@ -283,7 +283,7 @@ public abstract class V2Screen extends ScreenAdapter {
 
     /** Append a labelled item to the burger drop-down. Items render in
      *  insertion order from top to bottom. The action fires AFTER the
-     *  menu closes — typical use is a navigation target. */
+     *  menu closes - typical use is a navigation target. */
     protected void addBurgerItem(String label, Runnable action) {
         burgerLabels.add(label);
         burgerActions.add(action);
@@ -308,7 +308,7 @@ public abstract class V2Screen extends ScreenAdapter {
     }
 
     /** Position the burger panel + per-item rects centred on the viewport
-     *  as a chunky column-of-buttons window — same shape as every other V2
+     *  as a chunky column-of-buttons window - same shape as every other V2
      *  modal so the user reads it as "a window with a list of choices",
      *  not a corner dropdown. Called from render(); cheap to recompute
      *  every frame. */
@@ -326,7 +326,7 @@ public abstract class V2Screen extends ScreenAdapter {
         float panelY   = (ctx.worldH() - panelH) * 0.5f;
         burgerPanel.set(panelX, panelY, panelW, panelH);
         // Top item gets the highest y; libGDX is y-up, so first label is
-        // the highest one on screen — matches reading order top-down.
+        // the highest one on screen - matches reading order top-down.
         for (int i = 0; i < n; i++) {
             float iy = panelY + panelH - padTop - (i + 1) * itemH - i * itemGap;
             burgerItemRects.get(i).set(panelX + padX, iy,
@@ -340,7 +340,7 @@ public abstract class V2Screen extends ScreenAdapter {
         ctx.applyProjection();
         layoutBurgerOverlay();
 
-        // Pass 1 — body shapes.
+        // Pass 1 - body shapes.
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
@@ -349,17 +349,17 @@ public abstract class V2Screen extends ScreenAdapter {
         ctx.shapes.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
-        // Pass 2 — body text / icons.
+        // Pass 2 - body text / icons.
         ctx.batch.begin();
         drawBodyText(ctx);
         for (Btn b : buttons) b.drawText(ctx);
         ctx.batch.end();
 
-        // Pass 3 — chrome: each widget owns its renderer lifecycle.
+        // Pass 3 - chrome: each widget owns its renderer lifecycle.
         if (back   != null) back.draw(ctx);
         if (burger != null) burger.draw(ctx);
 
-        // Stage layer — sub-popups (e.g. V2Saves's delete-confirm) and
+        // Stage layer - sub-popups (e.g. V2Saves's delete-confirm) and
         // the burger overlay. Renders LAST so the scrim cleanly hides
         // everything above. The Stage walks its children in z-order
         // and skips closed popups via their
@@ -372,7 +372,7 @@ public abstract class V2Screen extends ScreenAdapter {
 
     /** Burger drop-down overlay rendered on the V2 stage's top
      *  ({@code burgerLayer}) so it cleanly hides every screen body and
-     *  any sub-popups underneath. Reads V2Screen state directly —
+     *  any sub-popups underneath. Reads V2Screen state directly -
      *  inner class so {@code burgerOpen}, {@code burgerLabels},
      *  {@code burgerItemRects}, and {@code burgerItemPressed} are
      *  accessible without copying. */
@@ -386,7 +386,7 @@ public abstract class V2Screen extends ScreenAdapter {
 
         @Override
         public void renderSelf() {
-            // Modal dim — paints over the screen body that V2Screen.render
+            // Modal dim - paints over the screen body that V2Screen.render
             // already drew, so titles / buttons / chrome behind the menu
             // all read as backgrounded.
             com.bjsp123.rl2.ui.v2.stage.Scrim.draw(ctx);

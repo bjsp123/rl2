@@ -17,7 +17,7 @@ import java.util.function.Consumer;
  * unlock set; routes a small {@code observe*} surface into per-trigger
  * dispatch and persists on first unlock.
  *
- * <p>Lives entirely on the rgame side — every trigger comes from either
+ * <p>Lives entirely on the rgame side - every trigger comes from either
  * {@link GameEvent}s drained by the {@link com.bjsp123.rl2.world.anim.Animator}
  * or from PlayScreen / V2 popup hooks. rlib remains free of presentation
  * dependencies.
@@ -49,9 +49,9 @@ public final class AchievementSystem {
         this.listener = null;
     }
 
-    // ── Observation API ────────────────────────────────────────────────
+    // -- Observation API ------------------------------------------------
 
-    /** Polled per render frame from PlayScreen — once a depth threshold is
+    /** Polled per render frame from PlayScreen - once a depth threshold is
      *  passed the matching achievement unlocks; cheap no-op thereafter. */
     public void observeDepth(int depth) {
         if (depth >= 2) unlock(Achievement.BEGUN_THE_ADVENTURE);
@@ -61,7 +61,7 @@ public final class AchievementSystem {
 
     /** Forwarded from {@link com.bjsp123.rl2.world.anim.Animator#consume}.
      *  {@code player} may be {@code null} during cross-level transitions
-     *  where the animator hasn't latched the new level's player yet — the
+     *  where the animator hasn't latched the new level's player yet - the
      *  switch short-circuits in those cases. */
     public void observeEvent(GameEvent ev, Mob player, Level level) {
         if (ev == null) return;
@@ -87,7 +87,7 @@ public final class AchievementSystem {
             }
         } else if (ev instanceof GameEvent.RainbowBurst m) {
             // RainbowBurst is emitted by MobProgression on level-up at the
-            // levelling mob's tile — match against the player's position to
+            // levelling mob's tile - match against the player's position to
             // distinguish player level-ups from enemy ones.
             if (player != null && player.position != null) {
                 Point at = m.pos();
@@ -112,7 +112,7 @@ public final class AchievementSystem {
         unlock(Achievement.ARTISAN);
     }
 
-    // ── Internal ────────────────────────────────────────────────────────
+    // -- Internal --------------------------------------------------------
 
     /** Unlock {@code a}. No-op when already on the books. Persists the
      *  store and fires the listener exactly once per first-time unlock. */

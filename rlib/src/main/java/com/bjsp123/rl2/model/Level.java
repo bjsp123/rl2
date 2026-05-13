@@ -16,18 +16,18 @@ public class Level {
     public enum LevelFlag {
         /** Spawns many more water pools than usual. */
         WATER,
-        /** Corridors become FLOOR_WOOD plank bridges over chasm — chasm to either side stays
+        /** Corridors become FLOOR_WOOD plank bridges over chasm - chasm to either side stays
          *  chasm rather than being walled in, so corridors look like walkways suspended over
          *  a drop. Rooms still get conventional walls. */
         WALKWAY_LEVEL,
         /** Spawns many more vegetation patches than usual. */
         PLANTS,
-        /** Scales the level's tile dimensions up by 1.5×. The downstream builders are
+        /** Scales the level's tile dimensions up by 1.5x. The downstream builders are
          *  data-driven (BSP partitions to fit, Poisson scales with area, Loop's radius
          *  derives from {@code min(w,h)}) so room counts and corridor lengths grow with
          *  the canvas without any builder having to know about the flag. */
         BIGLEVEL,
-        /** Corridors are random-walk "rough" paths instead of clean L-shapes — they drift
+        /** Corridors are random-walk "rough" paths instead of clean L-shapes - they drift
          *  toward the goal but wander on the cross axis ~20% of the time, so the level
          *  reads more cave-like and fewer corridors meet a room edge head-on. */
         ROUGH
@@ -35,7 +35,7 @@ public class Level {
 
     /**
      * Liquid/slick overlaid on a floor tile. A cell with a surface renders like a shallow
-     * water tile — scrolling animated base plus shore stitch overlay — tinted per surface
+     * water tile - scrolling animated base plus shore stitch overlay - tinted per surface
      * type. Does not block movement or sight.
      */
     public enum Surface {
@@ -46,14 +46,14 @@ public class Level {
      * Ground-level flora/effect overlay drawn on top of the floor. GRASS is a few green
      * blades, MUSHROOMS is a small cluster, FIRE is a burning patch managed by
      * {@link com.bjsp123.rl2.logic.FireSystem}, TREES are large trunks that block light
-     * (but not movement or line-of-sight) and are flammable like grass — they don't spread
+     * (but not movement or line-of-sight) and are flammable like grass - they don't spread
      * on their own. None of these block sight; TREES blocks light propagation only (see
      * {@link #blocksLight}).
      */
     public enum Vegetation {
         GRASS, MUSHROOMS, FIRE, TREES;
 
-        /** True if a tile carrying this vegetation should block <i>light</i> — lamps and
+        /** True if a tile carrying this vegetation should block <i>light</i> - lamps and
          *  glowing items don't shine past it. Sight is unaffected: the player can still
          *  spot mobs through the canopy as long as the tile is lit by something else. */
         public boolean blocksLight() { return this == TREES; }
@@ -76,7 +76,7 @@ public class Level {
     /**
      * Lateral position of a level on the dungeon map. The world graph is a diamond:
      * depth 1 and depth 5 each have one CENTER level; depths 2-4 each have a WEST and an
-     * EAST level. Defaults to {@link #CENTER} so old (linear) saves still load — the
+     * EAST level. Defaults to {@link #CENTER} so old (linear) saves still load - the
      * MapScreen treats CENTER levels as a column down the middle.
      */
     public enum Side {
@@ -84,7 +84,7 @@ public class Level {
     }
 
     /**
-     * Picked per level at generation time to drive tileset selection. Purely a visual tag —
+     * Picked per level at generation time to drive tileset selection. Purely a visual tag -
      * doesn't affect gameplay. Renderers map a theme to a concrete texture asset.
      */
     public enum VisualTheme {
@@ -100,29 +100,29 @@ public class Level {
     public int depth = 1;
     /** Monotonic game-turn counter copied in from {@code World.turn} each frame by the play
      *  screen. Lets stateless {@code MobSystem} functions time-stamp events without having
-     *  to thread a turn parameter through every call site. Transient — restored from
+     *  to thread a turn parameter through every call site. Transient - restored from
      *  {@code World.turn} on load. */
     public transient int currentTurn;
     /** Tick counter for the standard-turn cadence (see
      *  {@link com.bjsp123.rl2.logic.TurnSystem#STANDARD_TURN_TICKS}). Each call to
      *  {@link com.bjsp123.rl2.logic.TurnSystem#tick} increments this by 1; when it
      *  reaches {@code STANDARD_TURN_TICKS} it resets and fires one pass of the per-turn
-     *  handlers (vegetation spread, fire spread, …). Transient — on load the cadence
+     *  handlers (vegetation spread, fire spread, ...). Transient - on load the cadence
      *  simply resumes from zero, which at worst delays the next per-turn pulse by a
      *  fraction of a turn. */
     public transient int standardTurnTickAcc;
-    // Animation freeze fields moved out — owned by rgame.anim.AnimQueue. rlib has no
+    // Animation freeze fields moved out - owned by rgame.anim.AnimQueue. rlib has no
     // concept of render frames.
-    /** Engine→renderer event log. Appended to by {@code rlib} systems during a tick and
+    /** Engine->renderer event log. Appended to by {@code rlib} systems during a tick and
      *  drained by {@code rgame}'s animator immediately after each
-     *  {@link com.bjsp123.rl2.logic.TurnSystem#tick}. Transient — events never survive
+     *  {@link com.bjsp123.rl2.logic.TurnSystem#tick}. Transient - events never survive
      *  a save/load cycle. */
     public transient List<com.bjsp123.rl2.event.GameEvent> events = new ArrayList<>();
     public Tile[][] tiles;
     /** Liquid/slick overlay on a tile (water, blood, oil). {@code null} = none. */
     public Surface[][] surface;
     /** Floating gas on a tile (smoke, steam, poison) packed into a single int per
-     *  cell — the high nybble carries the {@link Cloud} type ordinal + 1 (so
+     *  cell - the high nybble carries the {@link Cloud} type ordinal + 1 (so
      *  0 means "no cloud"), the low nybble carries the duration (turns until the
      *  cloud dissipates, capped at {@link com.bjsp123.rl2.logic.CloudSystem#MAX_DURATION}).
      *  Read / write through {@link com.bjsp123.rl2.logic.CloudSystem} helpers
@@ -142,10 +142,10 @@ public class Level {
     public transient boolean[][] lit;
     /** Re-derived per frame from the player's vision; not serialized. */
     public transient boolean[][] visible;
-    // Visual effects moved out — owned by rgame.render.EffectStage.
+    // Visual effects moved out - owned by rgame.render.EffectStage.
     /** Per-tile countdown to the next fire-particle emission. Ticked down by
      *  {@link com.bjsp123.rl2.logic.FireSystem}; on zero/negative, a particle Effect is
-     *  spawned and the counter resets to ~50. Transient — emit cadence is purely visual. */
+     *  spawned and the counter resets to ~50. Transient - emit cadence is purely visual. */
     public transient int[][] fireEmitCountdown;
 
     /** Back-reference to the {@link World} that owns this level. Set by
@@ -158,7 +158,7 @@ public class Level {
 
     /** Generation-time flags that nudge overall level style (more water, void corridors, etc.).
      *  Stored as a plain {@link HashSet} rather than {@link java.util.EnumSet} because
-     *  libGDX's {@code Json} can't instantiate {@code EnumSet} subclasses on load — saves
+     *  libGDX's {@code Json} can't instantiate {@code EnumSet} subclasses on load - saves
      *  would silently fail to deserialize. */
     public Set<LevelFlag> flags = new HashSet<>();
 
@@ -167,8 +167,8 @@ public class Level {
      *  field still load into the classic look. */
     public VisualTheme theme = VisualTheme.CRYSTAL;
 
-    /** Structural archetype rolled at generation time (hub-and-spoke, wheel, labyrinth, …).
-     *  Set by the level factory and otherwise informational — post-generation, the tile grid
+    /** Structural archetype rolled at generation time (hub-and-spoke, wheel, labyrinth, ...).
+     *  Set by the level factory and otherwise informational - post-generation, the tile grid
      *  is authoritative. Defaults to {@link Layout#SPD} so older saves still load. */
     public Layout layout = Layout.BSP;
 
@@ -186,7 +186,7 @@ public class Level {
     /** Index in {@code World.levels} of the level reached by ascending {@link #stairsUp}.
      *  {@code -1} = no stair / no link. Set by the world generator; read by stair
      *  transitions and by the map screen's edge-drawing pass so the topology is whatever
-     *  the per-level fields say it is — no separate hardcoded graph table. */
+     *  the per-level fields say it is - no separate hardcoded graph table. */
     public int stairsUpTarget    = -1;
     /** Sibling of {@link #stairsUpTarget} for {@link #stairsUpAlt}. */
     public int stairsUpAltTarget = -1;
@@ -205,13 +205,13 @@ public class Level {
 
     /** Horizontal coordinate of this level on the dungeon map. The map screen reads this
      *  from every level, finds the min/max across the world, and normalises into pixel
-     *  positions — the world generator can pick any scale (we use {@code -1, 0, +1} for
+     *  positions - the world generator can pick any scale (we use {@code -1, 0, +1} for
      *  the diamond), so the map screen handles arbitrary layered DAGs without knowing
      *  about specific topologies. */
     public float mapColumn;
 
     /** True once the player has set foot on this level. Drives the map screen's
-     *  visited-vs-unknown rendering — known levels show a tile-grid mini map, unknown
+     *  visited-vs-unknown rendering - known levels show a tile-grid mini map, unknown
      *  levels show a question mark. Default false. */
     public boolean visited;
 
@@ -239,11 +239,11 @@ public class Level {
      *  {@code LevelFactory.createDungeonLevel} after carving + corridor-connect
      *  but before themed-room stamping starts removing rooms from the working
      *  list. Themed-room stamping back-fills each entry's {@code kind}.
-     *  Diagnostic / dump-only — runtime systems read tiles directly. Transient
+     *  Diagnostic / dump-only - runtime systems read tiles directly. Transient
      *  (regenerated per session). */
     public transient java.util.List<RoomSnapshot> rooms = new java.util.ArrayList<>();
 
-    /** True iff (x, y) sits inside any of {@link #reservedRects}. Cheap linear scan —
+    /** True iff (x, y) sits inside any of {@link #reservedRects}. Cheap linear scan -
      *  the list is at most a couple of entries per level. */
     public boolean isReserved(int x, int y) {
         if (reservedRects == null) return false;
@@ -253,7 +253,7 @@ public class Level {
         return false;
     }
 
-    /** No-arg constructor for JSON deserialization — does not allocate arrays. */
+    /** No-arg constructor for JSON deserialization - does not allocate arrays. */
     public Level() {}
 
     public Level(int width, int height) {

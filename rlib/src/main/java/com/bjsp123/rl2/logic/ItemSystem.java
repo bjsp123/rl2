@@ -18,7 +18,7 @@ import com.bjsp123.rl2.model.StatBlock;
  * exactly one place.
  *
  * <p>The {@code bonusToXxx} methods are designed to return a contribution from
- * <em>any</em> equipped item — most items return {@link MinMax#ZERO} for stat slots
+ * <em>any</em> equipped item - most items return {@link MinMax#ZERO} for stat slots
  * they don't carry. Mob-side stat helpers ({@code MobSystem.rawDamageRange} etc.)
  * iterate every equipped slot and sum the per-stat bonus, so any future "ring of
  * fire damage" or "amulet of evasion" plugs in by setting the corresponding base
@@ -28,7 +28,7 @@ public final class ItemSystem {
 
     private ItemSystem() {}
 
-    // ── Single contributor entry-point for the StatBlock pipeline ────────────
+    // -- Single contributor entry-point for the StatBlock pipeline ------------
 
     /**
      * Add {@code item}'s contribution to {@code dst}. {@link MobSystem#writeEffectiveStats}
@@ -63,7 +63,7 @@ public final class ItemSystem {
         if (item.lightRadius > dst.lightRadius) dst.lightRadius = item.lightRadius;
         dst.knockbackSquares += item.knockbackSquares;
 
-        // Brand stat bonuses — layered on top of the item's own contribution.
+        // Brand stat bonuses - layered on top of the item's own contribution.
         if (item.brand != null) {
             BrandDefinition b = item.brand;
             if (b.damage    > 0) dst.damage      = dst.damage     .plus(new MinMax(b.damage,    b.damage));
@@ -101,7 +101,7 @@ public final class ItemSystem {
                           item.magicResist.max() + lvl * inc.max());
     }
 
-    // ── Level-scaling primitives ─────────────────────────────────────────────
+    // -- Level-scaling primitives ---------------------------------------------
 
     /** Min-max linear level scale: {@code [baseMin + lvl*incMin, baseMax + lvl*incMax]}.
      *  Null items / negative levels clamp the level to 0. Used by every per-item
@@ -119,25 +119,25 @@ public final class ItemSystem {
         return item == null ? 0 : Math.max(0, item.level);
     }
 
-    // ── Use-time effects ─────────────────────────────────────────────────────
+    // -- Use-time effects -----------------------------------------------------
 
     /** Effective damage range on this item, level-scaled by the item's own
      *  {@code damagePerLevel} column. Used unchanged for melee weapons (via
      *  {@link #contributeInto}), thrown weapons (via {@code MobSystem.throwItem}),
-     *  damage-dealing wands (MISSILE, LIGHTNING — via {@code applyWandImpact}),
+     *  damage-dealing wands (MISSILE, LIGHTNING - via {@code applyWandImpact}),
      *  and damage-dealing bombs (via the bomb impact path). Items with no
      *  damage range return {@link MinMax#ZERO}. */
     public static MinMax effectiveDamageRange(Item item) {
         return effectiveDamageRange(item, clampedLevel(item));
     }
 
-    /** Holder-aware overload — uses {@link #effectiveLevel} so WANDMASTER
+    /** Holder-aware overload - uses {@link #effectiveLevel} so WANDMASTER
      *  and BOMB_JACK bonuses are reflected in damage output. */
     public static MinMax effectiveDamageRange(Item item, Mob holder) {
         return effectiveDamageRange(item, effectiveLevel(item, holder));
     }
 
-    /** Level-explicit overload — used by paths where the effective level
+    /** Level-explicit overload - used by paths where the effective level
      *  differs from {@code item.level} (currently the WANDMASTER perk bumps
      *  the wand by +1 at fire time). */
     public static MinMax effectiveDamageRange(Item item, int level) {
@@ -157,7 +157,7 @@ public final class ItemSystem {
                 item.armorPerLevel.min(), item.armorPerLevel.max());
     }
 
-    /** Linear-scale primitive parameterised on level rather than item — used
+    /** Linear-scale primitive parameterised on level rather than item - used
      *  by callers that need to bump the level (perks, future buffs that
      *  amplify item effects). */
     private static MinMax levelScaledRangeAt(int level,
@@ -179,7 +179,7 @@ public final class ItemSystem {
     /** Single source of truth for "what level should this item act at
      *  when {@code holder} uses it?". Combines:
      *  <ul>
-     *    <li>{@link Item#level} — the item's own enchantment plusses.</li>
+     *    <li>{@link Item#level} - the item's own enchantment plusses.</li>
      *    <li>+1 if {@code holder} carries the {@link Perk#WANDMASTER}
      *        perk and {@code item} is a wand.</li>
      *    <li>+N from the {@link com.bjsp123.rl2.model.Buff.BuffType#SORCERY}
@@ -241,13 +241,13 @@ public final class ItemSystem {
      *  Euclidean disc radius via {@code MobSystem.radiusForTileCount} at the
      *  use-site. Reads {@link Item#tilesAffected} + {@code tilesAffectedPerLevel}
      *  off the source item; items with no AOE columns return 0. Replaces the
-     *  separate wand-tiles / bomb-tiles helpers — the formula is the same and
+     *  separate wand-tiles / bomb-tiles helpers - the formula is the same and
      *  the per-item columns now carry the per-kind values. */
     public static int effectiveTilesAffected(Item item) {
         return effectiveTilesAffected(item, clampedLevel(item));
     }
 
-    /** Holder-aware overload — uses {@link #effectiveLevel} so BOMB_JACK bonus
+    /** Holder-aware overload - uses {@link #effectiveLevel} so BOMB_JACK bonus
      *  expands bomb AOE. */
     public static int effectiveTilesAffected(Item item, Mob holder) {
         return effectiveTilesAffected(item, effectiveLevel(item, holder));
@@ -259,12 +259,12 @@ public final class ItemSystem {
         return item.tilesAffected + Math.max(0, level) * item.tilesAffectedPerLevel;
     }
 
-    // ── Use-time effect dispatchers ──────────────────────────────────────────
+    // -- Use-time effect dispatchers ------------------------------------------
 
     /**
      * Consume a food item: raise {@code eater}'s satiety by {@code item.foodValue}
      * (capped at {@link GameBalance#STARTING_SATIETY}), apply any buff carried by
-     * the item ({@link Item#appliesBuff} — silvery pear's HOPE, conference pear's
+     * the item ({@link Item#appliesBuff} - silvery pear's HOPE, conference pear's
      * ESP, etc.), then remove the item from their inventory. No-op for items
      * without food value.
      */
@@ -285,16 +285,16 @@ public final class ItemSystem {
      * Apply a {@link Item.UseBehavior#POWERUP} pickup to {@code picker}.
      * Dispatches on {@link Item#wandEffect}:
      * <ul>
-     *   <li>{@code LEVEL_UP} — bumps the picker's character level by one
+     *   <li>{@code LEVEL_UP} - bumps the picker's character level by one
      *       (delegated to {@link MobProgression#applyLevelUp}).</li>
-     *   <li>{@code HP_UP} — restores {@code maxHp * abilityPower} HP,
+     *   <li>{@code HP_UP} - restores {@code maxHp * abilityPower} HP,
      *       clamped at the picker's max.</li>
-     *   <li>{@code MANA_UP} — every wand-bearing item in the picker's
+     *   <li>{@code MANA_UP} - every wand-bearing item in the picker's
      *       inventory gains its own {@code chargeGain} of charge,
      *       clamped at {@link Item#maxCharge()}.</li>
      * </ul>
      * Caller (currently {@link MobSystem}'s tile-step hook) is responsible
-     * for removing the item from the level — this method only applies the
+     * for removing the item from the level - this method only applies the
      * effect.
      */
     public static void applyPowerup(Level level, Mob picker, Item item) {
@@ -330,7 +330,7 @@ public final class ItemSystem {
                             eq.charge + eq.chargeGain);
                 }
             }
-            default -> { /* not a POWERUP effect — ignore */ }
+            default -> { /* not a POWERUP effect - ignore */ }
         }
         // Floating-text feedback so the player sees the absorption land.
         if (level != null && level.events != null && picker.position != null) {
@@ -349,7 +349,7 @@ public final class ItemSystem {
      * Drink a potion. Applies the item's {@link Item#appliesBuff} (level and
      * duration from the item-level helpers). When the potion carries a
      * non-zero {@link Item#damage} range, the drinker takes that damage
-     * (level-scaled via {@link #effectiveDamageRange}) — drinking a poison
+     * (level-scaled via {@link #effectiveDamageRange}) - drinking a poison
      * potion now uses the same damage column as throwing it. Item is consumed.
      */
     public static void drinkPotion(Level level, Mob drinker, Item item) {
@@ -367,7 +367,7 @@ public final class ItemSystem {
     }
 
     /**
-     * Resolve a potion landing — the same effect that drinking the potion has
+     * Resolve a potion landing - the same effect that drinking the potion has
      * is applied to every mob on or adjacent to {@code at} (Chebyshev distance
      * 1). Called from {@code MobSystem.throwItem} for items whose
      * {@link Item#useBehavior} is {@link Item.UseBehavior#DRINK}: drinking and
@@ -403,7 +403,7 @@ public final class ItemSystem {
      *  in {@code item.appliesBuff} plus the rolled damage range when the
      *  potion deals damage on impact. Player-only side-effects (like
      *  reveal-the-level) are now expressed as buff types whose per-turn
-     *  handler does the work — see {@link com.bjsp123.rl2.model.Buff.BuffType#INSIGHT}. */
+     *  handler does the work - see {@link com.bjsp123.rl2.model.Buff.BuffType#INSIGHT}. */
     private static void applyPotionEffect(Level level, Mob mob, Item item, Mob source) {
         if (mob == null || item == null) return;
         applyConsumableBuff(level, mob, item);
@@ -440,7 +440,7 @@ public final class ItemSystem {
     }
 
     /**
-     * Consume a perk-granting item — currently just power orbs. Awards one perk
+     * Consume a perk-granting item - currently just power orbs. Awards one perk
      * point to the user, removes the item from inventory, and logs the action.
      * Caller is responsible for the move-cost accounting.
      */
@@ -477,7 +477,7 @@ public final class ItemSystem {
      * the wand's own per-item columns ({@link Item#tilesAffected},
      * {@link Item#damage}, plus their per-level increments). Called from
      * rgame's {@code Animator} as the {@code PendingImpact} callback once the
-     * wand-missile or ray visual completes — the wand instance is carried
+     * wand-missile or ray visual completes - the wand instance is carried
      * through the event so the impact site has access to its data-driven
      * scaling. {@code wand} may be {@code null} (defensive); element only
      * dispatches that need its damage / AOE columns then short-circuit.
@@ -504,7 +504,7 @@ public final class ItemSystem {
             case FIRE     -> MobSystem.igniteDisc(level, tx, ty, areaRadius);
             case DETONATION -> {
                 int radius = areaRadius + 1;
-                // Concussive blast — only sets fire to tiles that are
+                // Concussive blast - only sets fire to tiles that are
                 // intrinsically flammable (grass / mushrooms / trees /
                 // oil). Bare stone is left intact.
                 MobSystem.igniteFlammableDisc(level, tx, ty, radius);
@@ -563,7 +563,7 @@ public final class ItemSystem {
      *
      * <p>Jump radius is normally {@code 2} tiles, but bumps to {@code 4} when
      * the impact tile carries a {@link Level.Surface#WATER} or
-     * {@link Level.Surface#BLOOD} surface — those puddles act as electrical
+     * {@link Level.Surface#BLOOD} surface - those puddles act as electrical
      * conductors so the arc carries further. The {@code caster} itself is an
      * eligible chain target, so a careless lightning shot in a puddled room
      * can fry the wand-user along with everyone else.
@@ -572,7 +572,7 @@ public final class ItemSystem {
      *  every mob within Chebyshev radius {@code (effectiveLevel / 2) + 1}
      *  toward the centre. Floor-like tiles in the disc convert to
      *  CHASM; small statues are obliterated into chasm too (large
-     *  statues survive — they're too anchored). Pulled mobs play the
+     *  statues survive - they're too anchored). Pulled mobs play the
      *  standard knockback-slide animation; non-flying mobs that land on
      *  a fresh chasm tile fall through via
      *  {@link com.bjsp123.rl2.logic.MobSystem#fallToNextLevel}. */
@@ -583,7 +583,7 @@ public final class ItemSystem {
         int radius = Math.max(1, (effectiveLevel / 2) + 1);
         int r2 = radius * radius;
 
-        // Tile conversion pass — floor-like + small statues become CHASM.
+        // Tile conversion pass - floor-like + small statues become CHASM.
         // Walk the disc and switch tiles in place.
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dy = -radius; dy <= radius; dy++) {
@@ -604,7 +604,7 @@ public final class ItemSystem {
             }
         }
 
-        // Mob pull pass — each mob in the disc is yanked one tile toward
+        // Mob pull pass - each mob in the disc is yanked one tile toward
         // the centre, riding the standard knockback slide. Iteration uses
         // a snapshot because MobSystem.fallToNextLevel can mutate
         // level.mobs (cross-level transfer when a non-flyer lands on a
@@ -632,7 +632,7 @@ public final class ItemSystem {
      *  visual. If the destination is a (now-fresh) chasm and the mob
      *  isn't flying, route to the standard
      *  {@link com.bjsp123.rl2.logic.MobSystem#fallToNextLevel} so it
-     *  falls through. Stops on out-of-bounds, walls, or other mobs —
+     *  falls through. Stops on out-of-bounds, walls, or other mobs -
      *  the slide just doesn't happen in those edge cases (the void is
      *  a terrain hazard, not a guaranteed teleport). */
     private static void voidPullMob(Level level, Mob mob,
@@ -644,7 +644,7 @@ public final class ItemSystem {
         if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) return;
         com.bjsp123.rl2.model.Tile t = level.tiles[nx][ny];
         if (t == null || t.blocksMovement()) return;
-        // Block on another mob — pull stalls.
+        // Block on another mob - pull stalls.
         for (Mob other : level.mobs) {
             if (other == mob) continue;
             if (other.position == null) continue;
@@ -666,7 +666,7 @@ public final class ItemSystem {
     /** Reshape an area: every floor-like tile in the disc has a 50%
      *  chance to reroll to one of {FLOOR, FLOOR_WOOD, FLOOR_SPECIAL,
      *  CHASM}; every non-unique mob in the disc is replaced by a
-     *  random species whose intrinsic size lies within ±1 of the
+     *  random species whose intrinsic size lies within +/-1 of the
      *  original's. The player is never polymorphed. */
     private static void applyPolymorphImpact(Level level, Point target, int areaRadius) {
         int tx = target.tileX(), ty = target.tileY();
@@ -699,7 +699,7 @@ public final class ItemSystem {
             }
         }
 
-        // Mob reshape pass — snapshot since we mutate level.mobs in place.
+        // Mob reshape pass - snapshot since we mutate level.mobs in place.
         // The disc check uses Chebyshev distance so a target at a corner
         // of the disc is included rather than missed by the Euclidean
         // gate (which clips diagonals at radius 1).
@@ -715,7 +715,7 @@ public final class ItemSystem {
             int oldSize = oldDef.size;
             String pick = pickPolymorphReplacement(oldSize, m.mobType);
             if (pick == null) {
-                // Strict size band turned up nothing — fall back to any
+                // Strict size band turned up nothing - fall back to any
                 // non-unique non-PLAYER species so the wand doesn't
                 // silently no-op on small / large outliers.
                 pick = pickPolymorphReplacement(Integer.MIN_VALUE, m.mobType);
@@ -754,7 +754,7 @@ public final class ItemSystem {
     }
 
     /** Replace {@code old} in place with a fresh mob of {@code newType}
-     *  at the same tile. Position-tied state is dropped — the new mob
+     *  at the same tile. Position-tied state is dropped - the new mob
      *  starts at full HP with the species' default stats. The MobSpawned
      *  event drives the renderer's spawn-grow animation, which reads as
      *  a polymorph poof. */
@@ -775,7 +775,7 @@ public final class ItemSystem {
         applyLightningChain(level, caster, target, effectiveDamageRange(wand, effectiveLevel), null);
     }
 
-    /** Package-private overload for brand-triggered lightning — caller supplies
+    /** Package-private overload for brand-triggered lightning - caller supplies
      *  the damage range directly (no wand item required). {@code excluded}, when
      *  non-null, is added to the hit-set before the chain starts so it can never
      *  be targeted (used by brands to protect the attacker from self-damage). */
@@ -821,7 +821,7 @@ public final class ItemSystem {
         }
     }
 
-    /** True if {@code m} is electrically conductive — carries the WET buff or
+    /** True if {@code m} is electrically conductive - carries the WET buff or
      *  stands on a water / ice tile. Pulled out of the lightning case so the
      *  chain step can reuse it without duplicating the surface read. */
     private static boolean isWet(Level level, Mob m) {
@@ -855,7 +855,7 @@ public final class ItemSystem {
      * Generic summon-wand path. If the wand-of-X has a non-null
      * {@link Item#summonsWhenUsed}, this spawns one of that mob type on a free
      * floor tile adjacent to {@code caster}, sets ownership, and scales the
-     * summon to the wand's level. Returns {@code true} if a summon happened —
+     * summon to the wand's level. Returns {@code true} if a summon happened -
      * callers always pay the move cost regardless, so the wand burns a turn
      * even when the spawn is gated out by population caps or no-room.
      */
@@ -864,19 +864,19 @@ public final class ItemSystem {
      * targeting overlay confirms a tile) and AI (after picking a target). Handles
      * the three wand flavours uniformly:
      * <ul>
-     *   <li>summon-style ({@code wand.summonsWhenUsed != null}) — {@code target}
+     *   <li>summon-style ({@code wand.summonsWhenUsed != null}) - {@code target}
      *       is ignored; defers to {@link #castSummonWand}.</li>
-     *   <li>banishment ray — emits {@link GameEvent.WandRayFired}.</li>
-     *   <li>everything else — emits {@link GameEvent.WandMissileFired}.</li>
+     *   <li>banishment ray - emits {@link GameEvent.WandRayFired}.</li>
+     *   <li>everything else - emits {@link GameEvent.WandMissileFired}.</li>
      * </ul>
      * Trajectory is clipped to the first mob standing between caster and target so
      * a wand fired past an enemy resolves on that enemy. Caster always pays
-     * {@code attackCost}, even if the summon spawn was gated out — keeps the move
+     * {@code attackCost}, even if the summon spawn was gated out - keeps the move
      * cost identical between player and AI paths.
      */
     public static void fireWand(Level level, Mob caster, Item wand, Point target) {
         if (level == null || caster == null || wand == null) return;
-        // Charge gate — wands refuse to fire when current charge is < 1.
+        // Charge gate - wands refuse to fire when current charge is < 1.
         // The summoning branch shares the same gate so a depleted wand of
         // dog won't yip out a free puppy on use.
         if (wand.useBehavior == Item.UseBehavior.WAND && wand.charge < 1f) {
@@ -884,7 +884,7 @@ public final class ItemSystem {
                 String name = caster.name != null ? caster.name : "Adventurer";
                 EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                         "The " + (wand.name != null ? wand.name : "wand")
-                                + " fizzles — out of charge.",
+                                + " fizzles - out of charge.",
                         com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
             }
             return;
@@ -965,7 +965,7 @@ public final class ItemSystem {
             case EAT         -> eat(level, user, item);
             case DRINK       -> drinkPotion(level, user, item);
             case GRANT_PERK  -> grantXP(level, user, item);//grantPerk(level, user, item);
-            case WAND, GRAPPLE, NONE -> { return; } // need a target — caller routes elsewhere
+            case WAND, GRAPPLE, NONE -> { return; } // need a target - caller routes elsewhere
         }
         TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
     }
@@ -974,13 +974,13 @@ public final class ItemSystem {
      * Resolve a grappling-rope use ({@link Item.UseBehavior#GRAPPLE}) targeted
      * at {@code target}. The flow:
      * <ol>
-     *   <li>Pick the landing tile — the nearest non-wall 8-neighbour of
+     *   <li>Pick the landing tile - the nearest non-wall 8-neighbour of
      *       {@code caster} (closest to {@code target} on Euclidean ties);
      *       chasms count as valid landings (the grappled subject just
      *       falls in).</li>
      *   <li>Mob on the target tile: if its {@code size} exceeds the item's
      *       {@code abilityPower} (overloaded as the max-size cap for GRAPPLE
-     *       items) the rope flashes and fades — emit a {@code GrappleFired}
+     *       items) the rope flashes and fades - emit a {@code GrappleFired}
      *       with {@code success = false} and no movement events. Otherwise
      *       the mob is moved to the landing tile (chasm-fall handled).</li>
      *   <li>Floor items on the target tile: relocated to the landing tile,
@@ -1020,7 +1020,7 @@ public final class ItemSystem {
         Point landing = pickGrappleLanding(level, caster.position, target);
         if (landing == null || landing.equals(target)) {
             // No valid landing (caster boxed in by walls, or the target is
-            // already adjacent) — the rope reaches but pulls no-one.
+            // already adjacent) - the rope reaches but pulls no-one.
             if (level.events != null) {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
                         caster, caster.position, target, true));
@@ -1096,7 +1096,7 @@ public final class ItemSystem {
         TurnSystem.applyMoveCost(jumper, jumper.effectiveStats().moveCost);
     }
 
-    /** Find the best grapple landing tile — nearest non-wall 8-neighbour of
+    /** Find the best grapple landing tile - nearest non-wall 8-neighbour of
      *  {@code casterPos}, preferring the one closest to {@code target} on
      *  Euclidean ties so the dragged subject lands on the natural side of
      *  the caster. Skips tiles already occupied by another mob (the
@@ -1137,7 +1137,7 @@ public final class ItemSystem {
                     mob, start, landing, false));
         }
         if (landingIsChasm && !flying) {
-            // Chasm landing — defer to the standard fall-through path so
+            // Chasm landing - defer to the standard fall-through path so
             // the grapple-pulled mob either lands on the next level
             // (taking half-max-HP fall damage) or dies in the chasm if
             // there's no next level / the fall would kill it.
@@ -1211,7 +1211,7 @@ public final class ItemSystem {
     }
 
     /** Convert a target tile-count into the smallest Euclidean disc radius whose disc
-     *  has at least that many tiles. The disc-area approximation {@code πr²} would land
+     *  has at least that many tiles. The disc-area approximation {@code pir^2} would land
      *  short on small counts, so we ceil to the next radius. Result is always {@code >= 0}. */
     public static int radiusForTileCount(int tiles) {
         if (tiles <= 1) return 0;
@@ -1234,10 +1234,10 @@ public final class ItemSystem {
         return name;
     }
 
-    /** Convenience overload — no holder context (floor items, encyclopedia). */
+    /** Convenience overload - no holder context (floor items, encyclopedia). */
     public static String displayName(Item item) { return displayName(item, null); }
 
-    /** Size prefix for a gem of size 1–9 ("tiny" … "exquisite"). Caps at the last prefix
+    /** Size prefix for a gem of size 1-9 ("tiny" ... "exquisite"). Caps at the last prefix
      *  if a recipe somehow yields a size higher than 9. */
     public static String gemSizePrefix(int size) {
         return switch (Math.max(1, Math.min(9, size))) {
@@ -1253,7 +1253,7 @@ public final class ItemSystem {
         };
     }
 
-    /** "tiny blazingstar", "fine glittershard", … */
+    /** "tiny blazingstar", "fine glittershard", ... */
     public static String gemDisplayName(Item item) {
         if (item == null || item.gemSpecies == null) return "gem";
         return gemSizePrefix(item.gemSize) + " " + item.gemSpecies.name().toLowerCase();

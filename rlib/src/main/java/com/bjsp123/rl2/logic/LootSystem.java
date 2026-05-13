@@ -14,7 +14,7 @@ import java.util.Random;
 
 /**
  * Loot pipeline. Loot rolling happens at <em>spawn time</em>
- * ({@link #rollAndStashLoot}) — the mob carries its catalogued drops in its
+ * ({@link #rollAndStashLoot}) - the mob carries its catalogued drops in its
  * inventory bag from the moment it's created. {@link #dropLootOnDeath} then
  * just empties bag + equipment onto the floor and posts a
  * {@link GameEvent.LootDropped} per item so the renderer can play the

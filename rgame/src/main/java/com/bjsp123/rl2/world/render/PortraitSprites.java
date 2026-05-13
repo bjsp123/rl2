@@ -9,22 +9,22 @@ import java.util.Map;
 
 /**
  * Lazy-loaded sprite source for the HUD's character portrait. Pulls the head + upper
- * body (top 32×32 cell) of each PLAYER class pose from the same {@code sprites/mobs.png}
+ * body (top 32x32 cell) of each PLAYER class pose from the same {@code sprites/mobs.png}
  * atlas {@link MobSprites} owns. The atlas Texture itself is borrowed via
  * {@link MobSprites#sheetTexture()} so the file is only ever loaded once.
  *
  * <p>Source layout (row 0 of mobs.png at 32 px per cell):
  * <ul>
- *   <li>col 2 — Rogue</li>
- *   <li>col 3 — Mage</li>
- *   <li>col 4 — Warrior</li>
+ *   <li>col 2 - Rogue</li>
+ *   <li>col 3 - Mage</li>
+ *   <li>col 4 - Warrior</li>
  * </ul>
- * Each class occupies a 1×2 cell block; the upper cell ({@code y = 0..31}) is the
+ * Each class occupies a 1x2 cell block; the upper cell ({@code y = 0..31}) is the
  * head + shoulders, which is what we extract for the portrait.
  */
 public final class PortraitSprites {
 
-    // Source column per class on row 0 — mobs_simple.png ships a single shared
+    // Source column per class on row 0 - mobs_simple.png ships a single shared
     // player sprite at column 0, so all classes pull their head from there.
     private static final int COL_ROGUE   = 0;
     private static final int COL_MAGE    = 0;
@@ -53,8 +53,8 @@ public final class PortraitSprites {
     }
 
     /** Crop the portrait window from the player column. We pull pixel rows 8-40
-     *  (a 32-row band) rather than the top 32×32 cell because the player sprite's
-     *  silhouette starts a few pixels down inside its cell — the top 8 rows are
+     *  (a 32-row band) rather than the top 32x32 cell because the player sprite's
+     *  silhouette starts a few pixels down inside its cell - the top 8 rows are
      *  blank padding above the head, and rows 8-40 frame the head + chest cleanly
      *  for a HUD avatar. */
     private static final int PORTRAIT_Y0     = 8;
@@ -64,7 +64,7 @@ public final class PortraitSprites {
         return new TextureRegion(mobsTex, col * cell, PORTRAIT_Y0, cell, PORTRAIT_HEIGHT);
     }
 
-    /** No-op tear-down — the underlying texture is owned by {@link MobSprites};
+    /** No-op tear-down - the underlying texture is owned by {@link MobSprites};
      *  call {@link MobSprites#disposeShared()} on shutdown if you want to release it. */
     public static void disposeShared() {
         regions = null;

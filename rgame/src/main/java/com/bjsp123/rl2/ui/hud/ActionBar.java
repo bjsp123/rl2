@@ -6,10 +6,10 @@ import com.bjsp123.rl2.model.Mob;
  * Player-facing HUD action-bar bindings. Six slots that map 1:1 to the bottom-right
  * action buttons; each slot is either {@code null} or a reference to an {@link Item} the
  * player holds. Living on the rgame side rather than as a field on {@link Mob} so the
- * domain model in rlib stays free of UI concepts — nothing in rlib has to know an action
+ * domain model in rlib stays free of UI concepts - nothing in rlib has to know an action
  * bar exists.
  *
- * <p>Bindings are aliases — the {@link Item} referenced here is the same instance that
+ * <p>Bindings are aliases - the {@link Item} referenced here is the same instance that
  * sits in {@code mob.inventory.bag} (or in an equipment slot). Removing the item from
  * inventory orphans the binding; {@link #audit(Mob)} sweeps stale references on every
  * turn advancement and refills with a same-type item from the bag where possible.
@@ -37,7 +37,7 @@ public final class ActionBar {
 
     public void set(int i, Item it) {
         if (i < 0 || i >= SLOTS) return;
-        // An item lives in at most one slot at a time — binding it to a
+        // An item lives in at most one slot at a time - binding it to a
         // new slot evicts it from any other it was already in. Same-type
         // duplicates (different Item instances) are unaffected.
         if (it != null) {
@@ -113,7 +113,7 @@ public final class ActionBar {
      */
     public void audit(Mob player) {
         if (player == null) return;
-        // Phase 1 — collect items already accounted for by HELD slot bindings. Stale slot
+        // Phase 1 - collect items already accounted for by HELD slot bindings. Stale slot
         // references (item gone from inventory) don't reserve anything: if both slots are
         // stale, both should be eligible for refill from whatever is in the bag, and a
         // newly-picked replacement only "reserves" itself for one of them.
@@ -123,7 +123,7 @@ public final class ActionBar {
             if (bound != null && heldByPlayer(player, bound)) reserved.add(bound);
         }
 
-        // Phase 2 — for each stale slot, pick the first bag item of the same type that's
+        // Phase 2 - for each stale slot, pick the first bag item of the same type that's
         // not yet reserved. Add the picked item to the reserved set so a later iteration
         // doesn't draft the same instance into a second slot. If nothing matches, the
         // slot is cleared.

@@ -22,7 +22,7 @@ public class ArenaHallOfFame {
     public List<ArenaHallOfFameEntry> entries = new ArrayList<>();
 
     /** Prepend {@code e} as the newest matchup, dropping any tail past
-     *  {@link #MAX}. Doesn't persist — caller pairs this with
+     *  {@link #MAX}. Doesn't persist - caller pairs this with
      *  {@link ArenaHallOfFameStore#save}. */
     public void add(ArenaHallOfFameEntry e) {
         entries.add(0, e);

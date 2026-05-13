@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 level-info screen — fact sheet for the level the player is currently on.
+ * V2 level-info screen - fact sheet for the level the player is currently on.
  * Modal full-screen window with a vertical stack of label/value rows.
  */
 public final class V2LevelInfo extends V2Screen {

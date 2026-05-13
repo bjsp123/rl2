@@ -5,7 +5,7 @@ import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 
 /**
- * Shared target-selection memory for the player's cursor-picking modes — look mode and
+ * Shared target-selection memory for the player's cursor-picking modes - look mode and
  * wand / ranged-weapon targeting. Keeps two independent hints so repeat-use of a wand, or
  * pass-through looking, naturally snaps back to the thing the player last cared about.
  *
@@ -19,7 +19,7 @@ import com.bjsp123.rl2.model.Point;
  *
  * <p>The two slots are updated independently by {@link #record}: a cell with a mob on it
  * updates {@code lastMob}; an empty cell updates {@code lastFloor}. Moving the cursor off
- * a mob onto empty ground does NOT erase the last-mob memory, so a zap → examine → zap
+ * a mob onto empty ground does NOT erase the last-mob memory, so a zap -> examine -> zap
  * sequence still snaps back to the enemy on the final activation.
  */
 public final class TargetHistory {
@@ -30,7 +30,7 @@ public final class TargetHistory {
     /**
      * Record what the cursor is on right now. Mob cells update {@link #lastMob}; empty /
      * terrain-only cells update {@link #lastFloor}. Safe to call every frame in hover-style
-     * flows (look mode) — the two slots never overwrite each other.
+     * flows (look mode) - the two slots never overwrite each other.
      */
     public void record(Level level, Point cell) {
         if (level == null || cell == null) return;

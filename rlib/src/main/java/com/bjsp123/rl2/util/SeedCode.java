@@ -6,7 +6,7 @@ import java.util.Locale;
  * Bidirectional encoding between a world seed (long) and a six-letter
  * alphabetic code (e.g. {@code "ABCDEF"}). The encoding is base-26 over
  * uppercase A-Z, so the code space is {@code 26^6 = 308,915,776} distinct
- * worlds — small enough to type, large enough that two random codes are
+ * worlds - small enough to type, large enough that two random codes are
  * effectively never the same.
  *
  * <p>The encoding is lossy in one direction: encoding a long that exceeds

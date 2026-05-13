@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 /**
  * Shared backing store for the codebase's CSV-driven registries
- * ({@code MobRegistry}, {@code ItemRegistry}, {@code ThemedRoomRegistry}, …).
+ * ({@code MobRegistry}, {@code ItemRegistry}, {@code ThemedRoomRegistry}, ...).
  * Holds an insertion-ordered {@code Map<String, T>} keyed on the definition's
  * id string and provides the three operations every registry exposes:
  * {@link #load}, {@link #get}, {@link #knownTypes}.
@@ -19,7 +19,7 @@ import java.util.function.Function;
  * while collapsing the duplicated load/lookup boilerplate into one place.
  *
  * <p>Type-specific helpers (faction indexing, predicate filters, silhouette
- * lookups, etc.) stay in their owning registry — the store deliberately
+ * lookups, etc.) stay in their owning registry - the store deliberately
  * doesn't try to generalise those.
  *
  * @param <T> the definition type held in this store (e.g. {@code ItemDefinition})
@@ -49,7 +49,7 @@ public final class CsvRegistryStore<T> {
     }
 
     /** Parse {@code csv} and replace the store's contents. Calling twice is
-     *  idempotent — the previous load is discarded first. Rows whose id
+     *  idempotent - the previous load is discarded first. Rows whose id
      *  comes back null throw, matching the existing per-registry behaviour. */
     public void load(String csv) {
         defs.clear();

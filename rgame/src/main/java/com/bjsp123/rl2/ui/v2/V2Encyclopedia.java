@@ -28,14 +28,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 encyclopedia popup — modal window with category tabs across the top,
+ * V2 encyclopedia popup - modal window with category tabs across the top,
  * a scrolling list of (icon, name) entries, and a detail panel that
  * replaces the list when a row is tapped. Same list/info-only rule that
  * the rest of the V2 chrome follows: a window is one or the other, never
  * both.
  *
- * <p>Tap a list row → detail view with the entry's icon, name, and
- * description. Tap outside the panel or press Back / ESC → return to the
+ * <p>Tap a list row -> detail view with the entry's icon, name, and
+ * description. Tap outside the panel or press Back / ESC -> return to the
  * list. From the list, ESC closes the popup.
  */
 public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
@@ -43,7 +43,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private enum Cat { ITEMS, CREATURES, BUFFS_PERKS, GEMS, TERRAIN, GUIDE }
 
     /** Map each tab to a glyph in the shared UI icon sheet. GEMS has no
-     *  dedicated icon yet — falls back to OTHER. */
+     *  dedicated icon yet - falls back to OTHER. */
     private static com.bjsp123.rl2.world.render.IconSprites.Icon tabIcon(Cat c) {
         return switch (c) {
             case ITEMS       -> com.bjsp123.rl2.world.render.IconSprites.Icon.ITEMS;
@@ -63,11 +63,11 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
 
     private final boolean[] tabPressed = new boolean[Cat.values().length];
 
-    /** All entries pre-built per category — static reference data. */
+    /** All entries pre-built per category - static reference data. */
     private final java.util.EnumMap<Cat, List<Entry>> entries
             = new java.util.EnumMap<>(Cat.class);
 
-    /** Per-row hit rects for the active tab — rebuilt every frame from
+    /** Per-row hit rects for the active tab - rebuilt every frame from
      *  the list of entries that fit inside {@link #window}. */
     private final List<Rect> rowRects = new ArrayList<>();
     private final List<Entry> rowEntries = new ArrayList<>();
@@ -75,7 +75,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
      *  row currently held, or -1. */
     private int rowPressed = -1;
 
-    /** List scroll state — clamps {@code scrollY} against total content
+    /** List scroll state - clamps {@code scrollY} against total content
      *  height each frame; tab switches reset it to the top. */
     private final Scroller scroller = new Scroller();
 
@@ -88,9 +88,9 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private final Rectangle scissorIn = new Rectangle();
     private final Rectangle scissorOut = new Rectangle();
 
-    /** Currently-selected entry — non-null when the detail panel is up. */
+    /** Currently-selected entry - non-null when the detail panel is up. */
     private Entry selected;
-    /** Standard back button — viewport-anchored bottom-right, shown only
+    /** Standard back button - viewport-anchored bottom-right, shown only
      *  while a detail panel is up. Replaces the V1 inline back-button
      *  rect at the bottom-left of the detail window. Lazily built when
      *  the detail panel opens; reset to {@code null} on the list view. */
@@ -99,8 +99,10 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
      *  {@link #layoutRects()} so both render passes (frame chrome in the
      *  shape pass, aspect-fit sprite in the text pass) read the same rect. */
     private final Rect detailIconFrame = new Rect();
+    private TextDraw.TextBlock detailNameBlock =
+            TextDraw.block(null, "", 1f, 0, 0f);
 
-    /** Pre-wrapped flavor / details lines for the current detail page —
+    /** Pre-wrapped flavor / details lines for the current detail page -
      *  populated during {@link #layoutRects()} so the shape pass (which
      *  paints the divider rule) and the text pass (which paints the lines)
      *  agree on the layout. */
@@ -110,7 +112,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
      *  pixels), in CONTENT space (before scroll offset is applied), or
      *  {@code Float.NaN} when one half is empty and no rule is drawn. */
     private float detailDividerY = Float.NaN;
-    /** Scrollable body region for the detail page — bounded by the icon
+    /** Scrollable body region for the detail page - bounded by the icon
      *  frame at the top and the window's bottom edge. Content longer than
      *  the band scrolls vertically, with up/down arrow indicators at the
      *  edges. */
@@ -139,7 +141,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     }
 
     /** {@code true} when the encyclopaedia was opened with a registered
-     *  back-stack entry on {@link UiCtx#stack} — used to discriminate
+     *  back-stack entry on {@link UiCtx#stack} - used to discriminate
      *  between "list-internal" detail back (returns to list view) and
      *  "popup-stack" detail back (closes encyclopaedia, restores the
      *  caller). */
@@ -171,7 +173,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         if (selected == null) {
-            // List view layout — tab strip + row hit rects.
+            // List view layout - tab strip + row hit rects.
             float pad = 12f;
             float tabH = 32f;
             float tabGap = 4f;
@@ -179,7 +181,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             float tabW = (innerW - (tabRects.length - 1) * tabGap) / tabRects.length;
             // Reserve a header band sized to the live header-font cap height
             // (which scales with UiFontScale). The tab strip sits below
-            // that band so a 1.5×/2× font scale doesn't bleed the title
+            // that band so a 1.5x/2x font scale doesn't bleed the title
             // text into the tabs.
             float headerBand = ctx.headerLineH() + ctx.lineH();
             float tabsY = window.top() - pad - tabH - headerBand;
@@ -189,12 +191,12 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             }
 
             // Build per-row hit rects for whatever fits below the tab strip.
-            // Row height accommodates a 32×32 icon cell so every list row
+            // Row height accommodates a 32x32 icon cell so every list row
             // shows its sprite at a uniform 32 px regardless of source size
             // (small buff icons get scaled UP, big mob sprites get scaled
-            // DOWN — same fixed cell either way).
+            // DOWN - same fixed cell either way).
             //
-            // The list scrolls — {@link #scrollY} shifts the rendered rows
+            // The list scrolls - {@link #scrollY} shifts the rendered rows
             // upward when positive, exposing entries from the bottom of the
             // master list. Each row's offset y is derived from its index
             // and the current scroll, then clipped against the visible
@@ -215,7 +217,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             scroller.setMaxScroll(totalH - visibleH);
 
             // Stash the visible band so both render passes can scissor-clip
-            // the row drawing — scissor lets partially-visible rows render
+            // the row drawing - scissor lets partially-visible rows render
             // at the edges instead of popping in/out.
             listBand.set(left, visibleBottom, rowW, visibleH);
 
@@ -227,13 +229,13 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 rowEntries.add(list.get(i));
             }
         } else {
-            // Detail-view back affordance — standard viewport-anchored
+            // Detail-view back affordance - standard viewport-anchored
             // BackBtn so the encyclopaedia matches every other V2 screen.
             // Built lazily so the list view (selected == null) doesn't
             // even create the rect.
             if (detailBack == null) {
                 // When opened via openTo(id, onClose) the detail page has
-                // no list view above it on the popup stack — back goes
+                // no list view above it on the popup stack - back goes
                 // directly to whatever opened the encyclopaedia (inventory,
                 // look, character stats). Otherwise (encyclopaedia opened
                 // from the HUD burger), back drops to the list view.
@@ -244,13 +246,13 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                         close();
                         ctx.stack.back();
                     } else {
-                        // List → detail → list internal navigation.
+                        // List -> detail -> list internal navigation.
                         selected = null;
                     }
                 });
             }
 
-            // Sprite frame — sized to 2× the source's largest dimension
+            // Sprite frame - sized to 2x the source's largest dimension
             // (per "graphics shown double size in info pages"), with a 64-px
             // floor so tiny buff icons still get a readable frame. Centred
             // horizontally; sits below the title row. The aspect-fit sprite
@@ -260,12 +262,15 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 srcMax = Math.max(selected.icon.getRegionWidth(),
                                   selected.icon.getRegionHeight());
             }
+            detailNameBlock = TextDraw.block(ctx.fontHeader, selected.name,
+                    window.w - 28f, 2, ctx.headerLineH());
+            float titleTop = window.top() - ctx.headerLineH();
             float frameSz = Math.max(64f, srcMax * 2f);
             float frameX  = window.cx() - frameSz * 0.5f;
-            float frameY  = window.top() - 70f - frameSz;
+            float frameY  = titleTop - detailNameBlock.height() - 10f - frameSz;
             detailIconFrame.set(frameX, frameY, frameSz, frameSz);
 
-            // Pre-wrap the flavor + details bodies — no truncation cap, the
+            // Pre-wrap the flavor + details bodies - no truncation cap, the
             // body region scrolls when the content is taller than the
             // visible band. Lines and divider y are shared by the shape pass
             // (which draws the rule) and the text pass (which paints the
@@ -346,8 +351,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                     s.setColor(UIVars.BTN_PRESSED_BG);
                     s.rect(rr.x, rr.y, rr.w, rr.h);
                 }
-                // Icon frames — light-warm-grey backdrop + thin tri-line
-                // border around the 32×32 cell that holds each row's
+                // Icon frames - light-warm-grey backdrop + thin tri-line
+                // border around the 32x32 cell that holds each row's
                 // sprite. Sprite itself paints in the text pass on top.
                 for (Rect rr : rowRects) {
                     float fSz = 80f;
@@ -362,7 +367,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 ScissorStack.popScissors();
             }
         } else {
-            // Sprite frame chrome — light-warm-grey backdrop + tri-line
+            // Sprite frame chrome - light-warm-grey backdrop + tri-line
             // border. Sprite itself is painted aspect-fit in the text pass.
             Rect f = detailIconFrame;
             Edges.drawTriLine(s, f.x, f.y, f.w, f.h, UIVars.HUD_LINE_W);
@@ -370,7 +375,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             s.rect(f.x + UIVars.HUD_BORDER, f.y + UIVars.HUD_BORDER,
                     f.w - 2 * UIVars.HUD_BORDER, f.h - 2 * UIVars.HUD_BORDER);
 
-            // Body region — the divider rule sits in content space and
+            // Body region - the divider rule sits in content space and
             // scrolls with the body, so it's clipped to the scissor band
             // along with the text lines themselves. The shape pass only
             // draws the rule; the band's chrome (no border, just the
@@ -386,14 +391,14 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 s.flush();
                 ScissorStack.popScissors();
             }
-            // Up / down scroll-arrow indicators — drawn outside the
+            // Up / down scroll-arrow indicators - drawn outside the
             // scissor so they're never clipped. Only show when there is
             // actually content to reveal in that direction.
             float scroll = detailScroller.scrollY();
             float maxScroll = scrollMax();
             if (scroll > 0.5f) {
                 // Sits in the gap between the icon frame and the body
-                // band's top edge — not overlapping the first line of
+                // band's top edge - not overlapping the first line of
                 // text inside the band.
                 drawScrollArrow(s,
                         detailBodyBand.cx(),
@@ -413,7 +418,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     }
 
     /** Push a scissor onto the GL stack matching {@link #detailBodyBand}.
-     *  Returns {@code true} when the push succeeded — caller must
+     *  Returns {@code true} when the push succeeded - caller must
      *  {@code popScissors} in that case. {@code false} means the band is
      *  empty / off-screen and no clip was applied. */
     private boolean pushDetailBodyScissor() {
@@ -466,7 +471,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Encyclopedia",
                     window.cx(), window.top() - ctx.headerLineH());
 
-            // Tabs render as icons — same source sheet as the Settings
+            // Tabs render as icons - same source sheet as the Settings
             // tab strip. {@link #tabIcon} maps each Cat to a sheet column.
             for (int i = 0; i < tabRects.length; i++) {
                 boolean active = Cat.values()[i] == currentTab;
@@ -488,7 +493,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 for (int i = 0; i < rowRects.size(); i++) {
                     Rect r = rowRects.get(i);
                     Entry e = rowEntries.get(i);
-                    // Fixed 80×80 frame — every list row reserves the same
+                    // Fixed 80x80 frame - every list row reserves the same
                     // cell regardless of source sprite size. Sprite is
                     // aspect-fit + outlined inside the frame.
                     float fSz = 80f;
@@ -497,18 +502,19 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                     if (e.icon != null) {
                         drawAspectFit(e.icon, fx, fy, fSz, fSz);
                     }
-                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                            e.name, fx + fSz + 8f, r.y + r.h - 9f);
+                    TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                            e.name, fx + fSz + 8f, r.y + r.h - 9f,
+                            r.right() - (fx + fSz + 12f));
                 }
                 ctx.batch.flush();
                 ScissorStack.popScissors();
             }
         } else {
-            TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                    selected.name, window.cx(), window.top() - ctx.headerLineH());
+            TextDraw.wrappedCentre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                    detailNameBlock, window.cx(), window.top() - ctx.headerLineH());
 
-            // Detail sprite — aspect-fit inside the frame computed in
-            // layoutRects. Frame is 2× source size with a 64-px floor so
+            // Detail sprite - aspect-fit inside the frame computed in
+            // layoutRects. Frame is 2x source size with a 64-px floor so
             // tiny buff icons still read clearly; the sprite preserves its
             // native aspect ratio.
             if (selected.icon != null) {
@@ -517,7 +523,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                         detailIconFrame.w, detailIconFrame.h);
             }
 
-            // Body — flavor (bright) on top, optional horizontal rule, then
+            // Body - flavor (bright) on top, optional horizontal rule, then
             // mechanical details (dim) below. Lines + divider Y are
             // pre-computed in layoutRects in CONTENT coords; the body
             // region scissors out anything outside the visible band, and
@@ -555,7 +561,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     }
 
     /** Push a scissor onto the GL stack matching {@link #listBand}. Returns
-     *  {@code true} when the push succeeded — caller must {@code popScissors}
+     *  {@code true} when the push succeeded - caller must {@code popScissors}
      *  in that case. {@code false} means the band is empty / off-screen and
      *  no clip was applied (caller should skip the wrapped drawing). */
     private boolean pushListScissor() {
@@ -565,7 +571,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         return ScissorStack.pushScissors(scissorOut);
     }
 
-    /** 8-tap unit circle for the silhouette outline — same {@code (cos, sin)}
+    /** 8-tap unit circle for the silhouette outline - same {@code (cos, sin)}
      *  pattern the world mob renderer uses, just at a fixed 8 hits since
      *  encyclopaedia icons render at a known modest size and don't need
      *  the world's variable-tap-count smoothing. */
@@ -575,8 +581,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private static final float[] OUTLINE_DY = {
             0f, 0.7071f, 1f, 0.7071f, 0f, -0.7071f, -1f, -0.7071f
     };
-    /** Outline thickness in V2 virtual pixels — picked to read as a clear
-     *  rim at the 32-px list-row icon and the 2× detail sprite. */
+    /** Outline thickness in V2 virtual pixels - picked to read as a clear
+     *  rim at the 32-px list-row icon and the 2x detail sprite. */
     private static final float OUTLINE_W = 1.5f;
 
     /** Draw {@code region} centred inside the {@code (x, y, w, h)} box,
@@ -597,7 +603,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         float drawH = srcH * scale;
         float drawX = x + (w - drawW) * 0.5f;
         float drawY = y + (h - drawH) * 0.5f;
-        // Black outline — 8 radial offset draws at OUTLINE_W. SpriteBatch
+        // Black outline - 8 radial offset draws at OUTLINE_W. SpriteBatch
         // multiplies sprite RGB by the batch colour, so RGB=0 paints a
         // black silhouette of the same alpha mask; the offset draws fill
         // the rim, the main draw on top covers the interior.
@@ -635,7 +641,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                         detailScroller.onTouchDown(vy);
                         return true;
                     }
-                    // Tap outside the detail window acts like Back —
+                    // Tap outside the detail window acts like Back -
                     // returns to the list view, OR closes (and runs the
                     // back-stack callback) when the encyclopaedia was
                     // opened directly to this entry.
@@ -664,7 +670,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                     }
                 }
                 if (!window.contains(vx, vy)) { close(); return true; }
-                // Touch landed inside the window but missed every row —
+                // Touch landed inside the window but missed every row -
                 // arm the scroller anyway so a drag from this point still
                 // scrolls the list.
                 scroller.onTouchDown(vy);
@@ -676,12 +682,12 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 if (!open) return false;
                 float vy = ctx.unprojectY(sx, sy);
                 if (selected != null) {
-                    // Detail body — scroll on drag.
+                    // Detail body - scroll on drag.
                     detailScroller.onTouchDragged(vy);
                     return true;
                 }
                 if (scroller.onTouchDragged(vy)) {
-                    // Drag classified — suppress any pending tap so release
+                    // Drag classified - suppress any pending tap so release
                     // doesn't fire a row click or tab switch.
                     rowPressed = -1;
                     for (int i = 0; i < tabPressed.length; i++) tabPressed[i] = false;
@@ -707,7 +713,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
 
-                // Detail body drag release — clear scroller state without
+                // Detail body drag release - clear scroller state without
                 // firing any tap action.
                 if (selected != null && detailScroller.isDragging()) {
                     detailScroller.onTouchUp();
@@ -754,7 +760,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 if (!open) return false;
                 if (keycode == Input.Keys.ESCAPE || keycode == Input.Keys.BACK) {
                     if (selected != null && !openedFromStack) {
-                        selected = null;            // detail → list
+                        selected = null;            // detail -> list
                     } else if (openedFromStack) {
                         close();
                         ctx.stack.back();           // close + restore caller
@@ -768,7 +774,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         };
     }
 
-    // ── Entry builders ───────────────────────────────────────────────────────
+    // -- Entry builders -------------------------------------------------------
 
     private static List<Entry> buildItemEntries() {
         List<Entry> out = new ArrayList<>();
@@ -864,7 +870,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         return null;
     }
 
-    /** Open the popup pre-selected to a specific entry — used by inventory's
+    /** Open the popup pre-selected to a specific entry - used by inventory's
      *  "?" button to jump from an item-detail popup straight to its
      *  encyclopedia page. {@code id} matches whatever the entry was built
      *  with: item type string (Items), mob type string (Creatures),
@@ -875,7 +881,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         openTo(id, null);
     }
 
-    /** Open variant carrying an "on-close" callback — pushes {@code onClose}
+    /** Open variant carrying an "on-close" callback - pushes {@code onClose}
      *  onto the shared {@link UiCtx#stack} so back from this opening
      *  unwinds via the same single window stack screens use. The
      *  caller (V2Inventory, V2Look, V2CharacterStats) supplies a
@@ -898,7 +904,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         }
     }
 
-    /** One row in a tab's list — id (natural key for {@link #openTo}) +
+    /** One row in a tab's list - id (natural key for {@link #openTo}) +
      *  icon + name + flavor / details. {@code flavor} (description blurb)
      *  renders in bright text, then a horizontal rule, then {@code details}
      *  (mechanical stats) in dimmer text; either may be empty. The list

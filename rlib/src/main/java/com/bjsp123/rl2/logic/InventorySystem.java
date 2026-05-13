@@ -6,7 +6,7 @@ import com.bjsp123.rl2.model.Item.InventoryCategory;
 
 /**
  * Algorithms that operate on an {@link Inventory}. The data class itself is a
- * pure POJO — every mutation that involves stack-merging, position resolution,
+ * pure POJO - every mutation that involves stack-merging, position resolution,
  * or capacity checks lives here. Mirrors the way {@code MobSystem} relates to
  * {@link com.bjsp123.rl2.model.Mob}: storage in {@code model/}, behaviour in
  * {@code logic/}.
@@ -28,7 +28,7 @@ public final class InventorySystem {
 
     private InventorySystem() {}
 
-    // ── Capacity groups ───────────────────────────────────────────────────────
+    // -- Capacity groups -------------------------------------------------------
 
     /** The four bag-capacity buckets that partition every {@link InventoryCategory}. */
     private enum BagGroup { EQUIPMENT, GEMS, FOOD, ITEMS }
@@ -138,7 +138,7 @@ public final class InventorySystem {
     /** Move {@code it} from its equipment slot back into the bag. No-op
      *  when {@code it} isn't currently equipped or when the bag has no
      *  room for another stack (and merging into an existing matching
-     *  stack isn't possible — though for typical equipment that case is
+     *  stack isn't possible - though for typical equipment that case is
      *  vanishingly rare since equipped items always carry count == 1).
      *  Returns {@code true} on successful unequip. */
     public static boolean unequip(Inventory inv, Item it) {
@@ -147,7 +147,7 @@ public final class InventorySystem {
         if (cat == null || !cat.isEquipment()) return false;
         int slot = findEquippedSlot(inv, it);
         if (slot < 0) return false;
-        // Capacity check — refuse the unequip if the category is full and no
+        // Capacity check - refuse the unequip if the category is full and no
         // matching stack can absorb it. Equipment is never stackable, so the
         // canAbsorb path only matters for stackable items unequipped by mistake.
         boolean canAbsorb = false;
@@ -226,8 +226,8 @@ public final class InventorySystem {
     }
 
     /** Add {@code it} to the bag, merging into a matching stack if the item is
-     *  stackable and a match exists. No capacity check — only called after the
-     *  caller has already verified there is room (or for equipped→bag returns
+     *  stackable and a match exists. No capacity check - only called after the
+     *  caller has already verified there is room (or for equipped->bag returns
      *  where item loss would be worse than overflow). */
     private static void mergeOrAdd(Inventory inv, Item it) {
         if (it.isStackable()) {

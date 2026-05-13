@@ -5,12 +5,12 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
- * Top-right burger icon — present on every V2 screen per CLAUDE.md ("burger
- * menu always present"). Draws a 56×56 button containing three short
+ * Top-right burger icon - present on every V2 screen per CLAUDE.md ("burger
+ * menu always present"). Draws a 56x56 button containing three short
  * horizontal bars stacked vertically. Tap behaviour is owned by the screen
  * (typically: open a small overlay with Title / Settings / Encyclopaedia).
  *
- * <p>For now the click target is wired but the overlay isn't implemented — it
+ * <p>For now the click target is wired but the overlay isn't implemented - it
  * dispatches to a screen-supplied {@link Runnable} that may be a no-op while
  * the V2 chain is being built up.
  */
@@ -25,7 +25,7 @@ public final class Burger {
 
     public Burger(UiCtx ctx, Runnable onClick) {
         this.onClick = onClick;
-        // Anchor at top-right of the current virtual viewport — reads
+        // Anchor at top-right of the current virtual viewport - reads
         // ctx.worldW()/H() so the burger re-positions on layout rebuild
         // after a UiScale change.
         rect.set(ctx.worldW() - SIZE - INSET, ctx.worldH() - SIZE - INSET, SIZE, SIZE);
@@ -38,7 +38,7 @@ public final class Burger {
         s.rect(rect.x + UIVars.HUD_BORDER, rect.y + UIVars.HUD_BORDER,
                rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
 
-        // Three horizontal bars — width ~50% of the button, vertically spaced
+        // Three horizontal bars - width ~50% of the button, vertically spaced
         // so the gap between bars matches the bar height (the canonical
         // "hamburger" silhouette).
         float cx = rect.cx();

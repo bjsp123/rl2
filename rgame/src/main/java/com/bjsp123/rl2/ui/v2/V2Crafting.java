@@ -19,12 +19,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 crafting popup — three input slots + a result preview, with a picker
+ * V2 crafting popup - three input slots + a result preview, with a picker
  * overlay for filling each slot from the player's inventory. Tap Confirm
  * to consume one unit from each filled slot and add the matched recipe
  * result to the bag.
  *
- * <p>Recipe matching is delegated to {@link RecipeSystem#tryMatch} — same
+ * <p>Recipe matching is delegated to {@link RecipeSystem#tryMatch} - same
  * logic the V1 crafting screen uses, so any recipe registered in
  * {@link RecipeSystem#ALL} works here.
  */
@@ -37,7 +37,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private Mob player;
 
     /** Items bound to each input slot. Items remain in the player's bag
-     *  until {@link #confirm()} runs — the slot just holds a reference. */
+     *  until {@link #confirm()} runs - the slot just holds a reference. */
     private final Item[] slots = new Item[N_INPUTS];
 
     private final Rect window         = new Rect();
@@ -85,7 +85,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         for (int i = 0; i < slots.length; i++) slots[i] = null;
     }
 
-    /** Open with {@code item} pre-loaded into the first empty slot — same
+    /** Open with {@code item} pre-loaded into the first empty slot - same
      *  contract as the V1 crafting screen, used by inventory's Combine
      *  button to chain into here with a chosen item. */
     public void openWith(Item item) {
@@ -162,7 +162,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         pCellSz, pCellSz));
             }
             // Stash the picker window rect at the end so render() can reach it.
-            // We rebuild this every frame — cheap.
+            // We rebuild this every frame - cheap.
             pickerWindow.set(pX, pY, pickW, pickH);
         }
     }
@@ -245,11 +245,11 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Item result = RecipeSystem.tryMatch(slots[0], slots[1], slots[2]);
         drawCellIcon(resultRect, result);
 
-        // Arrow glyph between last input and result — drawn as text since
+        // Arrow glyph between last input and result - drawn as text since
         // we don't have a vector arrow primitive yet.
         TextDraw.centre(ctx, ctx.fontHeader,
                 result != null ? UIVars.ACCENT : UIVars.TEXT_DIM,
-                "→",
+                "->",
                 slotRects[2].right() + 14f, slotRects[2].cy() + 4f);
 
         // Button labels.
@@ -266,26 +266,26 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     window.cx(), confirmBtn.top() + 28f);
         } else {
             String name = result.name != null ? result.name : result.type;
-            TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
+            TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.ACCENT,
                     "Yields: " + name,
-                    window.cx(), confirmBtn.top() + 28f);
+                    window.cx(), confirmBtn.top() + 28f,
+                    window.w - 28f);
         }
 
-        // Recipe list under the slots — read-only summary.
+        // Recipe list under the slots - read-only summary.
         float top = resultRect.y - 20f;
         TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Recipes:",
                 window.x + 16f, top);
         top -= 18f;
         for (RecipeSystem.Recipe r : RecipeSystem.ALL) {
             if (top < confirmBtn.top() + 50f) break;
-            String desc = r.describe();
-            if (desc.length() > 42) desc = desc.substring(0, 40) + "…";
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    desc, window.x + UIVars.PAD_CONTENT, top);
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    r.describe(), window.x + UIVars.PAD_CONTENT, top,
+                    window.right() - UIVars.PAD_CONTENT - (window.x + UIVars.PAD_CONTENT));
             top -= 16f;
         }
 
-        // Picker overlay — item icons.
+        // Picker overlay - item icons.
         if (pickerSlot >= 0) {
             TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                     "Choose item",

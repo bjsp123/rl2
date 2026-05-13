@@ -11,8 +11,8 @@ import java.util.Map;
 
 /**
  * Shared lazy-loaded sprite source for {@link Item}s. Three places need to render the
- * same item picture — the inventory popup, the HUD's action-bar quickslots, and the
- * dungeon floor where the item lives — and they all go through this class so the art
+ * same item picture - the inventory popup, the HUD's action-bar quickslots, and the
+ * dungeon floor where the item lives - and they all go through this class so the art
  * stays in sync.
  *
  * <p>Sprite-cell coordinates live on each item's row in
@@ -34,13 +34,13 @@ public final class ItemSprites {
      *  (procedural items go through their own path; missing rows return null). */
     public static TextureRegion regionFor(Item item) {
         if (item == null) return null;
-        // Gems are procedural — species + size produce a unique colour-and-shape icon
+        // Gems are procedural - species + size produce a unique colour-and-shape icon
         // that the registry can't address. GemSprites caches per-(species, size).
         if (item.isGem()) return GemSprites.regionFor(item);
         return regionFor(item.type);
     }
 
-    /** Direct type lookup — used by code paths that don't have an Item handle
+    /** Direct type lookup - used by code paths that don't have an Item handle
      *  (e.g. silhouette rendering for an empty slot). */
     public static TextureRegion regionFor(String type) {
         if (type == null) return null;
@@ -61,7 +61,7 @@ public final class ItemSprites {
         }
     }
 
-    /** 32×32 cell at {@code (col, row)} on {@code sprites/items.png}. */
+    /** 32x32 cell at {@code (col, row)} on {@code sprites/items.png}. */
     private static TextureRegion sai(int col, int row) {
         return saiItemsTex == null ? null
                 : new TextureRegion(saiItemsTex, col * CELL, row * CELL, CELL, CELL);

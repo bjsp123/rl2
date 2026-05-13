@@ -2,9 +2,9 @@ package com.bjsp123.rl2.ui.skin;
 import com.badlogic.gdx.Gdx;
 import com.bjsp123.rl2.persistence.Persistence;
 
-/** Persistent UI scale factor — affects font size and HUD/menu element sizing. */
+/** Persistent UI scale factor - affects font size and HUD/menu element sizing. */
 public class UiScale {
-    /** Persistence key — the {@code -v3} suffix invalidates older keys after
+    /** Persistence key - the {@code -v3} suffix invalidates older keys after
      *  the V2 UI rebuild redefined sensible scale ranges. Without the bump,
      *  a leftover {@code 2.0} value from a previous default would keep the
      *  world at half size on first launch, making everything read as twice
@@ -26,7 +26,7 @@ public class UiScale {
         }
         try {
             float v = Float.parseFloat(raw);
-            // Accept only values that match a current choice — defensive
+            // Accept only values that match a current choice - defensive
             // against tampered persistence or a CHOICES array narrowed in
             // a future revision. Out-of-list values fall back to default.
             for (float c : CHOICES) {

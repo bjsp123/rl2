@@ -28,7 +28,7 @@ public final class AchievementsStore {
                 try {
                     a.unlocked.add(Achievement.valueOf(name));
                 } catch (IllegalArgumentException ignored) {
-                    // Unknown entry from a different build — drop it.
+                    // Unknown entry from a different build - drop it.
                 }
             }
         } catch (Exception ignored) {

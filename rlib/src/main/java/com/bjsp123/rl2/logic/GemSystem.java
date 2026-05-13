@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Gem spawn helpers — theme-gated species draw and the factory used by {@code placeGems}
+ * Gem spawn helpers - theme-gated species draw and the factory used by {@code placeGems}
  * and the recipe engine. Equip/unequip live on {@link com.bjsp123.rl2.model.Inventory};
  * stat bonuses from equipped gems will plug into {@link ItemSystem#contributeInto} when
  * designed, with no separate dispatch path needed.
@@ -53,7 +53,7 @@ public final class GemSystem {
     }
 
     /** Build a level-1 ("tiny") gem of {@code species}. The factory point used both by
-     *  level population and by the recipe engine — same-kind size-up calls
+     *  level population and by the recipe engine - same-kind size-up calls
      *  {@link #createGem(GemSpecies, int)} with the next size. */
     public static Item createGem(GemSpecies species) {
         return createGem(species, 1);
@@ -61,7 +61,7 @@ public final class GemSystem {
 
     public static Item createGem(GemSpecies species, int size) {
         Item it = new Item();
-        // Procedural item — null type. Identity is carried by gemSpecies + gemSize,
+        // Procedural item - null type. Identity is carried by gemSpecies + gemSize,
         // and Item.isGem reads the species field rather than checking the type.
         it.inventoryCategory = InventoryCategory.GEM;
         it.gemSpecies = species;

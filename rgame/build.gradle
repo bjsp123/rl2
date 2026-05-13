@@ -8,7 +8,7 @@ java {
 dependencies {
     api project(':rlib')
     api "com.badlogicgames.gdx:gdx:$gdxVersion"
-    // FreeType — used by PixelOperator.ttf loading in StoneUi.newDefaultFont().
+    // FreeType - used by PixelOperator.ttf loading in StoneUi.newDefaultFont().
     // Native libraries are pulled per-platform by the desktop and android modules.
     api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
 }

@@ -11,13 +11,13 @@ import com.bjsp123.rl2.model.Point;
  * Emitted by {@code rlib} systems (see {@code Level.events}); consumed once per
  * {@code TurnSystem.tick} by {@code rgame}'s animator.
  *
- * <p>Events are passive data records — there are no listeners and no callbacks. They
+ * <p>Events are passive data records - there are no listeners and no callbacks. They
  * are appended in the order things happened during a tick and drained same-frame.
  * Carrying direct {@link Mob} / {@link Item} / {@link Point} references is safe because
  * consumption happens before the next tick mutates state.
  *
  * <p>Sub-types are flat records so the consumer can pattern-match in a single
- * {@code switch} expression. Keep payloads minimal — anything purely visual (frame
+ * {@code switch} expression. Keep payloads minimal - anything purely visual (frame
  * counts, palettes, particle counts) is the consumer's concern.
  */
 public sealed interface GameEvent permits
@@ -73,8 +73,8 @@ public sealed interface GameEvent permits
      *  {@code level.mobs}; consumers play the death animation against this snapshot. */
     record MobKilled(Mob mob, Mob killer, int x, int y, boolean visibleAtKill) implements GameEvent {}
 
-    /** Mob teleported between two tiles. The animator plays origin streaks → fade-out
-     *  → fade-in at destination → arrival streaks. */
+    /** Mob teleported between two tiles. The animator plays origin streaks -> fade-out
+     *  -> fade-in at destination -> arrival streaks. */
     record MobTeleported(Mob mob, int fromX, int fromY, int toX, int toY) implements GameEvent {}
 
     /** Mob became / stopped being on fire. Maintains the consumer's burning set so it
@@ -88,7 +88,7 @@ public sealed interface GameEvent permits
     record MobWoke (Mob mob) implements GameEvent {}
 
     /** Plain magic-missile fired (caster's basic ranged attack, AI ranged shot, staff).
-     *  Damage is applied logically when the visual completes — the consumer holds the
+     *  Damage is applied logically when the visual completes - the consumer holds the
      *  pending impact and calls back into {@code rlib}. */
     record MagicMissileFired(Mob caster, Point from, Point to, int damage,
                              boolean trajectoryVisible) implements GameEvent {}
@@ -97,7 +97,7 @@ public sealed interface GameEvent permits
      *  + gravity + brightness from the element. The {@code wand} reference is
      *  carried so the impact site can read per-item scaling columns
      *  ({@code damage}, {@code damagePerLevel}, {@code tilesAffected}, etc.).
-     *  {@code effectiveLevel} is the level used for scaling — typically
+     *  {@code effectiveLevel} is the level used for scaling - typically
      *  {@code wand.level} but bumped by +1 when the caster has the WANDMASTER
      *  perk, captured at fire time so the impact callback sees the right
      *  number even though the perk lives on the player. */
@@ -134,14 +134,14 @@ public sealed interface GameEvent permits
     /** Single faint mote drifting up from a light source. */
     record LightMoteSpawn(Point pos) implements GameEvent {}
 
-    /** Mob recovered HP — drives the "+N" green heal-text floater. */
+    /** Mob recovered HP - drives the "+N" green heal-text floater. */
     record HealApplied(Mob mob, int amount) implements GameEvent {}
 
-    /** Tame succeeded (thrown food on a feral pet, etc.) — drives the "tame!" floater. */
+    /** Tame succeeded (thrown food on a feral pet, etc.) - drives the "tame!" floater. */
     record MobTamed(Mob mob) implements GameEvent {}
 
     /** Coloured particle burst at a wand impact tile. The renderer maps {@code element}
-     *  to the corresponding palette (water → blue, fire → red, …). */
+     *  to the corresponding palette (water -> blue, fire -> red, ...). */
     record WandImpactBurst(Point pos, Item.ItemEffect element) implements GameEvent {}
 
     /** Particle burst at a potion-drink or potion-throw landing tile. The
@@ -168,23 +168,23 @@ public sealed interface GameEvent permits
     record VegetationChanged(Point pos, Level.Vegetation vegetation) implements GameEvent {}
 
     /** Multi-coloured radial particle burst at {@code pos}. Used for the
-     *  power-orb absorb celebration and on character level-up. Blocking — the
+     *  power-orb absorb celebration and on character level-up. Blocking - the
      *  Animator parks the freeze gate for the burst's duration so the
      *  player notices the level-up before the next turn ticks. */
     record RainbowBurst(Point pos) implements GameEvent {}
 
     record XPGainBurst(Point pos) implements GameEvent {}
 
-    /** Per-turn HP loss from a buff DOT (fire, poison, …). The renderer picks the
-     *  floating-text tint from {@code buff} (orange for fire, green for poison, …). */
+    /** Per-turn HP loss from a buff DOT (fire, poison, ...). The renderer picks the
+     *  floating-text tint from {@code buff} (orange for fire, green for poison, ...). */
     record PeriodicBuffDamage(Mob mob, Buff.BuffType buff, int amount) implements GameEvent {}
 
-    /** A single item was dropped on death — the renderer plays a brief arcing toss
+    /** A single item was dropped on death - the renderer plays a brief arcing toss
      *  from the dying mob's tile to the item's resting spot. The animation is
      *  non-blocking (runs in parallel with whatever animation comes next). */
     record LootDropped(Item item, Point from, Point to) implements GameEvent {}
 
-    /** A single item was just picked up by a mob — the renderer plays a brief
+    /** A single item was just picked up by a mob - the renderer plays a brief
      *  arc from the item's tile toward the bottom-right of the screen (where the
      *  inventory tab lives). Non-blocking. */
     record ItemPickedUp(Mob picker, Item item, Point from) implements GameEvent {}
@@ -206,7 +206,7 @@ public sealed interface GameEvent permits
      *  engine has either applied half-max-HP fall damage (and possibly
      *  killed the mob), or moved the survivor to the next dungeon level
      *  via the source level's down-stairs link. The renderer doesn't
-     *  need to know which — the sprite animation is the same. */
+     *  need to know which - the sprite animation is the same. */
     record MobFellThroughChasm(Mob mob, Point fromTile) implements GameEvent {}
 
     /** Mob jumped from {@code from} to {@code to} via a JUMP-behavior item.
@@ -215,10 +215,10 @@ public sealed interface GameEvent permits
     record MobJumped(Mob mob, Point from, Point to) implements GameEvent {}
 
     /** Player (or future AI) fired a grappling rope from {@code from} to
-     *  {@code target}. {@code success == true} → the rope retracts and the
+     *  {@code target}. {@code success == true} -> the rope retracts and the
      *  animator slides whatever was on the target tile back via a paired
      *  {@link MobKnockedBack} event the engine emitted alongside this one;
-     *  {@code success == false} → the target was too heavy and the rope
+     *  {@code success == false} -> the target was too heavy and the rope
      *  flashes / fades at full extent without pulling anything. Blocking
      *  during the rope's extend phase so the dragged-mob slide that
      *  follows lines up with the retract. */

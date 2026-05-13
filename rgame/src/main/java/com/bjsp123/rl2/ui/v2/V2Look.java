@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 look popup — modal info panel that appears alongside {@link LookMode}
+ * V2 look popup - modal info panel that appears alongside {@link LookMode}
  * and shows the contents of the tile under the cursor (terrain + items + mob).
  * Anchored to the top-centre of the viewport so the world view + bottom HUD
  * stay visible behind it.
@@ -30,27 +30,27 @@ import java.util.List;
  * <p>Content scrolls vertically when it exceeds the window height. A thin
  * scroll bar on the right edge indicates position.
  *
- * <p>Each section gets a "?" button when an encyclopaedia is wired —
+ * <p>Each section gets a "?" button when an encyclopaedia is wired -
  * tapping it opens the encyclopaedia pre-selected to that tile / mob entry,
  * deactivating look mode in the process so the V2 single-popup-at-a-time
  * rule is preserved.
  */
 public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
-    // ── Constants ─────────────────────────────────────────────────────────────
+    // -- Constants -------------------------------------------------------------
     /** Pixels from window top reserved for the "Look" header (title + gap). */
     private static final float HEADER_H        = 56f;
     /** Max bag items listed before a "..." truncation line. */
     private static final int   MAX_BAG_DISPLAY = 8;
 
-    // ── Dependencies ─────────────────────────────────────────────────────────
+    // -- Dependencies ---------------------------------------------------------
     private final UiCtx ctx;
     private LookMode lookMode;
     private Level level;
     private V2Encyclopedia encyclopedia;
     private V2BuffInfo buffInfo;
 
-    // ── Layout ────────────────────────────────────────────────────────────────
+    // -- Layout ----------------------------------------------------------------
     private final Rect window      = new Rect();
     private final Rect tileInfoBtn = new Rect();
     private final Rect mobInfoBtn  = new Rect();
@@ -70,22 +70,22 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private float totalContentH;
 
     /** Content-space Y positions (0 = top, increasing downward) of the two
-     *  significant section boundaries — set by {@link #doContentLayout}. */
+     *  significant section boundaries - set by {@link #doContentLayout}. */
     private float tileDivContentY;
     private float mobDivContentY;   // -1 when no mob
     private float mobHeaderContentY; // -1 when no mob
 
-    // ── Scroll state ──────────────────────────────────────────────────────────
+    // -- Scroll state ----------------------------------------------------------
     private final Scroller scroller = new Scroller();
-    /** Last mob we computed layout for — used to detect cursor movement so
+    /** Last mob we computed layout for - used to detect cursor movement so
      *  the scroll position resets when the player looks at a new mob. */
     private Mob prevLookedMob;
 
-    // ── Looked-at capture ─────────────────────────────────────────────────────
+    // -- Looked-at capture -----------------------------------------------------
     private Tile lookedTile;
     private Mob  lookedMob;
 
-    // ── Buff icon hit targets ─────────────────────────────────────────────────
+    // -- Buff icon hit targets -------------------------------------------------
     private final List<Rect>    buffIconRects = new ArrayList<>();
     private final List<Buff>    buffIconList  = new ArrayList<>();
     private final List<float[]> pendingDots   = new ArrayList<>();
@@ -112,7 +112,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         renderDotColumns();
     }
 
-    // ── Capture ───────────────────────────────────────────────────────────────
+    // -- Capture ---------------------------------------------------------------
 
     private void captureLookedAt() {
         lookedTile = null;
@@ -136,14 +136,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         }
     }
 
-    // ── Layout ────────────────────────────────────────────────────────────────
+    // -- Layout ----------------------------------------------------------------
 
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float winW = Math.min(320f, vw - 32f);
 
-        // Wrap mob description into flavor lines — must happen before
+        // Wrap mob description into flavor lines - must happen before
         // doContentLayout so it can count them.
         mobFlavorLines.clear();
         if (lookedMob != null && lookedMob.description != null
@@ -155,7 +155,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Measure total content height (dry-run mirrors renderTextPass).
         totalContentH = doContentLayout(winW);
 
-        // Window — top anchored at vh-80, height capped to leave 10px at
+        // Window - top anchored at vh-80, height capped to leave 10px at
         // the bottom of the screen.
         float maxWinH = vh - 90f;
         float winH    = Math.min(maxWinH, HEADER_H + totalContentH);
@@ -184,7 +184,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 ? caTop + scrollOff - mobDivContentY
                 : Float.NaN;
 
-        // "?" buttons — scroll with their respective section headings.
+        // "?" buttons - scroll with their respective section headings.
         float infoSz   = 22f;
         float topPad   = ctx.lineH() * 0.5f;
         tileInfoBtn.set(window.right() - 14f - infoSz,
@@ -198,7 +198,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     /**
-     * Dry-run of the content layout — mirrors {@link #renderTextPass} but only
+     * Dry-run of the content layout - mirrors {@link #renderTextPass} but only
      * accumulates heights. Sets {@link #tileDivContentY}, {@link #mobDivContentY},
      * and {@link #mobHeaderContentY} as side effects. Returns total content height.
      */
@@ -209,15 +209,16 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         float lh  = ctx.lineH();
         float hlh = ctx.headerLineH();
+        float textW = winW - 28f;
 
-        float h = lh * 0.5f; // top padding — breathing room below the separator
+        float h = lh * 0.5f; // top padding - breathing room below the separator
         Point cursor = lookMode != null ? lookMode.cursor() : null;
         if (cursor == null || level == null) return h;
         int cx = (int) Math.floor(cursor.x());
         int cy = (int) Math.floor(cursor.y());
         boolean inBounds = cx >= 0 && cy >= 0 && cx < level.width && cy < level.height;
 
-        // Tile section — name is the section header.
+        // Tile section - name is the section header.
         if (lookedTile != null) h += hlh;
         if (inBounds && level.surface != null && level.surface[cx][cy] != null) h += lh;
         if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) h += lh;
@@ -225,14 +226,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 && com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]) != null) h += lh;
         if (lookedTile != null) h += lh * 0.5f; // section gap
 
-        // Floor items — each item name is its own header.
+        // Floor items - each item name is its own header.
         if (level.items != null) {
             int count = 0;
             for (Item it : level.items) {
                 if (it == null || it.location == null) continue;
                 if ((int) Math.floor(it.location.x()) == cx
                         && (int) Math.floor(it.location.y()) == cy) {
-                    h += hlh;
+                    String name = com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
+                    h += TextDraw.block(ctx.fontHeader, name, textW, 2, hlh).height();
                     count++;
                     if (count >= 3) break;
                 }
@@ -249,9 +251,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             mobDivContentY = h;
             if (!mobFlavorLines.isEmpty()) h += lh * 0.6f; // rule gap
 
-            // Mob live-detail block — name is the section header.
+            // Mob live-detail block - name is the section header.
             mobHeaderContentY = h;
-            h += hlh; // name header
+            h += mobHeaderBlock(textW).height();
             h += lh;  // HP
             h += lh;  // Att / Def
             h += lh;  // Dmg / Arm
@@ -269,7 +271,11 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 List<Item> eq = lookedMob.inventory.allEquipped();
                 if (!eq.isEmpty()) {
                     h += lh;               // "Equipped:" header
-                    h += eq.size() * lh;
+                    for (Item it : eq) {
+                        if (it == null) continue;
+                        String name = "  " + com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
+                        h += TextDraw.block(ctx.fontRegular, name, textW, 2, lh).height();
+                    }
                 }
                 // Bag items.
                 int bagCount = 0;
@@ -277,7 +283,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 if (bagCount > 0) {
                     h += lh;               // "Bag:" header
                     int shown = Math.min(bagCount, MAX_BAG_DISPLAY);
-                    h += shown * lh;
+                    int seen = 0;
+                    for (Item it : lookedMob.inventory.bag) {
+                        if (it == null) continue;
+                        if (seen >= shown) break;
+                        String iname = com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
+                        if (it.count > 1) iname += " x" + it.count;
+                        h += TextDraw.block(ctx.fontRegular, "  " + iname, textW, 2, lh).height();
+                        seen++;
+                    }
                     if (bagCount > MAX_BAG_DISPLAY) h += lh; // "..." line
                 }
             }
@@ -286,7 +300,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         return h;
     }
 
-    // ── Shapes pass ───────────────────────────────────────────────────────────
+    // -- Shapes pass -----------------------------------------------------------
 
     private void renderShapesPass() {
         ctx.applyProjection();
@@ -297,7 +311,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
-        // Thin separator between the fixed header and the scrollable body —
+        // Thin separator between the fixed header and the scrollable body -
         // masks any ascender bleed from the top content line.
         float caTop = window.top() - HEADER_H;
         s.setColor(UIVars.BORDER_MID);
@@ -305,7 +319,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         float caBot = window.y;
 
-        // "?" buttons — only draw when scrolled into view.
+        // "?" buttons - only draw when scrolled into view.
         if (encyclopedia != null && lookedTile != null
                 && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= caBot) {
             drawInfoBtn(s, tileInfoBtn, tileInfoPressed);
@@ -329,7 +343,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     window.w - 16f, 4f, 1f);
         }
 
-        // Scroll bar — shown when content is taller than the visible area.
+        // Scroll bar - shown when content is taller than the visible area.
         float visH = window.h - HEADER_H;
         if (totalContentH > visH + 1f) {
             float barW  = 3f;
@@ -353,12 +367,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
-    // ── Text pass ─────────────────────────────────────────────────────────────
+    // -- Text pass -------------------------------------------------------------
 
     private void renderTextPass() {
         ctx.batch.begin();
 
-        // Fixed header — always visible, never scrolls.
+        // Fixed header - always visible, never scrolls.
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Look",
                 window.cx(), window.top() - ctx.headerLineH());
 
@@ -373,6 +387,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         int cx = (int) Math.floor(cursor.x());
         int cy = (int) Math.floor(cursor.y());
         float left   = window.x + 14f;
+        float textW  = window.w - 28f;
         float caTop  = window.top() - HEADER_H;  // content area ceiling
         float caBot  = window.y + 2f;             // content area floor
         float drawY  = caTop + scroller.scrollY(); // current line baseline
@@ -387,8 +402,8 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // --- TILE SECTION --- name is the section header
         if (lookedTile != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
-                        lookedTile.name().toLowerCase(), left, drawY);
+                TextDraw.leftFit(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
+                        lookedTile.name().toLowerCase(), left, drawY, textW);
                 if (encyclopedia != null
                         && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= caBot) {
                     TextDraw.centre(ctx, ctx.fontRegular,
@@ -401,16 +416,16 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         if (inBounds && level.surface != null && level.surface[cx][cy] != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        "  " + describeSurface(level.surface[cx][cy]), left, drawY);
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        "  " + describeSurface(level.surface[cx][cy]), left, drawY, textW);
             }
             drawY -= lh;
         }
 
         if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        "  " + describeVegetation(level.vegetation[cx][cy]), left, drawY);
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        "  " + describeVegetation(level.vegetation[cx][cy]), left, drawY, textW);
             }
             drawY -= lh;
         }
@@ -420,9 +435,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]);
             if (type != null) {
                 if (inView(drawY, caTop, caBot)) {
-                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                    TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                             "  " + type.name().toLowerCase().replace('_', ' '),
-                            left, drawY);
+                            left, drawY, textW);
                 }
                 drawY -= lh;
             }
@@ -430,7 +445,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         if (lookedTile != null) drawY -= lh * 0.5f; // section gap
 
-        // Floor items — each name is its own header.
+        // Floor items - each name is its own header.
         if (level.items != null) {
             int count = 0;
             for (Item it : level.items) {
@@ -438,11 +453,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 int ix = (int) Math.floor(it.location.x());
                 int iy = (int) Math.floor(it.location.y());
                 if (ix == cx && iy == cy) {
+                    TextDraw.TextBlock itemName = TextDraw.block(ctx.fontHeader,
+                            com.bjsp123.rl2.logic.ItemSystem.displayName(it, null),
+                            textW, 2, hlh);
                     if (inView(drawY, caTop, caBot)) {
-                        TextDraw.left(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
-                                com.bjsp123.rl2.logic.ItemSystem.displayName(it, null), left, drawY);
+                        TextDraw.wrapped(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
+                                itemName, left, drawY);
                     }
-                    drawY -= hlh;
+                    drawY -= itemName.height();
                     count++;
                     if (count >= 3) break;
                 }
@@ -454,7 +472,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         // --- MOB SECTION ---
         if (lookedMob != null) {
-            // Flavor text — bright, above the rule.
+            // Flavor text - bright, above the rule.
             for (String line : mobFlavorLines) {
                 if (inView(drawY, caTop, caBot)) {
                     TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
@@ -465,9 +483,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (!mobFlavorLines.isEmpty()) drawY -= lh * 0.6f; // rule gap
 
             // Live-stats block.
-            drawY = renderMobBlockAt(left, drawY, caTop, caBot);
+            drawY = renderMobBlockAt(left, drawY, caTop, caBot, textW);
 
-            // Mob "?" label — drawn after renderMobBlockAt so it appears on top
+            // Mob "?" label - drawn after renderMobBlockAt so it appears on top
             // of any overlapping buff icons drawn to the batch.
             if (encyclopedia != null
                     && mobInfoBtn.top() <= caTop + 2f && mobInfoBtn.y >= caBot) {
@@ -491,49 +509,48 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
      * Returns the Y cursor after the last rendered element.
      * Buff icon hit-rects are rebuilt here (cleared before this call).
      */
-    private float renderMobBlockAt(float left, float drawY, float caTop, float caBot) {
+    private float renderMobBlockAt(float left, float drawY, float caTop, float caBot,
+                                   float textW) {
         Mob m = lookedMob;
         StatBlock s = m.effectiveStats();
 
-        // Name — section header.
-        String mname  = m.name != null ? m.name : "mob";
-        String header = mname;
-        if (m.characterLevel > 1) header += " (lvl " + m.characterLevel + ")";
+        // Name - section header.
+        TextDraw.TextBlock header = mobHeaderBlock(textW);
         if (inView(drawY, caTop, caBot)) {
-            TextDraw.left(ctx, ctx.fontHeader, UIVars.TEXT_BODY, header, left, drawY);
+            TextDraw.wrapped(ctx, ctx.fontHeader, UIVars.TEXT_BODY, header, left, drawY);
         }
         float lh = ctx.lineH();
-        drawY -= ctx.headerLineH();
+        drawY -= header.height();
 
         // HP.
         if (inView(drawY, caTop, caBot)) {
             int hp    = (int) Math.round(m.hp);
             int maxHp = (int) Math.round(s.maxHp);
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "HP " + hp + " / " + maxHp, left, drawY);
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                    "HP " + hp + " / " + maxHp, left, drawY, textW);
         }
         drawY -= lh;
 
         // Att / Def.
         if (inView(drawY, caTop, caBot)) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "Att " + s.accuracy + "   Def " + s.evasion, left, drawY);
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                    "Att " + s.accuracy + "   Def " + s.evasion, left, drawY, textW);
         }
         drawY -= lh;
 
         // Dmg / Arm.
         if (inView(drawY, caTop, caBot)) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "Dmg " + range(s.damage) + "   Arm " + range(s.armor), left, drawY);
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                    "Dmg " + range(s.damage) + "   Arm " + range(s.armor), left, drawY, textW);
         }
         drawY -= lh;
 
         // Ranged (optional).
         if (!s.rangedDamage.isZero()) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         "Ranged " + range(s.rangedDamage) + " @ " + s.rangedDistance + " sq",
-                        left, drawY);
+                        left, drawY, textW);
             }
             drawY -= lh;
         }
@@ -544,8 +561,8 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             String al = attitudeLabel(viewer, m);
             if (al != null) {
                 if (inView(drawY, caTop, caBot)) {
-                    TextDraw.left(ctx, ctx.fontRegular, attitudeColor(viewer, m),
-                            al, left, drawY);
+                    TextDraw.leftFit(ctx, ctx.fontRegular, attitudeColor(viewer, m),
+                            al, left, drawY, textW);
                 }
                 drawY -= lh;
             }
@@ -555,7 +572,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         String state = stateOfMindLabel(m);
         if (state != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, state, left, drawY);
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM, state, left, drawY, textW);
             }
             drawY -= lh;
         }
@@ -565,13 +582,13 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             String ownerLabel = m.owner.behavior == Mob.Behavior.PLAYER ? "you"
                     : (m.owner.mobType != null ? m.owner.mobType.toLowerCase() : "unknown");
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        "Loyal to: " + ownerLabel, left, drawY);
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        "Loyal to: " + ownerLabel, left, drawY, textW);
             }
             drawY -= lh;
         }
 
-        // Buff icons row — always rebuild hit rects regardless of visibility
+        // Buff icons row - always rebuild hit rects regardless of visibility
         // so touch targets stay accurate.
         buffIconRects.clear();
         buffIconList.clear();
@@ -611,11 +628,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 drawY -= lh;
                 for (Item it : eq) {
                     if (it == null) continue;
+                    TextDraw.TextBlock itemName = TextDraw.block(ctx.fontRegular,
+                            "  " + com.bjsp123.rl2.logic.ItemSystem.displayName(it, null),
+                            textW, 2, lh);
                     if (inView(drawY, caTop, caBot)) {
-                        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                                "  " + com.bjsp123.rl2.logic.ItemSystem.displayName(it, null), left, drawY);
+                        TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                                itemName, left, drawY);
                     }
-                    drawY -= lh;
+                    drawY -= itemName.height();
                 }
             }
 
@@ -641,17 +661,29 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     }
                     String iname = com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
                     if (it.count > 1) iname += " x" + it.count;
+                    TextDraw.TextBlock itemName = TextDraw.block(ctx.fontRegular,
+                            "  " + iname, textW, 2, lh);
                     if (inView(drawY, caTop, caBot)) {
-                        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                                "  " + iname, left, drawY);
+                        TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                                itemName, left, drawY);
                     }
-                    drawY -= lh;
+                    drawY -= itemName.height();
                     shown++;
                 }
             }
         }
 
         return drawY;
+    }
+
+    private TextDraw.TextBlock mobHeaderBlock(float textW) {
+        if (lookedMob == null) {
+            return TextDraw.block(ctx.fontHeader, "", textW, 0, ctx.headerLineH());
+        }
+        String mname = lookedMob.name != null ? lookedMob.name : "mob";
+        String header = mname;
+        if (lookedMob.characterLevel > 1) header += " (lvl " + lookedMob.characterLevel + ")";
+        return TextDraw.block(ctx.fontHeader, header, textW, 2, ctx.headerLineH());
     }
 
     private void renderDotColumns() {
@@ -672,7 +704,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    // ── Static helpers ────────────────────────────────────────────────────────
+    // -- Static helpers --------------------------------------------------------
 
     private static String describeSurface(com.bjsp123.rl2.model.Level.Surface s) {
         return switch (s) {
@@ -731,13 +763,13 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
         String suffix = m.intent == null ? "" : switch (m.intent) {
             case IDLE               -> "";
-            case WANDERING          -> " — wandering";
-            case PURSUING           -> " — pursuing a foe";
-            case CHASING_LAST_KNOWN -> " — chasing last seen";
-            case SHOOTING           -> " — taking aim";
-            case KITING             -> " — keeping range";
-            case FLEEING            -> " — fleeing";
-            case FOLLOWING_LEADER   -> " — following its leader";
+            case WANDERING          -> " - wandering";
+            case PURSUING           -> " - pursuing a foe";
+            case CHASING_LAST_KNOWN -> " - chasing last seen";
+            case SHOOTING           -> " - taking aim";
+            case KITING             -> " - keeping range";
+            case FLEEING            -> " - fleeing";
+            case FOLLOWING_LEADER   -> " - following its leader";
         };
         return prefix + suffix;
     }
@@ -748,7 +780,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                                     : mm.min() + "-" + mm.max();
     }
 
-    // ── Input ─────────────────────────────────────────────────────────────────
+    // -- Input -----------------------------------------------------------------
 
     public InputProcessor input() {
         return new InputAdapter() {
@@ -762,7 +794,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 float vy = ctx.unprojectY(sx, sy);
                 dragging = false;
 
-                // "?" buttons — only hittable when scrolled into view.
+                // "?" buttons - only hittable when scrolled into view.
                 float caTop = window.top() - HEADER_H;
                 if (encyclopedia != null && lookedTile != null
                         && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= window.y

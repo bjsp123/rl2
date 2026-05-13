@@ -47,7 +47,7 @@ public class LookMode extends InputAdapter {
     public boolean isActive() { return active; }
     public Point   cursor()   { return cursor; }
 
-    /** True when the look panel should be drawn — look is active AND the player has
+    /** True when the look panel should be drawn - look is active AND the player has
      *  made a pick (tap/click/cursor) that chose a square to inspect. After
      *  activation but before any input, only the reticle shows; the panel is hidden
      *  until {@link #hasChosen} flips. */
@@ -64,7 +64,7 @@ public class LookMode extends InputAdapter {
     public void activate() {
         if (player == null || level == null) return;
         active = true;
-        // Panel hidden until first user input — auto-pick is a preview, not a commit.
+        // Panel hidden until first user input - auto-pick is a preview, not a commit.
         hasChosen = false;
         Mob nearest = nearestVisibleMob(player, level);
         cursor = (nearest != null) ? nearest.position : player.position;
@@ -164,8 +164,8 @@ public class LookMode extends InputAdapter {
             case Input.Keys.ENTER,
                  Input.Keys.NUMPAD_ENTER,
                  Input.Keys.SPACE -> {
-                // SPACE / ENTER commit the current reticle position — panel
-                // appears (state A → B). Direction keys only PREVIEW: they move
+                // SPACE / ENTER commit the current reticle position - panel
+                // appears (state A -> B). Direction keys only PREVIEW: they move
                 // the reticle without revealing the panel, so the player can
                 // line up a square before committing.
                 hasChosen = true;
@@ -175,7 +175,7 @@ public class LookMode extends InputAdapter {
         }
         // Direction-key behaviour depends on whether the panel is up:
         //   State A (no panel yet): move the reticle silently, panel stays hidden.
-        //   State B (panel visible): a direction key dismisses look — once the
+        //   State B (panel visible): a direction key dismisses look - once the
         //     player has committed to a square the panel is the focus, and a
         //     direction key signals "I'm done examining, return to the world".
         if (hasChosen) {
@@ -194,8 +194,8 @@ public class LookMode extends InputAdapter {
         // Two-stage tap behaviour. State A (panel hidden, just-activated): a tap
         // moves the reticle to the tapped tile and reveals the panel. State B
         // (panel already visible): a tap ends the look operation. Taps that hit
-        // the panel itself never reach here — LookRenderer's framed Container
-        // absorbs them — so any touchDown in State B is a tap "away from" the
+        // the panel itself never reach here - LookRenderer's framed Container
+        // absorbs them - so any touchDown in State B is a tap "away from" the
         // panel, which is the user's dismissal gesture.
         if (hasChosen) {
             deactivate();

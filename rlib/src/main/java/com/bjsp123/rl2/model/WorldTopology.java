@@ -21,11 +21,11 @@ import java.util.Random;
  *   <li>The default downstair always reaches the same-side level at {@code d+1}
  *       (or the bottom CENTER if {@code d+1 == DUNGEON_DEPTH}).</li>
  *   <li>With probability {@code CROSSLINK_PROBABILITY}, a second downstair
- *       reaches the opposite-side level at {@code d+1} — only relevant when
+ *       reaches the opposite-side level at {@code d+1} - only relevant when
  *       both sides exist there ({@code d+1 < DUNGEON_DEPTH}).</li>
  *   <li>With probability {@code SIDE_BRANCH_PROBABILITY}, a second downstair
  *       reaches a fresh dead-end "side branch" level at the same depth, column
- *       ±2 of the parent. Mutually exclusive with the crosslink — a level can
+ *       +/-2 of the parent. Mutually exclusive with the crosslink - a level can
  *       grow at most one extra downstair.</li>
  * </ul>
  *
@@ -68,10 +68,10 @@ public final class WorldTopology {
         // Bottom CENTER (depth = DUNGEON_DEPTH).
         mainC[depth] = addLevel(out, width, height, true, false, depth, Level.Side.CENTER, 0f, unique, rng);
 
-        // 2. Wire the spine — same-side downstairs at every depth d ∈ [2, N-1].
+        // 2. Wire the spine - same-side downstairs at every depth d in [2, N-1].
         //    Top CENTER feeds 2W + 2E; bottom CENTER receives from (N-1)W + (N-1)E.
         if (depth == 2) {
-            // Degenerate world: top CENTER → bottom CENTER, single edge.
+            // Degenerate world: top CENTER -> bottom CENTER, single edge.
             connectDown(out, mainC[1], mainC[2], /*alt=*/false);
         } else {
             connectDown(out, mainC[1], mainW[2], false);
@@ -112,7 +112,7 @@ public final class WorldTopology {
                     continue;
                 }
 
-                // Side branch: dead-end at parent depth, column ±2.
+                // Side branch: dead-end at parent depth, column +/-2.
                 if (rng.nextDouble() < pBranch) {
                     int sideIdx = addLevel(out, width, height, true, false,
                             d, lvl.side, amWest ? -2f : +2f, unique, rng);
@@ -127,14 +127,14 @@ public final class WorldTopology {
 
     /** Allocate one fresh level, append it to {@code out}, and stamp the supplied
      *  metadata. Returns its index. The per-level seed is drawn from the world
-     *  rng so the same world seed regenerates the same dungeon every time —
+     *  rng so the same world seed regenerates the same dungeon every time -
      *  using {@code LevelFactory}'s built-in {@code ROOT_RNG} would leak fresh
      *  randomness into every run and break determinism. */
     private static int addLevel(List<Level> out, int width, int height,
                                 boolean hasUp, boolean hasDown,
                                 int depth, Level.Side side, float mapColumn,
                                 UniqueTracker unique, Random rng) {
-        // Pass depth into createDungeonLevel up front — population reads
+        // Pass depth into createDungeonLevel up front - population reads
         // {@code level.depth} for power-level / unique-mob eligibility, so
         // setting it after construction would be too late and every level
         // would generate as if it were depth 1.

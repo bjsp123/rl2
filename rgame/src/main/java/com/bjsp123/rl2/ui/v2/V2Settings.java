@@ -1,5 +1,7 @@
 package com.bjsp123.rl2.ui.v2;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputMultiplexer;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.ui.skin.AnimationSpeed;
 import com.bjsp123.rl2.ui.skin.LogFontScale;
@@ -7,13 +9,14 @@ import com.bjsp123.rl2.ui.skin.LogPreferences;
 import com.bjsp123.rl2.ui.skin.MobOutline;
 import com.bjsp123.rl2.ui.skin.UiFontScale;
 import com.bjsp123.rl2.ui.skin.UiScale;
+import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
 import com.bjsp123.rl2.world.render.IconSprites;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 settings screen — tab strip across the top of a window, content panel
+ * V2 settings screen - tab strip across the top of a window, content panel
  * below. Each tab shows a vertical stack of "labelled rows", each row a
  * setting name plus a horizontal mini-button choice grid.
  *
@@ -25,12 +28,11 @@ public final class V2Settings extends V2Screen {
 
     private enum Tab { GAMEPLAY, GRAPHICS, LOG, DANGER }
     private static Tab currentTab = Tab.GRAPHICS;
-    /** Tracks whether the user's first tap on "Clear Hall of Fame" is pending
-     *  confirmation. Resets when the tab is rebuilt (i.e. on any navigation). */
-    private boolean clearHofPending = false;
 
     private final Rl2Game game;
     private final Rect window = new Rect();
+    private final ConfirmPopup clearHallPopup;
+    private final V2PopupActor clearHallPopupActor;
 
     private static final float WIN_PAD     = 12f;
     /** Horizontal gap between tabs in the tab strip. */
@@ -57,6 +59,8 @@ public final class V2Settings extends V2Screen {
     public V2Settings(Rl2Game game, UiCtx ctx) {
         super(ctx);
         this.game = game;
+        this.clearHallPopup = new ConfirmPopup(ctx);
+        this.clearHallPopupActor = new V2PopupActor(clearHallPopup);
     }
 
     @Override
@@ -67,23 +71,22 @@ public final class V2Settings extends V2Screen {
         rowLabels.clear();
         tabBtns.clear();
 
-        // Outer window — caps at the design width so the panel doesn't
+        // Outer window - caps at the design width so the panel doesn't
         // stretch into a wide letterbox on widescreen displays. Centred
         // horizontally on the viewport so the surrounding world breathes
         // evenly on either side. Top reserved for the screen header;
         // bottom reserved for the back/burger overlay row.
-        float winW = Math.min(UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
-                ctx.worldW() - 2 * SCREEN_MARGIN);
-        float winH = Math.min(UIVars.VIRTUAL_H - 110f, ctx.worldH() - 110f);
-        float winX = (ctx.worldW() - winW) * 0.5f;
-        float winY = (ctx.worldH() - winH) * 0.5f;
-        window.set(winX, winY, winW, winH);
+        PanelLayout.centered(window, ctx,
+                UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
+                UIVars.VIRTUAL_H - 110f,
+                SCREEN_MARGIN, 55f);
+        float winW = window.w;
+        float winX = window.x;
+        float winY = window.y;
+        float winH = window.h;
 
-        // Reset confirm state when layout rebuilds.
-        clearHofPending = false;
-
-        // Tab strip — anchored at the TOP of the window's interior. Tab
-        // widths are computed so all tabs FIT within the inner width — no
+        // Tab strip - anchored at the TOP of the window's interior. Tab
+        // widths are computed so all tabs FIT within the inner width - no
         // tab strip ever overflows the panel. Total tab strip width =
         // n*tabW + (n-1)*TAB_GAP = innerW; solve for tabW.
         float tabsY = winY + winH - WIN_PAD - TAB_H;
@@ -97,14 +100,14 @@ public final class V2Settings extends V2Screen {
                     tabsX + i * (tabW + TAB_GAP), tabsY, tabW, TAB_H,
                     () -> { currentTab = t; show(); });
             b.checked = (t == currentTab);
-            // Icon sourced from the shared UI sheet — text label fallback
+            // Icon sourced from the shared UI sheet - text label fallback
             // kicks in if the sheet failed to load.
             b.icon = IconSprites.regionFor(iconFor(t));
             tabBtns.add(b);
             buttons.add(b);
         }
 
-        // Tab content — vertical stack of "labelled rows" beneath the tab
+        // Tab content - vertical stack of "labelled rows" beneath the tab
         // strip. Each row is a section label (drawn by drawBodyText) plus a
         // horizontal chooser of mini-buttons (drawn by the parent button
         // pass). We lay out from the top of the content area downward; since
@@ -137,10 +140,11 @@ public final class V2Settings extends V2Screen {
                         LogPreferences::expanded, LogPreferences::setExpanded);
                 yCursor = addLogFontScaleRow(winX + WIN_PAD, yCursor);
             }
-            case DANGER -> addDangerTabContent(winX + WIN_PAD, contentTop, innerW);
+            case DANGER -> addButtonRow(winX + WIN_PAD,
+                    contentTop, "Clear Hall of Fame");
         }
 
-        // Back button at bottom-right — pops the navigation stack so the
+        // Back button at bottom-right - pops the navigation stack so the
         // user returns to wherever Settings was opened from.
         back = new BackBtn(ctx, game::popScreen);
         // Burger top-right.
@@ -154,7 +158,7 @@ public final class V2Settings extends V2Screen {
     /** Add one labelled row of choice buttons. Returns the new y-cursor
      *  (one row below the current one). */
     private float addRow(String labelText, float x, float yTop, List<ChoiceSpec> choices) {
-        // Section label text — drawn by drawBodyText. yTop is the top of the
+        // Section label text - drawn by drawBodyText. yTop is the top of the
         // label (libGDX baseline conventions handled in TextDraw).
         rowLabels.add(new RowLabel(labelText, x, yTop));
         // Chooser buttons sit just below the label.
@@ -170,15 +174,11 @@ public final class V2Settings extends V2Screen {
     }
 
     private float addButtonRow(float x, float yTop, String label) {
-      
-           
         float winW = Math.min(UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
                 ctx.worldW() - 2 * SCREEN_MARGIN);
         float innerW = winW - 2 * WIN_PAD;
-        Btn b = new Btn(label, x, yTop - CHOOSER_H, innerW, CHOOSER_H, () -> {
-            game.hallOfFame.entries.clear();     
-            show();
-        });
+        Btn b = new Btn(label, x, yTop - CHOOSER_H, innerW, CHOOSER_H,
+                this::openClearHallPopup);
         b.warn = true;
         buttons.add(b);
         return yTop - CHOOSER_H - ROW_GAP;
@@ -296,7 +296,7 @@ public final class V2Settings extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        // Window title bar — a header label drawn ABOVE the window for now,
+        // Window title bar - a header label drawn ABOVE the window for now,
         // since our window content is fully consumed by tabs + choosers.
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Settings",
                 ctx.worldW() * 0.5f, ctx.worldH() - 24f);
@@ -306,22 +306,34 @@ public final class V2Settings extends V2Screen {
         }
     }
 
-    private void addDangerTabContent(float x, float yTop, float innerW) {
-        String btnLabel = clearHofPending
-                ? "Confirm — this cannot be undone"
-                : "Clear Hall of Fame";
-        Btn b = new Btn(btnLabel, x, yTop - CHOOSER_H, innerW, CHOOSER_H, () -> {
-            if (!clearHofPending) {
-                clearHofPending = true;
-            } else {
-                game.hallOfFame.entries.clear();
-                com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
-                clearHofPending = false;
-                show();
-            }
-        });
-        b.warn = true;
-        buttons.add(b);
+    private void openClearHallPopup() {
+        clearHallPopup.configure(
+                "Clear Hall of Fame?",
+                "This removes all hero records.",
+                "Clear",
+                "Cancel",
+                () -> {
+                    game.hallOfFame.entries.clear();
+                    com.bjsp123.rl2.save.HallOfFameStore.save(
+                            game.persistence, game.hallOfFame);
+                    show();
+                });
+        clearHallPopup.open();
+    }
+
+    @Override
+    public void show() {
+        super.show();
+        ctx.v2Stage.remove(clearHallPopupActor);
+        ctx.v2Stage.addToSubPopup(clearHallPopupActor);
+        Gdx.input.setInputProcessor(new InputMultiplexer(
+                clearHallPopup.input(), baseInput()));
+    }
+
+    @Override
+    public void hide() {
+        ctx.v2Stage.remove(clearHallPopupActor);
+        super.hide();
     }
 
     private static String label(Tab t) {

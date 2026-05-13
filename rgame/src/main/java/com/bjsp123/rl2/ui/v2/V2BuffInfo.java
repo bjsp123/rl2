@@ -1,12 +1,7 @@
 package com.bjsp123.rl2.ui.v2;
 
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
-import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.InputProcessor;
-import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.BuffSystem;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.world.render.BuffIcons;
@@ -20,36 +15,24 @@ import java.util.List;
  * turns remain.  Opened by tapping a buff icon in the HUD or any info
  * screen; closed by tapping outside or pressing Back/Escape.
  */
-public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
+public final class V2BuffInfo extends BasePopup {
 
-    private final UiCtx ctx;
-    private boolean open;
     private Buff buff;
 
-    private final Rect window = new Rect();
     private final List<String> descLines = new ArrayList<>();
 
-    public V2BuffInfo(UiCtx ctx) { this.ctx = ctx; }
+    public V2BuffInfo(UiCtx ctx) { super(ctx); }
 
     public void open(Buff b) {
         this.buff = b;
-        this.open = true;
+        open();
     }
 
-    public void close() { this.open = false; }
+    @Override
+    protected boolean canRender() { return buff != null; }
 
     @Override
-    public boolean isOpen() { return open; }
-
-    @Override
-    public void renderSelf() {
-        if (!open || buff == null) return;
-        layoutRects();
-        renderShapesPass();
-        renderTextPass();
-    }
-
-    private void layoutRects() {
+    protected void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float winW = Math.min(240f, vw - 32f);
@@ -64,20 +47,16 @@ public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
     }
 
-    private void renderShapesPass() {
-        ctx.applyProjection();
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        ShapeRenderer s = ctx.shapes;
-        s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
-        s.rect(0, 0, ctx.worldW(), ctx.worldH());
-        Window.drawShape(ctx, window.x, window.y, window.w, window.h);
-        s.end();
-        Gdx.gl.glDisable(GL20.GL_BLEND);
+    @Override
+    protected void renderShapesPass() {
+        beginModalShapes();
+        drawScrim();
+        drawWindow();
+        endModalShapes();
     }
 
-    private void renderTextPass() {
+    @Override
+    protected void renderTextPass() {
         ctx.batch.begin();
 
         float iconSz = 48f;
@@ -90,8 +69,9 @@ public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         }
 
         top = iconY - ctx.lineH();
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                BuffSystem.displayName(buff.type), window.cx(), top);
+        TextDraw.centreFit(ctx, ctx.fontHeader, UIVars.ACCENT,
+                BuffSystem.displayName(buff.type), window.cx(), top,
+                window.w - 28f);
 
         top -= ctx.headerLineH();
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
@@ -111,30 +91,6 @@ public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     public InputProcessor input() {
-        return new InputAdapter() {
-            @Override
-            public boolean touchDown(int sx, int sy, int pointer, int button) {
-                if (!open) return false;
-                float vx = ctx.unprojectX(sx, sy);
-                float vy = ctx.unprojectY(sx, sy);
-                if (!window.contains(vx, vy)) close();
-                return true;
-            }
-
-            @Override
-            public boolean touchUp(int sx, int sy, int pointer, int button) {
-                return open;
-            }
-
-            @Override
-            public boolean keyDown(int keycode) {
-                if (!open) return false;
-                if (keycode == Input.Keys.ESCAPE || keycode == Input.Keys.BACK) {
-                    close();
-                    return true;
-                }
-                return false;
-            }
-        };
+        return simpleDismissInput();
     }
 }

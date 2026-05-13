@@ -15,7 +15,7 @@ import com.badlogic.gdx.scenes.scene2d.Touchable;
  *
  * <p>Touch is disabled on the actor: input flows through the existing
  * {@link com.badlogic.gdx.InputMultiplexer} and each popup's own
- * {@code input()} processor — the Stage never claims taps. {@link #act}
+ * {@code input()} processor - the Stage never claims taps. {@link #act}
  * just mirrors {@link V2Popup#isOpen} onto {@link #setVisible} so a
  * closed popup is skipped by the Stage's draw walk.
  */
@@ -25,7 +25,7 @@ public final class V2PopupActor extends Actor {
 
     public V2PopupActor(V2Popup popup) {
         this.popup = popup;
-        // Stage must not claim taps — the existing InputMultiplexer +
+        // Stage must not claim taps - the existing InputMultiplexer +
         // popup.input() pair already does hit testing and tap-outside-to-
         // close. Touchable.disabled also makes the actor a no-op for
         // hover / focus events.
@@ -47,7 +47,7 @@ public final class V2PopupActor extends Actor {
         // Pause the Stage's batch so the popup can run its own
         // shapes.begin / shapes.end and (if needed) batch.begin /
         // batch.end pairs without nested-begin GL errors. The flush is
-        // standard and harmless — see scene2d docs on mixing
+        // standard and harmless - see scene2d docs on mixing
         // ShapeRenderer with Stage actors.
         batch.end();
         popup.renderSelf();

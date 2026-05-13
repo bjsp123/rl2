@@ -20,7 +20,7 @@ public final class BrandSystem {
 
     private BrandSystem() {}
 
-    // ── Brand assignment ──────────────────────────────────────────────────────
+    // -- Brand assignment ------------------------------------------------------
 
     /**
      * 1-in-5 chance to assign a random brand to {@code item}. When the roll
@@ -51,7 +51,7 @@ public final class BrandSystem {
         };
     }
 
-    // ── On-hit dispatch ───────────────────────────────────────────────────────
+    // -- On-hit dispatch -------------------------------------------------------
 
     /**
      * Apply the elemental on-hit effect of {@code b} when {@code attacker}

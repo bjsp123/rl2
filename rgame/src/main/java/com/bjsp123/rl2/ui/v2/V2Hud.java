@@ -24,30 +24,30 @@ import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
- * V2 in-game HUD — built from primitive ShapeRenderer rects + SpriteBatch
+ * V2 in-game HUD - built from primitive ShapeRenderer rects + SpriteBatch
  * texture draws. Replaces the scene2d-based {@link com.bjsp123.rl2.ui.hud.HudRenderer}
  * for active gameplay; instantiated and driven directly by {@code PlayScreen}
  * (no scene2d Stage involvement).
  *
  * <p>Layout, in viewport-relative virtual coords:
  * <ul>
- *   <li><b>Top-left</b> — three stacked status bars (HP / XP / Satiety).</li>
- *   <li><b>Top-right</b> — burger button (opens settings / map / encyclopaedia /
- *       return-to-title via dropdown — dropdown not yet wired in this slice).</li>
- *   <li><b>Bottom-left</b> — Look button.</li>
- *   <li><b>Bottom-right</b> — six action quickslots + an inventory button at the
+ *   <li><b>Top-left</b> - three stacked status bars (HP / XP / Satiety).</li>
+ *   <li><b>Top-right</b> - burger button (opens settings / map / encyclopaedia /
+ *       return-to-title via dropdown - dropdown not yet wired in this slice).</li>
+ *   <li><b>Bottom-left</b> - Look button.</li>
+ *   <li><b>Bottom-right</b> - six action quickslots + an inventory button at the
  *       far right, all flush to the bottom-right corner.</li>
  * </ul>
  *
  * <p>Render lifecycle each frame:
  * <ol>
  *   <li>{@code PlayScreen.render()} runs world-rendering passes</li>
- *   <li>{@code v2Hud.update(player, depth, turn, tick)} — fresh game state</li>
- *   <li>{@code v2Hud.render()} — switches projection to V2 camera, runs
+ *   <li>{@code v2Hud.update(player, depth, turn, tick)} - fresh game state</li>
+ *   <li>{@code v2Hud.render()} - switches projection to V2 camera, runs
  *       a ShapeRenderer pass for backgrounds + bars, then a SpriteBatch
  *       pass for icons, status line, and burger glyph (drawn via shapes again
  *       at the end since they're geometry, not textures)</li>
- *   <li>uiStage (popups) renders on top — popups still come from V1 for now</li>
+ *   <li>uiStage (popups) renders on top - popups still come from V1 for now</li>
  * </ol>
  *
  * <p>Input: {@link #input()} returns an {@link InputProcessor} that the
@@ -57,7 +57,7 @@ import java.util.function.Supplier;
  */
 public final class V2Hud {
 
-    // ── Layout constants (virtual px, design at 400×720) ────────────────────
+    // -- Layout constants (virtual px, design at 400x720) --------------------
     private static final float MARGIN       = 8f;
     private static final float BAR_W        = 140f;
     private static final float BAR_H        = 14f;
@@ -69,16 +69,16 @@ public final class V2Hud {
     private static final float ACTION_GAP   = 4f;
     private static final float ICON_PAD     = 6f  * HUD_SCALE;
 
-    // ── State ────────────────────────────────────────────────────────────────
+    // -- State ----------------------------------------------------------------
     private final UiCtx ctx;
 
-    /** Live player accessor — re-read every frame so a level-transition
+    /** Live player accessor - re-read every frame so a level-transition
      *  doesn't leave the HUD bound to a stale Mob reference. */
     private Supplier<Mob> playerSupplier;
     private ActionBar actionBar;
     private int depth, turn;
 
-    // Callbacks — same shape as the V1 HudRenderer.setOn* setters, so
+    // Callbacks - same shape as the V1 HudRenderer.setOn* setters, so
     // PlayScreen's existing wiring carries over with minimal changes.
     private IntConsumer onActionUse;
     private Runnable    onOpenInventory;
@@ -90,13 +90,13 @@ public final class V2Hud {
     private Runnable    onReturnToTitle;
     private Runnable    onOpenMap;
     private Runnable    onOpenLog;
-    /** Tap on a player buff icon → open buff detail popup. */
+    /** Tap on a player buff icon -> open buff detail popup. */
     private java.util.function.Consumer<Buff> onBuffTap;
     public void setOnBuffTap(java.util.function.Consumer<Buff> fn) {
         this.onBuffTap = fn;
     }
 
-    // ── Hit rects ────────────────────────────────────────────────────────────
+    // -- Hit rects ------------------------------------------------------------
     private final Rect portraitRect = new Rect();
     private final Rect hpBarRect    = new Rect();
     private final Rect xpBarRect    = new Rect();
@@ -113,7 +113,7 @@ public final class V2Hud {
     private final java.util.List<Rect> buffIconRects = new java.util.ArrayList<>();
     private final java.util.List<Buff> buffIconList = new java.util.ArrayList<>();
 
-    // ── Pressed state for visual feedback ───────────────────────────────────
+    // -- Pressed state for visual feedback -----------------------------------
     private final boolean[] actionPressed = new boolean[ActionBar.SLOTS];
     private boolean invPressed, lookPressed, burgerPressed;
     private boolean menuOpen;
@@ -134,7 +134,7 @@ public final class V2Hud {
         for (int i = 0; i < menuItemRects.length; i++) menuItemRects[i] = new Rect();
     }
 
-    // ── Public API (mirrors HudRenderer.setOn* surface) ─────────────────────
+    // -- Public API (mirrors HudRenderer.setOn* surface) ---------------------
     public void setPlayerSupplier(Supplier<Mob> s)  { this.playerSupplier = s; }
     public void setActionBar(ActionBar a)           { this.actionBar = a; }
     public void setOnActionUse(IntConsumer fn)      { this.onActionUse = fn; }
@@ -148,7 +148,7 @@ public final class V2Hud {
     public void setOnOpenMap(Runnable fn)           { this.onOpenMap = fn; }
     public void setOnOpenLog(Runnable fn)           { this.onOpenLog = fn; }
 
-    /** Frame state — depth / turn for the status line; player read via
+    /** Frame state - depth / turn for the status line; player read via
      *  {@link #playerSupplier}. The {@code tick} parameter is accepted for
      *  parity with the legacy HUD's call signature but isn't surfaced in
      *  the V2 status line. */
@@ -157,7 +157,7 @@ public final class V2Hud {
         this.turn  = turn;
     }
 
-    /** True when the burger dropdown is showing — PlayScreen folds this
+    /** True when the burger dropdown is showing - PlayScreen folds this
      *  into its {@code isAnyPopupOpen()} gate so the world doesn't tick
      *  while the player is reading the menu. */
     public boolean isMenuOpen() { return menuOpen; }
@@ -170,7 +170,7 @@ public final class V2Hud {
         renderBurgerGlyph();   // tiny shapes pass at the end for the menu lines
     }
 
-    // ── Layout ──────────────────────────────────────────────────────────────
+    // -- Layout --------------------------------------------------------------
     private void layoutRects() {
         float w = ctx.worldW();
         float h = ctx.worldH();
@@ -203,7 +203,7 @@ public final class V2Hud {
         float ax1row = invRect.x - ACTION_GAP - stripW1row;
         gridLayout = ax1row < lookRect.x + lookRect.w + ACTION_GAP;
         if (gridLayout) {
-            // Prefer 2 rows (e.g. 4×2 for 8 slots); fall back to 3 rows only
+            // Prefer 2 rows (e.g. 4x2 for 8 slots); fall back to 3 rows only
             // when the 2-row grid would overlap the look button.
             int gridCols2 = (n + 1) / 2;
             float gridW2  = gridCols2 * ACTION_BTN + (gridCols2 - 1) * ACTION_GAP;
@@ -229,7 +229,7 @@ public final class V2Hud {
             }
         }
 
-        // Burger menu — centred on the viewport as a chunky column-of-
+        // Burger menu - centred on the viewport as a chunky column-of-
         // buttons window. Same shape as the V2Screen menu-screen burger so
         // the in-game pause menu reads identically.
         if (menuOpen) {
@@ -254,7 +254,7 @@ public final class V2Hud {
         }
     }
 
-    // ── Render passes ───────────────────────────────────────────────────────
+    // -- Render passes -------------------------------------------------------
     private void renderShapesPass() {
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
@@ -283,16 +283,16 @@ public final class V2Hud {
             drawBar(s, satBarRect, 0f, UIVars.BORDER_OUTER);
         }
 
-        // Buttons — chrome only; icons land in the SpriteBatch pass.
+        // Buttons - chrome only; icons land in the SpriteBatch pass.
         // Action quickslots + inventory button carry item / chest icons,
         // so they paint with the paler SLOT_BG so the icon stays legible.
         for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) drawSlotBtn(s, actionRects[i], actionPressed[i]);
         drawSlotBtn(s, invRect, invPressed);
-        // Look + burger have no item icon — plain HUD chrome.
+        // Look + burger have no item icon - plain HUD chrome.
         drawBtn(s, lookRect,   lookPressed);
         drawBtn(s, burgerRect, burgerPressed);
 
-        // Burger menu — modal column-of-buttons window centred on the
+        // Burger menu - modal column-of-buttons window centred on the
         // viewport. Dim everything behind it first, then paint the window
         // and each item as a chunky button (tri-line border + warm fill).
         if (menuOpen) {
@@ -311,7 +311,7 @@ public final class V2Hud {
             }
         }
 
-        // Buff duration dot timers — one 1×1 dot per remaining turn (max 8),
+        // Buff duration dot timers - one 1x1 dot per remaining turn (max 8),
         // stacked bottom-to-top to the right of each buff icon.
         Mob dotPlayer = currentPlayer();
         if (dotPlayer != null && dotPlayer.buffs != null && !dotPlayer.buffs.isEmpty()) {
@@ -337,7 +337,7 @@ public final class V2Hud {
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    /** Draw an HP/XP/Satiety bar — tri-line border, mid warm-grey backdrop,
+    /** Draw an HP/XP/Satiety bar - tri-line border, mid warm-grey backdrop,
      *  and a fill bar at {@code frac} in {@code fillColor}. */
     private void drawBar(ShapeRenderer s, Rect r, float frac, Color fillColor) {
         Edges.drawTriLine(s, r.x, r.y, r.w, r.h, 1f);
@@ -350,7 +350,7 @@ public final class V2Hud {
         }
     }
 
-    /** Action-quickslot chrome — tri-line border + paler warm-grey fill so
+    /** Action-quickslot chrome - tri-line border + paler warm-grey fill so
      *  the item icon drawn over it is legible. Used for the bottom-right
      *  action buttons and the inventory button (both carry sprites). */
     private void drawSlotBtn(ShapeRenderer s, Rect r, boolean pressed) {
@@ -360,7 +360,7 @@ public final class V2Hud {
                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
-    /** Plain HUD button chrome — tri-line border + mid warm-grey fill.
+    /** Plain HUD button chrome - tri-line border + mid warm-grey fill.
      *  Used for buttons WITHOUT item icons (look button, burger). */
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed) {
         Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
@@ -373,7 +373,7 @@ public final class V2Hud {
     private void renderTextPass() {
         ctx.batch.begin();
 
-        // Portrait — character class sprite drawn in the top-left cell.
+        // Portrait - character class sprite drawn in the top-left cell.
         Mob playerForPortrait = currentPlayer();
         if (playerForPortrait != null && playerForPortrait.characterClass != null) {
             TextureRegion portrait = PortraitSprites.regionFor(
@@ -385,7 +385,7 @@ public final class V2Hud {
             }
         }
 
-        // XP bar right-side labels — character level and unspent-perk star.
+        // XP bar right-side labels - character level and unspent-perk star.
         Mob playerXp = currentPlayer();
         if (playerXp != null) {
             String lvlLabel = String.valueOf(playerXp.characterLevel);
@@ -396,7 +396,7 @@ public final class V2Hud {
                     lvlLabel, xpBarRect.right() - 2f, xpBarRect.y + xpBarRect.h - 2f);
         }
 
-        // Action button icons — pull from ActionBar.
+        // Action button icons - pull from ActionBar.
         if (actionBar != null) {
             for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
                 Item it = actionBar.get(i);
@@ -404,7 +404,7 @@ public final class V2Hud {
                 Rect r = actionRects[i];
                 ItemCell.draw(ctx, it, currentPlayer(), r.x, r.y, r.w, r.h, true);
             }
-            // Brand sparks — additive pass over the icons.
+            // Brand sparks - additive pass over the icons.
             for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
                 Item it = actionBar.get(i);
                 if (it != null && it.brand != null) {
@@ -417,7 +417,7 @@ public final class V2Hud {
             }
         }
 
-        // Inventory button — chest icon if available, else "Bag" label.
+        // Inventory button - chest icon if available, else "Bag" label.
         TextureRegion chest = IconSprites.regionFor(IconSprites.Icon.INV);
         if (chest != null) {
             ctx.batch.draw(chest,
@@ -428,7 +428,7 @@ public final class V2Hud {
                     invRect.cx(), invRect.y + invRect.h * 0.5f + 4);
         }
 
-        // Look button — magnifier icon.
+        // Look button - magnifier icon.
         TextureRegion look = IconSprites.regionFor(IconSprites.Icon.LOOK);
         if (look != null) {
             ctx.batch.draw(look,
@@ -436,12 +436,12 @@ public final class V2Hud {
                     lookRect.w - 2 * ICON_PAD, lookRect.h - 2 * ICON_PAD);
         }
 
-        // Status line — under the satiety bar.
-        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+        // Status line - under the satiety bar.
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                 "Lvl " + depth + "   Turn " + turn,
-                MARGIN, satBarRect.y - 6f);
+                MARGIN, satBarRect.y - 6f, Math.max(40f, ctx.worldW() - 2f * MARGIN));
 
-        // Player buff icons row — under the status line, anchored at the
+        // Player buff icons row - under the status line, anchored at the
         // top-left edge so it shares the bars cluster's anchor. Caps at
         // 8 visible buffs to avoid the row bleeding under the right-side
         // chrome on a narrow viewport.
@@ -468,7 +468,7 @@ public final class V2Hud {
             }
         }
 
-        // Event log readout — last few entries, drawn above the action
+        // Event log readout - last few entries, drawn above the action
         // quickslot row at the bottom-right. Most-recent line lands closest
         // to the action bar; older lines stack upward. Filtered through
         // {@link LogPreferences} so the user's "show low-priority / mob-vs-
@@ -497,21 +497,18 @@ public final class V2Hud {
                         e.priority == LogEvent.EventPriority.HIGH
                                 ? UIVars.TEXT_BODY
                                 : UIVars.TEXT_DIM;
-                String text = e.text;
-                // Naive cap so a long line doesn't overshoot the action bar.
-                int maxChars = 56;
-                if (text.length() > maxChars) text = text.substring(0, maxChars - 1) + "…";
-                TextDraw.left(ctx, ctx.fontRegular, col,
-                        text, logLeft, logBottom + lines * lineH);
+                TextDraw.leftFit(ctx, ctx.fontRegular, col,
+                        e.text, logLeft, logBottom + lines * lineH,
+                        Math.max(24f, logRight - logLeft));
                 lines++;
-                // Soft x-overrun guard — if the rect is narrower on a
+                // Soft x-overrun guard - if the rect is narrower on a
                 // viewport-shrunk world, stop early rather than spilling
                 // under the action quickslots.
                 if (logLeft >= logRight) break;
             }
         }
 
-        // Burger menu items — centred header-weight labels, matching the
+        // Burger menu items - centred header-weight labels, matching the
         // V2Screen menu-screen burger style.
         if (menuOpen) {
             String[] labels = { "Settings", "Map", "Encyclopaedia", "Log", "Main Menu" };
@@ -549,7 +546,7 @@ public final class V2Hud {
         return playerSupplier != null ? playerSupplier.get() : null;
     }
 
-    // ── Input ───────────────────────────────────────────────────────────────
+    // -- Input ---------------------------------------------------------------
     public InputProcessor input() {
         return new InputAdapter() {
             @Override
@@ -557,7 +554,7 @@ public final class V2Hud {
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
 
-                // Burger menu items intercept first when the menu is open —
+                // Burger menu items intercept first when the menu is open -
                 // so tapping a label fires it rather than the underlying HUD
                 // button below.
                 if (menuOpen) {

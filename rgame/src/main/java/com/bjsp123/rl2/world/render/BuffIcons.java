@@ -11,8 +11,8 @@ import java.util.Map;
  * Lazy-loaded sprite source for the {@link BuffType} icons that live in
  * {@code sprites/buffs16.png}. Sheet layout:
  * <ul>
- *   <li>Top 16-px band — buff-icon row, 16×16 cells, single row.</li>
- *   <li>Second 32-px band (y = 32..64) — attack-slash sprites, 32×32 cells.</li>
+ *   <li>Top 16-px band - buff-icon row, 16x16 cells, single row.</li>
+ *   <li>Second 32-px band (y = 32..64) - attack-slash sprites, 32x32 cells.</li>
  * </ul>
  * {@link #iconCol} maps each buff to its column in the buff row.
  *
@@ -26,7 +26,7 @@ public final class BuffIcons {
     public static final int BUFF_CELL  = 16;
     /** Edge length of one slash-sprite cell in source pixels. */
     public static final int SLASH_CELL = 32;
-    /** Top-left y of the slash band — first 32-px row is the buff band
+    /** Top-left y of the slash band - first 32-px row is the buff band
      *  (16 px of icons + 16 px of blank), slashes start at the second. */
     private static final int SLASH_Y   = 32;
 
@@ -50,9 +50,9 @@ public final class BuffIcons {
     }
 
     /** Attack-flash sprite from {@code buffs16.png}'s slash band. Player
-     *  slash at col 0 → source (0, 32, 32, 32); mob slash at col 1 → (32, 32,
+     *  slash at col 0 -> source (0, 32, 32, 32); mob slash at col 1 -> (32, 32,
      *  32, 32). Returns {@code null} if the sheet failed to load or doesn't
-     *  have room for a 32×32 cell at the requested column. */
+     *  have room for a 32x32 cell at the requested column. */
     public static TextureRegion attackFlashRegion(int col) {
         if (cache == null) load();
         if (sheet == null) return null;
@@ -61,7 +61,7 @@ public final class BuffIcons {
         return new TextureRegion(sheet, col * SLASH_CELL, SLASH_Y, SLASH_CELL, SLASH_CELL);
     }
 
-    /** Knockback graphic from the slash band — col 2, just to the right of
+    /** Knockback graphic from the slash band - col 2, just to the right of
      *  the player + mob slashes. Plays on a unit that's been knocked back
      *  to signal the impact. Returns {@code null} on missing sheet / cell. */
     public static TextureRegion knockbackRegion() {
@@ -97,10 +97,10 @@ public final class BuffIcons {
 
     /**
      * Column on the single buff-icon row in {@code sprites/buffs16.png}.
-     * Renderer-side mapping — lives in rgame because the sheet layout is
+     * Renderer-side mapping - lives in rgame because the sheet layout is
      * presentation, not game logic.
      *
-     * <p>Single-row layout (left → right): on fire, invisible, frightened,
+     * <p>Single-row layout (left -> right): on fire, invisible, frightened,
      * oily, sorcerous, levitating, regenerating, poisoned, blessed,
      * ghostly, hasted, protection, anti-magic, ESP, chilled, starving,
      * recharging (cooldown), killer.

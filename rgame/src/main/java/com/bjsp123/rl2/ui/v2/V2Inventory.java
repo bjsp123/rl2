@@ -20,17 +20,17 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 /**
- * V2 inventory popup — primitive-drawn modal window covering the bulk of the
+ * V2 inventory popup - primitive-drawn modal window covering the bulk of the
  * viewport. Replaces the scene2d-based {@link com.bjsp123.rl2.ui.popup.InventoryRenderer}
  * for the in-game backpack experience.
  *
  * <p>Layout (top-down inside the outer window):
  * <ol>
  *   <li>Header label ("Backpack")</li>
- *   <li>Equipment row — five fixed cells: weapon, offhand, armor, amulet 0, amulet 1</li>
- *   <li>Gems row — three fixed cells: gem 0, gem 1, gem 2</li>
- *   <li>Tab strip — Gear / Food / Items / Gems</li>
- *   <li>Bag grid — 6 cols × N rows of free-form items in the current tab</li>
+ *   <li>Equipment row - five fixed cells: weapon, offhand, armor, amulet 0, amulet 1</li>
+ *   <li>Gems row - three fixed cells: gem 0, gem 1, gem 2</li>
+ *   <li>Tab strip - Gear / Food / Items / Gems</li>
+ *   <li>Bag grid - 6 cols x N rows of free-form items in the current tab</li>
  * </ol>
  *
  * <p>Tapping any cell that holds an item opens a smaller item-detail popup
@@ -39,7 +39,7 @@ import java.util.function.BiConsumer;
  *
  * <p>Render lifecycle: the screen calls {@link #render()} after the V2 HUD
  * pass so the popup overlays the HUD. Input is captured via
- * {@link #input()} — when {@link #isOpen()} returns false the processor
+ * {@link #input()} - when {@link #isOpen()} returns false the processor
  * passes through without consuming.
  */
 public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
@@ -47,7 +47,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private enum Tab { GEAR, FOOD, ITEMS, GEMS }
 
     /** Map each tab to a glyph in the shared UI icon sheet. FOOD and GEMS
-     *  have no dedicated icons yet — fall back to OTHER. */
+     *  have no dedicated icons yet - fall back to OTHER. */
     private static com.bjsp123.rl2.world.render.IconSprites.Icon tabIcon(Tab t) {
         return switch (t) {
             case GEAR  -> com.bjsp123.rl2.world.render.IconSprites.Icon.EQUIPMENT;
@@ -57,14 +57,14 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    // ── State ───────────────────────────────────────────────────────────────
+    // -- State ---------------------------------------------------------------
     private final UiCtx ctx;
     private boolean open;
     private Mob player;
     private ActionBar actionBar;
     private Tab currentTab = Tab.GEAR;
 
-    /** Item the user has tapped — non-null while the item-detail popup is up. */
+    /** Item the user has tapped - non-null while the item-detail popup is up. */
     private Item selectedItem;
 
     // Hit rects for the main popup.
@@ -73,7 +73,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private final Rect[] equipRects   = new Rect[5];
     private final Rect[] gemRects     = new Rect[3];
     private final Rect[] tabRects     = new Rect[Tab.values().length];
-    /** Bag grid cells — built each frame from the player's bag, filtered by tab. */
+    /** Bag grid cells - built each frame from the player's bag, filtered by tab. */
     private final List<BagCell> bagCells = new ArrayList<>();
 
     // Item-detail popup rects.
@@ -82,21 +82,23 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private final Rect detailUseBtn   = new Rect();
     private final Rect detailEquipBtn = new Rect();
     private final Rect detailThrowBtn = new Rect();
-    /** Encyclopedia "?" jump button — top-right of the detail window. */
+    /** Encyclopedia "?" jump button - top-right of the detail window. */
     private final Rect detailInfoBtn  = new Rect();
-    /** Pre-wrapped flavor / details lines for the current item-detail popup —
+    /** Pre-wrapped flavor / details lines for the current item-detail popup -
      *  populated in {@link #layoutRects()} so the shape pass (which paints
      *  the divider rule) and the text pass (which paints the lines) agree
      *  on the layout. */
     private final List<String> detailFlavorLines  = new ArrayList<>();
     private final List<String> detailDetailsLines = new ArrayList<>();
+    private TextDraw.TextBlock detailNameBlock =
+            TextDraw.block(null, "", 1f, 0, 0f);
     /** Y of the horizontal rule between flavor and details (virtual pixels)
      *  or {@code Float.NaN} when one half is empty and no rule is drawn. */
     private float detailDividerY = Float.NaN;
     /** Top of the body text region (the y of the first flavor line). */
     private float detailBodyTop;
     private float detailLineH() { return ctx.lineH(); }
-    /** Quickslot-binding buttons — six numbered cells in the detail popup
+    /** Quickslot-binding buttons - six numbered cells in the detail popup
      *  that bind / unbind the chosen item to / from each action-bar slot.
      *  Built only when an {@link ActionBar} has been wired. */
     private final Rect[] bindBtnRects = new Rect[6];
@@ -106,7 +108,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     /** Index into {@link #bagCells} of the cell currently being held, or -1. */
     private int bagPressed = -1;
     /** Index into {@link #equipRects} (0..4) of the equipment cell being
-     *  held, or -1. Equipment cells share the bag-cell click semantics —
+     *  held, or -1. Equipment cells share the bag-cell click semantics -
      *  tap fills {@link #selectedItem} and opens the detail popup, where
      *  Use / Throw fire on the equipped item. */
     private int equipPressed = -1;
@@ -117,7 +119,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     /** Index of the bind-button (0..5) currently held, or -1. */
     private int bindPressed = -1;
 
-    /** Bag-grid scroller — used when the player's filtered bag has more
+    /** Bag-grid scroller - used when the player's filtered bag has more
      *  items than fit in the visible grid area. Touch drag on the grid
      *  scrolls; mouse wheel scrolls; tab switches reset to top. */
     private final Scroller bagScroller = new Scroller();
@@ -126,7 +128,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private BiConsumer<Mob, Item> onUse;
     private BiConsumer<Mob, Item> onThrow;
     private BiConsumer<Mob, Item> onCombine;
-    /** Optional jump target — when set, the item-detail popup grows a "?"
+    /** Optional jump target - when set, the item-detail popup grows a "?"
      *  button that closes the inventory and opens the encyclopaedia
      *  pre-selected to the chosen item. */
     private V2Encyclopedia encyclopedia;
@@ -139,7 +141,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         for (int i = 0; i < bindBtnRects.length; i++) bindBtnRects[i] = new Rect();
     }
 
-    // ── Public API (mirrors V1 InventoryRenderer where applicable) ───────────
+    // -- Public API (mirrors V1 InventoryRenderer where applicable) -----------
     public void setPlayer(Mob p)                          { this.player = p; }
     public void setActionBar(ActionBar ab)                { this.actionBar = ab; }
     public void setOnUse(BiConsumer<Mob, Item> fn)        { this.onUse = fn; }
@@ -156,7 +158,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
     private void openInv() { open = true; }
 
-    /** {@link V2Popup#renderSelf} — renders the inventory body only.
+    /** {@link V2Popup#renderSelf} - renders the inventory body only.
      *  The item-detail sub-popup is a SEPARATE popup actor placed on the
      *  V2 stage's {@code subPopupLayer} (one z-layer above this one), so
      *  its scrim cleanly hides the inventory's text when it's up. See
@@ -169,7 +171,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         renderInventoryTextPass();
     }
 
-    /** Companion popup for the item-detail panel — open when
+    /** Companion popup for the item-detail panel - open when
      *  {@link #selectedItem} is non-null. Renders the detail chrome +
      *  text on top of the inventory popup. */
     public com.bjsp123.rl2.ui.v2.stage.V2Popup detailPopup() {
@@ -188,9 +190,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    // ── Layout ───────────────────────────────────────────────────────────────
+    // -- Layout ---------------------------------------------------------------
     private void layoutRects() {
-        // Outer window — fills most of the viewport but leaves margin for the
+        // Outer window - fills most of the viewport but leaves margin for the
         // HUD strip at the bottom and a clear gap at the top.
         float vw = ctx.worldW();
         float vh = ctx.worldH();
@@ -208,7 +210,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         float headerH = 32f;
         headerRect.set(contentX, winY + winH - pad - headerH, contentW, headerH);
 
-        // Equipment row — 5 cells, sized to fit the content width.
+        // Equipment row - 5 cells, sized to fit the content width.
         float cellSz = 44f * 1.3f;
         float cellGap = 6f;
         float equipRowW = 5 * cellSz + 4 * cellGap;
@@ -218,7 +220,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             equipRects[i].set(equipRowX + i * (cellSz + cellGap), equipRowY, cellSz, cellSz);
         }
 
-        // Gems row — 3 cells.
+        // Gems row - 3 cells.
         float gemRowW = 3 * cellSz + 2 * cellGap;
         float gemRowX = contentX + (contentW - gemRowW) * 0.5f;
         float gemRowY = equipRowY - 8f - cellSz;
@@ -226,7 +228,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             gemRects[i].set(gemRowX + i * (cellSz + cellGap), gemRowY, cellSz, cellSz);
         }
 
-        // Tab strip — 4 tabs spanning the content width.
+        // Tab strip - 4 tabs spanning the content width.
         float tabH = 32f * 1.2f;
         float tabGap = 4f;
         float tabW = (contentW - (tabRects.length - 1) * tabGap) / tabRects.length;
@@ -235,7 +237,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             tabRects[i].set(contentX + i * (tabW + tabGap), tabRowY, tabW, tabH);
         }
 
-        // Bag grid — 6 cols × N rows, fills the rest of the window down to
+        // Bag grid - 6 cols x N rows, fills the rest of the window down to
         // the bottom padding. Scrolls vertically when the filtered bag has
         // more rows than fit in the visible band. Empty grid cells are
         // included alongside filled ones so the grid reads as a uniform
@@ -252,7 +254,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         float gridBottom = winY + pad;
         float visibleH = gridTop - gridBottom;
         List<Item> filtered = filteredBag();
-        // Total cells = exactly the bag capacity for this tab — no more, no less.
+        // Total cells = exactly the bag capacity for this tab - no more, no less.
         int tabCapacity = InventorySystem.bagLimitFor(tabCategory(currentTab));
         int totalRows   = (tabCapacity + cols - 1) / cols;
         float totalContentH = totalRows * (gridCellSz + gridGap) - gridGap;
@@ -272,11 +274,23 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             bagCells.add(cell);
         }
 
-        // Item-detail popup — taller now that it carries the quickslot
+        // Item-detail popup - taller now that it carries the quickslot
         // bind row above the action buttons.
         if (selectedItem != null) {
-            float dW = Math.min(280f, vw - 32f);
-            float dH = Math.min(440f, vh - 80f);
+            float dW = Math.min(300f, vw - 32f);
+            float bodyWidth = dW - 2 * 14f;
+
+            String name = com.bjsp123.rl2.logic.ItemSystem.displayName(selectedItem, player);
+            if (name.isEmpty()) name = selectedItem.type != null ? selectedItem.type : "";
+            detailNameBlock = TextDraw.block(ctx.fontHeader, name,
+                    dW - 28f, 2, ctx.headerLineH());
+
+            String flavor  = com.bjsp123.rl2.ui.ItemLore.describeFlavor(selectedItem);
+            String details = com.bjsp123.rl2.ui.ItemLore.describeDetails(selectedItem, player);
+            int wantedLines = wantedDetailLines(flavor, details, bodyWidth);
+
+            float dH = Math.min(detailHeightFor(wantedLines),
+                    Math.max(360f, vh - 32f));
             detailWindow.set((vw - dW) * 0.5f, (vh - dH) * 0.5f, dW, dH);
             // Icon centred near the top of the detail window.
             float iconSz = 64f;
@@ -292,7 +306,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             detailUseBtn  .set(btnX,                              btnY, btnW, btnH);
             detailEquipBtn.set(btnX + (btnW + btnGap),            btnY, btnW, btnH);
             detailThrowBtn.set(btnX + 2 * (btnW + btnGap),        btnY, btnW, btnH);
-            // Quickslot bind row — six 32×32 cells centred just above the
+            // Quickslot bind row - six 32x32 cells centred just above the
             // action button row. Only laid out when an action bar has been
             // wired; rendering + input both check {@link #actionBar} first.
             float bindSz = 32f;
@@ -305,23 +319,21 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 bindBtnRects[i].set(bindX + i * (bindSz + bindGap),
                         bindY, bindSz, bindSz);
             }
-            // "?" button at the top-right of the detail window — only laid
+            // "?" button at the top-right of the detail window - only laid
             // out when an encyclopedia is wired.
             float infoSz = 28f;
             detailInfoBtn.set(detailWindow.right() - 14f - infoSz,
                     detailWindow.top() - 14f - infoSz, infoSz, infoSz);
 
-            // Pre-wrap the body — flavor (description + description2) above
+            // Pre-wrap the body - flavor (description + description2) above
             // the divider rule, mechanical details below. Lines and rule Y
             // are shared by the shape + text passes.
-            detailBodyTop = detailIconRect.y - 36f;
+            float nameTop = detailIconRect.y - 12f;
+            detailBodyTop = nameTop - detailNameBlock.height() - 8f;
             float bodyBottom = bindBtnRects[0].top() + 22f;
             int   maxLines   = Math.max(0,
                     (int) Math.floor((detailBodyTop - bodyBottom)
                             / detailLineH()));
-            float bodyWidth  = detailWindow.w - 2 * 14f;
-            String flavor  = com.bjsp123.rl2.ui.ItemLore.describeFlavor(selectedItem);
-            String details = com.bjsp123.rl2.ui.ItemLore.describeDetails(selectedItem, player);
             detailFlavorLines.clear();
             detailDetailsLines.clear();
             // Cap flavor at half the body so the mechanical details block
@@ -330,8 +342,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             int flavorBudget = (details != null && !details.isEmpty())
                     ? Math.max(2, maxLines / 2)
                     : maxLines;
-            TextDraw.wrap(ctx.fontRegular, flavor, bodyWidth, flavorBudget,
-                    detailFlavorLines);
+            TextDraw.TextBlock flavorBlock = TextDraw.block(ctx.fontRegular,
+                    flavor, bodyWidth, flavorBudget, detailLineH());
+            detailFlavorLines.addAll(flavorBlock.lines);
             int leftLines = maxLines - detailFlavorLines.size();
             // Reserve two line-slots for the divider gap when both halves
             // have content.
@@ -339,12 +352,35 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     && !details.isEmpty()
                     && leftLines > 2;
             int detailMax = Math.max(0, hasRule ? leftLines - 2 : leftLines);
-            TextDraw.wrap(ctx.fontRegular, details, bodyWidth, detailMax,
-                    detailDetailsLines);
+            TextDraw.TextBlock detailsBlock = TextDraw.block(ctx.fontRegular,
+                    details, bodyWidth, detailMax, detailLineH());
+            detailDetailsLines.addAll(detailsBlock.lines);
             detailDividerY = hasRule
                     ? detailBodyTop - detailFlavorLines.size() * detailLineH() - 4f
                     : Float.NaN;
         }
+    }
+
+    private int wantedDetailLines(String flavor, String details, float bodyWidth) {
+        int flavorLines = lineCountFor(flavor, bodyWidth);
+        int detailsLines = lineCountFor(details, bodyWidth);
+        int ruleSlots = flavorLines > 0 && detailsLines > 0 ? 2 : 0;
+        return Math.min(24, flavorLines + detailsLines + ruleSlots);
+    }
+
+    private int lineCountFor(String text, float bodyWidth) {
+        if (text == null || text.isEmpty()) return 0;
+        TextDraw.TextBlock block = TextDraw.block(ctx.fontRegular, text,
+                bodyWidth, Integer.MAX_VALUE, detailLineH());
+        return block.lineCount();
+    }
+
+    private float detailHeightFor(int bodyLines) {
+        // Top icon + title band, body text, divider breathing room, quickslot
+        // row, and action buttons. The clamp keeps ordinary one-line items
+        // from expanding into a huge mostly-empty panel.
+        float fixedH = 220f + detailNameBlock.height();
+        return Math.max(440f, fixedH + bodyLines * detailLineH());
     }
 
     /** Item currently equipped at one of the 5 equipment slots
@@ -390,7 +426,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    /** A representative {@link Item.InventoryCategory} for each tab — used to
+    /** A representative {@link Item.InventoryCategory} for each tab - used to
      *  look up the bag-capacity limit that applies to items on that tab. */
     private static Item.InventoryCategory tabCategory(Tab tab) {
         return switch (tab) {
@@ -401,8 +437,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    // ── Render passes ───────────────────────────────────────────────────────
-    /** Inventory chrome only — modal dim + outer window + equipment / gem
+    // -- Render passes -------------------------------------------------------
+    /** Inventory chrome only - modal dim + outer window + equipment / gem
      *  / tab / bag-cell shapes. Detail popup chrome is a separate pass
      *  that runs AFTER the inventory's text, so the popup cleanly covers
      *  the body. */
@@ -413,7 +449,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
 
-        // Modal dim — half-transparent black covering the whole viewport
+        // Modal dim - half-transparent black covering the whole viewport
         // so the world below reads as backgrounded.
         s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
@@ -421,11 +457,11 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Outer window with full chrome.
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
-        // Equipment + gem cells — all use the slot-style border.
+        // Equipment + gem cells - all use the slot-style border.
         for (Rect r : equipRects) drawSlot(s, r);
         for (Rect r : gemRects)   drawSlot(s, r);
 
-        // Tab strip — active tab highlighted with the accent border.
+        // Tab strip - active tab highlighted with the accent border.
         for (int i = 0; i < tabRects.length; i++) {
             boolean active  = Tab.values()[i] == currentTab;
             boolean pressed = tabPressed[i];
@@ -463,7 +499,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    /** Item-detail popup chrome — drawn AFTER the inventory body so the
+    /** Item-detail popup chrome - drawn AFTER the inventory body so the
      *  popup's dim layer + window chrome cover any inventory text below
      *  it cleanly. Bind cells, action buttons, and the flavor / details
      *  divider also live here. */
@@ -485,7 +521,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Icon backdrop slot.
         drawSlot(s, detailIconRect);
 
-        // Quickslot bind cells — paler SLOT_BG fill so they read as
+        // Quickslot bind cells - paler SLOT_BG fill so they read as
         // image-bearing slots; the slot number paints over them in
         // the text pass. Currently-bound slot border swaps to ACCENT.
         if (actionBar != null) {
@@ -526,7 +562,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    /** Inventory slot — image-bearing cell, so paints with the paler
+    /** Inventory slot - image-bearing cell, so paints with the paler
      *  SLOT_BG fill. Tri-line border keeps it visually consistent with
      *  the rest of the V2 chrome. */
     private void drawSlot(ShapeRenderer s, Rect r) {
@@ -591,7 +627,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
-    /** Inventory body text — header, equipment icons, tab icons, bag-grid
+    /** Inventory body text - header, equipment icons, tab icons, bag-grid
      *  icons + count badges. Drawn before the detail popup's chrome so the
      *  popup can paint cleanly over it. */
     private void renderInventoryTextPass() {
@@ -601,7 +637,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Backpack",
                 headerRect.cx(), headerRect.y + headerRect.h * 0.75f);
 
-        // Equipment cells — render the equipped item icons via SpriteBatch.
+        // Equipment cells - render the equipped item icons via SpriteBatch.
         if (player != null && player.inventory != null) {
             Inventory inv = player.inventory;
             drawCellIcon(equipRects[0], inv.weapon);
@@ -614,7 +650,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
         }
 
-        // Tab icons — same source sheet as the Settings tab strip. FOOD
+        // Tab icons - same source sheet as the Settings tab strip. FOOD
         // and GEMS lack dedicated icons; both fall back to OTHER for now.
         for (int i = 0; i < tabRects.length; i++) {
             boolean active = Tab.values()[i] == currentTab;
@@ -634,7 +670,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             drawCellIcon(c.rect, c.item);
         }
 
-        // Brand sparks — additive pass over all slots with branded items.
+        // Brand sparks - additive pass over all slots with branded items.
         if (player != null && player.inventory != null) {
             Item[] equips = {
                 player.inventory.weapon, player.inventory.offhand,
@@ -669,7 +705,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ctx.batch.end();
     }
 
-    /** Detail-popup text — icon, name, body, action labels, bind labels.
+    /** Detail-popup text - icon, name, body, action labels, bind labels.
      *  Caller has already drawn the detail popup's chrome shapes, so this
      *  pass just adds the labels on top. */
     private void renderDetailTextPass() {
@@ -690,18 +726,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         selectedItem.brand,
                         com.bjsp123.rl2.world.render.BrandFx.phaseFor(selectedItem));
             }
-            // Name — up to 2 wrapped lines, centred, in header font.
-            String name = com.bjsp123.rl2.logic.ItemSystem.displayName(selectedItem, player);
-            if (name.isEmpty()) name = selectedItem.type != null ? selectedItem.type : "";
-            java.util.List<String> nameLines = new java.util.ArrayList<>();
-            TextDraw.wrap(ctx.fontHeader, name, detailWindow.w - 28f, 2, nameLines);
-            float nameBaseY = detailIconRect.y - 12f;
-            for (int ni = 0; ni < nameLines.size(); ni++) {
-                TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, nameLines.get(ni),
-                        detailWindow.cx(), nameBaseY - ni * 18f);
-            }
+            TextDraw.wrappedCentre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                    detailNameBlock, detailWindow.cx(), detailIconRect.y - 12f);
 
-            // Body — flavor (bright) on top, optional rule, then details
+            // Body - flavor (bright) on top, optional rule, then details
             // (dim) below. Lines + divider Y are pre-computed in
             // {@link #layoutRects()} so this pass and the shape pass agree.
             float left = detailWindow.x + 14f;
@@ -727,7 +755,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     ? capitalize(selectedItem.useVerb) : "Use";
             TextDraw.centre(ctx, ctx.fontRegular,
                     detailUsePressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                    useLabel, detailUseBtn.cx(), detailUseBtn.cy() + 6f);
+                    TextDraw.ellipsize(ctx.fontRegular, useLabel, detailUseBtn.w - 8f),
+                    detailUseBtn.cx(), detailUseBtn.cy() + 6f);
             String equipLabel;
             if (selectedItem.isEquippable() && player != null
                     && com.bjsp123.rl2.logic.InventorySystem
@@ -738,12 +767,14 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
             TextDraw.centre(ctx, ctx.fontRegular,
                     detailEquipPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                    equipLabel, detailEquipBtn.cx(), detailEquipBtn.cy() + 6f);
+                    TextDraw.ellipsize(ctx.fontRegular, equipLabel, detailEquipBtn.w - 8f),
+                    detailEquipBtn.cx(), detailEquipBtn.cy() + 6f);
             TextDraw.centre(ctx, ctx.fontRegular,
                     detailThrowPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                    "Throw", detailThrowBtn.cx(), detailThrowBtn.cy() + 6f);
+                    TextDraw.ellipsize(ctx.fontRegular, "Throw", detailThrowBtn.w - 8f),
+                    detailThrowBtn.cx(), detailThrowBtn.cy() + 6f);
             if (encyclopedia != null) {
-                // Standard info-icon button — same INFO glyph the
+                // Standard info-icon button - same INFO glyph the
                 // perks-tab info buttons use, so info affordances read
                 // identically across V2 surfaces.
                 var iregion = com.bjsp123.rl2.world.render.IconSprites
@@ -759,7 +790,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 }
             }
 
-            // Quickslot bind labels — slot number 1..6 + "Quickslot" header.
+            // Quickslot bind labels - slot number 1..6 + "Quickslot" header.
             if (actionBar != null) {
                 TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         "Quickslot",
@@ -783,7 +814,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     /** Draw {@code item}'s sprite icon centred inside {@code cell}. Caller
      *  is in the SpriteBatch pass. */
     /** Title-case the first letter of {@code s} for use as a button label
-     *  ("eat" → "Eat", "zap" → "Zap"). Returns the input unchanged when
+     *  ("eat" -> "Eat", "zap" -> "Zap"). Returns the input unchanged when
      *  it's null or empty. */
     private static String capitalize(String s) {
         if (s == null || s.isEmpty()) return s;
@@ -794,7 +825,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ItemCell.draw(ctx, item, player, cell.x, cell.y, cell.w, cell.h, true);
     }
 
-    // ── Input ───────────────────────────────────────────────────────────────
+    // -- Input ---------------------------------------------------------------
     public InputProcessor input() {
         return new InputAdapter() {
             @Override
@@ -842,7 +873,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         return true;
                     }
                 }
-                // Equipment + gem cells — tappable iff currently equipped.
+                // Equipment + gem cells - tappable iff currently equipped.
                 for (int i = 0; i < equipRects.length; i++) {
                     if (equipRects[i].contains(vx, vy)
                             && equippedItemAt(i) != null) {
@@ -870,7 +901,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     close();
                     return true;
                 }
-                // Touch landed inside the window but missed every cell —
+                // Touch landed inside the window but missed every cell -
                 // still arm the scroller so a drag from this point scrolls
                 // the bag grid.
                 bagScroller.onTouchDown(vy);
@@ -882,7 +913,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 if (!open || selectedItem != null) return false;
                 float vy = ctx.unprojectY(sx, sy);
                 if (bagScroller.onTouchDragged(vy)) {
-                    // Drag classified — cancel any pending tap so release
+                    // Drag classified - cancel any pending tap so release
                     // doesn't fire a row click.
                     bagPressed = -1;
                     equipPressed = -1;
@@ -913,7 +944,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     if (actionBar != null
                             && idx < bindBtnRects.length
                             && bindBtnRects[idx].contains(vx, vy)) {
-                        // Toggle — tap again to unbind.
+                        // Toggle - tap again to unbind.
                         if (actionBar.get(idx) == selectedItem) {
                             actionBar.set(idx, null);
                         } else {
@@ -1004,7 +1035,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         return true;
                     }
                 }
-                // Equipment-cell tap → open item-detail popup.
+                // Equipment-cell tap -> open item-detail popup.
                 if (equipPressed >= 0) {
                     int idx = equipPressed;
                     equipPressed = -1;
@@ -1014,7 +1045,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     }
                     return true;
                 }
-                // Gem-cell tap → open item-detail popup.
+                // Gem-cell tap -> open item-detail popup.
                 if (gemPressed >= 0) {
                     int idx = gemPressed;
                     gemPressed = -1;
@@ -1024,7 +1055,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     }
                     return true;
                 }
-                // Bag-cell tap → open item-detail popup.
+                // Bag-cell tap -> open item-detail popup.
                 if (bagPressed >= 0) {
                     int idx = bagPressed;
                     bagPressed = -1;
@@ -1052,7 +1083,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    /** Local convenience holder — one cell's rect + which Item it represents. */
+    /** Local convenience holder - one cell's rect + which Item it represents. */
     private static final class BagCell {
         final Rect rect = new Rect();
         Item item;

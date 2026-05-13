@@ -9,7 +9,7 @@ import java.util.ArrayList;
 
 /**
  * Persistence I/O for {@link ArenaHallOfFame}. Mirrors {@link HallOfFameStore}
- * — static load/save against {@link Persistence}, libGDX {@code Json}
+ * - static load/save against {@link Persistence}, libGDX {@code Json}
  * serialisation, decoupled from the data POJO.
  */
 public final class ArenaHallOfFameStore {

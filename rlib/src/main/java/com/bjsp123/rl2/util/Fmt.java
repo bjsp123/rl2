@@ -5,12 +5,12 @@ package com.bjsp123.rl2.util;
  * expose {@code format(String, Object...)} reliably, so any call site that targets both JVM and
  * web builds should go through this method instead. Supports the subset we actually use:
  * <ul>
- *   <li>{@code %s} — value's {@code toString()} (or {@code "null"}).</li>
- *   <li>{@code %d} — integer.</li>
- *   <li>{@code %<N>d} — right-aligned integer padded to width {@code N}.</li>
- *   <li>{@code %-<N>d}, {@code %-<N>s} — left-aligned integer / string padded to width {@code N}.</li>
- *   <li>{@code %.<N>f} — float with {@code N} decimal places.</li>
- *   <li>{@code %%} — literal percent sign.</li>
+ *   <li>{@code %s} - value's {@code toString()} (or {@code "null"}).</li>
+ *   <li>{@code %d} - integer.</li>
+ *   <li>{@code %<N>d} - right-aligned integer padded to width {@code N}.</li>
+ *   <li>{@code %-<N>d}, {@code %-<N>s} - left-aligned integer / string padded to width {@code N}.</li>
+ *   <li>{@code %.<N>f} - float with {@code N} decimal places.</li>
+ *   <li>{@code %%} - literal percent sign.</li>
  * </ul>
  * Anything fancier (flags, grouping, hex) is intentionally unsupported.
  */
@@ -63,7 +63,7 @@ public final class Fmt {
                     piece = v == null ? "null" : v.toString();
                 }
                 default -> {
-                    // Unknown specifier — emit verbatim and move on without consuming an arg.
+                    // Unknown specifier - emit verbatim and move on without consuming an arg.
                     out.append('%').append(spec);
                     i = j + 1;
                     continue;

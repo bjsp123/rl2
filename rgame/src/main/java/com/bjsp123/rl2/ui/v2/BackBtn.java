@@ -5,11 +5,11 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
- * Bottom-left back glyph — drawn fixed-position on every V2 screen except
- * the title (which is the root). A 56×56 button containing a left-pointing
+ * Bottom-left back glyph - drawn fixed-position on every V2 screen except
+ * the title (which is the root). A 56x56 button containing a left-pointing
  * triangle drawn from primitives. Tap unwinds one level of navigation.
  *
- * <p>The screen is responsible for routing the click — {@link V2Screen}
+ * <p>The screen is responsible for routing the click - {@link V2Screen}
  * provides {@code onBack()} for ESC and tap-outside, and the BackBtn calls
  * the same hook.
  */
@@ -29,7 +29,7 @@ public final class BackBtn {
 
     public void drawShape(UiCtx ctx) {
         ShapeRenderer s = ctx.shapes;
-        // Tri-line border in red — outer bright red, mid mid-red, inner dark
+        // Tri-line border in red - outer bright red, mid mid-red, inner dark
         // red. Distinguishes the back affordance from grey-bordered chrome.
         Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h, UIVars.HUD_LINE_W,
                 UIVars.WARN_HL, UIVars.TEXT_WARN, UIVars.WARN_SHADE);

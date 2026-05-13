@@ -14,7 +14,7 @@ import java.util.Random;
  * per-level progression, action costs, shared defaults. Anything a designer might want to
  * tweak without touching logic code lives here.
  *
- * <p>Non-balance constants (e.g. atlas offsets, rendering padding) do NOT belong here — this
+ * <p>Non-balance constants (e.g. atlas offsets, rendering padding) do NOT belong here - this
  * class is reserved for <i>gameplay</i> knobs so they can be scanned and adjusted together.
  *
  * <p>Tunables are {@code public static} (not {@code final}) so {@link #load(String)} can
@@ -28,7 +28,7 @@ public final class GameBalance {
 
     /** Read a {@code key=value} properties file and override any matching {@code public
      *  static} field on this class. Unknown keys are ignored; missing keys keep their
-     *  Java-side baseline. Currently handles {@code int} and {@code double} fields — that
+     *  Java-side baseline. Currently handles {@code int} and {@code double} fields - that
      *  covers every tunable we have today. Call once at startup, before gameplay code
      *  reads any of these fields. */
     public static void load(String text) {
@@ -53,14 +53,14 @@ public final class GameBalance {
                 else if (t == long.class)   f.setLong(null, Long.parseLong(value));
                 else if (t == boolean.class) f.setBoolean(null, Boolean.parseBoolean(value));
             } catch (NoSuchFieldException | IllegalAccessException | NumberFormatException ignored) {
-                // Unknown key, non-overridable field, or malformed value — keep the baseline.
+                // Unknown key, non-overridable field, or malformed value - keep the baseline.
             }
         }
     }
 
-    // ───────────────────────── Combat simulation ─────────────────────────────
+    // ------------------------- Combat simulation -----------------------------
 
-    /** Default number of duels {@link #mobfight} runs to estimate win rate. 10k gives ~±1%
+    /** Default number of duels {@link #mobfight} runs to estimate win rate. 10k gives ~+/-1%
      *  on the percentage it returns; bumping higher costs linearly more time. */
     public static int MOBFIGHT_DEFAULT_TRIALS = 10_000;
 
@@ -69,7 +69,7 @@ public final class GameBalance {
      * {@code a} and {@code b} and return the fraction (0..1) of fights {@code a} wins. Each
      * duel resets HP and runs until one combatant drops to zero, with attacker turn order
      * driven by {@link Mob#attackCost} (lower-cost mob acts more often). No items, terrain,
-     * or AI — just accuracy/evasion to-hit and damage/armor rolls.
+     * or AI - just accuracy/evasion to-hit and damage/armor rolls.
      *
      * <p>Does not mutate the input mobs.
      */
@@ -89,7 +89,7 @@ public final class GameBalance {
         int bAcc = bs.accuracy, bEva = bs.evasion, bArm = bs.armor.min(), bCost = Math.max(1, bs.attackCost);
         com.bjsp123.rl2.model.MinMax aDmg = MobSystem.rawDamageRange(a);
         com.bjsp123.rl2.model.MinMax bDmg = MobSystem.rawDamageRange(b);
-        // Armor range bypasses the equipment lookup — mob-only base armor + nothing else,
+        // Armor range bypasses the equipment lookup - mob-only base armor + nothing else,
         // matching the input snapshot.
         int aResLo = aArm, aResHi = aArm;
         int bResLo = bArm, bResHi = bArm;
@@ -98,7 +98,7 @@ public final class GameBalance {
         for (int t = 0; t < trials; t++) {
             int aHp = aMax, bHp = bMax;
             // "Time-to-next-attack" counters; lower = acts sooner. Tied counters advance both
-            // simultaneously, but combat damage is applied in A→B order to keep the result
+            // simultaneously, but combat damage is applied in A->B order to keep the result
             // reproducible and break the tie deterministically.
             int aReady = 0, bReady = 0;
             while (aHp > 0 && bHp > 0) {
@@ -129,13 +129,13 @@ public final class GameBalance {
         return Math.max(0, raw - res);
     }
 
-    // ───────────────────────── Character progression ─────────────────────────
-    /** Hard cap — characters stop leveling at this level even if they accrue more XP. */
+    // ------------------------- Character progression -------------------------
+    /** Hard cap - characters stop leveling at this level even if they accrue more XP. */
     public static int MAX_CHARACTER_LEVEL   = 32;
-    /** XP cost to advance from level {@code N} to {@code N+1} = {@code N × XP_PER_LEVEL_STEP}. */
+    /** XP cost to advance from level {@code N} to {@code N+1} = {@code N x XP_PER_LEVEL_STEP}. */
     public static int XP_PER_LEVEL_STEP     = 10;
     /** Perk points granted on each level-up. (Per-stat level deltas are now
-     *  per-mob — see the {@code *PerLevel} columns of {@code mobs.csv}.) */
+     *  per-mob - see the {@code *PerLevel} columns of {@code mobs.csv}.) */
     public static int PERK_POINTS_PER_LEVEL = 1;
 
     public static int XP_PER_POWER_ORB = 10;
@@ -154,19 +154,19 @@ public final class GameBalance {
      *  tools are always singletons. */
     public static int BAG_ITEMS_SIZE = 20;
 
-    // ───────────────────────── Item-level scaling ────────────────────────────
+    // ------------------------- Item-level scaling ----------------------------
     // Items carry a {@code level} field. Level 0 is baseline; every level above adds
     // a fixed increment to the relevant stat. Per-level scaling values are now per-item
     // ({@code damagePerLevel}, {@code armorPerLevel}, {@code tilesAffectedPerLevel} columns
-    // on items.csv) — there are no kind-wide scaling globals here.
+    // on items.csv) - there are no kind-wide scaling globals here.
 
-    /** Baseline food value of a level-0 food item. Food doesn't scale with level — it's
-     *  always level 0 — so this is the only food number that matters. */
+    /** Baseline food value of a level-0 food item. Food doesn't scale with level - it's
+     *  always level 0 - so this is the only food number that matters. */
     public static int BASIC_FOOD_VALUE = 10_000;
 
-    // ───────────────────────── Level dimensions / density ───────────────────
+    // ------------------------- Level dimensions / density -------------------
     /** Default base dimensions for every dungeon level. The {@code BIGLEVEL}
-     *  flag scales these by 1.5×; otherwise every level is exactly this size. */
+     *  flag scales these by 1.5x; otherwise every level is exactly this size. */
     public static int LEVEL_BASE_W = 48;
     public static int LEVEL_BASE_H = 48;
 
@@ -174,7 +174,7 @@ public final class GameBalance {
      *  {@link LevelFactory} is parameterised by this so different layouts in
      *  the same dungeon don't read as wildly different densities. */
     public static int LEVEL_TARGET_ROOMS    = 8;
-    /** ± tolerance around {@link #LEVEL_TARGET_ROOMS}. Builders that can produce
+    /** +/- tolerance around {@link #LEVEL_TARGET_ROOMS}. Builders that can produce
      *  more rooms than the cap (greedy growth in PACKED, BSP partition leaf
      *  variance) trim or stop at {@code LEVEL_TARGET_ROOMS + LEVEL_ROOM_TOLERANCE}. */
     public static int LEVEL_ROOM_TOLERANCE  = 2;
@@ -185,20 +185,20 @@ public final class GameBalance {
     public static int ROOM_MIN_SIZE = 4;
     public static int ROOM_MAX_SIZE = 10;
 
-    // ───────────────────────── World generation ─────────────────────────────
+    // ------------------------- World generation -----------------------------
     /** Number of dungeon depths the world generator builds. Depth 1 (top) and
      *  {@code DUNGEON_DEPTH} (bottom) are CENTER-side single-level rows; the
      *  intermediate depths each carry one WEST + one EAST level. */
     public static int DUNGEON_DEPTH = 5;
     /** Per-roll probability that a given E or W level grows a dead-end side
-     *  branch (a single extra level at column ±2 of the parent's depth). */
+     *  branch (a single extra level at column +/-2 of the parent's depth). */
     public static double SIDE_BRANCH_PROBABILITY = 0.4;
     /** Per-roll probability that a given E or W level (where a sibling exists
      *  at depth+1) gets a second downstairs cross-linking it to the opposite
      *  side, in addition to its same-side downstairs. */
     public static double CROSSLINK_PROBABILITY = 0.4;
 
-    // ───────────────────────── Level population ──────────────────────────────
+    // ------------------------- Level population ------------------------------
     /** Base hostile-mob target when populating a fresh level. Actual count is
      *  {@code STARTING_MOBS_PER_LEVEL + rng(4)}, so each level starts with
      *  this many to {@code this + 3} hostiles. */
@@ -214,8 +214,8 @@ public final class GameBalance {
      *  gives each drop a 50 % chance of one extra copy. */
     public static double LOOT_DROP_FREQUENCY_COEFF = 1.0;
 
-    // ───────────────────────── Mob population caps ───────────────────────────
-    /** Hard cap on mobs alive on a level — magical / scripted spawn effects
+    // ------------------------- Mob population caps ---------------------------
+    /** Hard cap on mobs alive on a level - magical / scripted spawn effects
      *  (summon wands, kissyblob eat-spawn, mouse mushroom-eat-spawn) skip
      *  their spawn when the level is at or above this. Initial level
      *  population (LevelFactoryPopulate) is NOT subject to this cap. */
@@ -224,11 +224,11 @@ public final class GameBalance {
     /** Per-species cap for spawner mobs (anthills today, future spawners by the
      *  same {@code turnSpawnType} flag). A spawner skips its budding roll when
      *  the level already holds this many of its {@code turnSpawnType}. Combined
-     *  with {@link #MAX_MOBS_ON_LEVEL} — both must pass before the bud is
+     *  with {@link #MAX_MOBS_ON_LEVEL} - both must pass before the bud is
      *  created. */
     public static int MAX_MOBS_FROM_SPAWNER = 8;
 
-    // ───────────────────────── Hunger / satiety ──────────────────────────────
+    // ------------------------- Hunger / satiety ------------------------------
     /** Starting satiety for a fresh mob. Counts down by one per passing tick. */
     public static int STARTING_SATIETY       = 10000;
     /** Once satiety is exhausted, the player loses 1 HP per this many ticks. */

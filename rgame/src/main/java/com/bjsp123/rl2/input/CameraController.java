@@ -13,7 +13,7 @@ import com.bjsp123.rl2.world.render.LevelRenderer;
 public class CameraController extends InputAdapter {
 
     // Smaller MIN_ZOOM = closer view (camera "zooms in" further). At 0.08 a 16-px tile fills
-    // ~200 px of screen on a 1080p window — close enough to read individual pixels of the
+    // ~200 px of screen on a 1080p window - close enough to read individual pixels of the
     // tile art without the game becoming a single-tile peep show.
     private static final float MIN_ZOOM = 0.08f;
     private static final float MAX_ZOOM = 5.0f;
@@ -28,7 +28,7 @@ public class CameraController extends InputAdapter {
     private float lastPinchDist = -1;
     private int lastPlayerTileX = Integer.MIN_VALUE, lastPlayerTileY = Integer.MIN_VALUE;
     /** True iff {@link #followPlayer} ran with an active step animation last frame. Used
-     *  to force one extra camera update on the frame where the step finishes — without it,
+     *  to force one extra camera update on the frame where the step finishes - without it,
      *  the early-return below leaves the camera at the last in-flight offset (~2.7 px off
      *  the destination tile centre) and the next step appears to jerk back to align. */
     private boolean lastWasStepping;
@@ -41,7 +41,7 @@ public class CameraController extends InputAdapter {
         this.animator = animator;
     }
 
-    /** Optional gate — when this supplier returns true, every touch / scroll
+    /** Optional gate - when this supplier returns true, every touch / scroll
      *  event is ignored (no pan, no zoom, no state mutation). Used by
      *  {@link com.bjsp123.rl2.screen.PlayScreen} to suppress map drag while a
      *  modal popup is open: per the UI rules, the topmost window owns input
@@ -56,7 +56,7 @@ public class CameraController extends InputAdapter {
         return inputBlocker != null && inputBlocker.getAsBoolean();
     }
 
-    // ── Desktop scroll-wheel zoom ────────────────────────────────────────────
+    // -- Desktop scroll-wheel zoom --------------------------------------------
 
     @Override
     public boolean scrolled(float amountX, float amountY) {
@@ -65,7 +65,7 @@ public class CameraController extends InputAdapter {
         return true;
     }
 
-    // ── Touch / mouse ────────────────────────────────────────────────────────
+    // -- Touch / mouse --------------------------------------------------------
 
     @Override
     public boolean touchDown(int x, int y, int pointer, int button) {
@@ -79,7 +79,7 @@ public class CameraController extends InputAdapter {
         }
         if (pointer == 0) { touch0.set(x, y); touch0Down = true; lastX = x; lastY = y; }
         if (pointer == 1) { touch1.set(x, y); touch1Down = true; lastPinchDist = -1; }
-        return false; // don't consume — GameInput also needs touchDown
+        return false; // don't consume - GameInput also needs touchDown
     }
 
     @Override
@@ -103,7 +103,7 @@ public class CameraController extends InputAdapter {
             }
             lastPinchDist = dist;
         } else if (pointer == 0 && touch0Down && !touch1Down) {
-            // Single-finger / mouse pan — use unproject so pan respects current zoom
+            // Single-finger / mouse pan - use unproject so pan respects current zoom
             Vector3 prev = camera.unproject(new Vector3(lastX, lastY, 0));
             Vector3 curr = camera.unproject(new Vector3(x, y, 0));
             camera.translate(prev.x - curr.x, prev.y - curr.y);
@@ -113,7 +113,7 @@ public class CameraController extends InputAdapter {
         return false;
     }
 
-    // ── Auto-follow ──────────────────────────────────────────────────────────
+    // -- Auto-follow ----------------------------------------------------------
 
     /** Re-center the camera on the player. Tracks the player's interpolated pixel position
      *  during a step animation so the map scrolls smoothly underneath them rather than
@@ -127,8 +127,8 @@ public class CameraController extends InputAdapter {
         boolean stepping = as.stepTotal > 0;
         // The frame after a step ends, the early-return below would lock the camera at the
         // last animation frame's offset (a few px short of tile centre). Override it so we
-        // get one final "snap to tile centre" update — fixed by also recomputing on the
-        // transition stepping=true → stepping=false.
+        // get one final "snap to tile centre" update - fixed by also recomputing on the
+        // transition stepping=true -> stepping=false.
         boolean justFinishedStepping = lastWasStepping && !stepping;
         lastWasStepping = stepping;
         if (!stepping && !justFinishedStepping

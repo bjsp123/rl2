@@ -50,11 +50,11 @@ final class PlayController {
     private final LevelRenderer levelRenderer;
     private final Runnable recenterCamera;
 
-    /** Auto-move interrupt — set of hostile mobs visible at the start of the current
+    /** Auto-move interrupt - set of hostile mobs visible at the start of the current
      *  auto-path. While auto-pathing, any newly-visible hostile (not in this set) aborts
      *  the path. {@code null} when no auto-path is in progress. */
     private Set<Mob> autoMoveSnapshotHostiles;
-    /** Auto-move interrupt — player HP at the start of the most recent step. If HP drops
+    /** Auto-move interrupt - player HP at the start of the most recent step. If HP drops
      *  between steps, the path aborts. {@code -1} when no auto-path is in progress. */
     private double autoMoveLastHp = -1;
 
@@ -93,11 +93,11 @@ final class PlayController {
             world.tick++;
             // Drain events into the animator after every game tick so
             // the sequential flag reflects animations queued by THIS
-            // tick — not just whatever was in flight at the start of
+            // tick - not just whatever was in flight at the start of
             // the render frame.
             animator.consume(level);
             // Only a SEQUENTIAL animation (lunge, knockback slide,
-            // chained death-fade) breaks the loop — a pile of concurrent
+            // chained death-fade) breaks the loop - a pile of concurrent
             // mob slides should NOT, since they're meant to play
             // simultaneously with the player's slide. This lets many
             // mobs move on a single render frame and eliminates the
@@ -127,8 +127,8 @@ final class PlayController {
      * HUD action-button handler. Resolves the bound item on the current player and
      * dispatches on {@link UseBehavior}.
      *
-     * <p>Re-tap semantics when targeting is already open: same item → confirm; different
-     * item → cancel old, start new for the new item.
+     * <p>Re-tap semantics when targeting is already open: same item -> confirm; different
+     * item -> cancel old, start new for the new item.
      */
     void triggerActionSlot(int slotIndex) {
         Level level = world.currentLevel();
@@ -183,7 +183,7 @@ final class PlayController {
             case WAND    -> beginWand(level, user, item);
             case GRAPPLE -> beginGrapple(level, user, item);
             case JUMP    -> beginJump(level, user, item);
-            case NONE -> { /* unreachable — the popup gates Use on isUsable() */ }
+            case NONE -> { /* unreachable - the popup gates Use on isUsable() */ }
         }
     }
 
@@ -199,10 +199,10 @@ final class PlayController {
             ItemSystem.fireWand(level, user, wand, null);
             // Drain the MobSpawned event into the Animator now so the spawn-grow
             // freeze is in place before the next render frame's controller.tick
-            // can let the new pet take its first turn — otherwise the dog acts
+            // can let the new pet take its first turn - otherwise the dog acts
             // before its own spawn animation plays.
             animator.consume(level);
-            // Force a renderer index rebuild — no game tick ran, so the mob-by-cell
+            // Force a renderer index rebuild - no game tick ran, so the mob-by-cell
             // cache wouldn't otherwise pick up the freshly-summoned pet and its
             // grow animation wouldn't play until the freeze finally drains.
             levelRenderer.markDirty();
@@ -287,7 +287,7 @@ final class PlayController {
         return grid;
     }
 
-    /** Grid of tiles currently visible to the player — valid targets for wand/grapple/throw. */
+    /** Grid of tiles currently visible to the player - valid targets for wand/grapple/throw. */
     private static boolean[][] visibleGrid(Level level) {
         boolean[][] grid = new boolean[level.width][level.height];
         if (level.visible == null) return grid;
@@ -377,7 +377,7 @@ final class PlayController {
             if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
             if (!level.visible[mx][my]) continue;
             // Only true hostiles (ATTACK attitude) interrupt auto-move.
-            // Neutrals (NOTHING, FLEE) and allies are ignored — wandering
+            // Neutrals (NOTHING, FLEE) and allies are ignored - wandering
             // past a passive mob shouldn't break a long path.
             if (MobSystem.getAttitudeToMob(player, m) != MobSystem.Attitude.ATTACK) continue;
             out.add(m);
@@ -387,7 +387,7 @@ final class PlayController {
 
     /** Seed the HUD action bar with the class-default bindings on a brand-new run.
      *  Bindings come from the {@code actionBar} cell of the player's row in
-     *  {@code mobs.csv} — pipe-separated {@code <slotIndex>:<itemType>} entries.
+     *  {@code mobs.csv} - pipe-separated {@code <slotIndex>:<itemType>} entries.
      *  Each entry resolves against the player's current inventory; entries whose
      *  item isn't carried are skipped. */
     void seedDefaultActionBar(Mob player, CharacterClass cls) {
@@ -421,7 +421,7 @@ final class PlayController {
     void tryStairsDown() { tryStairs(+1); }
 
     /**
-     * Use the tile the player is standing on: stairs → go up/down; otherwise wait one full
+     * Use the tile the player is standing on: stairs -> go up/down; otherwise wait one full
      * move-cost worth of ticks so the rest of the level (AI, vegetation, effects) advances
      * without the player moving. Triggered by SPACE or by tapping the player's own tile.
      */
@@ -447,7 +447,7 @@ final class PlayController {
      *  entries (everything added after {@code bagBefore}) and bind each usable /
      *  throwable item to the first empty action-bar slot. Items that are already in a
      *  quickslot, or that have no use / throw behaviour, are skipped. Existing bindings
-     *  are never overwritten — full action bar means no auto-assign. */
+     *  are never overwritten - full action bar means no auto-assign. */
     private void autoAssignNewPickups(Mob player, int bagBefore) {
         if (actionBar == null || player == null) return;
         List<Item> bag = player.inventory.bag;

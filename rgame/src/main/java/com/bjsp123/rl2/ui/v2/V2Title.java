@@ -4,18 +4,18 @@ import com.badlogic.gdx.Gdx;
 import com.bjsp123.rl2.Rl2Game;
 
 /**
- * V2 title screen — game logo at the top, vertical column of chunky buttons
+ * V2 title screen - game logo at the top, vertical column of chunky buttons
  * filling the centre, burger top-right. No back button (this is the root).
  *
- * <p>Layout follows CLAUDE.md's "vertical list of large buttons" rule —
- * every entry is the same {@link UIVars#BTN_W} × {@link UIVars#BTN_H}, stacked
+ * <p>Layout follows CLAUDE.md's "vertical list of large buttons" rule -
+ * every entry is the same {@link UIVars#BTN_W} x {@link UIVars#BTN_H}, stacked
  * with a small gap, centred horizontally on the viewport.
  */
 public final class V2Title extends V2Screen {
 
     private final Rl2Game game;
 
-    /** Window rect — drawn behind the button column for visual coherence. */
+    /** Window rect - drawn behind the button column for visual coherence. */
     private final Rect window = new Rect();
     private static final float WINDOW_PAD = 16f;
     private static final float TITLE_GAP  = 12f;
@@ -47,7 +47,7 @@ public final class V2Title extends V2Screen {
         float winY = (ctx.worldH() - winH) * 0.5f;
         window.set(winX, winY, winW, winH);
 
-        // Place buttons from the bottom of the window upward — libGDX is
+        // Place buttons from the bottom of the window upward - libGDX is
         // y-up so the first button drawn is the lowest one on screen, which
         // matches our vertical list (Quit at the bottom).
         float btnX = winX + WINDOW_PAD;
@@ -87,7 +87,7 @@ public final class V2Title extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        // Header inside the window — positioned a fixed offset down from
+        // Header inside the window - positioned a fixed offset down from
         // the window's top edge.
         float headerY = window.top() - WINDOW_PAD;
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,

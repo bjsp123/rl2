@@ -7,12 +7,12 @@ public class World {
      *  state advanced, giving every game event a consistent time stamp across level
      *  changes. Used by {@code HistoricalRecord} to time-stamp history entries. */
     public int turn;
-    /** Monotonic <b>game-tick</b> counter — the finer-grained currency drained by
+    /** Monotonic <b>game-tick</b> counter - the finer-grained currency drained by
      *  {@link com.bjsp123.rl2.logic.TurnSystem#tick(Level)}. Persisted across level
      *  changes. */
     public int tick;
     /** Tracks unique-content ids that have already been generated somewhere in the
-     *  world — referenced at level-generation time so unique rooms / mobs / items
+     *  world - referenced at level-generation time so unique rooms / mobs / items
      *  never appear twice in the same run. */
     public UniqueTracker unique = new UniqueTracker();
 

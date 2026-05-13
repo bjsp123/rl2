@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Per-mob inventory: a bag (variable-size stack list) plus equipment slots
- * keyed by {@link InventoryCategory}. Pure data — every algorithmic operation
+ * keyed by {@link InventoryCategory}. Pure data - every algorithmic operation
  * (add-to-bag with stack-merge, equip with slot-resolution + stack-split, etc.)
  * lives in {@code com.bjsp123.rl2.logic.InventorySystem}.
  *
@@ -34,7 +34,7 @@ public class Inventory {
     /** Three gem positions. Equip prefers the first free slot. */
     public final Item[] gems    = new Item[3];
 
-    /** Number of positions for {@code category} — 1 for single-position
+    /** Number of positions for {@code category} - 1 for single-position
      *  equipment, 2 for amulets, 3 for gems, 0 for non-equipment categories. */
     public static int positionCount(InventoryCategory category) {
         if (category == null) return 0;

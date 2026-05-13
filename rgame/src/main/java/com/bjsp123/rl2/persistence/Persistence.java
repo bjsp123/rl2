@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.persistence;
 
 /**
- * Platform-agnostic key→string blob storage. All platform-specific file/preferences code lives in the
+ * Platform-agnostic key->string blob storage. All platform-specific file/preferences code lives in the
  * implementations: {@code AndroidPersistence} (android module) and {@code DesktopPersistence} (desktop module).
  */
 public interface Persistence {

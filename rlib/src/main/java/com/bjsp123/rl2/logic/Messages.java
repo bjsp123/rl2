@@ -18,7 +18,7 @@ public final class Messages {
 
     private Messages() {}
 
-    // ── Level / game life-cycle ─────────────────────────────────────────────
+    // -- Level / game life-cycle ---------------------------------------------
 
     public static LogEvent beginGame(String playerName) {
         return new LogEvent(playerName + " begins a new adventure.",
@@ -60,7 +60,7 @@ public final class Messages {
         }
     }
 
-    // ── Player combat ───────────────────────────────────────────────────────
+    // -- Player combat -------------------------------------------------------
 
     public static LogEvent playerHit(String playerName, String target, int dmg) {
         return new LogEvent(playerName + " hits the " + target + " for " + dmg + ".",
@@ -105,7 +105,7 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
-    // ── Mob combat (no player) ──────────────────────────────────────────────
+    // -- Mob combat (no player) ----------------------------------------------
 
     public static LogEvent mobHit(String attacker, String target, int dmg) {
         return new LogEvent("The " + attacker + " hits the " + target + " for " + dmg + ".",
@@ -122,7 +122,7 @@ public final class Messages {
                             EventPriority.HIGH, false);
     }
 
-    // ── Mob-on-player combat (involves player) ──────────────────────────────
+    // -- Mob-on-player combat (involves player) ------------------------------
 
     public static LogEvent enemyHit(String attacker, String playerName, int dmg) {
         return new LogEvent("The " + attacker + " hits " + playerName + " for " + dmg + ".",
@@ -139,7 +139,7 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
-    // ── Other ──────────────────────────────────────────────────────────────
+    // -- Other --------------------------------------------------------------
 
     public static LogEvent pickupItem(String playerName, String itemName) {
         return new LogEvent(playerName + " picks up a " + itemName + ".",
@@ -193,7 +193,7 @@ public final class Messages {
     public static LogEvent vegetationEaten(String name, String vegetation) {
         // HIGH priority so the message survives the default log filter (LOW would be
         // hidden unless the player toggles "!"). Mushroom eating drives mouse-spawning
-        // bookkeeping that the player otherwise has no way to observe — making the event
+        // bookkeeping that the player otherwise has no way to observe - making the event
         // visible avoids "the system feels broken because nothing logs".
         return new LogEvent("The " + name + " eats the " + vegetation + ".",
                             EventPriority.HIGH, false);
@@ -216,7 +216,7 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
-    /** "Adventurer eats the apple." — HIGH-priority so the player sees it
+    /** "Adventurer eats the apple." - HIGH-priority so the player sees it
      *  in the default log filter; food is a meaningful resource event. */
     public static LogEvent playerEats(String playerName, String itemName) {
         return new LogEvent(playerName + " eats the " + itemName + ".",

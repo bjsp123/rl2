@@ -8,13 +8,13 @@ package com.bjsp123.rl2.ui.skin;
  *
  * <p>Volatile because the read happens on the libGDX render thread and the
  * write happens on the Settings input thread (also the render thread in
- * practice, but the volatile is cheap insurance — same pattern as
+ * practice, but the volatile is cheap insurance - same pattern as
  * {@link LogPreferences}).
  */
 public final class LogFontScale {
 
-    /** Selectable multipliers exposed by the Settings → Log tab. {@code 1.0×} is
-     *  the legacy size; defaults bumped to {@code 1.5×} so a fresh install lands
+    /** Selectable multipliers exposed by the Settings -> Log tab. {@code 1.0x} is
+     *  the legacy size; defaults bumped to {@code 1.5x} so a fresh install lands
      *  at a more readable size given the new pixel font. */
     public static final float[] CHOICES = { 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f };
 

@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.save;
 
 /**
- * Player-progression milestones. Each entry is a flat data record — display
+ * Player-progression milestones. Each entry is a flat data record - display
  * name + a short description of what triggers it, plus a {@link Category}
  * for grouping in the Hall of Fame Achievements tab and a {@code hidden}
  * flag for surprise / spoiler entries (rendered as {@code ???} until
@@ -31,7 +31,7 @@ public enum Achievement {
             Category.ITEMS, false),
     ARTISAN            ("Artisan",             "Craft your first item.",
             Category.ITEMS, false),
-    HALL_OF_FAMER      ("Memento Mori",        "Complete a run — your name in the Hall of Fame.",
+    HALL_OF_FAMER      ("Memento Mori",        "Complete a run - your name in the Hall of Fame.",
             Category.RUN, false);
 
     public final String   displayName;

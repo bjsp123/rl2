@@ -10,25 +10,25 @@ import com.bjsp123.rl2.model.Mob;
 import java.util.Random;
 
 /**
- * Per-turn evolution of the {@link Level#cloud} layer — the gaseous overlay that
+ * Per-turn evolution of the {@link Level#cloud} layer - the gaseous overlay that
  * sits on top of vegetation / surfaces and drifts around the level.
  *
  * <p>Each cell in {@code level.cloud} packs a {@link Cloud} type and a duration
- * (turns until the cloud dissipates) into a single int — see
+ * (turns until the cloud dissipates) into a single int - see
  * {@link #pack(Cloud, int)}, {@link #typeAt(Level, int, int)},
  * {@link #durationAt(Level, int, int)}. Reads / writes go through this class so
  * the encoding stays contained.
  *
  * <p>Per-turn flow (driven by {@link TurnSystem#tick} via the standard-turn pass):
  * <ol>
- *   <li>Apply effects — every mob standing on a {@link Cloud#POISON} cell gets
+ *   <li>Apply effects - every mob standing on a {@link Cloud#POISON} cell gets
  *       a fresh {@link Buff.BuffType#POISONED} buff.</li>
- *   <li>Spread — every cell with {@code duration >= 2} has a 30% chance to
+ *   <li>Spread - every cell with {@code duration >= 2} has a 30% chance to
  *       transfer half its duration (rounded up) to a random adjacent cell;
  *       the source's duration is also halved (rounded up).</li>
- *   <li>Decay — every non-empty cell loses 1 duration; cells that hit 0 clear
+ *   <li>Decay - every non-empty cell loses 1 duration; cells that hit 0 clear
  *       back to {@code 0}.</li>
- *   <li>Emission — fire vegetation rolls 25% to spawn smoke (duration 5);
+ *   <li>Emission - fire vegetation rolls 25% to spawn smoke (duration 5);
  *       water surfaces adjacent to fire roll 50% to spawn steam (duration 3).</li>
  * </ol>
  *
@@ -44,7 +44,7 @@ public final class CloudSystem {
      *  cloud lingers beyond a dozen turns regardless of stacking. */
     public static final int MAX_DURATION = 12;
 
-    /** Per-tile per-turn chance a cloud with duration ≥ 2 spreads to a
+    /** Per-tile per-turn chance a cloud with duration >= 2 spreads to a
      *  neighbour. */
     public static final double SPREAD_CHANCE = 0.30;
     /** Per-fire-tile per-turn chance to emit a smoke cloud (duration 5). */
@@ -59,13 +59,13 @@ public final class CloudSystem {
 
     /** Buff strength applied by a poison cloud each turn. */
     private static final int POISON_BUFF_LEVEL = 1;
-    /** Buff duration (turns) applied per poison-cloud tick. Short — the cloud
+    /** Buff duration (turns) applied per poison-cloud tick. Short - the cloud
      *  re-applies it next turn if the mob is still standing in it. */
     private static final int POISON_BUFF_DURATION = 2;
 
     private static final Random RNG = new Random();
 
-    // ── Encoding helpers ────────────────────────────────────────────────────
+    // -- Encoding helpers ----------------------------------------------------
 
     /** Pack {@code type} + {@code duration} into the single int form stored in
      *  {@link Level#cloud}. {@code duration <= 0} or {@code type == null}
@@ -76,7 +76,7 @@ public final class CloudSystem {
         return ((type.ordinal() + 1) << 4) | d;
     }
 
-    /** Inverse of {@link #pack} — null when the cell is empty. */
+    /** Inverse of {@link #pack} - null when the cell is empty. */
     public static Cloud type(int packed) {
         int t = (packed >> 4) & 0xF;
         if (t <= 0 || t > Cloud.values().length) return null;
@@ -97,20 +97,20 @@ public final class CloudSystem {
         return duration(level.cloud[x][y]);
     }
 
-    /** True when {@code (x, y)} carries a SMOKE cloud — used by
+    /** True when {@code (x, y)} carries a SMOKE cloud - used by
      *  {@code LevelSystem.buildBlocking} to make smoke opaque to sight + light
      *  without changing the underlying tile. */
     public static boolean smokeAt(Level level, int x, int y) {
         return typeAt(level, x, y) == Cloud.SMOKE;
     }
 
-    // ── Mutation ────────────────────────────────────────────────────────────
+    // -- Mutation ------------------------------------------------------------
 
     /** Add (or replace) a cloud at {@code (x, y)}. The merge rule:
      *  <ul>
-     *    <li>Empty cell → set to ({@code type}, {@code duration}).</li>
-     *    <li>Same type → durations add (clamped to {@link #MAX_DURATION}).</li>
-     *    <li>Different type → the incoming type wins, duration is the larger
+     *    <li>Empty cell -> set to ({@code type}, {@code duration}).</li>
+     *    <li>Same type -> durations add (clamped to {@link #MAX_DURATION}).</li>
+     *    <li>Different type -> the incoming type wins, duration is the larger
      *        of the two so a fresh poison plume doesn't get instantly wiped
      *        by leftover smoke.</li>
      *  </ul>
@@ -135,10 +135,10 @@ public final class CloudSystem {
         level.cloud[x][y] = pack(newType, newDur);
     }
 
-    // ── Per-turn tick ───────────────────────────────────────────────────────
+    // -- Per-turn tick -------------------------------------------------------
 
     /** One pass of the cloud layer's per-turn behaviour. See class javadoc for
-     *  ordering: poison effect → spread → decay → emission. */
+     *  ordering: poison effect -> spread -> decay -> emission. */
     public static void tickPerTurn(Level level) {
         if (level == null || level.cloud == null) return;
         int w = level.width, h = level.height;
@@ -146,7 +146,7 @@ public final class CloudSystem {
         // (1) Apply poison-cloud effects to mobs standing in poison cells.
         applyPoisonEffects(level);
 
-        // (2) Spread — work from a snapshot so clouds don't cascade through
+        // (2) Spread - work from a snapshot so clouds don't cascade through
         //     freshly-spread tiles in a single turn.
         int[][] next = new int[w][h];
         for (int x = 0; x < w; x++) System.arraycopy(level.cloud[x], 0, next[x], 0, h);
@@ -161,7 +161,7 @@ public final class CloudSystem {
                 int[] nb = pickAdjacentInBounds(level, x, y);
                 if (nb == null) continue;
                 int transfer = (dur + 1) / 2; // half rounded up
-                int srcRem   = (dur + 1) / 2; // halved (rounded up) — spec
+                int srcRem   = (dur + 1) / 2; // halved (rounded up) - spec
                 next[x][y] = pack(t, srcRem);
                 int destPacked = next[nb[0]][nb[1]];
                 Cloud destType = type(destPacked);
@@ -170,7 +170,7 @@ public final class CloudSystem {
                 if (destType == null || destType == t) {
                     merged = Math.min(MAX_DURATION, destDur + transfer);
                 } else {
-                    // Mixed types — incoming wins, duration takes the larger
+                    // Mixed types - incoming wins, duration takes the larger
                     // of the two so we don't reset the cloud's lifetime.
                     merged = Math.min(MAX_DURATION, Math.max(destDur, transfer));
                 }
@@ -179,7 +179,7 @@ public final class CloudSystem {
         }
         for (int x = 0; x < w; x++) System.arraycopy(next[x], 0, level.cloud[x], 0, h);
 
-        // (3) Decay — every non-empty cell drops by 1.
+        // (3) Decay - every non-empty cell drops by 1.
         for (int x = 0; x < w; x++) {
             for (int y = 0; y < h; y++) {
                 int packed = level.cloud[x][y];
@@ -195,7 +195,7 @@ public final class CloudSystem {
             }
         }
 
-        // (4) Emission — fire makes smoke; water adjacent to fire makes steam.
+        // (4) Emission - fire makes smoke; water adjacent to fire makes steam.
         emitFromFireAndWater(level);
     }
 
@@ -243,7 +243,7 @@ public final class CloudSystem {
         return false;
     }
 
-    /** 8 neighbour offsets — same indexing as {@link #pickAdjacentInBounds}. */
+    /** 8 neighbour offsets - same indexing as {@link #pickAdjacentInBounds}. */
     private static final int[] NB_DX = { -1,  0,  1, -1, 1, -1, 0, 1 };
     private static final int[] NB_DY = { -1, -1, -1,  0, 0,  1, 1, 1 };
 

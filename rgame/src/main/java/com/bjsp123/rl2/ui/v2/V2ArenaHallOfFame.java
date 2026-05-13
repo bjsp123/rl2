@@ -9,7 +9,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** V2 arena hall-of-fame screen — list of past arena matches. */
+/** V2 arena hall-of-fame screen - list of past arena matches. */
 public final class V2ArenaHallOfFame extends V2Screen {
 
     private static final SimpleDateFormat TS_FMT =
@@ -18,7 +18,8 @@ public final class V2ArenaHallOfFame extends V2Screen {
 
     private final Rl2Game game;
     private final Rect window = new Rect();
-    private final Scroller scroller = new Scroller();
+    private final ScrollBand listBand = new ScrollBand();
+    private float listContentH;
 
     public V2ArenaHallOfFame(Rl2Game game) {
         super(game.ui);
@@ -46,6 +47,7 @@ public final class V2ArenaHallOfFame extends V2Screen {
     @Override
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        listBand.drawScrollbar(ctx.shapes, listContentH);
     }
 
     @Override
@@ -72,62 +74,92 @@ public final class V2ArenaHallOfFame extends V2Screen {
         TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Match",     contentLeft, headerY);
         TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Survivors", right,       headerY);
 
-        float rowH          = lh * 2.5f;
         float visibleTop    = headerY - lh;
         float visibleBottom = window.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET;
-        float visibleH      = visibleTop - visibleBottom;
-        scroller.setMaxScroll(Math.max(0f, entries.size() * rowH - visibleH));
+        listBand.set(window.x + 8f, visibleBottom,
+                window.w - 16f, visibleTop - visibleBottom);
 
+        float textW = Math.max(24f, right - contentLeft);
+        float[] rowHeights = new float[entries.size()];
+        float[] cumY = new float[entries.size()];
+        listContentH = 0f;
         for (int i = 0; i < entries.size(); i++) {
-            float yTop = visibleTop - i * rowH + scroller.scrollY();
-            if (yTop - rowH > visibleTop) continue;
-            if (yTop < visibleBottom) break;
-
             ArenaHallOfFameEntry e = entries.get(i);
-
-            Color badgeColor;
-            String badgeLetter;
-            if (e.winner == 1) {
-                badgeColor  = WIN_A_COLOR;
-                badgeLetter = "A";
-            } else if (e.winner == 2) {
-                badgeColor  = UIVars.ACCENT;
-                badgeLetter = "B";
-            } else {
-                badgeColor  = UIVars.TEXT_DIM;
-                badgeLetter = "=";
-            }
-            float badgeBottom = yTop - badgeSz;
-            ctx.batch.setColor(badgeColor);
-            ctx.batch.draw(ctx.whitePixel, badgeX, badgeBottom, badgeSz, badgeSz);
-            ctx.batch.setColor(Color.WHITE);
-            TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, badgeLetter,
-                    badgeX + badgeSz * 0.5f, badgeBottom + badgeSz * 0.5f + lh * 0.25f);
-
-            String when   = TS_FMT.format(new Date(e.timestampMillis));
-            String match  = e.teamADescription + " vs " + e.teamBDescription;
+            String match = e.teamADescription + " vs " + e.teamBDescription;
             String result = "A " + e.teamASurvivors + "  /  B " + e.teamBSurvivors;
-            TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM,  when,   contentLeft, yTop - lh * 0.8f);
-            TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_BODY, match,  contentLeft, yTop - lh * 1.8f);
-            TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY, result, right,       yTop - lh * 1.8f);
+            int matchLines = TextDraw.block(ctx.fontRegular, match,
+                    textW, 2, lh).lineCount();
+            int resultLines = TextDraw.block(ctx.fontRegular, result,
+                    textW, 2, lh).lineCount();
+            rowHeights[i] = Math.max(badgeSz + 6f,
+                    lh * (1.2f + matchLines + resultLines) + 10f);
+            cumY[i] = listContentH;
+            listContentH += rowHeights[i] + 8f;
         }
+        if (entries.size() > 0) listContentH -= 8f;
+        listBand.update(listContentH);
+
+        listBand.clip(ctx, () -> {
+            for (int i = 0; i < entries.size(); i++) {
+                float yTop = listBand.top() - cumY[i] + listBand.scroller.scrollY();
+                float rowH = rowHeights[i];
+                if (yTop - rowH > listBand.top()) continue;
+                if (yTop < listBand.bottom()) break;
+
+                ArenaHallOfFameEntry e = entries.get(i);
+
+                Color badgeColor;
+                String badgeLetter;
+                if (e.winner == 1) {
+                    badgeColor  = WIN_A_COLOR;
+                    badgeLetter = "A";
+                } else if (e.winner == 2) {
+                    badgeColor  = UIVars.ACCENT;
+                    badgeLetter = "B";
+                } else {
+                    badgeColor  = UIVars.TEXT_DIM;
+                    badgeLetter = "=";
+                }
+                float badgeBottom = yTop - badgeSz;
+                ctx.batch.setColor(badgeColor);
+                ctx.batch.draw(ctx.whitePixel, badgeX, badgeBottom, badgeSz, badgeSz);
+                ctx.batch.setColor(Color.WHITE);
+                TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, badgeLetter,
+                        badgeX + badgeSz * 0.5f, badgeBottom + badgeSz * 0.5f + lh * 0.25f);
+
+                String when = TS_FMT.format(new Date(e.timestampMillis));
+                String match = e.teamADescription + " vs " + e.teamBDescription;
+                String result = "A " + e.teamASurvivors + "  /  B " + e.teamBSurvivors;
+                TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        when, contentLeft, yTop - lh * 0.35f, textW);
+                TextDraw.TextBlock matchBlock = TextDraw.block(ctx.fontRegular,
+                        match, textW, 2, lh);
+                float lineY = yTop - lh * 1.35f;
+                TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                        matchBlock, contentLeft, lineY);
+                lineY -= matchBlock.height();
+                TextDraw.TextBlock resultBlock = TextDraw.block(ctx.fontRegular,
+                        result, textW, 2, lh);
+                TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        resultBlock, contentLeft, lineY);
+            }
+        });
     }
 
     @Override
     protected boolean onTouchDownInBody(float vx, float vy) {
         if (!window.contains(vx, vy)) return false;
-        scroller.onTouchDown(vy);
-        return true;
+        return listBand.touchDown(vx, vy);
     }
 
     @Override
     protected boolean onTouchDragged(float vx, float vy) {
-        return scroller.onTouchDragged(vy);
+        return listBand.touchDragged(vy);
     }
 
     @Override
     protected boolean onScrolled(float amountY) {
-        scroller.onScrolled(amountY, 40f);
+        listBand.scrolled(amountY, 40f);
         return true;
     }
 

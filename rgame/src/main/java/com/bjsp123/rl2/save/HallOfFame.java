@@ -24,7 +24,7 @@ public class HallOfFame {
     public List<HallOfFameEntry> entries = new ArrayList<>();
 
     /** Append {@code e}, re-sort by score descending, and truncate to
-     *  {@link #MAX}. Doesn't persist — caller pairs this with
+     *  {@link #MAX}. Doesn't persist - caller pairs this with
      *  {@link HallOfFameStore#save}. */
     public void add(HallOfFameEntry e) {
         entries.add(e);

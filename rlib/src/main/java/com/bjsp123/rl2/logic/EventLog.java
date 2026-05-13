@@ -12,7 +12,7 @@ import java.util.List;
  * reference through every call would be invasive. A single game instance runs one world
  * at a time, so a shared buffer is fine.
  *
- * <p>Capped at {@link #MAX_EVENTS}; older entries drop off the front. Not persisted — a
+ * <p>Capped at {@link #MAX_EVENTS}; older entries drop off the front. Not persisted - a
  * fresh session starts with an empty log.
  */
 public final class EventLog {
@@ -42,7 +42,7 @@ public final class EventLog {
         return Collections.unmodifiableList(events.subList(from, events.size()));
     }
 
-    /** Wipe the log — called on new-game start so the Hall-of-Fame kill chatter from a
+    /** Wipe the log - called on new-game start so the Hall-of-Fame kill chatter from a
      *  previous run doesn't stick around. */
     public static void clear() {
         events.clear();

@@ -2,7 +2,7 @@ package com.bjsp123.rl2.ui.v2;
 
 /**
  * Plain mutable rectangle in virtual coordinates. Y-up: {@code y} is the
- * BOTTOM edge — matches libGDX's screen-space convention after the viewport
+ * BOTTOM edge - matches libGDX's screen-space convention after the viewport
  * unprojects pointer events.
  */
 public final class Rect {

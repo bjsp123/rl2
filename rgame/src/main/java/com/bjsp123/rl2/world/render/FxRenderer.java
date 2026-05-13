@@ -15,11 +15,11 @@ import com.bjsp123.rl2.world.render.Effect.EffectTint;
 import com.bjsp123.rl2.world.render.Effect.EffectType;
 
 /**
- * Animations, FX, and timing — every {@link Effect}-driven visual the renderer paints.
+ * Animations, FX, and timing - every {@link Effect}-driven visual the renderer paints.
  * Held by {@link DefaultLevelRenderer} (one instance per renderer); reads its
  * {@link SpriteBatch}, {@link BitmapFont}, white-pixel {@link TextureRegion}, and the
  * two optional painted-fire sheets through constructor injection. The whole class is
- * read-only against game state — every draw method takes whatever it needs in args.
+ * read-only against game state - every draw method takes whatever it needs in args.
  *
  * <p>Owns the rendering for every {@link EffectType}: floating text, thrown items,
  * particle burst, explosion, magic missile, fire particle, sleep Z, teleport streaks,
@@ -37,13 +37,13 @@ final class FxRenderer {
     private static final int  FIRE_SHEET_FRAME_W = 32;
     private static final int  FIRE_SHEET_FRAME_H = 48;
     private static final int  FIRE_SHEET_FRAMES  = 8;
-    /** On-screen draw size of one painted fire — smaller than the cell so a tile can
+    /** On-screen draw size of one painted fire - smaller than the cell so a tile can
      *  carry a PAIR of flames at random per-tile positions. Preserves 32:48 source
-     *  aspect at 12×18. */
+     *  aspect at 12x18. */
     private static final int  FIRE_DISPLAY_W     = 12;
     private static final int  FIRE_DISPLAY_H     = 18;
 
-    /** Constant downward acceleration applied to PARTICLE_BURST particles, in pixels/frame². */
+    /** Constant downward acceleration applied to PARTICLE_BURST particles, in pixels/frame^2. */
     private static final float PARTICLE_GRAVITY = 0.32f;
     /** Pixel size of each particle (square). */
     private static final float PARTICLE_SIZE    = 1.5f;
@@ -52,16 +52,16 @@ final class FxRenderer {
     private static final Color TINT_BLUE   = new Color(0.4f, 0.6f, 1f, 1f);
     private static final Color TINT_BROWN  = new Color(0.55f, 0.34f, 0.16f, 1f);
     private static final Color TINT_ORANGE = new Color(1f, 0.55f, 0.1f, 1f);
-    /** POWERUP_FLASH cycle: dim grey → bright white → warm gold. */
+    /** POWERUP_FLASH cycle: dim grey -> bright white -> warm gold. */
     private static final Color TINT_GREY   = new Color(0.55f, 0.55f, 0.55f, 1f);
     private static final Color TINT_GOLD   = new Color(1.0f, 0.85f, 0.25f, 1f);
 
     private final SpriteBatch batch;
     private final BitmapFont font;
     private final TextureRegion whiteRegion;
-    /** Two painted 8-frame fire animation sheets — each 256×48 (8 frames of 32×48). Each
+    /** Two painted 8-frame fire animation sheets - each 256x48 (8 frames of 32x48). Each
      *  FIRE tile picks one of the two by hash for visual variety. Optional: if a file is
-     *  missing, {@link #drawFireAt} draws nothing — there is no procedural fallback. */
+     *  missing, {@link #drawFireAt} draws nothing - there is no procedural fallback. */
     private final Texture fire1Tex;
     private final Texture fire2Tex;
 
@@ -80,7 +80,7 @@ final class FxRenderer {
      * ignore FOV so the player can see their own projectiles crossing dark tiles.
      */
     void drawEffect(Level level, Effect effect) {
-        // Effects with a pending start delay are parked — EffectStage.tick is still
+        // Effects with a pending start delay are parked - EffectStage.tick is still
         // counting down the delay; nothing should render yet.
         if (effect.startDelay > 0) return;
         int ex = effect.location.tileX(), ey = effect.location.tileY();
@@ -128,12 +128,12 @@ final class FxRenderer {
             if (!level.visible[ex][ey]) return;
             drawCloudPuff(effect);
         } else if (effect.type == EffectType.RAY) {
-            // Rays draw across the whole length regardless of FOV — the player should
+            // Rays draw across the whole length regardless of FOV - the player should
             // always see their own beam clear out a ghost even if the destination tile
             // is at the edge of vision.
             drawRay(effect);
         } else if (effect.type == EffectType.GRAPPLE_ROPE) {
-            // Same FOV rule as the player's own ray — the rope should
+            // Same FOV rule as the player's own ray - the rope should
             // always be visible to its caster.
             drawGrappleRope(effect);
         } else if (effect.type == EffectType.BLAST) {
@@ -202,7 +202,7 @@ final class FxRenderer {
 
     /** Overlay two painted-fire flames at the mob's pixel position so a burning mob is
      *  visually on fire. Uses the same flame sheets and per-frame animation cadence as
-     *  fire-tile rendering — but the centre x is the mob's tile centre (with anim/lift
+     *  fire-tile rendering - but the centre x is the mob's tile centre (with anim/lift
      *  offsets applied) so the flame follows the mob's step interpolation. */
     void drawFireOnMob(Mob mob, int mx, int my, float ox, float oy) {
         long frameId = Gdx.graphics.getFrameId();
@@ -214,7 +214,7 @@ final class FxRenderer {
         drawPaintedFireFlamePx(seedB, centerXpx + CELL / 4f, baseYpx);
     }
 
-    /** Render a FIRE_PARTICLE effect — a single rising ember spawned by
+    /** Render a FIRE_PARTICLE effect - a single rising ember spawned by
      *  {@link com.bjsp123.rl2.logic.FireSystem} from each burning tile on a regular cadence. */
     private void drawFireParticle(Effect e) {
         if (e.particleX0 == null || e.particleY0 == null || e.particleVX == null) return;
@@ -251,7 +251,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Render a single SLEEP_Z effect — a "Z" rising out of a sleeping mob's tile. */
+    /** Render a single SLEEP_Z effect - a "Z" rising out of a sleeping mob's tile. */
     private void drawSleepZ(Effect e) {
         if (e == null || e.location == null || font == null) return;
         int total = e.totalFrames();
@@ -299,7 +299,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Floating buff-icon — same rising motion as floating text, but renders the buff's
+    /** Floating buff-icon - same rising motion as floating text, but renders the buff's
      *  sprite from {@link BuffIcons}. Falls back to the carried {@link Effect#text}
      *  when the sheet didn't load. */
     private void drawBuffIcon(Effect e) {
@@ -357,12 +357,12 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Render the grappling-rope effect — a thick brown line from caster to
+    /** Render the grappling-rope effect - a thick brown line from caster to
      *  target tile that grows during the extend phase, then either shrinks
      *  back (success) or holds-flashes-fades (failure). The retract pairs
      *  with the engine's {@link com.bjsp123.rl2.event.GameEvent.MobKnockedBack}
      *  slide so the dragged subject's sprite glides home with the rope's
-     *  tip — set up at the rlib side, no synchronisation needed here. */
+     *  tip - set up at the rlib side, no synchronisation needed here. */
     private void drawGrappleRope(Effect e) {
         if (e.endLocation == null) return;
         int extendFrames = Math.max(1, e.grappleExtendFrames);
@@ -383,16 +383,16 @@ final class FxRenderer {
         if (frame < extendFrames) {
             reachT = (frame + 1) / (float) extendFrames;
         } else if (e.grappleSuccess) {
-            // Retract — tip slides back to the caster.
+            // Retract - tip slides back to the caster.
             float t = (frame - extendFrames + 1) / (float) tailFrames;
             reachT = Math.max(0f, 1f - t);
         } else {
-            // Failure — full extent, with a brief flash-then-fade.
+            // Failure - full extent, with a brief flash-then-fade.
             reachT = 1f;
             float t = (frame - extendFrames) / (float) tailFrames;
             // First half is a held flash, second half fades to nothing.
             if (t < 0.4f) {
-                // Pulse: 1.0 → 0.6 → 1.0 to read as "rope yanks taut".
+                // Pulse: 1.0 -> 0.6 -> 1.0 to read as "rope yanks taut".
                 alpha = 0.6f + 0.4f * (float) Math.cos(t * Math.PI / 0.4f);
             } else {
                 alpha = Math.max(0f, 1f - (t - 0.4f) / 0.6f);
@@ -405,7 +405,7 @@ final class FxRenderer {
         Color tint = e.grappleSuccess
                 ? tintToColor(EffectTint.BROWN, Color.WHITE)
                 : tintToColor(EffectTint.RED,   Color.WHITE);
-        // Soft outline (1.5× thickness, 35% alpha) under a crisp core line.
+        // Soft outline (1.5x thickness, 35% alpha) under a crisp core line.
         batch.setColor(tint.r * 0.4f, tint.g * 0.3f, tint.b * 0.25f, alpha * 0.5f);
         batch.draw(whiteRegion,
                 x1, y1 - 2f, 0f, 2f,
@@ -414,7 +414,7 @@ final class FxRenderer {
         batch.draw(whiteRegion,
                 x1, y1 - 1f, 0f, 1f,
                 drawLen, 2f, 1f, 1f, angle);
-        // Hook tip — small square at the rope's far end so the eye can
+        // Hook tip - small square at the rope's far end so the eye can
         // follow the tip during the retract.
         float tx = x1 + fdx * reachT;
         float ty = y1 + fdy * reachT;
@@ -423,7 +423,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Render one LIGHT_MOTE — a soft pale spark drifting up from a light source. */
+    /** Render one LIGHT_MOTE - a soft pale spark drifting up from a light source. */
     private void drawLightMote(Effect e) {
         if (e.particleX0 == null || e.particleX0.length == 0) return;
         int total = e.totalFrames();
@@ -448,7 +448,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Render a teleport streak burst — green vertical streaks moving purely along y. */
+    /** Render a teleport streak burst - green vertical streaks moving purely along y. */
     private void drawTeleportStreaks(Effect e) {
         if (e.particleX0 == null) return;
         float t     = e.frame;
@@ -471,7 +471,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Render an EXPLOSION effect — particles flying outward at constant velocity. */
+    /** Render an EXPLOSION effect - particles flying outward at constant velocity. */
     private void drawExplosion(Effect e) {
         if (e.particleX0 == null) return;
         float t = e.frame;
@@ -509,7 +509,7 @@ final class FxRenderer {
 
         if (e.particleSpawnFrame != null
                 && e.particleSpawnFrame.length == e.particleX0.length) {
-            // Per-particle path — each particle lives for PARTICLE_LIFE frames
+            // Per-particle path - each particle lives for PARTICLE_LIFE frames
             // starting at its own spawn frame, independent of the others.
             final int PARTICLE_LIFE = 40;
             Color base = tintToColor(e.tint, Color.WHITE);
@@ -517,7 +517,7 @@ final class FxRenderer {
                 int age = e.frame - e.particleSpawnFrame[i];
                 if (age < 0 || age >= PARTICLE_LIFE) continue;
                 float lifeFrac = age / (float) PARTICLE_LIFE;
-                // First half: tint → white.  Second half: white, alpha fades.
+                // First half: tint -> white.  Second half: white, alpha fades.
                 float whiteFrac = Math.min(1f, lifeFrac * 2f);
                 float cr = base.r + (1f - base.r) * whiteFrac;
                 float cg = base.g + (1f - base.g) * whiteFrac;
@@ -612,7 +612,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Per-floor dust-cloud tints — looked up from the tile under the
+    /** Per-floor dust-cloud tints - looked up from the tile under the
      *  effect's spawn point so a wood floor kicks up sawdust-tan and a
      *  stone floor kicks up pale grey. Tiles not in this map (walls,
      *  doors, chasms) get a neutral tan default. */
@@ -627,29 +627,29 @@ final class FxRenderer {
     }
     private static final Color DUST_DEFAULT = new Color(0.82f, 0.78f, 0.66f, 1f);
 
-    /** Foot-dust ellipse — expands, rises, drifts in the spawning mob's
+    /** Foot-dust ellipse - expands, rises, drifts in the spawning mob's
      *  move direction, and fades. Drawn over the bottom of the mob's
      *  tile so it obscures the sprite's feet for a few frames. The
      *  ellipse is approximated with horizontal whitepixel bars (no
      *  native ellipse primitive in the SpriteBatch path). */
-    /** Render one {@link Effect.EffectType#CLOUD_PUFF} ellipse — same
+    /** Render one {@link Effect.EffectType#CLOUD_PUFF} ellipse - same
      *  horizontal-bar approximation as {@link #drawDustCloud}, tinted by
-     *  the cloud type, expanding ~2× and rising / fading over its life.
+     *  the cloud type, expanding ~2x and rising / fading over its life.
      *  Many puffs per tile per second compose into the visible cloud. */
     private void drawCloudPuff(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
         float t = Math.min(1f, e.frame / (float) total);
         // Width: starts at the base random (5..9 px), grows ~100% over its
-        // life so peak ≈ 10..18 px.
+        // life so peak ~ 10..18 px.
         float w = e.dustStartW * (1f + 1.0f * t);
         float h = w * 0.7f;
-        // Independent rise atop the drift — stronger upward bias than
+        // Independent rise atop the drift - stronger upward bias than
         // dust clouds since smoke / steam / fumes float pretty actively.
         float rise = 6f * t;
         // Alpha: ramps in over the first 25% then linear-fades. Smoke
         // gets a heavier peak so a thick plume actually obscures what's
-        // underneath — gameplay-wise smoke also blocks sight + light, so
+        // underneath - gameplay-wise smoke also blocks sight + light, so
         // it should read as visually opaque too. Steam / poison stay at
         // the lighter "wisps stack up" peak.
         float baseAlpha;
@@ -687,14 +687,14 @@ final class FxRenderer {
         float t = Math.min(1f, e.frame / (float) total);
 
         // Width: starts at the cloud's randomised base (4..7 px), grows
-        // ~60% over its lifetime so peak ≈ 6..11 px. Height ≈ 0.75× width
+        // ~60% over its lifetime so peak ~ 6..11 px. Height ~ 0.75x width
         // for a rounder, less squashed puff.
         float w = e.dustStartW * (1f + 0.6f * t);
         float h = w * 0.75f;
-        // Independent vertical rise (separate from drift): 0 → ~4 px up.
+        // Independent vertical rise (separate from drift): 0 -> ~4 px up.
         float rise = 4f * t;
         // Alpha: held for the first 40% of life, then linear fade. Paler
-        // overall — the dust hints at footing rather than asserting it.
+        // overall - the dust hints at footing rather than asserting it.
         float baseAlpha = 0.45f;
         float alpha = (t < 0.4f)
                 ? baseAlpha
@@ -706,12 +706,12 @@ final class FxRenderer {
                 && tx < level.width && ty < level.height)
                 ? level.tiles[tx][ty] : null;
         Color tint = DUST_TINT.getOrDefault(floor, DUST_DEFAULT);
-        // Per-cloud shade variance — same hue, slightly lighter / darker.
+        // Per-cloud shade variance - same hue, slightly lighter / darker.
         float r = clamp01(tint.r * e.dustShade);
         float g = clamp01(tint.g * e.dustShade);
         float b = clamp01(tint.b * e.dustShade);
 
-        // Pixel anchor + drift in player's direction × frame count + rise.
+        // Pixel anchor + drift in player's direction x frame count + rise.
         float cx = e.dustPxX + e.dustVxPxPerFrame * e.frame;
         float cy = e.dustPxY + e.dustVyPxPerFrame * e.frame + rise;
 
@@ -732,7 +732,7 @@ final class FxRenderer {
         return v < 0f ? 0f : (v > 1f ? 1f : v);
     }
 
-    /** Knockback flash centred on the impacted unit's tile — same fade
+    /** Knockback flash centred on the impacted unit's tile - same fade
      *  curve as the attack flash, but anchored to the centre rather than
      *  offset to one side, so it reads as "hit on the unit". */
     private void drawKnockbackFlash(Effect e) {
@@ -780,7 +780,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Pickup toss — the item flies off the source tile toward the bottom-right
+    /** Pickup toss - the item flies off the source tile toward the bottom-right
      *  of the screen while shrinking and fading. Drawn entirely in world coords:
      *  the destination is a fixed offset (+8 tiles right, -6 tiles down) from
      *  the source, which is roughly off-screen for a player-centred camera and
@@ -795,7 +795,7 @@ final class FxRenderer {
         float sx = (e.location.tileX() + 0.5f) * CELL;
         float sy = (e.location.tileY() + 0.5f) * CELL;
         float dxTotal =  8f * CELL;   // right
-        float dyTotal = -6f * CELL;   // down (y-up world → bottom-of-screen)
+        float dyTotal = -6f * CELL;   // down (y-up world -> bottom-of-screen)
         float px = sx + dxTotal * t;
         float py = sy + dyTotal * t + (float) Math.sin(Math.PI * t * 0.5f) * (CELL * 0.6f);
         float scale = 1f - 0.6f * t;
@@ -806,7 +806,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Mob falling into a chasm — same revolve-shrink-fade as
+    /** Mob falling into a chasm - same revolve-shrink-fade as
      *  {@link #drawFallingItem} but reads the mob's sprite from
      *  {@link MobSprites}. */
     private void drawFallingMob(Effect e) {
@@ -853,7 +853,7 @@ final class FxRenderer {
         font.setColor(Color.WHITE);
     }
 
-    /** Tile-anchored sprite redraw, tinted on a grey → white → gold
+    /** Tile-anchored sprite redraw, tinted on a grey -> white -> gold
      *  cycle over the effect's lifetime. Stacks on top of the mob's
      *  normal sprite to read as a celebratory pulse. */
     private void drawPowerupFlash(Effect e) {
@@ -868,7 +868,7 @@ final class FxRenderer {
         if      (t < 1f / 3f) base = TINT_GREY;
         else if (t < 2f / 3f) base = Color.WHITE;
         else                  base = TINT_GOLD;
-        // Pulse alpha — peak at the middle of each phase so the flash
+        // Pulse alpha - peak at the middle of each phase so the flash
         // reads as a heartbeat rather than a static overlay.
         float phaseT = (t * 3f) % 1f;
         float alpha = 0.55f * (1f - Math.abs(phaseT - 0.5f) * 2f) + 0.15f;
@@ -879,7 +879,7 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
-    /** Item falling into a chasm — spins in place while shrinking and fading out. */
+    /** Item falling into a chasm - spins in place while shrinking and fading out. */
     private void drawFallingItem(Effect e) {
         if (e.thrownItem == null) return;
         TextureRegion region = ItemSprites.regionFor(e.thrownItem);

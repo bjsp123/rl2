@@ -5,7 +5,7 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
-// Headless world dumper — generates a world via the rlib factory pipeline and
+// Headless world dumper - generates a world via the rlib factory pipeline and
 // writes a YAML snapshot to world_dump.yaml in the repo root. No libGDX, no
 // rendering. Pass an optional seed: ./gradlew :rlib:dumpWorld --args="42"
 tasks.register('dumpWorld', JavaExec) {

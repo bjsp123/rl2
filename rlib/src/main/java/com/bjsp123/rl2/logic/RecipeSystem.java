@@ -10,7 +10,7 @@ import java.util.List;
  * gem recipes and other categories plug in by adding to {@link #ALL}.
  *
  * <p>Recipe matching is order-insensitive across the three crafting cells. Slots are
- * sparse — a 2-input recipe leaves the third slot null and only matches when exactly two
+ * sparse - a 2-input recipe leaves the third slot null and only matches when exactly two
  * slots are filled.
  */
 public final class RecipeSystem {
@@ -57,7 +57,7 @@ public final class RecipeSystem {
         return false;
     }
 
-    /** Same-kind gem size-up — two gems of identical species and size collapse into one
+    /** Same-kind gem size-up - two gems of identical species and size collapse into one
      *  gem of the next size up. Order-insensitive; the third slot must be empty. */
     static final class GemSizeUpRecipe implements Recipe {
         @Override

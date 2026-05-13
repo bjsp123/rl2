@@ -6,7 +6,7 @@ public class Item {
      * {@link #throwEffect} and {@link #wandEffect} so values like {@code FIRE}
      * mean the same thing whether the source is a fire bomb or a fire wand.
      *
-     * <p>Null on either field means "no special effect" — thrown items with a
+     * <p>Null on either field means "no special effect" - thrown items with a
      * null {@code throwEffect} just land on the floor; summon-style wands carry
      * a null {@code wandEffect} and route through {@link #summonsWhenUsed}
      * instead.
@@ -53,7 +53,7 @@ public class Item {
          *  50% chance to reroll to one of {FLOOR, FLOOR_WOOD,
          *  FLOOR_SPECIAL, CHASM}, and every non-unique mob in the disc
          *  is replaced by a random species whose intrinsic size is
-         *  within ±1 of the original's. */
+         *  within +/-1 of the original's. */
         POLYMORPH,
         /** {@link UseBehavior#POWERUP} sub-effect: gain one character
          *  level when picked up. */
@@ -85,7 +85,7 @@ public class Item {
 
     /**
      * Single source of truth for "what kind of item is this?". Drives equip-slot
-     * routing, inventory tab grouping, and item-generation bucketing — formerly
+     * routing, inventory tab grouping, and item-generation bucketing - formerly
      * spread across {@code slot}, {@code useBehavior}, and {@code thrownBehavior}
      * heuristics. Set per row in {@code items.csv}.
      *
@@ -129,14 +129,14 @@ public class Item {
         DRINK,
         /** Consume the item to grant the user a perk point. Used by power orbs. */
         GRANT_PERK,
-        /** Throw a grappling rope — pick a target tile, then yank everything
+        /** Throw a grappling rope - pick a target tile, then yank everything
          *  on it (mob and any floor items) onto the nearest non-wall tile
          *  adjacent to the user. Mobs whose {@code size} exceeds the item's
          *  {@link Item#abilityPower} (overloaded as the max-size cap for
          *  GRAPPLE items) are too heavy: the rope flashes and fades without
          *  pulling anything. Items that land on a chasm fall in. */
         GRAPPLE,
-        /** Quick-jump tool — picks a target tile within
+        /** Quick-jump tool - picks a target tile within
          *  {@link Item#abilityPower} squares (Chebyshev) of the user and
          *  teleports them there for one {@code moveCost}. */
         JUMP,
@@ -150,7 +150,7 @@ public class Item {
         POWERUP
     }
 
-    /** Identifier — string key matching the {@code type} column of a row in
+    /** Identifier - string key matching the {@code type} column of a row in
      *  {@code assets/data/items.csv}. Null for procedurally-generated items
      *  (gems) that aren't catalogued in the CSV. Used as the registry lookup
      *  key and as the stack-merge identity. */
@@ -159,7 +159,7 @@ public class Item {
     public String name;
     /** Free-form flavor text / description shown in the item detail dialog. */
     public String description = "";
-    /** Optional secondary flavor paragraph — rendered immediately below
+    /** Optional secondary flavor paragraph - rendered immediately below
      *  {@link #description} in the encyclopedia entry, separated by a
      *  blank line. Use it for in-fiction lore or quotes that don't fit
      *  on the inventory popup; the look popup deliberately ignores this
@@ -176,13 +176,13 @@ public class Item {
     /** Per-level armor range increment. Mirrors {@link #damagePerLevel} but
      *  for {@link #armor}. */
     public MinMax armorPerLevel  = MinMax.ZERO;
-    /** Armor-piercing damage range — bypasses the target's armor on a hit.
+    /** Armor-piercing damage range - bypasses the target's armor on a hit.
      *  Composed by sum into the wielder's {@code apDamage} stat in
      *  {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto}. */
     public MinMax apDamage = MinMax.ZERO;
     /** Per-level increment to {@link #apDamage}. */
     public MinMax apDamagePerLevel = MinMax.ZERO;
-    /** Magic-resistance range — reduces magical / energy damage taken when
+    /** Magic-resistance range - reduces magical / energy damage taken when
      *  the item is equipped. Read from the CSV {@code antiMagic} column.
      *  Composed by sum into the wielder's {@code magicResist} stat. */
     public MinMax magicResist = MinMax.ZERO;
@@ -192,7 +192,7 @@ public class Item {
     public int accuracy;
     /** Bonus to the wielder's {@code evasion}. Composed by sum. */
     public int evasion;
-    /** Multiplier on the wielder's base attack cost — values below 1.0 mean
+    /** Multiplier on the wielder's base attack cost - values below 1.0 mean
      *  faster attacks, above 1.0 mean slower. {@link #ATTACK_SPEED_DEFAULT}
      *  (= 1.0) is "no change". Read from the CSV {@code attackSpeed} column.
      *  Wired into the wielder's {@code attackCost} via
@@ -201,7 +201,7 @@ public class Item {
     /** Multiplier on the wielder's base move cost. Mirrors
      *  {@link #attackSpeed} for movement; CSV column is {@code moveSpeed}. */
     public double moveSpeed = MOVE_SPEED_DEFAULT;
-    /** Identity values for the speed multipliers — items without a speed
+    /** Identity values for the speed multipliers - items without a speed
      *  modifier carry these so {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto}
      *  contributes zero delta, and the lore renderer can suppress the row. */
     public static final double ATTACK_SPEED_DEFAULT = 1.0;
@@ -227,19 +227,19 @@ public class Item {
     /** Element a {@link UseBehavior#WAND} use applies on impact. Null for summon-style wands. */
     public ItemEffect wandEffect;
     /** Verb the UI shows on the Use button and in event-log messages for this item's use
-     *  action — "eat" for a pear, "zap" for a staff, "drink" for a potion, etc. Null/empty
+     *  action - "eat" for a pear, "zap" for a staff, "drink" for a potion, etc. Null/empty
      *  for items with no use action. */
     public String useVerb;
 
     /** Power level of this specific instance. {@code 0} is baseline (no bonus); each
      *  level above adds a fixed increment from {@link com.bjsp123.rl2.logic.GameBalance}
-     *  — wider area, more damage, larger heal, etc. Player starter items are always
+     *  - wider area, more damage, larger heal, etc. Player starter items are always
      *  level 0; dungeon-generated items roll a random level in {@code [0, depth]}.
      *  Food is always level 0. Display: when level > 0, the renderer paints "+N" on
      *  the top-right of the floor sprite. */
     public int level = 0;
 
-    /** Mob types this item tames when thrown at one — sets {@link Mob#owner} to the
+    /** Mob types this item tames when thrown at one - sets {@link Mob#owner} to the
      *  thrower. Empty for items that don't tame. The delicious fish lists
      *  {@code CAT|DOG}; future taming items just declare their own list. */
     public java.util.List<String> tameOnThrow = new java.util.ArrayList<>();
@@ -257,14 +257,14 @@ public class Item {
      *  in one impact. */
     public java.util.List<Buff.BuffType> appliesBuff = new java.util.ArrayList<>();
 
-    /** Convenience — first entry of {@link #appliesBuff} or {@code null}.
+    /** Convenience - first entry of {@link #appliesBuff} or {@code null}.
      *  Used by call sites that historically treated the field as a single
      *  buff (animator tinting, eat / drink hooks). */
     public Buff.BuffType primaryBuff() {
         return appliesBuff.isEmpty() ? null : appliesBuff.get(0);
     }
 
-    /** Generic "magnitude" knob — overloaded by useBehavior:
+    /** Generic "magnitude" knob - overloaded by useBehavior:
      *  <ul>
      *    <li>{@code APPLYBUFFS} / {@code DRINK} / {@code EAT}: base buff
      *        duration in turns at item-level 0; effective duration scales
@@ -294,7 +294,7 @@ public class Item {
      *  adds 1 max charge. 0 means the item has no charges (default). */
     public int baseChargeMax = 0;
 
-    /** Intrinsic maximum charge — {@code baseChargeMax + level}. Use
+    /** Intrinsic maximum charge - {@code baseChargeMax + level}. Use
      *  {@code ItemSystem.effectiveMaxCharge(item, holder)} when the holder
      *  is available so WANDMASTER / BOMB_JACK bonuses apply. */
     public int maxCharge() { return Math.max(1, baseChargeMax + level); }
@@ -313,17 +313,17 @@ public class Item {
      *  "of [name]" suffix to the display name. */
     public com.bjsp123.rl2.logic.BrandDefinition brand;
 
-    /** Authoritative item-kind tag — see {@link InventoryCategory}. Drives
+    /** Authoritative item-kind tag - see {@link InventoryCategory}. Drives
      *  equip routing, inventory tab grouping, and {@code ItemGenerator}
      *  bucketing. Null only for procedural items (gems) which set the
      *  category in {@code GemSystem.createGem}. */
     public InventoryCategory inventoryCategory;
 
-    /** Gem species — non-null iff this item is a gem. Drives icon colour, theme
+    /** Gem species - non-null iff this item is a gem. Drives icon colour, theme
      *  shape (triangle for crystal, square for concrete), and same-kind recipe matching.
      *  {@link #isGem()} reads off this field. */
     public GemSpecies gemSpecies;
-    /** Gem size 1–9 (tiny, small, medium, large, fine, impressive, mighty, sublime,
+    /** Gem size 1-9 (tiny, small, medium, large, fine, impressive, mighty, sublime,
      *  exquisite). Combining two gems of the same {@link #gemSpecies} and matching size
      *  yields one gem of the next size up. Ignored for non-gems. */
     public int gemSize;
@@ -332,7 +332,7 @@ public class Item {
      *  Inventory operations merge new items into the existing stack via
      *  {@link com.bjsp123.rl2.model.Inventory#addToBag}; consumption helpers decrement
      *  the count and only drop the entry once it hits 0. Equipped items are always
-     *  count 1 — equipping pulls one out of a bag stack. */
+     *  count 1 - equipping pulls one out of a bag stack. */
     public int count = 1;
 
     public boolean isGem() { return gemSpecies != null; }
@@ -342,14 +342,14 @@ public class Item {
     public boolean isUsable()     { return useBehavior != null && useBehavior != UseBehavior.NONE; }
 
     /** True only for categories that may form stacks: potions, bombs, and food.
-     *  All other item types (weapons, wands, gems, tools, …) are always singletons. */
+     *  All other item types (weapons, wands, gems, tools, ...) are always singletons. */
     public boolean isStackable() {
         return inventoryCategory == InventoryCategory.POTION
                 || inventoryCategory == InventoryCategory.BOMB
                 || inventoryCategory == InventoryCategory.FOOD;
     }
 
-    /** True if {@code other} is "exactly identical" for stacking purposes — same type,
+    /** True if {@code other} is "exactly identical" for stacking purposes - same type,
      *  both stackable. Bombs ignore level so same-type bombs from different depths
      *  merge freely; potions and food still require matching levels. */
     public boolean matchesStackKey(Item other) {

@@ -15,7 +15,7 @@ import java.util.Random;
 
 /**
  * Stage-3 population pass: lays surfaces (water/blood pools), vegetation patches, items and
- * mobs onto a level whose tile grid is already finalised. All placement here is post-tile —
+ * mobs onto a level whose tile grid is already finalised. All placement here is post-tile -
  * no method here reshapes terrain. Pool/patch growth is randomized flood-fill bounded by
  * size targets.
  *
@@ -32,7 +32,7 @@ public final class LevelFactoryPopulate {
     private LevelFactoryPopulate() {}
 
     /** Depth-fraction of {@code level.depth} within the configured dungeon size:
-     *  depth 1 → 0.0, depth {@code DUNGEON_DEPTH} → 1.0. Caps below + above so callers
+     *  depth 1 -> 0.0, depth {@code DUNGEON_DEPTH} -> 1.0. Caps below + above so callers
      *  on side-branch / preview levels with out-of-range depths still get a sane number.
      *  Public so {@link ItemGenerator} callers (loot tables, themed-room drops, etc.)
      *  can convert a level to the {@code powerLevel} input the generator expects. */
@@ -47,7 +47,7 @@ public final class LevelFactoryPopulate {
     /** Triangle weight over the {@code [powerMin, powerMax]} band: returns 0
      *  outside the band, peaks at the midpoint, and tapers toward each edge.
      *  Floored at {@link #POWER_EDGE_WEIGHT} so even at the very edges a mob
-     *  retains a small but non-zero spawn chance — without the floor, mobs
+     *  retains a small but non-zero spawn chance - without the floor, mobs
      *  whose band starts at 0 (or ends at 1) would never spawn on the
      *  shallowest (or deepest) levels because their weight there would be
      *  exactly 0 and they'd be dropped from the pool. */
@@ -60,13 +60,13 @@ public final class LevelFactoryPopulate {
         return Math.max(POWER_EDGE_WEIGHT, w);
     }
 
-    /** Floor for {@link #powerWeight} inside the band — ensures edge mobs keep
+    /** Floor for {@link #powerWeight} inside the band - ensures edge mobs keep
      *  a positive spawn chance. */
     private static final double POWER_EDGE_WEIGHT = 0.05;
 
     /** Weight multiplier for a definition's theme relative to the level's theme.
-     *  Null theme = theme-neutral (1×); matching = twice as likely (2×);
-     *  mismatching = half as likely (0.5×). */
+     *  Null theme = theme-neutral (1x); matching = twice as likely (2x);
+     *  mismatching = half as likely (0.5x). */
     private static double themeMultiplier(Level.VisualTheme defTheme,
                                           Level.VisualTheme levelTheme) {
         if (defTheme == null) return 1.0;
@@ -74,7 +74,7 @@ public final class LevelFactoryPopulate {
     }
 
     /** Pick a key from {@code keys} weighted by the parallel {@code weights} array.
-     *  All-zero weights → null. */
+     *  All-zero weights -> null. */
     static String pickWeighted(List<String> keys, double[] weights, Random rng) {
         double total = 0;
         for (double w : weights) total += w;
@@ -105,9 +105,9 @@ public final class LevelFactoryPopulate {
     }
 
     /** Mob types eligible for random spawn on {@code level}, with parallel weights.
-     *  Player-class rows + unique-flagged species are excluded — players are kit
+     *  Player-class rows + unique-flagged species are excluded - players are kit
      *  templates, and unique mobs go through their own one-shot pass below.
-     *  Rows whose {@code powerLevel} band is {@code 0_0} are also excluded — the
+     *  Rows whose {@code powerLevel} band is {@code 0_0} are also excluded - the
      *  zero-zero band is the convention for "summon / retainer only" mobs (kobold
      *  spearmen, kittens, etc.) that should never appear via random scatter. */
     private static List<String> eligibleMobs(Level level, double[][] weightOut) {
@@ -151,7 +151,7 @@ public final class LevelFactoryPopulate {
         return out;
     }
 
-    // ── Surfaces ────────────────────────────────────────────────────────────
+    // -- Surfaces ------------------------------------------------------------
 
     /** Scatter water pools across floor tiles. {@link LevelFlag#WATER} bumps the count. */
     public static void placeWaterPools(Level level, Random rng) {
@@ -198,7 +198,7 @@ public final class LevelFactoryPopulate {
                 if (taken[x][y] && level.surface[x][y] == null) level.surface[x][y] = surface;
     }
 
-    // ── Vegetation ──────────────────────────────────────────────────────────
+    // -- Vegetation ----------------------------------------------------------
 
     /** Grass + mushroom patches on dry floor. {@link LevelFlag#PLANTS} bumps the count. */
     public static void placeVegetation(Level level, Random rng) {
@@ -242,9 +242,9 @@ public final class LevelFactoryPopulate {
                 if (taken[x][y] && level.vegetation[x][y] == null) level.vegetation[x][y] = kind;
     }
 
-    // ── Items ───────────────────────────────────────────────────────────────
+    // -- Items ---------------------------------------------------------------
 
-    /** One copy of every {@code guaranteedPerLevel} eligible item plus 1–3 random
+    /** One copy of every {@code guaranteedPerLevel} eligible item plus 1-3 random
      *  cluster placements drawn via {@link ItemGenerator}. Each pick rolls
      *  the item's {@code clusterSize} for how many copies sit on adjacent floor
      *  tiles. Items prefer enclosed interiors via
@@ -310,13 +310,13 @@ public final class LevelFactoryPopulate {
      *  cell when one exists without making placement deterministic. */
     private static final int INNER_TILE_SAMPLES = 8;
 
-    /** Scatter 4–6 size-1 ("tiny") gems on themed levels. Each gem is rolled via
+    /** Scatter 4-6 size-1 ("tiny") gems on themed levels. Each gem is rolled via
      *  {@link ItemGenerator} with {@code GEM} category; themes with no gem
      *  species defined produce no gems (the generator returns {@code null} and
      *  the loop bails). */
     public static void placeGems(Level level, Random rng) {
         double powerLevel = depthFraction(level);
-        // First gem also acts as the "is this theme gem-eligible?" probe — a
+        // First gem also acts as the "is this theme gem-eligible?" probe - a
         // null return means the theme has no gem table so no gems on this level.
         Item firstGem = ItemGenerator.generateItem(powerLevel, level.theme,
                 ItemGenerator.LootCategory.GEM, rng);
@@ -334,28 +334,28 @@ public final class LevelFactoryPopulate {
         }
     }
 
-    // ── Mobs ────────────────────────────────────────────────────────────────
+    // -- Mobs ----------------------------------------------------------------
 
     /** Random encounters drawn from the powerLevel-weighted pool until the level
-     *  carries 7–10 mobs hostile to the player. Each encounter rolls its species'
+     *  carries 7-10 mobs hostile to the player. Each encounter rolls its species'
      *  {@code clusterSize} (extra copies of the same species on adjacent floor tiles)
      *  and {@code numRetainers} (entourage of other species, e.g. cats with kittens
      *  or kobold generals with their guard); retainers are spawned with
      *  {@link Mob#owner} pointed at the parent so their FOLLOWING-state AI tracks
      *  them. Non-hostile spawns (cats, kittens, mice, neutral critters) don't count
-     *  toward the target — they're flavor population, not encounter pressure. */
+     *  toward the target - they're flavor population, not encounter pressure. */
     public static void placeMobs(Level level, Random rng,
                                  com.bjsp123.rl2.model.UniqueTracker unique) {
         double[][] weightHolder = new double[1][];
         List<String> pool = eligibleMobs(level, weightHolder);
         int spawnLevel = 1 + level.depth;
 
-        // ── Regular weighted scatter ──────────────────────────────────────
+        // -- Regular weighted scatter --------------------------------------
         if (!pool.isEmpty()) {
             int hostileTarget = GameBalance.STARTING_MOBS_PER_LEVEL + rng.nextInt(4);
             int hostileCount  = 0;
             // Bound the loop in case the eligible pool is all non-hostile flavor
-            // species (deep mouse-only levels, etc.) — without the cap a level whose
+            // species (deep mouse-only levels, etc.) - without the cap a level whose
             // pool can't hit the target would scatter mobs forever.
             int safety = 60;
             while (hostileCount < hostileTarget && safety-- > 0) {
@@ -379,7 +379,7 @@ public final class LevelFactoryPopulate {
                     if (first == null) first = m;
                 }
                 // Tally newly-added mobs (cluster + retainers) that are hostile to
-                // the player. Retainers come in via spawnMobAt → placeRetainers, so
+                // the player. Retainers come in via spawnMobAt -> placeRetainers, so
                 // counting via the level.mobs delta is the simplest catch-all.
                 for (int j = before; j < level.mobs.size(); j++) {
                     if (isHostileToPlayer(level.mobs.get(j))) hostileCount++;
@@ -387,7 +387,7 @@ public final class LevelFactoryPopulate {
             }
         }
 
-        // ── Unique pass: independent roll per eligible candidate ─────────
+        // -- Unique pass: independent roll per eligible candidate ---------
         // Base chance is 50%; multiplied by theme factor (so matching theme
         // raises it to 100%, mismatching lowers it to 25%).
         for (String type : eligibleUniqueMobs(level, unique)) {
@@ -411,7 +411,7 @@ public final class LevelFactoryPopulate {
      *  {@code level.mobs}, and (when {@code withRetainers} is true) generate the
      *  CSV-declared retainer entourage on adjacent floor tiles. Returns the spawned
      *  mob, or {@code null} when {@code type} isn't in the registry / position is bad.
-     *  Used by {@link #placeMobs} and by themed-room population — same code path so
+     *  Used by {@link #placeMobs} and by themed-room population - same code path so
      *  both honour cluster + retainer rules consistently. */
     static Mob spawnMobAt(Level level, String type, Point pos, int spawnLevel,
                           Random rng, boolean withRetainers) {
@@ -420,7 +420,7 @@ public final class LevelFactoryPopulate {
         MobProgression.setSpawnLevel(m, spawnLevel);
         brandStartingInventory(m, rng);
         // Pre-roll the mob's drops into its bag at spawn time. Death-time
-        // {@link LootSystem#dropLootOnDeath} just dumps the bag — making the
+        // {@link LootSystem#dropLootOnDeath} just dumps the bag - making the
         // dungeon's loot deterministic for a given world seed.
         LootSystem.rollAndStashLoot(level, m, rng);
         level.mobs.add(m);
@@ -438,7 +438,7 @@ public final class LevelFactoryPopulate {
         int n = rollMinMax(def.numRetainers, rng);
         if (n <= 0) return;
         List<Point> spots = adjacentFloorTiles(level, parent.position, n + 1);
-        // First slot in adjacentFloorTiles is the parent's own tile — skip it.
+        // First slot in adjacentFloorTiles is the parent's own tile - skip it.
         int placed = 0;
         for (int i = 1; i < spots.size() && placed < n; i++) {
             Point p = spots.get(i);
@@ -464,8 +464,8 @@ public final class LevelFactoryPopulate {
     }
 
     /** Inclusive sample from a {@link com.bjsp123.rl2.model.MinMax} range. Null /
-     *  zero range → {@code 0}. Package-private so themed-room code can roll counts
-     *  ({@code 2_3} → 2, 3, or somewhere in between) the same way. */
+     *  zero range -> {@code 0}. Package-private so themed-room code can roll counts
+     *  ({@code 2_3} -> 2, 3, or somewhere in between) the same way. */
     static int rollMinMax(com.bjsp123.rl2.model.MinMax mm, Random rng) {
         if (mm == null) return 0;
         int lo = mm.min(), hi = mm.max();
@@ -476,9 +476,9 @@ public final class LevelFactoryPopulate {
     /** BFS outward from {@code seed}, returning up to {@code count} reachable
      *  FLOOR / FLOOR_WOOD tiles in BFS order (the seed sits at index 0 if it's a
      *  floor cell, so growth radiates evenly). Expansion only continues through
-     *  floor — see {@link #adjacentTilesPermeable} when callers need to find floor
+     *  floor - see {@link #adjacentTilesPermeable} when callers need to find floor
      *  surrounding a chasm-centred decoration. Mobs already standing on a tile are
-     *  NOT excluded here — callers handle the occupancy check. Package-private. */
+     *  NOT excluded here - callers handle the occupancy check. Package-private. */
     static List<Point> adjacentFloorTiles(Level level, Point seed, int count) {
         return collectByBfs(level, seed, count,
                 /* permeable= */ false, /* allowChasm= */ false);
@@ -493,7 +493,7 @@ public final class LevelFactoryPopulate {
                 /* permeable= */ true, /* allowChasm= */ false);
     }
 
-    /** Like {@link #adjacentTilesPermeable} but also collects {@code CHASM} tiles —
+    /** Like {@link #adjacentTilesPermeable} but also collects {@code CHASM} tiles -
      *  used by the BELFRY's flying-mob spawns. Package-private. */
     static List<Point> adjacentTilesAllowChasm(Level level, Point seed, int count) {
         return collectByBfs(level, seed, count,
@@ -532,7 +532,7 @@ public final class LevelFactoryPopulate {
 
     /** Spawn-time predicate for "would this mob attack the player on sight?". Reads
      *  the species' CSV-declared {@code enemyFactions} for the {@code "PLAYER"}
-     *  faction tag — every aggressive monster row carries it; flavor critters
+     *  faction tag - every aggressive monster row carries it; flavor critters
      *  (mice, kittens, cats) leave it blank. Used by {@link #placeMobs} so the
      *  encounter target counts only fightable threats. */
     private static boolean isHostileToPlayer(Mob mob) {

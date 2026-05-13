@@ -10,10 +10,10 @@ import java.util.Random;
  * room rectangle. Four orthogonal layers, applied in order so each respects
  * what the previous laid down:
  * <ol>
- *   <li>{@link ThemedRoomDefinition.RoomShape}  — overall floor geometry.</li>
- *   <li>{@link ThemedRoomDefinition.ChasmShape} — chasm overlay.</li>
- *   <li>{@link ThemedRoomDefinition.Vegetation} — only paints over surviving FLOOR.</li>
- *   <li>{@link ThemedRoomDefinition.Decoration} list — statues / lamps via
+ *   <li>{@link ThemedRoomDefinition.RoomShape}  - overall floor geometry.</li>
+ *   <li>{@link ThemedRoomDefinition.ChasmShape} - chasm overlay.</li>
+ *   <li>{@link ThemedRoomDefinition.Vegetation} - only paints over surviving FLOOR.</li>
+ *   <li>{@link ThemedRoomDefinition.Decoration} list - statues / lamps via
  *       {@link LevelFactoryRooms#placeStatue} / {@link LevelFactoryRooms#placeLamp},
  *       which already require FLOOR + not-near-door.</li>
  * </ol>
@@ -34,7 +34,7 @@ final class ThemedRoomPainter {
         }
     }
 
-    // ── Room shape ──────────────────────────────────────────────────────────
+    // -- Room shape ----------------------------------------------------------
 
     private static void paintRoomShape(Level level,
                                        ThemedRoomDefinition.RoomShape s,
@@ -47,7 +47,7 @@ final class ThemedRoomPainter {
         }
     }
 
-    // ── Surface ─────────────────────────────────────────────────────────────
+    // -- Surface -------------------------------------------------------------
 
     private static void paintSurface(Level level,
                                      ThemedRoomDefinition.Surface s,
@@ -58,7 +58,7 @@ final class ThemedRoomPainter {
         }
     }
 
-    /** Roughly 40% of the interior covered by a centred blood patch — matches
+    /** Roughly 40% of the interior covered by a centred blood patch - matches
      *  the previous SHROOM_FARM blood-pool layout. The patch is inset by 2 cells
      *  from each edge so the door fringe stays dry. */
     private static void paintBloodPoolCenter(Level level, int x, int y, int w, int h) {
@@ -76,7 +76,7 @@ final class ThemedRoomPainter {
         }
     }
 
-    // ── Chasm overlay ───────────────────────────────────────────────────────
+    // -- Chasm overlay -------------------------------------------------------
 
     private static void paintChasm(Level level,
                                    ThemedRoomDefinition.ChasmShape c,
@@ -103,11 +103,11 @@ final class ThemedRoomPainter {
         }
     }
 
-    /** A small square of chasm at the room's centre — like the existing
+    /** A small square of chasm at the room's centre - like the existing
      *  CHASM_TEMPLE painter, but without the corner statues (decorations layer
      *  handles those if requested). */
     private static void paintCenterSquareChasm(Level level, int x, int y, int w, int h) {
-        // 3×3 if the room is big enough, 2×2 otherwise.
+        // 3x3 if the room is big enough, 2x2 otherwise.
         int side = (w >= 7 && h >= 7) ? 3 : 2;
         int sx = x + (w - side) / 2;
         int sy = y + (h - side) / 2;
@@ -123,9 +123,9 @@ final class ThemedRoomPainter {
         if (level.tiles[x][y] == Tile.FLOOR) level.tiles[x][y] = t;
     }
 
-    // ── Vegetation ──────────────────────────────────────────────────────────
+    // -- Vegetation ----------------------------------------------------------
 
-    // ── Special floor ─────────────────────────────────────────────────────
+    // -- Special floor -----------------------------------------------------
 
     private static void paintSpecialFloor(Level level,
                                           ThemedRoomDefinition.SpecialFloor s,
@@ -138,7 +138,7 @@ final class ThemedRoomPainter {
         }
     }
 
-    /** Drop a 4×4 patch of FLOOR_SPECIAL in the lower-middle of the room — used
+    /** Drop a 4x4 patch of FLOOR_SPECIAL in the lower-middle of the room - used
      *  by the chapel layout so the altar/lamps at the top of the room sit on
      *  regular floor while the centre-south reads as a styled "pew" area. */
     private static void paintSpecialFloorCenter4x4(Level level, int x, int y, int w, int h) {
@@ -153,7 +153,7 @@ final class ThemedRoomPainter {
     }
 
     /** Fill every interior FLOOR cell with FLOOR_SPECIAL except for the 1-tile
-     *  strip ringing the outer walls — produces the "pedestal" look. */
+     *  strip ringing the outer walls - produces the "pedestal" look. */
     private static void paintSpecialFloorInsetRect(Level level, int x, int y, int w, int h) {
         if (w < 4 || h < 4) return;
         for (int i = x + 2; i < x + w - 2; i++) {
@@ -164,7 +164,7 @@ final class ThemedRoomPainter {
     }
 
     /** Alternate FLOOR / FLOOR_SPECIAL in a checkerboard pattern over the room's
-     *  interior cells. Parity is {@code (i + j) % 2 == 0 → FLOOR_SPECIAL}. */
+     *  interior cells. Parity is {@code (i + j) % 2 == 0 -> FLOOR_SPECIAL}. */
     private static void paintSpecialFloorCheckerboard(Level level, int x, int y, int w, int h) {
         for (int i = x + 1; i < x + w - 1; i++) {
             for (int j = y + 1; j < y + h - 1; j++) {
@@ -191,7 +191,7 @@ final class ThemedRoomPainter {
     }
 
     /** Fill mushrooms on every dry interior FLOOR cell (cells whose surface array
-     *  is null — so e.g. blood-pool tiles are skipped). Used by the shroom-farm
+     *  is null - so e.g. blood-pool tiles are skipped). Used by the shroom-farm
      *  layout where a central blood pool sits inside a mushroom carpet. */
     private static void fillMushroomsDry(Level level, int x, int y, int w, int h) {
         for (int i = x; i < x + w; i++) {
@@ -217,7 +217,7 @@ final class ThemedRoomPainter {
 
     /** Drop a single 3-6 tile mushroom patch somewhere inside the room. The
      *  painter doesn't need the elaborate spread-chance flood-fill the level-
-     *  wide vegetation pass uses — a small contiguous blob reads fine for a
+     *  wide vegetation pass uses - a small contiguous blob reads fine for a
      *  themed room. */
     private static void growMushroomPatch(Level level, int x, int y, int w, int h, Random rng) {
         int cx = x + 1 + rng.nextInt(Math.max(1, w - 2));
@@ -233,7 +233,7 @@ final class ThemedRoomPainter {
         }
     }
 
-    // ── Statue / lamp decorations ──────────────────────────────────────────
+    // -- Statue / lamp decorations ------------------------------------------
 
     private static void paintDecoration(Level level,
                                         ThemedRoomDefinition.Decoration d,
@@ -257,8 +257,8 @@ final class ThemedRoomPainter {
     }
 
     /** Drop 2-6 small statues at random interior positions, leaving a 1-cell
-     *  margin from the outer wall. Count scales with room area so a 4×4 closet
-     *  gets 2 and a 10×6 hall gets ~4. Mirrors the pre-existing SMALL_STATUE_ROOM. */
+     *  margin from the outer wall. Count scales with room area so a 4x4 closet
+     *  gets 2 and a 10x6 hall gets ~4. Mirrors the pre-existing SMALL_STATUE_ROOM. */
     private static void paintSmallStatuesScattered(Level level, int x, int y,
                                                    int w, int h, Random rng) {
         if (w < 4 || h < 4) return;
@@ -274,7 +274,7 @@ final class ThemedRoomPainter {
 
     /** Chapel furnishing: altar 1 cell south of the top wall, centred horizontally;
      *  two lamps one cell south of the altar, flanking its centre. The altar tile
-     *  is the single anchor — the renderer paints the 3-wide sprite extending one
+     *  is the single anchor - the renderer paints the 3-wide sprite extending one
      *  cell west and one cell east from there. {@code y+h-1} is the top wall in
      *  this engine's y-up world, so "1 cell south of top wall" lives at {@code y+h-2}. */
     private static void paintChapelShrine(Level level, int x, int y, int w, int h) {

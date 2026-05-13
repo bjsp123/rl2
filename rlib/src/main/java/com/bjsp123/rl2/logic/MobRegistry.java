@@ -24,7 +24,7 @@ public final class MobRegistry {
     private static final CsvRegistryStore<MobDefinition> STORE =
             new CsvRegistryStore<>("mobs.csv", MobDefinition::parseAll, d -> d.type);
 
-    /** {@code faction tag → mob types carrying that tag}. Built by {@link #load}
+    /** {@code faction tag -> mob types carrying that tag}. Built by {@link #load}
      *  so attitude logic can ask "who else is in this mob's faction?" without
      *  scanning every definition each lookup. */
     private static final Map<String, Set<String>> factionMembers = new LinkedHashMap<>();
@@ -33,7 +33,7 @@ public final class MobRegistry {
     private MobRegistry() {}
 
     /** Parse {@code csv} (the contents of {@code assets/data/mobs.csv}) and
-     *  populate the registry. Replaces any prior contents — calling twice is
+     *  populate the registry. Replaces any prior contents - calling twice is
      *  idempotent. */
     public static void load(String csv) {
         STORE.load(csv);
@@ -48,13 +48,13 @@ public final class MobRegistry {
     }
 
     /** Lookup a definition by mob-type string. Returns {@code null} for unknown
-     *  types. The CSV does include the {@code PLAYER_*} kit rows — callers that
+     *  types. The CSV does include the {@code PLAYER_*} kit rows - callers that
      *  want to skip them filter on {@code def.behavior == Mob.Behavior.PLAYER}. */
     public static MobDefinition get(String mobType) { return STORE.get(mobType); }
 
     /** Read-only view of every mob-type string in the CSV. Order matches the
      *  CSV's row order (insertion-order map). The {@code PLAYER_*} kit rows
-     *  are included — callers that only want random-encounter species filter
+     *  are included - callers that only want random-encounter species filter
      *  by {@code def.behavior != PLAYER}. */
     public static Set<String> knownTypes() { return STORE.knownTypes(); }
 

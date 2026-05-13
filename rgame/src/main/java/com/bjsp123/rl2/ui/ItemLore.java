@@ -9,12 +9,12 @@ import com.bjsp123.rl2.model.Item.UseBehavior;
 import com.bjsp123.rl2.model.MinMax;
 
 /**
- * Shared "show everything about an item" formatter — the item-side analogue of
+ * Shared "show everything about an item" formatter - the item-side analogue of
  * {@link MobLore}. Used by both the encyclopedia (item detail panel) and the
  * inventory's item-detail popup so the two surfaces stay aligned.
  *
  * <p>Sections are separated by blank lines and only emitted when they have
- * something to show — a mundane sword skips the use-action and buff sections,
+ * something to show - a mundane sword skips the use-action and buff sections,
  * a potion skips the equipment / armor section, etc. Each per-level scaling
  * delta is printed inline with its base stat ("Damage: 4-7 plus 1-2 per
  * level") so the reader sees the growth without flipping between sections.
@@ -23,7 +23,7 @@ public final class ItemLore {
 
     private ItemLore() {}
 
-    /** Flavor paragraph(s) for {@code it} — {@link Item#description} followed
+    /** Flavor paragraph(s) for {@code it} - {@link Item#description} followed
      *  (when present) by {@link Item#description2}, separated by a blank line.
      *  Used as the bright-text portion above the divider rule on encyclopedia
      *  and inventory detail panels. Returns {@code ""} when both fields are
@@ -46,14 +46,14 @@ public final class ItemLore {
         return sb.toString();
     }
 
-    /** No-holder variant — shows the item's intrinsic enchantment level
+    /** No-holder variant - shows the item's intrinsic enchantment level
      *  without perk / gear bonuses. Used by encyclopedia-style surfaces
      *  that aren't tied to a specific player. */
     public static String describeDetails(Item it) {
         return describeDetails(it, null);
     }
 
-    /** Mechanical details of {@code it} — category / material, combat numbers
+    /** Mechanical details of {@code it} - category / material, combat numbers
      *  (with per-level deltas), light / food, throw and use behaviour, AOE
      *  coverage, applied buffs (and their scaling duration), knockback,
      *  summon / tame side-effects, and the glow / silhouette flags. Each
@@ -68,7 +68,7 @@ public final class ItemLore {
         if (it == null) return "";
         StringBuilder sb = new StringBuilder();
 
-        // ── Category / material ─────────────────────────────────────────────
+        // -- Category / material ---------------------------------------------
         StringBuilder hdr = new StringBuilder();
         if (it.inventoryCategory != null) {
             if (it.inventoryCategory.isEquipment()) {
@@ -80,7 +80,7 @@ public final class ItemLore {
         if (it.material != null) {
             hdr.append("Made of ").append(it.material.name().toLowerCase()).append('\n');
         }
-        // Enchantment level — display the EFFECTIVE level (intrinsic +
+        // Enchantment level - display the EFFECTIVE level (intrinsic +
         // perk / gear bonuses), only shown above the design baseline of
         // 1. When the holder bumps the effective level above the
         // intrinsic, both numbers are reported so the player can see
@@ -99,7 +99,7 @@ public final class ItemLore {
         }
         if (hdr.length() > 0) sb.append(hdr);
 
-        // ── Combat ──────────────────────────────────────────────────────────
+        // -- Combat ----------------------------------------------------------
         StringBuilder combat = new StringBuilder();
         if (it.damage.max() > 0) {
             line(combat, "Damage", range(it.damage),
@@ -146,7 +146,7 @@ public final class ItemLore {
         }
         if (combat.length() > 0) sb.append('\n').append(combat);
 
-        // ── Light / food ────────────────────────────────────────────────────
+        // -- Light / food ----------------------------------------------------
         StringBuilder bod = new StringBuilder();
         if (it.lightRadius > 0) {
             line(bod, "Shines light over", trim(it.lightRadius) + " tiles", false, "");
@@ -156,7 +156,7 @@ public final class ItemLore {
         }
         if (bod.length() > 0) sb.append('\n').append(bod);
 
-        // ── Use action ──────────────────────────────────────────────────────
+        // -- Use action ------------------------------------------------------
         if (it.useBehavior != null && it.useBehavior != UseBehavior.NONE) {
             StringBuilder use = new StringBuilder();
             String verb = it.useVerb != null && !it.useVerb.isEmpty()
@@ -214,12 +214,12 @@ public final class ItemLore {
                         flag(use, "Walk over to " + powerupVerb(it.wandEffect, it) + ".");
                     }
                 }
-                case NONE -> { /* unreachable — outer guard */ }
+                case NONE -> { /* unreachable - outer guard */ }
             }
             if (use.length() > 0) sb.append('\n').append(use);
         }
 
-        // ── Throw behaviour ─────────────────────────────────────────────────
+        // -- Throw behaviour -------------------------------------------------
         if (it.throwEffect != null || it.throwResult == ThrowResult.RETURN
                 || it.throwResult == ThrowResult.CONSUME) {
             StringBuilder thr = new StringBuilder();
@@ -246,7 +246,7 @@ public final class ItemLore {
                 case CONSUME -> flag(thr, "Shatters on impact.");
                 case RETURN  -> flag(thr,
                         "Bounces back to the thrower's feet after striking.");
-                case NOTHING -> { /* default — no message */ }
+                case NOTHING -> { /* default - no message */ }
             }
             if (!it.tameOnThrow.isEmpty()) {
                 flag(thr, "Throwing this at a "
@@ -256,7 +256,7 @@ public final class ItemLore {
             if (thr.length() > 0) sb.append('\n').append(thr);
         }
 
-        // ── Special flags ───────────────────────────────────────────────────
+        // -- Special flags ---------------------------------------------------
         StringBuilder flags = new StringBuilder();
         if (it.glows) {
             flag(flags, "Glows on the floor with an attention-catching twinkle.");
@@ -266,7 +266,7 @@ public final class ItemLore {
         return sb.toString().trim();
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // -- Helpers -------------------------------------------------------------
 
     private static String useBehaviorVerb(UseBehavior u) {
         return switch (u) {
@@ -302,8 +302,8 @@ public final class ItemLore {
             case LIGHTNING   -> "shock the target and nearby creatures";
             case APPLYBUFFS  -> "apply a magical effect to the target area";
             case POISONCLOUD -> "release a poison cloud at the target";
-            case VOID        -> "tear a void at the target — pulls nearby creatures in and crumbles the ground";
-            case POLYMORPH   -> "reshape the target area — rerolls floor tiles and transforms nearby creatures into similarly-sized kin";
+            case VOID        -> "tear a void at the target - pulls nearby creatures in and crumbles the ground";
+            case POLYMORPH   -> "reshape the target area - rerolls floor tiles and transforms nearby creatures into similarly-sized kin";
             case LEVEL_UP, HP_UP, MANA_UP -> "absorb its power";
             default -> "perform a magical action at the target";
         };
@@ -378,7 +378,7 @@ public final class ItemLore {
         return Double.toString(v);
     }
 
-    /** Render a speed multiplier as a percentage delta — {@code 0.6} reads as
+    /** Render a speed multiplier as a percentage delta - {@code 0.6} reads as
      *  "40% faster", {@code 1.1} as "10% slower". The qualitative direction
      *  is part of the label so the player doesn't have to remember which way
      *  the multiplier runs. {@code 1.0} is the no-change identity and is

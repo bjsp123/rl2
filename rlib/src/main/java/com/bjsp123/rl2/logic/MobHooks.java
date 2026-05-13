@@ -10,7 +10,7 @@ import java.util.Random;
 
 /**
  * Per-event hooks that fire as mobs come into existence, kill, or die. Centralises the
- * special-case behaviours that don't generalise into a single rule across all mobs — e.g.
+ * special-case behaviours that don't generalise into a single rule across all mobs - e.g.
  * the kissyblob budding off a fresh blob whenever it eats prey.
  *
  * <p><b>Design rule:</b> hooks dispatch on <i>flag fields</i> set on the mob, never on the
@@ -40,7 +40,7 @@ public final class MobHooks {
         if (killer.effectiveStats().eatSpawnChance > 0 && killer.eatSpawnType != null
                 && victim.material == Material.FLESH
                 && RANDOM.nextDouble() < killer.effectiveStats().eatSpawnChance) {
-            // Cap the level's total mob count — the dice roll is consumed first so
+            // Cap the level's total mob count - the dice roll is consumed first so
             // RNG state stays deterministic, but the spawn fizzles if we're full.
             if (!MobSystem.levelHasRoomForSpawn(level)) return;
             Point spawnPos = freeAdjacentFloor(level, killer.position);
@@ -64,7 +64,7 @@ public final class MobHooks {
     /**
      * Fires when {@code victim} dies, regardless of whether a {@code killer} can be
      * attributed (e.g. starvation has none). Placeholder for future death-triggers
-     * — corpse explosions, "in death I gain power" passives, etc. — that follow the
+     * - corpse explosions, "in death I gain power" passives, etc. - that follow the
      * same flag-driven pattern as {@link #onKill}.
      */
     public static void onDie(Level level, Mob victim, Mob killer) {
@@ -81,7 +81,7 @@ public final class MobHooks {
         // Reserved for flag-driven spawn effects. None defined yet.
     }
 
-    // ── helpers ─────────────────────────────────────────────────────────────
+    // -- helpers -------------------------------------------------------------
 
     /** First walkable tile in the 8-neighborhood of {@code center} not occupied by a live
      *  mob, or null if every neighbor is blocked. Package-accessible so the horror's

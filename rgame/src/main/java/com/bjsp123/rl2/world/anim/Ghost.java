@@ -27,7 +27,7 @@ public final class Ghost {
         return frame >= MobAnimState.DEATH_TOTAL_FRAMES;
     }
 
-    /** Render alpha for the ghost — flicker twice then linear fade to zero. */
+    /** Render alpha for the ghost - flicker twice then linear fade to zero. */
     public float alpha() {
         if (frame < MobAnimState.DEATH_FLICKER_FRAMES) {
             int half = frame / MobAnimState.DEATH_FLICKER_HALF_FRAMES;

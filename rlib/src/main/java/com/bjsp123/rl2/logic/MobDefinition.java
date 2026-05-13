@@ -23,14 +23,14 @@ import java.util.Set;
  */
 public final class MobDefinition {
 
-    // ── Identity ────────────────────────────────────────────────────────────
+    // -- Identity ------------------------------------------------------------
     public String type;            // CSV key, e.g. "CAT"
     public String name;
     public String description;
-    public Mob.Material material;  // FLESH, STONE, …
-    public Mob.Behavior behavior;  // MOB, HUNTER, EXPLORE_HIDE, …
+    public Mob.Material material;  // FLESH, STONE, ...
+    public Mob.Behavior behavior;  // MOB, HUNTER, EXPLORE_HIDE, ...
 
-    // ── StatBlock fields ────────────────────────────────────────────────────
+    // -- StatBlock fields ----------------------------------------------------
     public int    maxHp;
     public int    moveCost;
     public int    attackCost;
@@ -59,20 +59,20 @@ public final class MobDefinition {
     public double  turnSpawnChance;
     public int     fireExplosionRadiusOnDeath;
 
-    // ── Mob-side categorical fields ─────────────────────────────────────────
+    // -- Mob-side categorical fields -----------------------------------------
     public String eatSpawnType;          // mob-type string ref or null
     public String mushroomEatSpawnType;
     public String turnSpawnType;
     public Mob.DoorClosingBehavior doorClosing = Mob.DoorClosingBehavior.NEVER;
     public Mob.StateOfMind         stateOfMind = Mob.StateOfMind.ASLEEP;
 
-    // ── AI sets + shorthand ─────────────────────────────────────────────────
+    // -- AI sets + shorthand -------------------------------------------------
     public Set<String> attackTypes = new HashSet<>();
     public Set<String> fleeTypes   = new HashSet<>();
     /** Faction tag (arbitrary string). Mobs sharing a faction are allies; null
      *  for lone-wolf species. */
     public String faction;
-    /** Faction tags this mob is hostile to — see {@link Mob#enemyFactions}. */
+    /** Faction tags this mob is hostile to - see {@link Mob#enemyFactions}. */
     public Set<String> enemyFactions = new HashSet<>();
     /** When true, this species can spawn at most once per run. Generation code
      *  checks {@code World.unique.mobs} and adds the type-name on spawn so
@@ -104,7 +104,7 @@ public final class MobDefinition {
      *  itself. */
     public List<String> attackAllExcept = new ArrayList<>();
 
-    // ── Retainers (entourage species spawned alongside this mob) ────────────
+    // -- Retainers (entourage species spawned alongside this mob) ------------
     /** How many retainers spawn with each instance of this mob (rolled per
      *  spawn). {@code 0_0} = no retainers; cats roll {@code 0_2} kittens, the
      *  kobold general rolls {@code 2_3} fighters/spearmen/cleavers. */
@@ -114,11 +114,11 @@ public final class MobDefinition {
      *  {@link #numRetainers} is zero. */
     public List<String> retainerTypes = new ArrayList<>();
 
-    // ── Special-case flags (replace hardcoded mob-type checks) ──────────────
+    // -- Special-case flags (replace hardcoded mob-type checks) --------------
     public boolean banishable;
     public int knockbackSquares;
 
-    // ── Per-level scaling deltas (applied by MobProgression on each level up
+    // -- Per-level scaling deltas (applied by MobProgression on each level up
     //    or pre-roll). MinMax columns use the {@code MIN_MAX} cell format.
     public int    hpPerLevel             = 2;
     public int    accuracyPerLevel       = 1;
@@ -129,13 +129,13 @@ public final class MobDefinition {
     public int    rangedDistancePerLevel = 0;
     public MinMax armorPerLevel          = new MinMax(0, 1);
 
-    // ── Abilities (single packed cell — only kobold general today) ──────────
+    // -- Abilities (single packed cell - only kobold general today) ----------
     public List<AbilityDef> abilities = new ArrayList<>();
 
-    // ── Initial buffs (e.g. horror's TELEPORT_COOLDOWN seed) ────────────────
+    // -- Initial buffs (e.g. horror's TELEPORT_COOLDOWN seed) ----------------
     public List<InitialBuff> initialBuffs = new ArrayList<>();
 
-    // ── Starting inventory + perks (player rows) ────────────────────────────
+    // -- Starting inventory + perks (player rows) ----------------------------
     /** Items added to the bag at construction. Each entry is an item-type
      *  string (a key into {@code items.csv}) or {@code <type>*<count>}. Items
      *  whose definition carries a non-null slot are auto-equipped. Empty for
@@ -145,21 +145,21 @@ public final class MobDefinition {
     public List<com.bjsp123.rl2.model.Perk> startingPerks = new ArrayList<>();
 
     /** Default HUD action-bar binds for player rows. Pipe-separated
-     *  {@code <slotIndex>:<itemType>} entries — e.g.
+     *  {@code <slotIndex>:<itemType>} entries - e.g.
      *  {@code 0:FIRE_BOMB|1:OIL_BOMB|2:HEALING_POTION}. Null/empty for non-player
      *  mobs and for player classes with no preset binds. */
     public String actionBar;
 
-    // ── Sprite columns (read by rgame-side MobSprites loader) ───────────────
+    // -- Sprite columns (read by rgame-side MobSprites loader) ---------------
     public int     spriteCol;
     public int     spriteRow;
     public int     spriteW = 1;
     public int     spriteH = 1;
     public boolean spriteFacingPair;
 
-    // ────────────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
 
-    /** One support-ability spec — mirrors {@link com.bjsp123.rl2.model.Mob.MobAbility}'s
+    /** One support-ability spec - mirrors {@link com.bjsp123.rl2.model.Mob.MobAbility}'s
      *  shape so {@link #apply} can copy it across one-for-one. {@link #kind}
      *  drives the dispatch; the per-kind fields below are populated only for
      *  the kinds that need them (buff fields for {@code BUFF}, {@code healAmount}
@@ -194,9 +194,9 @@ public final class MobDefinition {
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // PARSE: CSV → list of definitions
-    // ────────────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
+    // PARSE: CSV -> list of definitions
+    // ------------------------------------------------------------------------
 
     public static List<MobDefinition> parseAll(String csv) {
         CsvTable table = CsvTable.parse(csv);
@@ -346,7 +346,7 @@ public final class MobDefinition {
         return out;
     }
 
-    /** Parse the {@code startingInventory} cell — pipe-separated item-type
+    /** Parse the {@code startingInventory} cell - pipe-separated item-type
      *  strings, optionally with a {@code *<count>} suffix. e.g.
      *  {@code DAGGER | FIRE_BOMB*5 | OIL_BOMB*5}. Range syntax ({@code *N_M}) is
      *  parsed but only the minimum is used here, since starting inventories
@@ -392,9 +392,9 @@ public final class MobDefinition {
         return out;
     }
 
-    // ────────────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
     // APPLY: write fields onto a fresh Mob
-    // ────────────────────────────────────────────────────────────────────────
+    // ------------------------------------------------------------------------
 
     /** Stamp this definition's fields onto a fresh {@link Mob} positioned
      *  at {@code pos}. */
@@ -460,7 +460,7 @@ public final class MobDefinition {
         m.rangedDistancePerLevel = rangedDistancePerLevel;
         m.armorPerLevel          = armorPerLevel;
 
-        // AI sets — copy directly, then expand the attackAllExcept shorthand.
+        // AI sets - copy directly, then expand the attackAllExcept shorthand.
         m.attackTypes.addAll(attackTypes);
         m.fleeTypes  .addAll(fleeTypes);
         m.faction    = faction;

@@ -4,10 +4,10 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 
 /**
- * Single back-history stack for every window in the game — full screens
+ * Single back-history stack for every window in the game - full screens
  * (V2Screen subclasses) and popups (V2Inventory, V2Encyclopedia, etc.)
  * alike. Every "navigate forward" pushes a {@link Runnable} that
- * "navigates back" — closing whatever is now on top and restoring whatever
+ * "navigates back" - closing whatever is now on top and restoring whatever
  * was beneath. {@link #back()} pops one entry and runs it, returning
  * {@code true} when something was popped.
  *
@@ -21,7 +21,7 @@ public final class WindowStack {
 
     private final Deque<Runnable> backActions = new ArrayDeque<>();
 
-    /** Push a "go back" action — typically closes the window just opened
+    /** Push a "go back" action - typically closes the window just opened
      *  and restores the window beneath. */
     public void push(Runnable backAction) {
         if (backAction != null) backActions.push(backAction);
@@ -36,7 +36,7 @@ public final class WindowStack {
         return true;
     }
 
-    /** Drop every back action — used for "go to root" navigations
+    /** Drop every back action - used for "go to root" navigations
      *  (return to title, begin game, game over) where the destination
      *  shouldn't have any pop-able history. */
     public void clear() {

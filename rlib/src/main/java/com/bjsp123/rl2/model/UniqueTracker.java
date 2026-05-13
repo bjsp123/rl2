@@ -8,7 +8,7 @@ import java.util.Set;
  * somewhere in the dungeon and must not be generated again.
  *
  * <p>Three parallel sets so callers don't have to namespace ids by hand. Today only
- * {@link #rooms} is consulted — unique mobs and unique items will land in the other
+ * {@link #rooms} is consulted - unique mobs and unique items will land in the other
  * two without any other plumbing change. Saved with the {@link World} (libGDX
  * {@code Json} serialises {@code HashSet<String>} reflectively).
  */

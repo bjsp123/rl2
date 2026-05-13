@@ -9,7 +9,7 @@ import com.bjsp123.rl2.model.Level.VisualTheme;
  * the procedural icon renderer.
  *
  * <p>Shape comes from the theme: crystal gems render as triangles, concrete gems as squares.
- * Colour is per-species; size grows with the gem's prefix tier (tiny … exquisite).
+ * Colour is per-species; size grows with the gem's prefix tier (tiny ... exquisite).
  */
 public enum GemSpecies {
     BLAZINGSTAR (VisualTheme.CRYSTAL,  1, 0xff5522ff),  // hot orange-red
@@ -32,7 +32,7 @@ public enum GemSpecies {
 
     /** Dungeon theme this gem appears in. */
     public final VisualTheme theme;
-    /** Rarity tier 1–3. Tier 1 species are common, tier 3 species are rare. The same-kind
+    /** Rarity tier 1-3. Tier 1 species are common, tier 3 species are rare. The same-kind
      *  size-up recipe never crosses species, so tier doesn't affect the recipe graph. */
     public final int tier;
     /** Packed RGBA8888 colour for the procedural gem icon. */

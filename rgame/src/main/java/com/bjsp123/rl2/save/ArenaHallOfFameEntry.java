@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.save;
 
 /**
- * One row in the arena hall-of-fame ledger. Each entry is a single matchup —
+ * One row in the arena hall-of-fame ledger. Each entry is a single matchup -
  * two team descriptions plus the outcome (per-team survivor counts) and a
  * wall-clock timestamp.
  *
@@ -9,11 +9,11 @@ package com.bjsp123.rl2.save;
  * round-trips it without custom serialisers. Mirrors {@link com.bjsp123.rl2.model.HallOfFameEntry}.
  */
 public class ArenaHallOfFameEntry {
-    /** Human-readable team description, e.g. {@code "warrior×3 L5"}. */
+    /** Human-readable team description, e.g. {@code "warriorx3 L5"}. */
     public String teamADescription = "";
     public String teamBDescription = "";
 
-    /** Per-team survivor description, e.g. {@code "warrior×2"} or {@code "—"} when wiped. */
+    /** Per-team survivor description, e.g. {@code "warriorx2"} or {@code "-"} when wiped. */
     public String teamASurvivors = "";
     public String teamBSurvivors = "";
 

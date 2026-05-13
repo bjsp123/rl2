@@ -44,11 +44,11 @@ public class PlayScreen implements Screen {
     private final World preloadedWorld;
     public final int saveSlot;
 
-    /** Player-supplied world seed for new runs. {@code null} ⇒ pick a random
+    /** Player-supplied world seed for new runs. {@code null} => pick a random
      *  seed inside the {@link com.bjsp123.rl2.util.SeedCode} window. Ignored
      *  when {@link #preloadedWorld} is non-null (load preserves the saved seed). */
     private final Long requestedSeed;
-    /** Pre-game-options god-mode flag — applied to the spawned player
+    /** Pre-game-options god-mode flag - applied to the spawned player
      *  Mob in {@link #initialize}. Ignored on a loaded run (the flag is
      *  on the saved Mob itself in that case). */
     private final boolean godModeRequested;
@@ -58,10 +58,10 @@ public class PlayScreen implements Screen {
      *  into the corresponding generated level and bump their character
      *  level to match. Ignored on a loaded run. */
     private final int startingLevel;
-    /** Pre-game-options "all items" flag — seeds the spawned player's
+    /** Pre-game-options "all items" flag - seeds the spawned player's
      *  inventory with one of every non-unique item in the registry. */
     private final boolean allItemsRequested;
-    /** Pre-game-options "+10 perk points" flag — adds 10 perk points to
+    /** Pre-game-options "+10 perk points" flag - adds 10 perk points to
      *  whatever the character normally starts with. */
     private final boolean tenPerkPointsRequested;
 
@@ -89,7 +89,7 @@ public class PlayScreen implements Screen {
     /** Cached popup actors registered with the shared V2 stage on
      *  {@link #show()} and de-registered on {@link #hide()}. The Stage
      *  walks them in z-order each frame; PlayScreen no longer calls each
-     *  popup's render directly — the v2Stage.act/draw pair on
+     *  popup's render directly - the v2Stage.act/draw pair on
      *  {@link #render(float)} does that work. */
     private com.badlogic.gdx.scenes.scene2d.Actor[] popupActors;
     private GameInput         gameInput;
@@ -108,7 +108,7 @@ public class PlayScreen implements Screen {
      *  turns that into a "best guess" starting cell for every new cursor-picking flow. */
     private final TargetHistory targetHistory = new TargetHistory();
 
-    /** Action / firing / auto-move dispatcher. Holds every "user pressed a button →
+    /** Action / firing / auto-move dispatcher. Holds every "user pressed a button ->
      *  mutate the level" code path; this screen keeps lifecycle + render orchestration
      *  and delegates everything else here. Built in {@link #initialize()}. */
     private PlayController controller;
@@ -161,22 +161,22 @@ public class PlayScreen implements Screen {
             initialized = true;
         }
         // cameraController goes FIRST so mouse-wheel zoom and pinch-zoom are always
-        // available regardless of UI focus state — opening the inventory or the
+        // available regardless of UI focus state - opening the inventory or the
         // encyclopaedia must not lock the camera at the current zoom level. Wheel
         // events return true (consumed); touchDown / touchDragged return false so
         // they continue to uiStage and the action handlers below.
         // uiStage goes second so HUD buttons stay reachable even while Look or
-        // Targeting is active — the stage returns false for clicks that don't land
+        // Targeting is active - the stage returns false for clicks that don't land
         // on a widget, letting them fall through to the world cursors. This is what
         // lets a re-tap of the same action-slot button confirm an open targeting
         // session, or a tap on a different action swap the target picker to that
         // new action.
-        // Block map drag/pinch/scroll while any modal is open — per the UI
+        // Block map drag/pinch/scroll while any modal is open - per the UI
         // rules, the topmost window owns input and the world behind it
         // shouldn't slide under the user's finger.
         cameraController.setInputBlocker(this::isAnyPopupOpen);
-        // Input chain: cameraController → V2 modal popups (each a no-op when
-        // closed; consume when open) → V2 HUD (corner buttons) → world
+        // Input chain: cameraController -> V2 modal popups (each a no-op when
+        // closed; consume when open) -> V2 HUD (corner buttons) -> world
         // handlers. V2 popups come BEFORE the HUD so an open popup eats taps
         // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
@@ -243,11 +243,11 @@ public class PlayScreen implements Screen {
             world.linkLevels();
         } else {
             EventLog.clear();
-            // World is procedurally generated — see WorldTopology.build. Depth and the
+            // World is procedurally generated - see WorldTopology.build. Depth and the
             // side-branch / crosslink probabilities come from GameBalance; every level's
             // stairs(Up|Down)(Alt)Target fields fully encode the resulting graph.
             // Allocate the World first so build() and every createDungeonLevel call
-            // share the same UniqueTracker — that's how unique themed rooms only
+            // share the same UniqueTracker - that's how unique themed rooms only
             // appear once per game.
             world = new World();
             // Honour an explicit user-supplied seed if there is one; otherwise
@@ -297,7 +297,7 @@ public class PlayScreen implements Screen {
         levelRenderer.setWorld(world);
         levelRenderer.setAnimator(animator);
 
-        // Achievement observation — every drained GameEvent gets a chance
+        // Achievement observation - every drained GameEvent gets a chance
         // to fire a "first X" achievement. The listener flashes the toast
         // banner + queues a HIGH-priority log line on each unlock.
         achievementToast = new com.bjsp123.rl2.ui.v2.AchievementToast(game.ui);
@@ -306,7 +306,7 @@ public class PlayScreen implements Screen {
             game.achievementSystem.setListener(this::onAchievementUnlocked);
         }
 
-        // V2 HUD — primitive ShapeRenderer + SpriteBatch chrome, drawn directly
+        // V2 HUD - primitive ShapeRenderer + SpriteBatch chrome, drawn directly
         // by this Screen. Game.ui is the shared V2 rendering context (one per
         // Game).
         v2Hud = new com.bjsp123.rl2.ui.v2.V2Hud(game.ui);
@@ -322,7 +322,7 @@ public class PlayScreen implements Screen {
                         game::popScreen,
                         world.currentLevel())));
 
-        // HUD action bar — bound to the player Mob so quickslot assignments
+        // HUD action bar - bound to the player Mob so quickslot assignments
         // persist across save/load: ActionBar mirrors the live slot Item
         // refs into {@link Mob#actionSlotTypes} on every set/clear, and
         // {@link ActionBar#bindToPlayer} restores live refs from the
@@ -330,7 +330,7 @@ public class PlayScreen implements Screen {
         actionBar = new ActionBar();
         actionBar.bindToPlayer(player);
 
-        // V2 inventory popup — primitive-drawn modal, drawn directly by this
+        // V2 inventory popup - primitive-drawn modal, drawn directly by this
         // Screen (not in uiStage). Reads the shared V2 rendering context off
         // the Game so the same fonts / palette as the HUD apply.
         v2Inventory = new V2Inventory(game.ui);
@@ -350,13 +350,13 @@ public class PlayScreen implements Screen {
         lookMode.setLevel(world.currentLevel());
         lookMode.setHistory(targetHistory);
 
-        // V2 look popup — its open state follows lookMode.isActive(), so no
+        // V2 look popup - its open state follows lookMode.isActive(), so no
         // toggle is needed here. The HUD's Look button toggles lookMode and
         // V2Look reads from it on every frame.
         v2Look = new V2Look(game.ui);
         v2Look.setLevel(world.currentLevel());
         v2Look.setLookMode(lookMode);
-        // V2 HUD doesn't track inv/look directly — it routes through callbacks
+        // V2 HUD doesn't track inv/look directly - it routes through callbacks
         // (onOpenInventory + onLook) which the binding below wires up. setPlayerSupplier
         // and setActionBar mirror the V1 HUD's API so the HUD always reads the live
         // player + bound action items.
@@ -389,7 +389,7 @@ public class PlayScreen implements Screen {
         v2CharacterStats.setBuffInfo(v2BuffInfo);
         v2Look.setBuffInfo(v2BuffInfo);
         // Inventory's item-detail info button jumps to the encyclopaedia
-        // pre-selected to that item — closes inventory in the process so
+        // pre-selected to that item - closes inventory in the process so
         // the V2 single-popup-at-a-time rule is preserved.
         v2Inventory.setEncyclopedia(v2Encyclopedia);
         // Look popup's per-section info buttons route through the same
@@ -536,23 +536,23 @@ public class PlayScreen implements Screen {
             world.turn++;
             level.currentTurn = world.turn;
             // Per-standard-turn handlers (vegetation spread, fire spread, smoke emission,
-            // …) are dispatched from TurnSystem.tick on every 100th call, so they keep a
+            // ...) are dispatched from TurnSystem.tick on every 100th call, so they keep a
             // stable game-time cadence regardless of player speed. Ember emission lives
             // on the real-time clock below.
-            // Something moved / died / got picked up / lit up — fog + item/mob indexes are
+            // Something moved / died / got picked up / lit up - fog + item/mob indexes are
             // potentially stale. Between ticks none of those change, so the renderer skips
             // the rebuilds and pixmap upload.
             levelRenderer.markDirty();
         }
 
-        // Real-time cadence — runs every render frame regardless of the game-tick or
+        // Real-time cadence - runs every render frame regardless of the game-tick or
         // per-turn clocks, so visuals (effect frames, mob lunge animation, fire embers)
         // continue while the game is paused on input. Projectile-impact resolution and
         // effect-frame advancement are owned by the Animator below.
         // Cap the wall-clock delta at 100 ms so a frame hitch doesn't dump a backlog of
         // particles all at once.
         int dtMs = Math.min(100, (int) (Gdx.graphics.getDeltaTime() * 1000f));
-        // Engine→renderer event drain plus the in-world animation tick. The Animator
+        // Engine->renderer event drain plus the in-world animation tick. The Animator
         // owns per-mob anim state, the freeze gate, ghost flicker/fade, and the
         // periodic teleport / burning / sleep-Z particle cadences.
         animator.impactFiredThisTick = false;
@@ -566,7 +566,7 @@ public class PlayScreen implements Screen {
         com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
 
         Mob playerAfter = TurnSystem.findPlayer(level);
-        // Cross-run achievement poll — depth-threshold checks fire from
+        // Cross-run achievement poll - depth-threshold checks fire from
         // here so any path that changes the player's level (stairs,
         // chasm fall, debug "starting level") feeds the same poll.
         checkDepthAchievements();
@@ -584,7 +584,7 @@ public class PlayScreen implements Screen {
             game.saveSystem.clear(saveSlot);
             game.currentPlay = null;
             dispose();
-            // Game over is terminal — clear the back-stack so the user can't
+            // Game over is terminal - clear the back-stack so the user can't
             // pop back into a disposed PlayScreen.
             game.setRootScreen(new com.bjsp123.rl2.ui.v2.V2GameOver(game, lastSnapshot));
             return;
@@ -594,7 +594,7 @@ public class PlayScreen implements Screen {
         camera.update();
 
         // Audit action slots EVERY frame, not just inside afterMove. Any path that consumes
-        // an item (throw, eat, …) is supposed to call afterMove which already runs the
+        // an item (throw, eat, ...) is supposed to call afterMove which already runs the
         // audit; this redundant call is a safety net for edge cases (e.g. an item that left
         // the inventory through a path I haven't anticipated) so a bound action button is
         // never showing a stale or empty reference for longer than one frame.
@@ -602,7 +602,7 @@ public class PlayScreen implements Screen {
 
         // Tell the renderer which mob (if any) the look cursor is over, so it can overlay
         // attitude markers on every visible mob and the looked-at mob's state of mind.
-        // Cast is intentional — only DefaultLevelRenderer carries this annotation hook;
+        // Cast is intentional - only DefaultLevelRenderer carries this annotation hook;
         // other LevelRenderer impls (test stubs) silently skip the overlay.
         if (levelRenderer instanceof DefaultLevelRenderer dlr) {
             dlr.setLookedAtMob(lookMode.isActive() ? lookMode.mobAtCursor() : null);
@@ -611,17 +611,17 @@ public class PlayScreen implements Screen {
         targetingOverlay.render();
         lookMode.render();
 
-        // V2 HUD chrome — drawn between the world and the popups so popups
+        // V2 HUD chrome - drawn between the world and the popups so popups
         // (inventory, look, etc.) overlay the HUD correctly. Switches
         // projection to V2's camera internally.
         v2Hud.update(level.depth, world.turn, world.tick);
         v2Hud.render();
 
-        // Achievement toast — sits above the HUD strip and below modal
+        // Achievement toast - sits above the HUD strip and below modal
         // popups. Renders nothing when no unlock is active.
         if (achievementToast != null) achievementToast.render(dtMs);
 
-        // Popup layer — the V2 stage walks the registered popup actors
+        // Popup layer - the V2 stage walks the registered popup actors
         // in z-order. Each {@link com.bjsp123.rl2.ui.v2.stage.V2PopupActor}
         // mirrors its popup's isOpen() onto its visibility, so closed
         // popups are skipped. The inventory's item-detail sub-popup
@@ -666,7 +666,7 @@ public class PlayScreen implements Screen {
         camera.setToOrtho(false, width, height);
         camera.zoom = oldZoom;
         recenterCameraOnPlayer();
-        // Forward to the V2 UI viewport too — without this the HUD,
+        // Forward to the V2 UI viewport too - without this the HUD,
         // popups, and burger menu keep their original size while the
         // window grows / shrinks, so chrome ends up stretched (or
         // crammed off-screen) instead of just repositioned.
@@ -686,7 +686,7 @@ public class PlayScreen implements Screen {
     @Override
     public void dispose() {
         if (levelRenderer    != null) levelRenderer.dispose();
-        // V2 inventory has no GPU resources of its own — dispose via UiCtx.
+        // V2 inventory has no GPU resources of its own - dispose via UiCtx.
         if (targetingOverlay != null) targetingOverlay.dispose();
         if (lookMode         != null) lookMode.dispose();
         // Drop the achievement listener so a stale callback can't fire

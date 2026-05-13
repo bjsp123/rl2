@@ -2,7 +2,7 @@ package com.bjsp123.rl2.ui.v2;
 
 import com.bjsp123.rl2.Rl2Game;
 
-/** V2 credits screen — single window with a few centred text lines. */
+/** V2 credits screen - single window with a few centred text lines. */
 public final class V2Credits extends V2Screen {
 
     private final Rl2Game game;

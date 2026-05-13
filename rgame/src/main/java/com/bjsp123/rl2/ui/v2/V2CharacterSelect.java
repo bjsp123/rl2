@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * V2 character-select screen — three big class buttons (Warrior / Rogue /
+ * V2 character-select screen - three big class buttons (Warrior / Rogue /
  * Mage) plus a back affordance. Tapping a class opens a character-detail
  * popup showing the class sprite (encyclopaedia-style framed), its
  * description, starting gear / stats / perks (all read live from the
@@ -48,7 +48,7 @@ public final class V2CharacterSelect extends V2Screen {
     /** Pre-game options. {@link #customSeed} == null means "random". */
     private boolean godMode;
     private Long customSeed;
-    /** Starting character level — also doubles as the starting dungeon
+    /** Starting character level - also doubles as the starting dungeon
      *  depth when {@code > 1}. Clamped at build time to
      *  {@code [1, DUNGEON_DEPTH]} since the world only has that many
      *  levels. */
@@ -63,7 +63,7 @@ public final class V2CharacterSelect extends V2Screen {
     private final Rect optionsPopup = new Rect();
     private final Rect spriteFrame  = new Rect();
 
-    /** Cached per-class sample Mob — lets us pull live sprite + stats
+    /** Cached per-class sample Mob - lets us pull live sprite + stats
      *  without re-rolling each frame. Built lazily; never added to a
      *  level. */
     private final java.util.EnumMap<CharacterClass, Mob> sampleMob
@@ -103,7 +103,7 @@ public final class V2CharacterSelect extends V2Screen {
         }
     }
 
-    // ── Layer 1: class buttons ──────────────────────────────────────────
+    // -- Layer 1: class buttons ------------------------------------------
     private void buildClassButtons() {
         float btnW = window.w - 32f;
         float btnH = 64f;
@@ -121,7 +121,7 @@ public final class V2CharacterSelect extends V2Screen {
         }
     }
 
-    // ── Layer 2: character detail popup ─────────────────────────────────
+    // -- Layer 2: character detail popup ---------------------------------
     private void buildCharacterPopup() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
@@ -129,7 +129,7 @@ public final class V2CharacterSelect extends V2Screen {
         float ph = Math.min(560f, vh - 144f);
         charPopup.set((vw - pw) * 0.5f, (vh - ph) * 0.5f, pw, ph);
 
-        // Sprite frame — encyclopaedia-style, sized to 2× source max
+        // Sprite frame - encyclopaedia-style, sized to 2x source max
         // with a 64-px floor.
         Mob sample = sampleMob(selected);
         TextureRegion region = sample != null ? MobSprites.regionFor(sample) : null;
@@ -161,7 +161,7 @@ public final class V2CharacterSelect extends V2Screen {
                 this::launchGame).header());
     }
 
-    // ── Layer 3: pre-game options popup ────────────────────────────────
+    // -- Layer 3: pre-game options popup --------------------------------
     private void buildOptionsPopup() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
@@ -218,7 +218,7 @@ public final class V2CharacterSelect extends V2Screen {
         super.onEscape();
     }
 
-    // ── Game launch ─────────────────────────────────────────────────────
+    // -- Game launch -----------------------------------------------------
     private void launchGame() {
         if (selected == null) return;
         if (game.currentPlay != null) {
@@ -230,7 +230,7 @@ public final class V2CharacterSelect extends V2Screen {
                 customSeed, godMode, startingLevel, allItems, tenPerkPoints));
     }
 
-    // ── Seed entry ──────────────────────────────────────────────────────
+    // -- Seed entry ------------------------------------------------------
     /** Always pops the platform text dialog (Android keyboard, desktop
      *  modal field) so the player can type, edit, or clear the seed in
      *  one place. Pre-fills with the current seed code when one is set;
@@ -242,7 +242,7 @@ public final class V2CharacterSelect extends V2Screen {
             @Override public void input(String text) {
                 String s = text == null ? "" : text.trim();
                 if (s.isEmpty()) {
-                    // Blank → random.
+                    // Blank -> random.
                     customSeed = null;
                     show();
                 } else if (SeedCode.isValid(s)) {
@@ -255,7 +255,7 @@ public final class V2CharacterSelect extends V2Screen {
         }, "Seed (blank for random)", prefill, "e.g. AB12CD");
     }
 
-    // ── Render passes ───────────────────────────────────────────────────
+    // -- Render passes ---------------------------------------------------
     @Override
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
@@ -314,8 +314,9 @@ public final class V2CharacterSelect extends V2Screen {
 
         String title = (def != null && def.name != null)
                 ? def.name : selected.displayName;
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, title,
-                charPopup.cx(), charPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f);
+        TextDraw.centreFit(ctx, ctx.fontHeader, UIVars.ACCENT, title,
+                charPopup.cx(), charPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f,
+                charPopup.w - 28f);
 
         // Aspect-fit the mob sprite inside the frame, with the same
         // 8-radial silhouette outline encyclopaedia entries use.
@@ -336,12 +337,10 @@ public final class V2CharacterSelect extends V2Screen {
         float guard    = charPopup.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET + 48f + lh;
 
         if (def != null && def.description != null && !def.description.isEmpty()) {
-            List<String> descLines = new ArrayList<>();
-            TextDraw.wrap(ctx.fontRegular, def.description, maxLineW, 3, descLines);
-            for (String line : descLines) {
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, line, left, top);
-                top -= lh;
-            }
+            TextDraw.TextBlock desc = TextDraw.block(ctx.fontRegular,
+                    def.description, maxLineW, 3, lh);
+            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM, desc, left, top);
+            top -= desc.height();
             top -= 6f;
         }
 
@@ -365,8 +364,10 @@ public final class V2CharacterSelect extends V2Screen {
                 String line = (si.count > 1)
                         ? "  " + iname + " x" + si.count
                         : "  " + iname;
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY, line, left, top);
-                top -= lh;
+                TextDraw.TextBlock gear = TextDraw.block(ctx.fontRegular,
+                        line, maxLineW, 2, lh);
+                TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, gear, left, top);
+                top -= gear.height();
             }
             top -= 4f;
         }
@@ -377,9 +378,10 @@ public final class V2CharacterSelect extends V2Screen {
             top -= lh;
             for (Perk p : def.startingPerks) {
                 if (top < guard) break;
-                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                        "  " + p.displayName(), left, top);
-                top -= lh;
+                TextDraw.TextBlock perk = TextDraw.block(ctx.fontRegular,
+                        "  " + p.displayName(), maxLineW, 2, lh);
+                TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, perk, left, top);
+                top -= perk.height();
             }
         }
     }
@@ -408,10 +410,13 @@ public final class V2CharacterSelect extends V2Screen {
     }
 
     private float statRow(float x, float y, String label, String value) {
-        TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                label, x, y);
-        TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                value, charPopup.right() - 14f, y);
+        float right = charPopup.right() - 14f;
+        float gap = 12f;
+        float valueW = Math.max(28f, (right - x) * 0.45f);
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                label, x, y, Math.max(24f, right - x - valueW - gap));
+        TextDraw.rightFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                value, right, y, valueW);
         return y - ctx.lineH();
     }
 

@@ -4,19 +4,19 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
- * V2 window chrome — faint black drop shadow, three-line border (outer
+ * V2 window chrome - faint black drop shadow, three-line border (outer
  * light blue-grey, mid blue-grey, inner dark blue-grey), and a warm dark
  * grey interior fill. Drawn entirely from filled rectangles via
  * ShapeRenderer.
  *
- * <p>Pure helper — call {@link #drawShape} between a
+ * <p>Pure helper - call {@link #drawShape} between a
  * {@link ShapeRenderer#begin(ShapeRenderer.ShapeType)} /
  * {@link ShapeRenderer#end()} pair. {@link V2Screen} enables GL blending
  * around its shapes pass so the shadow's alpha and the panel's
  * {@link UIVars#PANEL_FILL_ALPHA} fill composite correctly.
  *
  * <p>{@link #drawShapeOpaque} is for cells whose interior carries an image
- * (inventory slots, encyclopaedia detail icon backdrop) — those want
+ * (inventory slots, encyclopaedia detail icon backdrop) - those want
  * fully-opaque fill so the sprite sits on a solid surface.
  */
 public final class Window {
@@ -39,14 +39,14 @@ public final class Window {
     public static void drawShape(UiCtx ctx, float x, float y, float w, float h,
                                  Color fill, float fillAlpha) {
         ShapeRenderer s = ctx.shapes;
-        // Pass 1 — faint black drop shadow, offset down-right so the panel
+        // Pass 1 - faint black drop shadow, offset down-right so the panel
         // appears to float above whatever sits behind it.
         s.setColor(UIVars.SHADOW);
         s.rect(x + UIVars.SHADOW_OFFSET, y - UIVars.SHADOW_OFFSET, w, h);
-        // Pass 2 — three-line border (outer / mid / inner). The interior is
+        // Pass 2 - three-line border (outer / mid / inner). The interior is
         // left untouched here; pass 3 paints it.
         Edges.drawTriLine(s, x, y, w, h, UIVars.WIN_LINE_W);
-        // Pass 3 — warm dark-grey interior fill, inset by the full border
+        // Pass 3 - warm dark-grey interior fill, inset by the full border
         // thickness so it doesn't overpaint the inner-line ring.
         s.setColor(fill.r, fill.g, fill.b, fillAlpha);
         s.rect(x + UIVars.WIN_BORDER, y + UIVars.WIN_BORDER,
