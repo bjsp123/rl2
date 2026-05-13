@@ -327,15 +327,15 @@ public final class V2Arena extends ScreenAdapter {
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
         ctx.batch.begin();
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 paused ? "Resume" : "Pause",
                 pauseBtn.cx(), pauseBtn.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE, "Fast forward",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Fast forward",
                 ffBtn.cx(), ffBtn.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "Speed: " + (fastSpeed ? "4x" : "1x"),
                 speedBtn.cx(), speedBtn.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WARN, "Abort",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_WARN, "Abort",
                 abortBtn.cx(), abortBtn.cy() + 6f);
         ctx.batch.end();
     }
@@ -357,7 +357,7 @@ public final class V2Arena extends ScreenAdapter {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+        s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, vw, vh);
         Window.drawShape(ctx, bannerWindow.x, bannerWindow.y,
                 bannerWindow.w, bannerWindow.h);
@@ -374,26 +374,26 @@ public final class V2Arena extends ScreenAdapter {
               : "Mutual wipe";
 
         ctx.batch.begin();
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, headline,
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, headline,
                 bannerWindow.cx(), bannerWindow.top() - ctx.headerLineH());
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "Team A: " + describeSurvivors(teamA),
                 bannerWindow.cx(), bannerWindow.top() - 64f);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "Team B: " + describeSurvivors(teamB),
                 bannerWindow.cx(), bannerWindow.top() - 86f);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE, "Fight again",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Fight again",
                 bannerFightAgain.cx(), bannerFightAgain.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE, "Back to setup",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Back to setup",
                 bannerBack.cx(), bannerBack.cy() + 6f);
         ctx.batch.end();
     }
 
     private static void drawBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.HUD_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.HUD_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     // ── Input ──────────────────────────────────────────────────────────────

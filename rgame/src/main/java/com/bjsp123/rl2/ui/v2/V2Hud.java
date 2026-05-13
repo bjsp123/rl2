@@ -16,7 +16,6 @@ import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.ui.skin.LogPreferences;
 import com.bjsp123.rl2.world.render.BuffIcons;
 import com.bjsp123.rl2.world.render.IconSprites;
-import com.bjsp123.rl2.world.render.ItemSprites;
 import com.bjsp123.rl2.world.render.PortraitSprites;
 
 import java.util.List;
@@ -268,18 +267,20 @@ public final class V2Hud {
         if (player != null) {
             double maxHp = player.effectiveStats().maxHp;
             float hpFrac = maxHp > 0 ? (float) (player.hp / maxHp) : 0f;
-            drawBar(s, hpBarRect, hpFrac, Pal.WARN);
+            drawBar(s, hpBarRect, hpFrac, UIVars.TEXT_WARN);
 
-            // XP not modelled yet — empty bar.
-            drawBar(s, xpBarRect, 0f, Pal.ACCENT);
+            int xpBase = com.bjsp123.rl2.logic.MobProgression.xpToReach(player.characterLevel);
+            int xpStep = com.bjsp123.rl2.logic.MobProgression.xpToAdvanceFrom(player.characterLevel);
+            float xpFrac = xpStep > 0 ? (float)(player.xp - xpBase) / xpStep : 1f;
+            drawBar(s, xpBarRect, Math.max(0f, Math.min(1f, xpFrac)), UIVars.BAR_XP);
 
             int satMax = com.bjsp123.rl2.logic.GameBalance.STARTING_SATIETY;
             float satFrac = satMax > 0 ? (float) player.satiety / satMax : 0f;
-            drawBar(s, satBarRect, satFrac, Pal.BORDER_BRIGHT);
+            drawBar(s, satBarRect, satFrac, UIVars.BORDER_OUTER);
         } else {
-            drawBar(s, hpBarRect,  0f, Pal.WARN);
-            drawBar(s, xpBarRect,  0f, Pal.ACCENT);
-            drawBar(s, satBarRect, 0f, Pal.BORDER_BRIGHT);
+            drawBar(s, hpBarRect,  0f, UIVars.TEXT_WARN);
+            drawBar(s, xpBarRect,  0f, UIVars.ACCENT);
+            drawBar(s, satBarRect, 0f, UIVars.BORDER_OUTER);
         }
 
         // Buttons — chrome only; icons land in the SpriteBatch pass.
@@ -287,15 +288,6 @@ public final class V2Hud {
         // so they paint with the paler SLOT_BG so the icon stays legible.
         for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) drawSlotBtn(s, actionRects[i], actionPressed[i]);
         drawSlotBtn(s, invRect, invPressed);
-        // Wand charge bars — shapes pass so they sit under the sprite icon.
-        if (actionBar != null) {
-            for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
-                Item it = actionBar.get(i);
-                if (it != null && it.baseChargeMax > 0) {
-                    drawWandChargeBar(s, actionRects[i], it, player);
-                }
-            }
-        }
         // Look + burger have no item icon — plain HUD chrome.
         drawBtn(s, lookRect,   lookPressed);
         drawBtn(s, burgerRect, burgerPressed);
@@ -304,18 +296,18 @@ public final class V2Hud {
         // viewport. Dim everything behind it first, then paint the window
         // and each item as a chunky button (tri-line border + warm fill).
         if (menuOpen) {
-            s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+            s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
             s.rect(0, 0, ctx.worldW(), ctx.worldH());
             Window.drawShape(ctx,
                     menuPanelRect.x, menuPanelRect.y,
                     menuPanelRect.w, menuPanelRect.h);
             for (int i = 0; i < menuItemRects.length; i++) {
                 Rect r = menuItemRects[i];
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
                 s.setColor(i == menuItemPressed
-                        ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-                s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                        r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+                        ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+                s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                        r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
             }
         }
 
@@ -328,7 +320,7 @@ public final class V2Hud {
             float bx = MARGIN;
             float by = satBarRect.y - 30f * HUD_SCALE;
             int max = Math.min(dotPlayer.buffs.size(), 8);
-            s.setColor(UiColors.TEXT_DIM);
+            s.setColor(UIVars.TEXT_DIM);
             for (int i = 0; i < max; i++) {
                 Buff b = dotPlayer.buffs.get(i);
                 if (b == null || b.type == null || b.durationTurns <= 0) continue;
@@ -349,7 +341,7 @@ public final class V2Hud {
      *  and a fill bar at {@code frac} in {@code fillColor}. */
     private void drawBar(ShapeRenderer s, Rect r, float frac, Color fillColor) {
         Edges.drawTriLine(s, r.x, r.y, r.w, r.h, 1f);
-        s.setColor(UiColors.HUD_BG);
+        s.setColor(UIVars.HUD_BG);
         s.rect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
         if (frac > 0f) {
             float fw = (r.w - 6) * Math.max(0, Math.min(1, frac));
@@ -362,56 +354,21 @@ public final class V2Hud {
      *  the item icon drawn over it is legible. Used for the bottom-right
      *  action buttons and the inventory button (both carry sprites). */
     private void drawSlotBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.SLOT_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-               r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.SLOT_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+               r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     /** Plain HUD button chrome — tri-line border + mid warm-grey fill.
      *  Used for buttons WITHOUT item icons (look button, burger). */
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.HUD_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-               r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.HUD_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+               r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
-    private static void drawWandChargeBar(ShapeRenderer s, Rect r, Item it,
-                                          com.bjsp123.rl2.model.Mob player) {
-        int max = com.bjsp123.rl2.logic.ItemSystem.effectiveMaxCharge(it, player);
-        float pad = 4f, barH = 3f;
-        float barW = r.w - 2 * pad;
-        float bx = r.x + pad, by = r.y + 4f;
-        s.setColor(0f, 0f, 0f, 0.85f);
-        s.rect(bx - 1, by - 1, barW + 2, barH + 2);
-        if (max <= 1) {
-            s.setColor(0.25f, 0.25f, 0.25f, 1f);
-            s.rect(bx, by, barW, barH);
-            if (it.charge >= 1f) {
-                s.setColor(0.2f, 0.85f, 0.3f, 1f);
-                s.rect(bx, by, barW, barH);
-            } else if (it.charge > 0f) {
-                s.setColor(0.1f, 0.5f, 0.15f, 1f);
-                s.rect(bx, by, barW * it.charge, barH);
-            }
-        } else {
-            float slotW = (barW - (max - 1)) / max;
-            for (int i = 0; i < max; i++) {
-                float sx = bx + i * (slotW + 1f);
-                float filled = Math.min(1f, Math.max(0f, it.charge - i));
-                s.setColor(0.25f, 0.25f, 0.25f, 1f);
-                s.rect(sx, by, slotW, barH);
-                if (filled >= 1f) {
-                    s.setColor(0.2f, 0.85f, 0.3f, 1f);
-                    s.rect(sx, by, slotW, barH);
-                } else if (filled > 0f) {
-                    s.setColor(0.1f, 0.5f, 0.15f, 1f);
-                    s.rect(sx, by, slotW * filled, barH);
-                }
-            }
-        }
-    }
 
     private void renderTextPass() {
         ctx.batch.begin();
@@ -428,28 +385,24 @@ public final class V2Hud {
             }
         }
 
+        // XP bar right-side labels — character level and unspent-perk star.
+        Mob playerXp = currentPlayer();
+        if (playerXp != null) {
+            String lvlLabel = String.valueOf(playerXp.characterLevel);
+            if (playerXp.perkPoints > 0) lvlLabel += " *";
+            com.badlogic.gdx.graphics.Color lvlColor =
+                    playerXp.perkPoints > 0 ? UIVars.ACCENT : UIVars.TEXT_DIM;
+            TextDraw.right(ctx, ctx.fontRegular, lvlColor,
+                    lvlLabel, xpBarRect.right() - 2f, xpBarRect.y + xpBarRect.h - 2f);
+        }
+
         // Action button icons — pull from ActionBar.
         if (actionBar != null) {
             for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
                 Item it = actionBar.get(i);
                 if (it == null) continue;
-                TextureRegion region = ItemSprites.regionFor(it);
-                if (region == null) continue;
                 Rect r = actionRects[i];
-                ctx.batch.draw(region,
-                        r.x + ICON_PAD, r.y + ICON_PAD,
-                        r.w - 2 * ICON_PAD, r.h - 2 * ICON_PAD);
-                if (it.count > 1) {
-                    TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE,
-                            Integer.toString(it.count),
-                            r.right() - 3f, r.y + ctx.lineH());
-                }
-                int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, currentPlayer());
-                if (effLvl > 1) {
-                    TextDraw.right(ctx, ctx.fontRegular, Pal.ACCENT,
-                            "+" + (effLvl-1),
-                            r.right() - 3f, r.top() - 2f);
-                }
+                ItemCell.draw(ctx, it, currentPlayer(), r.x, r.y, r.w, r.h, true);
             }
             // Brand sparks — additive pass over the icons.
             for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
@@ -471,7 +424,7 @@ public final class V2Hud {
                     invRect.x + ICON_PAD, invRect.y + ICON_PAD,
                     invRect.w - 2 * ICON_PAD, invRect.h - 2 * ICON_PAD);
         } else {
-            TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE, "Bag",
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Bag",
                     invRect.cx(), invRect.y + invRect.h * 0.5f + 4);
         }
 
@@ -484,7 +437,7 @@ public final class V2Hud {
         }
 
         // Status line — under the satiety bar.
-        TextDraw.left(ctx, ctx.fontRegular, Pal.DIM,
+        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                 "Lvl " + depth + "   Turn " + turn,
                 MARGIN, satBarRect.y - 6f);
 
@@ -542,8 +495,8 @@ public final class V2Hud {
                         && !e.involvesPlayer) continue;
                 com.badlogic.gdx.graphics.Color col =
                         e.priority == LogEvent.EventPriority.HIGH
-                                ? UiColors.TEXT_BODY
-                                : UiColors.TEXT_DIM;
+                                ? UIVars.TEXT_BODY
+                                : UIVars.TEXT_DIM;
                 String text = e.text;
                 // Naive cap so a long line doesn't overshoot the action bar.
                 int maxChars = 56;
@@ -561,11 +514,11 @@ public final class V2Hud {
         // Burger menu items — centred header-weight labels, matching the
         // V2Screen menu-screen burger style.
         if (menuOpen) {
-            String[] labels = { "Settings", "Map", "Encyclopaedia", "Log", "Quit to Title" };
+            String[] labels = { "Settings", "Map", "Encyclopaedia", "Log", "Main Menu" };
             for (int i = 0; i < labels.length; i++) {
                 Rect r = menuItemRects[i];
                 TextDraw.centre(ctx, ctx.fontHeader,
-                        i == menuItemPressed ? Pal.ACCENT : Pal.WHITE,
+                        i == menuItemPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                         labels[i], r.cx(), r.cy() + 8f);
             }
         }
@@ -578,12 +531,12 @@ public final class V2Hud {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(burgerPressed || menuOpen ? Pal.ACCENT : Pal.WHITE);
+        s.setColor(burgerPressed || menuOpen ? UIVars.ACCENT : UIVars.TEXT_BODY);
         float cx   = burgerRect.cx();
         float cy   = burgerRect.cy();
         float barW = burgerRect.w * 0.5f;
-        float barH = 3f;
-        float gap  = 5f;
+        float barH = 4f;
+        float gap  = 6f;
         for (int i = -1; i <= 1; i++) {
             s.rect(cx - barW * 0.5f, cy - barH * 0.5f + i * (barH + gap),
                     barW, barH);

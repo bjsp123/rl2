@@ -14,7 +14,6 @@ import com.bjsp123.rl2.logic.RecipeSystem;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.model.Mob;
-import com.bjsp123.rl2.world.render.ItemSprites;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -108,7 +107,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(340f, vw - Pal.PAD_MODAL);
+        float winW = Math.min(340f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(440f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -178,7 +177,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         s.begin(ShapeRenderer.ShapeType.Filled);
 
         // Modal dim.
-        s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+        s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
@@ -202,7 +201,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             for (int i = 0; i < pickerCells.size(); i++) {
                 drawSlot(s, pickerCells.get(i));
                 if (i == pickerPressed) {
-                    s.setColor(Pal.PANEL_HI);
+                    s.setColor(UIVars.BTN_PRESSED_BG);
                     Rect r = pickerCells.get(i);
                     s.rect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
                 }
@@ -214,28 +213,28 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private void drawSlot(ShapeRenderer s, Rect r) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-        s.setColor(UiColors.SLOT_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        s.setColor(UIVars.SLOT_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed, boolean enabled) {
         if (!enabled) {
             // Disabled: all three border lines collapse to the inner shade.
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W,
-                    UiColors.BORDER_INNER, UiColors.BORDER_INNER, UiColors.BORDER_INNER);
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
+                    UIVars.BORDER_INNER, UIVars.BORDER_INNER, UIVars.BORDER_INNER);
         } else {
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
         }
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     private void renderTextPass() {
         ctx.batch.begin();
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Crafting",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Crafting",
                 window.cx(), window.top() - ctx.headerLineH());
 
         // Slot icons.
@@ -249,46 +248,46 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Arrow glyph between last input and result — drawn as text since
         // we don't have a vector arrow primitive yet.
         TextDraw.centre(ctx, ctx.fontHeader,
-                result != null ? Pal.ACCENT : Pal.DIM,
+                result != null ? UIVars.ACCENT : UIVars.TEXT_DIM,
                 "→",
                 slotRects[2].right() + 14f, slotRects[2].cy() + 4f);
 
         // Button labels.
         TextDraw.centre(ctx, ctx.fontRegular,
-                result == null ? Pal.DIM : Pal.WHITE,
+                result == null ? UIVars.TEXT_DIM : UIVars.TEXT_BODY,
                 "Combine", confirmBtn.cx(), confirmBtn.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "Cancel", cancelBtn.cx(), cancelBtn.cy() + 6f);
 
         // Help line.
         if (result == null) {
-            TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM,
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                     "Tap a slot to choose an ingredient.",
                     window.cx(), confirmBtn.top() + 28f);
         } else {
             String name = result.name != null ? result.name : result.type;
-            TextDraw.centre(ctx, ctx.fontRegular, Pal.ACCENT,
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
                     "Yields: " + name,
                     window.cx(), confirmBtn.top() + 28f);
         }
 
         // Recipe list under the slots — read-only summary.
         float top = resultRect.y - 20f;
-        TextDraw.left(ctx, ctx.fontRegular, Pal.DIM, "Recipes:",
+        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Recipes:",
                 window.x + 16f, top);
         top -= 18f;
         for (RecipeSystem.Recipe r : RecipeSystem.ALL) {
             if (top < confirmBtn.top() + 50f) break;
             String desc = r.describe();
             if (desc.length() > 42) desc = desc.substring(0, 40) + "…";
-            TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                    desc, window.x + Pal.PAD_CONTENT, top);
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    desc, window.x + UIVars.PAD_CONTENT, top);
             top -= 16f;
         }
 
         // Picker overlay — item icons.
         if (pickerSlot >= 0) {
-            TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT,
+            TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                     "Choose item",
                     pickerWindow.cx(),
                     pickerWindow.top() - ctx.headerLineH());
@@ -301,13 +300,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private void drawCellIcon(Rect cell, Item item) {
-        if (item == null) return;
-        TextureRegion region = ItemSprites.regionFor(item);
-        if (region == null) return;
-        float pad = 4f;
-        ctx.batch.draw(region,
-                cell.x + pad, cell.y + pad,
-                cell.w - 2 * pad, cell.h - 2 * pad);
+        ItemCell.draw(ctx, item, null, cell.x, cell.y, cell.w, cell.h, false);
     }
 
     /** Called by Confirm. Consumes one unit from each filled slot and adds

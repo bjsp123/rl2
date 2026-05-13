@@ -70,7 +70,7 @@ public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+        s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
         s.end();
@@ -90,22 +90,22 @@ public final class V2BuffInfo implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         }
 
         top = iconY - ctx.lineH();
-        TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT,
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                 BuffSystem.displayName(buff.type), window.cx(), top);
 
         top -= ctx.headerLineH();
-        TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "Level " + buff.level, window.cx(), top);
 
         top -= ctx.lineH() * 1.5f;
         for (String line : descLines) {
-            TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM, line, window.cx(), top);
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, line, window.cx(), top);
             top -= ctx.lineH();
         }
 
         top -= 6f;
         String durStr = buff.durationTurns > 0 ? buff.durationTurns + " turns" : "Permanent";
-        TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_BODY, durStr, window.cx(), top);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, durStr, window.cx(), top);
 
         ctx.batch.end();
     }

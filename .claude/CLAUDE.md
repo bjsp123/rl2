@@ -30,9 +30,6 @@ rgame renders the game on the screen and operates the UI and presentation.
 - `save/` — `SaveSystem`, `HallOfFame`, `HallOfFameStore`, `ArenaHallOfFame`.
 - `persistence/` — `Persistence` save/load abstraction.
 
-### V2 UI framework (`ui/v2/`)
-All screens and popups use this framework. Never use libGDX Scene2d widgets directly.
-
 **Base classes / screens:**
 - `V2Screen` — base for every navigable screen. Subclass overrides `buildLayout()` (called on show/resize), `drawBodyShape(UiCtx)` (shape pass), `drawBodyText(UiCtx)` (batch/text pass). Owns `List<Btn> buttons`, `Burger burger`, `BackBtn back`. Call `baseInput()` when chaining an `InputMultiplexer` for sub-popups.
 - `V2Popup` interface — `isOpen()` + `renderSelf()`. Wired into `V2Stage` via `V2PopupActor`.
@@ -50,7 +47,7 @@ All screens and popups use this framework. Never use libGDX Scene2d widgets dire
 - `Scroller` — vertical scroll state. `scrollY() > 0` = content pushed up, older entries visible.
 - `TextDraw` — `left/centre/right` draw helpers + `wrap(font, text, maxW, maxLines, List<String>)`.
 - `UiCtx` — shared viewport, batch, shapes, fonts (`fontHeader`, `fontRegular`), `layout` (GlyphLayout), `unprojectX/Y`.
-- `UiColors`, `Pal` — colour palette constants.
+- `UIVars` — single source of truth for all V2 colour constants, alpha values, and chrome geometry. Replaces the deleted `Pal` / `UiColors`. Loaded once at startup from `assets/data/uivars.properties` for runtime overrides.
 - `Window.drawShape(ctx, x, y, w, h)` — standard window chrome.
 - `Edges.drawTriLine(...)` — three-line border primitive.
 

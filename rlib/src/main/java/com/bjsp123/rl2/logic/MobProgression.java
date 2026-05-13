@@ -99,7 +99,7 @@ public final class MobProgression {
     public static void applyLevelUp(Level level, Mob mob, boolean emitRainbow) {
         if (mob.characterLevel >= GameBalance.MAX_CHARACTER_LEVEL) return;
         mob.characterLevel++;
-        if (mob.characterLevel % 2 == 0) mob.perkPoints++;
+        mob.perkPoints++;
         applyPerLevelDeltas(mob);
 
         if (level != null && mob.history != null) {

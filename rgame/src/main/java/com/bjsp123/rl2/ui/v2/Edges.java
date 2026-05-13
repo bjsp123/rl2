@@ -22,12 +22,12 @@ public final class Edges {
     private Edges() {}
 
     /** Convenience overload that pulls the three border colours from
-     *  {@link UiColors}. */
+     *  {@link UIVars}. */
     public static void drawTriLine(ShapeRenderer s,
                                    float x, float y, float w, float h,
                                    float lineW) {
         drawTriLine(s, x, y, w, h, lineW,
-                UiColors.BORDER_OUTER, UiColors.BORDER_MID, UiColors.BORDER_INNER);
+                UIVars.BORDER_OUTER, UIVars.BORDER_MID, UIVars.BORDER_INNER);
     }
 
     /** Three nested filled rects forming a tri-line border. */

@@ -1,9 +1,11 @@
 package com.bjsp123.rl2.ui.v2;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
- * Bottom-right back glyph — drawn fixed-position on every V2 screen except
+ * Bottom-left back glyph — drawn fixed-position on every V2 screen except
  * the title (which is the root). A 56×56 button containing a left-pointing
  * triangle drawn from primitives. Tap unwinds one level of navigation.
  *
@@ -21,32 +23,32 @@ public final class BackBtn {
 
     public BackBtn(UiCtx ctx, Runnable onClick) {
         this.onClick = onClick;
-        // Default anchor: bottom-right of the virtual viewport. Popups
-        // that own a window rect should call {@link #anchorBottomRightOf}
-        // each frame so the button hugs the popup's lower-right corner
-        // instead.
-        float s = Pal.BACK_SIZE;
-        rect.set(ctx.worldW() - s - INSET, INSET, s, s);
-    }
-
-    /** Re-anchor the button to the bottom-right corner of {@code window},
-     *  with the standard {@link #INSET} gap. Called by popups whose window
-     *  rect is laid out per-frame so the button moves with it. */
-    public void anchorBottomRightOf(Rect window) {
-        if (window == null) return;
-        float s = Pal.BACK_SIZE;
-        rect.set(window.right() - s - INSET, window.y + INSET, s, s);
+        float s = UIVars.BACK_SIZE;
+        rect.set(INSET, INSET, s, s);
     }
 
     public void drawShape(UiCtx ctx) {
         ShapeRenderer s = ctx.shapes;
         // Tri-line border in red — outer bright red, mid mid-red, inner dark
         // red. Distinguishes the back affordance from grey-bordered chrome.
-        Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h, Pal.HUD_LINE_W,
-                UiColors.WARN_HL, UiColors.TEXT_WARN, UiColors.WARN_SHADE);
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-        s.rect(rect.x + Pal.HUD_BORDER, rect.y + Pal.HUD_BORDER,
-               rect.w - 2 * Pal.HUD_BORDER, rect.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h, UIVars.HUD_LINE_W,
+                UIVars.WARN_HL, UIVars.TEXT_WARN, UIVars.WARN_SHADE);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+        s.rect(rect.x + UIVars.HUD_BORDER, rect.y + UIVars.HUD_BORDER,
+               rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
+    }
+
+    /** Single-call draw: owns the full shape + icon renderer lifecycle. */
+    public void draw(UiCtx ctx) {
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
+        drawShape(ctx);
+        ctx.shapes.end();
+        ctx.batch.begin();
+        drawIcon(ctx);
+        ctx.batch.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     /** Draw the back glyph from the shared UI icon sheet. Caller is inside
@@ -56,7 +58,7 @@ public final class BackBtn {
         var region = com.bjsp123.rl2.world.render.IconSprites
                 .regionFor(com.bjsp123.rl2.world.render.IconSprites.Icon.BACK);
         if (region == null) return;
-        ctx.batch.setColor(pressed ? UiColors.WARN_HL : UiColors.TEXT_WARN);
+        ctx.batch.setColor(pressed ? UIVars.WARN_HL : UIVars.TEXT_WARN);
         float sz = Math.min(rect.w, rect.h) * 0.6f;
         ctx.batch.draw(region,
                 rect.cx() - sz * 0.5f, rect.cy() - sz * 0.5f, sz, sz);

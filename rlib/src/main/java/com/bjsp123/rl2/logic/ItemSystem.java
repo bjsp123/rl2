@@ -182,23 +182,34 @@ public final class ItemSystem {
      *    <li>{@link Item#level} — the item's own enchantment plusses.</li>
      *    <li>+1 if {@code holder} carries the {@link Perk#WANDMASTER}
      *        perk and {@code item} is a wand.</li>
-     *    <li>(future) bonuses from equipped gems / amulets that boost
-     *        item levels — add cases here so every consumer (combat,
-     *        UI display, AOE math) sees the same number.</li>
+     *    <li>+N from the {@link com.bjsp123.rl2.model.Buff.BuffType#SORCERY}
+     *        buff (wands and potions only).</li>
+     *    <li>+1 per equipped item whose brand has {@code sorcery=true}
+     *        (wands and potions only).</li>
      *  </ul>
      *  {@code holder} may be {@code null} for floor-item / encyclopedia
      *  inspection; the perk / gear bonuses are simply skipped in that
      *  case. */
     public static int effectiveLevel(Item item, Mob holder) {
         if (item == null) return 0;
+        if (item.useBehavior == Item.UseBehavior.POWERUP) return 0;
         int lvl = clampedLevel(item);
         if (holder != null && holder.perks != null) {
-            if (item.useBehavior == Item.UseBehavior.WAND
-                    && holder.perks.getOrDefault(Perk.WANDMASTER, 0) > 0) {
-                lvl += 1;
+            if (item.inventoryCategory == Item.InventoryCategory.WAND) {
+                lvl += holder.perks.getOrDefault(Perk.WANDMASTER, 0);
             }
             if (item.inventoryCategory == Item.InventoryCategory.BOMB) {
                 lvl += holder.perks.getOrDefault(Perk.BOMB_JACK, 0);
+            }
+        }
+        if (holder != null
+                && (item.inventoryCategory == Item.InventoryCategory.WAND
+                    || item.inventoryCategory == Item.InventoryCategory.POTION)) {
+            lvl += BuffSystem.sorceryBonus(holder);
+            if (holder.inventory != null) {
+                for (Item eq : holder.inventory.allEquipped()) {
+                    if (eq.brand != null && eq.brand.sorcery) lvl++;
+                }
             }
         }
         return lvl;
@@ -292,7 +303,8 @@ public final class ItemSystem {
         if (eff == null) return;
         switch (eff) {
             case LEVEL_UP -> {
-                com.bjsp123.rl2.logic.MobProgression.applyLevelUp(level, picker, false);
+                com.bjsp123.rl2.logic.MobProgression.awardXp(level, picker,
+                        GameBalance.XP_PER_POWER_ORB);
             }
             case HP_UP -> {
                 double maxHp = picker.effectiveStats().maxHp;
@@ -1188,6 +1200,7 @@ public final class ItemSystem {
         Mob pet = MobFactory.spawn(wand.summonsWhenUsed, spot);
         if (pet == null) return false;
         pet.owner = caster;
+        if (caster != null) caster.beastsTamed++;
         int petLevel = 1 + Math.max(0, wand.level);
         MobProgression.setSpawnLevel(pet, petLevel);
         level.mobs.add(pet);
@@ -1207,17 +1220,22 @@ public final class ItemSystem {
         return Math.max(1, r);
     }
 
-    /** Display name with level suffix when level > 0. Gems take a different naming scheme
-     *  (size prefix + species, no "+N"); see {@link #gemDisplayName}. */
-    public static String displayName(Item item) {
+    /** Display name with level suffix. Holder-aware: WANDMASTER / BOMB_JACK perks
+     *  boost the effective level shown in the name, matching what the item actually
+     *  does in combat. Pass {@code null} for floor items and encyclopedia entries. */
+    public static String displayName(Item item, Mob holder) {
         if (item == null) return "";
         if (item.isGem()) return gemDisplayName(item);
         String name = item.name == null ? "" : item.name;
-        if (item.level > 0) name = name + " +" + item.level;
+        int lvl = effectiveLevel(item, holder);
+        if (lvl > 0) name = name + " +" + lvl;
         if (item.brand != null && item.brand.name != null && !item.brand.name.isEmpty())
             name = name + " of " + item.brand.name;
         return name;
     }
+
+    /** Convenience overload — no holder context (floor items, encyclopedia). */
+    public static String displayName(Item item) { return displayName(item, null); }
 
     /** Size prefix for a gem of size 1–9 ("tiny" … "exquisite"). Caps at the last prefix
      *  if a recipe somehow yields a size higher than 9. */

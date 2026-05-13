@@ -118,7 +118,7 @@ public final class V2Log implements V2Popup {
         window.set(winX, winY, winW, winH);
 
         // Header strip — top of window interior (inside WIN_BORDER inset).
-        float inset = Pal.WIN_BORDER;
+        float inset = UIVars.WIN_BORDER;
         float innerX = winX + inset;
         float innerTop = winY + winH - inset;
         float innerW = winW - 2f * inset;
@@ -146,7 +146,7 @@ public final class V2Log implements V2Popup {
         float vh = ctx.worldH();
         float winH = vh * 0.85f;
         float winY = (vh - winH) * 0.5f;
-        float inset = Pal.WIN_BORDER;
+        float inset = UIVars.WIN_BORDER;
         float innerTop = winY + winH - inset;
         float filterBarBottom = innerTop - HEADER_H - 2f - FILTER_H - 2f;
         return filterBarBottom - (winY + inset);
@@ -187,8 +187,8 @@ public final class V2Log implements V2Popup {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
         // Header background.
-        s.setColor(UiColors.SLOT_RECESS.r, UiColors.SLOT_RECESS.g,
-                   UiColors.SLOT_RECESS.b, 1f);
+        s.setColor(UIVars.SLOT_RECESS.r, UIVars.SLOT_RECESS.g,
+                   UIVars.SLOT_RECESS.b, 1f);
         s.rect(headerRect.x, headerRect.y, headerRect.w, headerRect.h);
 
         // Filter buttons.
@@ -196,8 +196,8 @@ public final class V2Log implements V2Popup {
         drawFilterBtnShape(s, filterNon, LogPreferences.showNonPlayer());
 
         // Body background.
-        s.setColor(UiColors.SLOT_RECESS.r, UiColors.SLOT_RECESS.g,
-                   UiColors.SLOT_RECESS.b, 0.7f);
+        s.setColor(UIVars.SLOT_RECESS.r, UIVars.SLOT_RECESS.g,
+                   UIVars.SLOT_RECESS.b, 0.7f);
         s.rect(bodyRect.x, bodyRect.y, bodyRect.w, bodyRect.h);
 
         // Priority dots for visible lines.
@@ -213,7 +213,7 @@ public final class V2Log implements V2Popup {
             float scrollFrac = (totalH <= bodyRect.h) ? 0f
                     : scroller.scrollY() / (totalH - bodyRect.h);
             float barY = bodyRect.y + (bodyRect.h - barH) * scrollFrac;
-            s.setColor(UiColors.BORDER_MID);
+            s.setColor(UIVars.BORDER_MID);
             s.rect(bodyRect.right() - barW, barY, barW, barH);
         }
 
@@ -222,15 +222,15 @@ public final class V2Log implements V2Popup {
 
     private void drawFilterBtnShape(ShapeRenderer s, Rect r, boolean active) {
         // Fill.
-        Color fill = active ? UiColors.BTN_PRESSED_BG : UiColors.HUD_BG;
+        Color fill = active ? UIVars.BTN_PRESSED_BG : UIVars.HUD_BG;
         s.setColor(fill);
         s.rect(r.x, r.y, r.w, r.h);
 
         // Border (tri-line via Edges using HUD_LINE_W).
-        float lw = Pal.HUD_LINE_W;
-        Color outer = active ? UiColors.ACCENT   : UiColors.BORDER_OUTER;
-        Color mid   = active ? UiColors.ACCENT   : UiColors.BORDER_MID;
-        Color inner = active ? UiColors.ACCENT   : UiColors.BORDER_INNER;
+        float lw = UIVars.HUD_LINE_W;
+        Color outer = active ? UIVars.ACCENT   : UIVars.BORDER_OUTER;
+        Color mid   = active ? UIVars.ACCENT   : UIVars.BORDER_MID;
+        Color inner = active ? UIVars.ACCENT   : UIVars.BORDER_INNER;
         Edges.drawTriLine(s, r.x, r.y, r.w, r.h, lw, outer, mid, inner);
     }
 
@@ -250,7 +250,7 @@ public final class V2Log implements V2Popup {
             if (entryMid + BADGE_R < bodyRect.y)     continue;
             if (entryMid - BADGE_R > bodyRect.top()) continue;
             s.setColor(le.event.priority == LogEvent.EventPriority.HIGH
-                    ? UiColors.ACCENT : LOW_COLOR);
+                    ? UIVars.ACCENT : LOW_COLOR);
             s.circle(dotX, entryMid, BADGE_R, 8);
         }
     }
@@ -260,13 +260,13 @@ public final class V2Log implements V2Popup {
         ctx.batch.begin();
 
         // Header label.
-        TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT,
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                 "Game Log",
                 headerRect.cx(),
                 headerRect.top() - 2f);
 
         // Close button "✕".
-        TextDraw.centre(ctx, ctx.fontHeader, UiColors.TEXT_BODY,
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
                 "✕",
                 closeBtn.cx(),
                 closeBtn.top() - 2f);
@@ -282,7 +282,7 @@ public final class V2Log implements V2Popup {
     }
 
     private void drawFilterLabel(String label, Rect r, boolean active) {
-        Color col = active ? UiColors.ACCENT : UiColors.TEXT_DIM;
+        Color col = active ? UIVars.ACCENT : UIVars.TEXT_DIM;
         TextDraw.centre(ctx, ctx.fontRegular, col,
                 label, r.cx(), r.top() - (r.h - ctx.fontRegular.getCapHeight()) * 0.5f);
     }
@@ -313,7 +313,7 @@ public final class V2Log implements V2Popup {
 
     private Color lineColor(LogEvent e) {
         if (e.priority == LogEvent.EventPriority.HIGH) {
-            return e.involvesPlayer ? UiColors.TEXT_BODY : UiColors.TEXT_DIM;
+            return e.involvesPlayer ? UIVars.TEXT_BODY : UIVars.TEXT_DIM;
         }
         return LOW_COLOR;
     }
@@ -408,7 +408,7 @@ public final class V2Log implements V2Popup {
     /** Max usable text width for a log line — text starts after badge column. */
     private float wrapWidth() {
         float winW  = ctx.worldW() * 0.90f;
-        float inset = Pal.WIN_BORDER;
+        float inset = UIVars.WIN_BORDER;
         return winW - 2f * inset - LINE_PAD_L - BADGE_COL_W;
     }
 

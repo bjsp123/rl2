@@ -19,7 +19,7 @@ AMULET_OF_FINESSE,precise amulet,"An intricate sign traced in silver, it seems t
 AMULET_OF_DEFENCE,protective amulet,"A blue, shield shaped gem in a gold setting.",Protects from physical blows.,,0.2_0.8,,AMULET,,,,,,,1_2,1_3,,,,,,,,,NONE,,,,,,,,,,,,2,6
 AMULET_OF_WARDING,warding amulet,"A grey, unremarkable amulet to look at.",Protects from magical and energy attacks.,,0.3_1.0,,AMULET,,,,,,,,,2_4,1_3,,,,,,,NONE,,,,,,,,,,,,3,6
 AMULET_OF_LIGHT,glowing amulet,"A pale gem set in silver, it shines brightly.",Light can change how creatures and plants act.,,0.3_0.7,,AMULET,,,,,,,,,,,,,,10,,,NONE,,,,,,,,,,,,4,6
-CHERRY_BOMB,cherry bomb,A small bomb.,,,0_0.5,5,BOMB,,4,1,,,,,,,,,1,1,,BLAST,,NONE,,,,,,,,,1,CONSUME,,5,3
+CHERRY_BOMB,cherry bomb,A small bomb.,,,0_0.5,5,BOMB,5,4,1,,,,,,,,,1,1,,BLAST,,NONE,,,,,,,,,1,CONSUME,,5,3
 FIRE_BOMB,fire bomb,A flask of unstable alchemy.," On impact, deals damage and ignites tiles around the target.",,0.1_0.7,3,BOMB,,6,2,,,,,,,,,2,1,,FIRE,,NONE,,,,,,,,,,CONSUME,,0,3
 BLAST_BOMB,blast bomb,A heavy iron sphere full of magical powder.,Damages and pushes away everything around the point of impact.,,0.3_0.8,3,BOMB,,6,4,,,,,,,,,2,1,,BLAST,,NONE,,,,,,,,,2,CONSUME,,2,3
 SHOCK_BOMB,shock bomb,A ball of tightly coiled wire that can release powerful current.,"Lighting bolts arc from foe to foe, doing extra damage to wet targets.",,0.5_0.9,3,BOMB,,6,3,,,,,,,,,2,1,,LIGHTNING,,NONE,,,,,,,,,,CONSUME,,6,3
@@ -34,7 +34,7 @@ WAND_GRASS,wand of vegetation,A green wand bound with vine.,Engenders vegetation
 WAND_FUNGUS,wand of fungus,A spongy red-brown wand.,Causes mushrooms to grow at the target area.,,0.4_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,FUNGUS,,2,2,,,,6,0
 WAND_FIRE,wand of fire,A blackened wand crackling with embers. Ignites the target.,Spreads fire around the target point,,0.4_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,FIRE,,0.5,3,,,,2,0
 WAND_DOG,wand of dog,A wand decorated with a small animal head.,Summons a loyal dog to protect you.,,0.1_0.4,,WAND,,,,,,,,,,,,,,,,,WAND,summon,,,,,DOG,0.25,1,,,,3,0
-WAND_DETONATION,wand of detonation,A blackened iron wand inlaid with red runes. Detonates the target tile in a ball of fire.,Blows the target location to smithereens.,,0.5_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,DETONATION,,0.5,1,1,,,2,0
+WAND_DETONATION,wand of detonation,A blackened iron wand inlaid with red runes. Detonates the target tile in a ball of fire.,Blows the target location to smithereens.,,0.5_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,DETONATION,,0.5,1,1,,,10,0
 WAND_MAGIC_MISSILE,wand of magic missile,A short wand topped with a pale chip of crystal.,Sends out a magical bolt that does moderate damage.,,0_1.0,,WAND,,3_6,1_2,,,,,,,,,,,,,,WAND,zap,,,,MISSILE,,3,3,,,,0,0
 WAND_BANISHMENT,wand of banishment,A wand bound in tarnished silver and tipped with flickering crystals.,This specialized wand can instantly banish creatures that are not really real.,,0.6_1.0,,WAND,,,,,,,,,,,,,,,,,WAND,zap,,,,BANISHMENT,,0.5,1,,,,7,0
 WAND_LIGHTNING,wand of lightning,A wand that crackles with energy. ,Effect jumps from target to target and is stronger in water -- beware.,,0.2_1.0,,WAND,,4_10,1_2,,,,,,,,,,,,BLAST,,WAND,zap,,,,LIGHTNING,,0.5,2,,,,8,0

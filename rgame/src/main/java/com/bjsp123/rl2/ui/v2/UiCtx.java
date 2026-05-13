@@ -25,7 +25,7 @@ import com.bjsp123.rl2.ui.skin.UiScale;
  * by {@link com.bjsp123.rl2.Rl2Game} and shared across every {@link V2Screen}.
  *
  * <p>Two fonts only — no per-call font scaling, no skin chrome, no bitmaps.
- * Panels and buttons are drawn from {@link Pal} colours via the ShapeRenderer.
+ * Panels and buttons are drawn from {@link UIVars} colours via the ShapeRenderer.
  */
 public final class UiCtx implements Disposable {
 
@@ -39,7 +39,7 @@ public final class UiCtx implements Disposable {
     private final Texture      whiteTex;
     public final OrthographicCamera camera = new OrthographicCamera();
     /** ScreenViewport — 1 world unit ≈ 1 screen pixel, so UI controls
-     *  drawn at fixed world dimensions (Pal.BTN_W, Pal.BTN_H, etc.) keep
+     *  drawn at fixed world dimensions (UIVars.BTN_W, UIVars.BTN_H, etc.) keep
      *  their on-screen size as the window grows or shrinks. The world
      *  width / height is whatever the screen currently is, so layouts use
      *  {@link #worldW()} / {@link #worldH()} to anchor and centre against
@@ -63,8 +63,8 @@ public final class UiCtx implements Disposable {
     public UiCtx() {
         FreeTypeFontGenerator gen = new FreeTypeFontGenerator(
                 Gdx.files.internal("ui/fonts/PixelOperator-Bold.ttf"));
-        fontRegular = makeFont(gen, Pal.FONT_REGULAR_PX);
-        fontHeader  = makeFont(gen, Pal.FONT_HEADER_PX);
+        fontRegular = makeFont(gen, UIVars.FONT_REGULAR_PX);
+        fontHeader  = makeFont(gen, UIVars.FONT_HEADER_PX);
         gen.dispose();
         Pixmap wp = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
         wp.setColor(1, 1, 1, 1);
@@ -113,7 +113,7 @@ public final class UiCtx implements Disposable {
     }
 
     /** Current world width / height in virtual coordinates. Layout code reads
-     *  these instead of {@link Pal#VIRTUAL_W} / {@link Pal#VIRTUAL_H} so a
+     *  these instead of {@link UIVars#VIRTUAL_W} / {@link UIVars#VIRTUAL_H} so a
      *  user-changed {@link com.bjsp123.rl2.ui.skin.UiScale} (which shrinks
      *  the viewport's min size) flows through to button placement, window
      *  sizing, and chrome anchors. */

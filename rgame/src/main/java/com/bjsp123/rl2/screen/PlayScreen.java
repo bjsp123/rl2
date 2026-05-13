@@ -65,7 +65,10 @@ public class PlayScreen implements Screen {
      *  whatever the character normally starts with. */
     private final boolean tenPerkPointsRequested;
 
-    private World            world;
+    private World world;
+    /** Exposed so burger-menu items from other packages can construct level-info
+     *  and map screens for the currently active run. */
+    public World getWorld() { return world; }
     private OrthographicCamera camera;
     private CameraController cameraController;
     private LevelRenderer    levelRenderer;
@@ -315,7 +318,7 @@ public class PlayScreen implements Screen {
                 game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Settings(game, game.ui)));
         v2Hud.setOnOpenLevelInfo(() ->
                 game.pushScreen(new com.bjsp123.rl2.ui.v2.V2LevelInfo(
-                        game.ui,
+                        game, game.ui,
                         game::popScreen,
                         world.currentLevel())));
 
@@ -367,7 +370,7 @@ public class PlayScreen implements Screen {
         });
         v2Hud.setOnOpenMap(() ->
                 game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
-                        game.ui, game::popScreen, world)));
+                        game, game.ui, game::popScreen, world)));
 
         v2CharacterStats = new V2CharacterStats(game.ui);
         v2CharacterStats.setPlayer(player);

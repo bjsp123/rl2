@@ -9,6 +9,7 @@ import com.bjsp123.rl2.logic.ThemedRoomRegistry;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Tile;
+import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.World;
 
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ import java.util.Set;
  */
 public final class V2Map extends V2Screen {
 
+    private final Rl2Game game;
     private final Runnable onBack;
     private final World world;
     private final Rect window = new Rect();
@@ -83,8 +85,9 @@ public final class V2Map extends V2Screen {
     private final com.badlogic.gdx.math.Rectangle scissorIn  = new com.badlogic.gdx.math.Rectangle();
     private final com.badlogic.gdx.math.Rectangle scissorOut = new com.badlogic.gdx.math.Rectangle();
 
-    public V2Map(UiCtx ctx, Runnable onBack, World world) {
+    public V2Map(Rl2Game game, UiCtx ctx, Runnable onBack, World world) {
         super(ctx);
+        this.game   = game;
         this.onBack = onBack;
         this.world  = world;
     }
@@ -96,14 +99,14 @@ public final class V2Map extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(420f, vw - Pal.PAD_MODAL);
-        float winH = Math.min(Pal.VIRTUAL_H - 120f, vh - 120f);
+        float winW = Math.min(420f, vw - UIVars.PAD_MODAL);
+        float winH = Math.min(UIVars.VIRTUAL_H - 120f, vh - 120f);
         float winY = (vh - winH) * 0.5f;
         window.set((vw - winW) * 0.5f, winY, winW, winH);
 
         back   = new BackBtn(ctx, onBack);
-        back.anchorBottomRightOf(window);
         burger = makeBurger();
+        addStandardBurgerItems(game);
     }
 
     @Override
@@ -227,9 +230,9 @@ public final class V2Map extends V2Screen {
             boolean current = i == world.currentLevelIndex;
             boolean isSel   = i == selected;
 
-            Color border = current ? Pal.ACCENT
-                          : isSel  ? Pal.WARN
-                          : Pal.BORDER;
+            Color border = current ? UIVars.ACCENT
+                          : isSel  ? UIVars.TEXT_WARN
+                          : UIVars.BORDER_MID;
             drawTrapezoidBorder(s, bx, by, bw, bh, ti, border);
 
             if (lvl.visited && lvl.tiles != null) {
@@ -435,7 +438,7 @@ public final class V2Map extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Map",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Map",
                 window.cx(), window.top() - ctx.headerLineH());
         if (world == null || world.levels == null) return;
 
@@ -471,7 +474,7 @@ public final class V2Map extends V2Screen {
             // wider, closer edge) so it stays legible above the
             // perspective-shrunk top.
             TextDraw.centre(ctx, ctx.fontRegular,
-                    lvl.visited ? Pal.WHITE : Pal.DIM,
+                    lvl.visited ? UIVars.TEXT_BODY : UIVars.TEXT_DIM,
                     label, xy[0] + bw * 0.5f, xy[1] + 4f * zoom);
         }
         ctx.batch.flush();
@@ -503,14 +506,14 @@ public final class V2Map extends V2Screen {
         if (lvl.theme != null) {
             header += "   " + lvl.theme.name().toLowerCase();
         }
-        TextDraw.left(ctx, ctx.fontRegular, Pal.ACCENT, header, left, top);
+        TextDraw.left(ctx, ctx.fontRegular, UIVars.ACCENT, header, left, top);
         top -= 18f;
 
         // Unique themed rooms — scan level.rooms for rooms whose kind is
         // flagged unique in the registry.
         String roomsLine = collectUniqueRooms(lvl);
         if (!roomsLine.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                     "Rooms: " + roomsLine, left, top);
             top -= 16f;
         }
@@ -518,7 +521,7 @@ public final class V2Map extends V2Screen {
         // Unique mob species present.
         String mobsLine = collectUniqueMobs(lvl);
         if (!mobsLine.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                     "Mobs:  " + mobsLine, left, top);
         }
     }

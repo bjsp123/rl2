@@ -35,6 +35,8 @@ public final class Btn {
     public boolean checked;
     /** {@code true} = render with the header font; {@code false} = regular. */
     public boolean header;
+    /** {@code true} = red border + red label (destructive / danger action). */
+    public boolean warn;
 
     public Btn(String label, float x, float y, float w, float h, Runnable onClick) {
         this.label = label;
@@ -51,22 +53,22 @@ public final class Btn {
     public void drawShape(UiCtx ctx) {
         ShapeRenderer s = ctx.shapes;
         boolean hot = pressed || checked;
-        Color fill = hot ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG;
-        // Three-line border. Checked tabs replace the outer light-grey line
-        // with an accent yellow so the "this tab is active" state is
-        // unmistakable; pressed buttons keep the standard tri-line but use
-        // the brighter fill above to register the press.
-        if (checked && !pressed) {
+        Color fill = hot ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG;
+        if (warn) {
             Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h,
-                    Pal.HUD_LINE_W,
-                    UiColors.ACCENT, UiColors.BORDER_MID, UiColors.BORDER_INNER);
+                    UIVars.HUD_LINE_W,
+                    UIVars.WARN_HL, UIVars.TEXT_WARN, UIVars.WARN_SHADE);
+        } else if (checked && !pressed) {
+            Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h,
+                    UIVars.HUD_LINE_W,
+                    UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
         } else {
             Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h,
-                    Pal.HUD_LINE_W);
+                    UIVars.HUD_LINE_W);
         }
         s.setColor(fill);
-        s.rect(rect.x + Pal.HUD_BORDER, rect.y + Pal.HUD_BORDER,
-               rect.w - 2 * Pal.HUD_BORDER, rect.h - 2 * Pal.HUD_BORDER);
+        s.rect(rect.x + UIVars.HUD_BORDER, rect.y + UIVars.HUD_BORDER,
+               rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
     }
 
     /** Draw the centred label or icon. Caller is inside a SpriteBatch
@@ -76,7 +78,7 @@ public final class Btn {
     public void drawText(UiCtx ctx) {
         boolean hot = pressed || checked;
         if (icon != null) {
-            Color tint = hot ? Pal.ACCENT : Pal.WHITE;
+            Color tint = hot ? UIVars.ACCENT : UIVars.TEXT_BODY;
             ctx.batch.setColor(tint);
             float size = Math.min(rect.w, rect.h) * 0.6f;
             ctx.batch.draw(icon,
@@ -86,7 +88,8 @@ public final class Btn {
             return;
         }
         BitmapFont font = header ? ctx.fontHeader : ctx.fontRegular;
-        font.setColor(hot ? Pal.ACCENT : Pal.WHITE);
+        font.setColor(warn ? (hot ? UIVars.WARN_HL : UIVars.TEXT_WARN)
+                           : (hot ? UIVars.ACCENT : UIVars.TEXT_BODY));
         ctx.layout.setText(font, label);
         float tx = rect.x + (rect.w - ctx.layout.width)  * 0.5f;
         // y is the BASELINE position in libGDX; we want the visible text

@@ -89,6 +89,7 @@ public class Rl2Game extends Game {
         // gameplay code reads a balance number. Game-balance loads first because
         // some Mob field initializers reference GameBalance.STARTING_SATIETY etc.
         loadGameBalance();
+        loadUiVars();
         loadMobConfig();
         loadItemConfig();
         loadBrandConfig();
@@ -126,6 +127,15 @@ public class Rl2Game extends Game {
         setScreen(new V2Title(this, ui));
     }
 
+
+    /** Read {@code assets/data/uivars.properties} and override matching
+     *  {@link com.bjsp123.rl2.ui.v2.UIVars} fields. Missing file is non-fatal. */
+    private void loadUiVars() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/uivars.properties");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.ui.v2.UIVars.load(fh.readString());
+    }
 
     /** Read {@code assets/data/gamebalance.properties} and override matching
      *  {@link com.bjsp123.rl2.logic.GameBalance} fields. Missing file is non-fatal —

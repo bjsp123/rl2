@@ -12,7 +12,7 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFont
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
-import com.bjsp123.rl2.ui.v2.Pal;
+import com.bjsp123.rl2.ui.v2.UIVars;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
@@ -223,6 +223,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     /** Custom shader that draws a scrolling surface modulated by a per-cell alpha mask. */
     private ShaderProgram   surfaceMaskShader;
     private float           waterTime;
+    private float           bobTime;
     /** Reference to the world for cross-level lookups (currently used by the stair labels
      *  to read the destination level's depth + side). Set via {@link #setWorld}; null if
      *  the renderer is being used outside a full game (e.g. tests). */
@@ -456,6 +457,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float dt = Gdx.graphics.getDeltaTime();
         waterTime      += dt;
         stairLabelTime += dt;
+        bobTime        += dt;
 
         // Bind the tile atlas matching this level's theme. TileSprites falls back to
         // CRYSTAL internally if a theme slipped through without a registered atlas.
@@ -1839,11 +1841,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  signal its enchant level. Yellow, half-scale font so it doesn't dominate the
      *  sprite. */
     private void drawItemLevelBadge(int effLvl, int x, int y) {
-        if (effLvl <=1) return;//no point drawing anything if no plusses
+        if (effLvl <= 1) return;
         float prevScale = font.getData().scaleX;
         font.getData().setScale(prevScale * 0.55f);
-        font.setColor(Pal.ACCENT);
-        String text = "+" + (effLvl-1);
+        font.setColor(UIVars.ACCENT);
+        String text = "+" + (effLvl - 1);
         com.badlogic.gdx.graphics.g2d.GlyphLayout layout =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout(font, text);
         // Top-right corner: x = right edge - text width, y = top of cell (font draws
@@ -2046,7 +2048,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // the frame's draw origin (left edge) therefore sits tileCenterX − that amount.
         float silhouetteCenterScaled = (s.visibleLeft + s.visibleW / 2f) * scaleX;
         float drawX = tileCenterX - silhouetteCenterScaled;
-        float drawY = baselineY + yAdj;
+        float bob = 0f;
+        if (s.yAdjust > 0) {
+            float phase = (gx * 7 + gy * 13) * 0.7f;
+            bob = (float) Math.sin(bobTime * (Math.PI * 2.0 / 2.5) + phase) * 2f * scaleY;
+        }
+        float drawY = baselineY + yAdj + bob;
 
         // Mob and its shadow share an alpha so the death flicker / fade dims both together.
         batch.setColor(1f, 1f, 1f, alpha);

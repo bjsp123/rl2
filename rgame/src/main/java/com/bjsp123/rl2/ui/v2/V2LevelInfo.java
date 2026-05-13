@@ -1,5 +1,6 @@
 package com.bjsp123.rl2.ui.v2;
 
+import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Tile;
 
@@ -12,13 +13,15 @@ import java.util.List;
  */
 public final class V2LevelInfo extends V2Screen {
 
+    private final Rl2Game game;
     private final Runnable onBack;
     private final Level level;
     private final Rect window = new Rect();
     private final List<String> rows = new ArrayList<>();
 
-    public V2LevelInfo(UiCtx ctx, Runnable onBack, Level level) {
+    public V2LevelInfo(Rl2Game game, UiCtx ctx, Runnable onBack, Level level) {
         super(ctx);
+        this.game   = game;
         this.onBack = onBack;
         this.level  = level;
     }
@@ -30,7 +33,7 @@ public final class V2LevelInfo extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
+        float winW = Math.min(360f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(540f, vh - 120f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -66,10 +69,8 @@ public final class V2LevelInfo extends V2Screen {
         }
 
         back = new BackBtn(ctx, onBack);
-        back.anchorBottomRightOf(window);
-        // Burger present for visual consistency; no items — V2LevelInfo
-        // reaches its parent screen via the back button only.
         burger = makeBurger();
+        addStandardBurgerItems(game);
     }
 
     @Override
@@ -80,13 +81,13 @@ public final class V2LevelInfo extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         float top = window.top() - ctx.headerLineH();
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Level Info",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Level Info",
                 window.cx(), top);
         top -= 50f;
         for (String s : rows) {
             if (top < window.y + 16f) break;
-            TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                    s, window.x + Pal.PAD_CONTENT, top);
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    s, window.x + UIVars.PAD_CONTENT, top);
             top -= ctx.lineH();
         }
     }

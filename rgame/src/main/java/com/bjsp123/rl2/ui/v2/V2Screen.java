@@ -290,6 +290,23 @@ public abstract class V2Screen extends ScreenAdapter {
         burgerItemRects.add(new Rect());
     }
 
+    /** Add the standard set of burger destinations every screen offers:
+     *  Main Menu / Settings, plus Level Info / Map / Log when a run is in
+     *  progress. Call once in {@link #buildLayout()} after {@link #makeBurger()}. */
+    protected final void addStandardBurgerItems(com.bjsp123.rl2.Rl2Game game) {
+        addBurgerItem("Main Menu", () -> game.setRootScreen(new V2Title(game, ctx)));
+        addBurgerItem("Settings",  () -> game.pushScreen(new V2Settings(game, ctx)));
+        if (game.currentPlay != null) {
+            addBurgerItem("Level Info", () -> game.pushScreen(new V2LevelInfo(game, ctx,
+                    game::popScreen,
+                    game.currentPlay.getWorld().currentLevel())));
+            addBurgerItem("Map", () -> game.pushScreen(new V2Map(game, ctx,
+                    game::popScreen,
+                    game.currentPlay.getWorld())));
+            addBurgerItem("Log", () -> game.setRootScreen(game.currentPlay));
+        }
+    }
+
     /** Position the burger panel + per-item rects centred on the viewport
      *  as a chunky column-of-buttons window — same shape as every other V2
      *  modal so the user reads it as "a window with a list of choices",
@@ -323,26 +340,24 @@ public abstract class V2Screen extends ScreenAdapter {
         ctx.applyProjection();
         layoutBurgerOverlay();
 
-        // Pass 1 — every rectangle drawn this frame. GL_BLEND is enabled so
-        // window fills painted at {@link Pal#PANEL_FILL_ALPHA} composite over
-        // whatever sits behind the screen (the dim overlay or the dungeon
-        // view); ShapeRenderer doesn't enable blending on its own.
+        // Pass 1 — body shapes.
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
         drawBodyShape(ctx);
         for (Btn b : buttons) b.drawShape(ctx);
-        if (back   != null) back.drawShape(ctx);
-        if (burger != null) burger.drawShape(ctx);
         ctx.shapes.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
-        // Pass 2 — every label / glyph drawn this frame.
+        // Pass 2 — body text / icons.
         ctx.batch.begin();
         drawBodyText(ctx);
         for (Btn b : buttons) b.drawText(ctx);
-        if (back != null) back.drawIcon(ctx);
         ctx.batch.end();
+
+        // Pass 3 — chrome: each widget owns its renderer lifecycle.
+        if (back   != null) back.draw(ctx);
+        if (burger != null) burger.draw(ctx);
 
         // Stage layer — sub-popups (e.g. V2Saves's delete-confirm) and
         // the burger overlay. Renders LAST so the scrim cleanly hides
@@ -385,11 +400,11 @@ public abstract class V2Screen extends ScreenAdapter {
                     burgerPanel.x, burgerPanel.y, burgerPanel.w, burgerPanel.h);
             for (int i = 0; i < burgerItemRects.size(); i++) {
                 Rect r = burgerItemRects.get(i);
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
                 s.setColor(i == burgerItemPressed
-                        ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-                s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                        r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+                        ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+                s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                        r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
             }
             s.end();
             Gdx.gl.glDisable(GL20.GL_BLEND);
@@ -399,7 +414,7 @@ public abstract class V2Screen extends ScreenAdapter {
                 Rect r = burgerItemRects.get(i);
                 TextDraw.centre(ctx, ctx.fontHeader,
                         i == burgerItemPressed
-                                ? UiColors.ACCENT : UiColors.TEXT_BODY,
+                                ? UIVars.ACCENT : UIVars.TEXT_BODY,
                         burgerLabels.get(i),
                         r.cx(), r.cy() + 8f);
             }

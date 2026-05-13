@@ -95,13 +95,13 @@ public final class AchievementToast {
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
         Window.drawShape(ctx, bannerX, bannerY, bannerW, BANNER_H,
-                UiColors.WIN_BG, alpha);
+                UIVars.WIN_BG, alpha);
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
         // Text pass — accent yellow, faded by alpha.
         ctx.batch.begin();
-        Color tint = UiColors.ACCENT;
+        Color tint = UIVars.ACCENT;
         TextDraw.centre(ctx, ctx.fontRegular,
                 new Color(tint.r, tint.g, tint.b, alpha),
                 text, bannerX + bannerW * 0.5f,

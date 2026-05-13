@@ -23,8 +23,11 @@ import java.util.List;
  */
 public final class V2Settings extends V2Screen {
 
-    private enum Tab { GAMEPLAY, GRAPHICS, LOG }
+    private enum Tab { GAMEPLAY, GRAPHICS, LOG, DANGER }
     private static Tab currentTab = Tab.GRAPHICS;
+    /** Tracks whether the user's first tap on "Clear Hall of Fame" is pending
+     *  confirmation. Resets when the tab is rebuilt (i.e. on any navigation). */
+    private boolean clearHofPending = false;
 
     private final Rl2Game game;
     private final Rect window = new Rect();
@@ -69,12 +72,15 @@ public final class V2Settings extends V2Screen {
         // horizontally on the viewport so the surrounding world breathes
         // evenly on either side. Top reserved for the screen header;
         // bottom reserved for the back/burger overlay row.
-        float winW = Math.min(Pal.VIRTUAL_W - 2 * SCREEN_MARGIN,
+        float winW = Math.min(UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
                 ctx.worldW() - 2 * SCREEN_MARGIN);
-        float winH = Math.min(Pal.VIRTUAL_H - 110f, ctx.worldH() - 110f);
+        float winH = Math.min(UIVars.VIRTUAL_H - 110f, ctx.worldH() - 110f);
         float winX = (ctx.worldW() - winW) * 0.5f;
         float winY = (ctx.worldH() - winH) * 0.5f;
         window.set(winX, winY, winW, winH);
+
+        // Reset confirm state when layout rebuilds.
+        clearHofPending = false;
 
         // Tab strip — anchored at the TOP of the window's interior. Tab
         // widths are computed so all tabs FIT within the inner width — no
@@ -82,7 +88,7 @@ public final class V2Settings extends V2Screen {
         // n*tabW + (n-1)*TAB_GAP = innerW; solve for tabW.
         float tabsY = winY + winH - WIN_PAD - TAB_H;
         float tabsX = winX + WIN_PAD;
-        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG };
+        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.DANGER };
         float innerW = winW - 2 * WIN_PAD;
         float tabW   = (innerW - (tabs.length - 1) * TAB_GAP) / tabs.length;
         for (int i = 0; i < tabs.length; i++) {
@@ -118,6 +124,7 @@ public final class V2Settings extends V2Screen {
                 yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Queue Acceleration",
                         AnimationSpeed::queueAccelEnabled, AnimationSpeed::setQueueAccelEnabled);
                 yCursor = addQuickslotCountRow(winX + WIN_PAD, yCursor);
+                yCursor = addButtonRow(winX + WIN_PAD, yCursor, "Clear Hall of Fame");
             }
             case LOG -> {
                 yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Show Event Log",
@@ -130,15 +137,15 @@ public final class V2Settings extends V2Screen {
                         LogPreferences::expanded, LogPreferences::setExpanded);
                 yCursor = addLogFontScaleRow(winX + WIN_PAD, yCursor);
             }
+            case DANGER -> addDangerTabContent(winX + WIN_PAD, contentTop, innerW);
         }
 
         // Back button at bottom-right — pops the navigation stack so the
         // user returns to wherever Settings was opened from.
         back = new BackBtn(ctx, game::popScreen);
-        back.anchorBottomRightOf(window);
         // Burger top-right.
         burger = makeBurger();
-        addBurgerItem("Title", () -> game.setRootScreen(new V2Title(game, ctx)));
+        addStandardBurgerItems(game);
     }
 
     @Override
@@ -160,6 +167,21 @@ public final class V2Settings extends V2Screen {
             bx += c.width + CHOOSER_GAP;
         }
         return by - ROW_GAP;
+    }
+
+    private float addButtonRow(float x, float yTop, String label) {
+      
+           
+        float winW = Math.min(UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
+                ctx.worldW() - 2 * SCREEN_MARGIN);
+        float innerW = winW - 2 * WIN_PAD;
+        Btn b = new Btn(label, x, yTop - CHOOSER_H, innerW, CHOOSER_H, () -> {
+            game.hallOfFame.entries.clear();     
+            show();
+        });
+        b.warn = true;
+        buttons.add(b);
+        return yTop - CHOOSER_H - ROW_GAP;
     }
 
     private float addUiScaleRow(float x, float yTop) {
@@ -276,12 +298,30 @@ public final class V2Settings extends V2Screen {
     protected void drawBodyText(UiCtx ctx) {
         // Window title bar — a header label drawn ABOVE the window for now,
         // since our window content is fully consumed by tabs + choosers.
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Settings",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Settings",
                 ctx.worldW() * 0.5f, ctx.worldH() - 24f);
 
         for (RowLabel rl : rowLabels) {
-            TextDraw.left(ctx, ctx.fontRegular, Pal.DIM, rl.text, rl.x, rl.y);
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, rl.text, rl.x, rl.y);
         }
+    }
+
+    private void addDangerTabContent(float x, float yTop, float innerW) {
+        String btnLabel = clearHofPending
+                ? "Confirm — this cannot be undone"
+                : "Clear Hall of Fame";
+        Btn b = new Btn(btnLabel, x, yTop - CHOOSER_H, innerW, CHOOSER_H, () -> {
+            if (!clearHofPending) {
+                clearHofPending = true;
+            } else {
+                game.hallOfFame.entries.clear();
+                com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
+                clearHofPending = false;
+                show();
+            }
+        });
+        b.warn = true;
+        buttons.add(b);
     }
 
     private static String label(Tab t) {
@@ -289,6 +329,7 @@ public final class V2Settings extends V2Screen {
             case GAMEPLAY -> "Play";
             case GRAPHICS -> "Graphics";
             case LOG      -> "Log";
+            case DANGER   -> "Danger";
         };
     }
 
@@ -298,6 +339,7 @@ public final class V2Settings extends V2Screen {
             case GAMEPLAY -> IconSprites.Icon.GAME;
             case GRAPHICS -> IconSprites.Icon.VIDEO;
             case LOG      -> IconSprites.Icon.BOOK;
+            case DANGER   -> IconSprites.Icon.CANCEL;
         };
     }
 

@@ -160,13 +160,14 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         layoutRects();
         renderShapesPass();
         renderTextPass();
+        if (detailBack != null) detailBack.draw(ctx);
     }
 
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
-        float winH = Math.min(Pal.VIRTUAL_H - 100f, vh - 100f);
+        float winW = Math.min(360f, vw - UIVars.PAD_MODAL);
+        float winH = Math.min(UIVars.VIRTUAL_H - 100f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         if (selected == null) {
@@ -248,10 +249,6 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                     }
                 });
             }
-            // Anchor the back button to the encyclopaedia's window rect
-            // each frame so the button hugs the popup's bottom-right
-            // corner rather than the viewport's.
-            detailBack.anchorBottomRightOf(window);
 
             // Sprite frame — sized to 2× the source's largest dimension
             // (per "graphics shown double size in info pages"), with a 64-px
@@ -317,7 +314,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+        s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
@@ -328,14 +325,14 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 boolean active  = Cat.values()[i] == currentTab;
                 boolean pressed = tabPressed[i];
                 if (active || pressed) {
-                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W,
-                            UiColors.ACCENT, UiColors.BORDER_MID, UiColors.BORDER_INNER);
+                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
+                            UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
                 } else {
-                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
                 }
-                s.setColor(active ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-                s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                        r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+                s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+                s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                        r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
             }
             // Scissor-clip the row drawing to the visible band so partial
             // rows at the top / bottom edges render smoothly instead of
@@ -346,7 +343,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 // Row press highlight.
                 if (rowPressed >= 0 && rowPressed < rowRects.size()) {
                     Rect rr = rowRects.get(rowPressed);
-                    s.setColor(UiColors.BTN_PRESSED_BG);
+                    s.setColor(UIVars.BTN_PRESSED_BG);
                     s.rect(rr.x, rr.y, rr.w, rr.h);
                 }
                 // Icon frames — light-warm-grey backdrop + thin tri-line
@@ -356,25 +353,22 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                     float fSz = 80f;
                     float fx  = rr.x + 2f;
                     float fy  = rr.y + (rr.h - fSz) * 0.5f;
-                    Edges.drawTriLine(s, fx, fy, fSz, fSz, Pal.HUD_LINE_W);
-                    s.setColor(UiColors.ICON_FRAME_BG);
-                    s.rect(fx + Pal.HUD_BORDER, fy + Pal.HUD_BORDER,
-                            fSz - 2 * Pal.HUD_BORDER, fSz - 2 * Pal.HUD_BORDER);
+                    Edges.drawTriLine(s, fx, fy, fSz, fSz, UIVars.HUD_LINE_W);
+                    s.setColor(UIVars.ICON_FRAME_BG);
+                    s.rect(fx + UIVars.HUD_BORDER, fy + UIVars.HUD_BORDER,
+                            fSz - 2 * UIVars.HUD_BORDER, fSz - 2 * UIVars.HUD_BORDER);
                 }
                 s.flush();
                 ScissorStack.popScissors();
             }
         } else {
-            // Standard back button (viewport-anchored, red-bordered).
-            if (detailBack != null) detailBack.drawShape(ctx);
-
             // Sprite frame chrome — light-warm-grey backdrop + tri-line
             // border. Sprite itself is painted aspect-fit in the text pass.
             Rect f = detailIconFrame;
-            Edges.drawTriLine(s, f.x, f.y, f.w, f.h, Pal.HUD_LINE_W);
-            s.setColor(UiColors.ICON_FRAME_BG);
-            s.rect(f.x + Pal.HUD_BORDER, f.y + Pal.HUD_BORDER,
-                    f.w - 2 * Pal.HUD_BORDER, f.h - 2 * Pal.HUD_BORDER);
+            Edges.drawTriLine(s, f.x, f.y, f.w, f.h, UIVars.HUD_LINE_W);
+            s.setColor(UIVars.ICON_FRAME_BG);
+            s.rect(f.x + UIVars.HUD_BORDER, f.y + UIVars.HUD_BORDER,
+                    f.w - 2 * UIVars.HUD_BORDER, f.h - 2 * UIVars.HUD_BORDER);
 
             // Body region — the divider rule sits in content space and
             // scrolls with the body, so it's clipped to the scissor band
@@ -384,7 +378,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             s.flush();
             if (pushDetailBodyScissor()) {
                 if (!Float.isNaN(detailDividerY)) {
-                    s.setColor(UiColors.BORDER_MID);
+                    s.setColor(UIVars.BORDER_MID);
                     s.rect(detailBodyBand.x,
                             detailDividerY + detailScroller.scrollY(),
                             detailBodyBand.w, 1f);
@@ -453,7 +447,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         float h  = 8f;
         float halfW = w * 0.5f;
         float halfH = h * 0.5f;
-        s.setColor(UiColors.ACCENT);
+        s.setColor(UIVars.ACCENT);
         if (up) {
             s.triangle(cx - halfW, cy - halfH,
                        cx + halfW, cy - halfH,
@@ -469,7 +463,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         ctx.batch.begin();
 
         if (selected == null) {
-            TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Encyclopedia",
+            TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Encyclopedia",
                     window.cx(), window.top() - ctx.headerLineH());
 
             // Tabs render as icons — same source sheet as the Settings
@@ -480,7 +474,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 var region = com.bjsp123.rl2.world.render.IconSprites
                         .regionFor(tabIcon(Cat.values()[i]));
                 if (region == null) continue;
-                ctx.batch.setColor(active ? Pal.ACCENT : Pal.WHITE);
+                ctx.batch.setColor(active ? UIVars.ACCENT : UIVars.TEXT_BODY);
                 float sz = Math.min(r.w, r.h) * 0.6f;
                 ctx.batch.draw(region,
                         r.cx() - sz * 0.5f, r.cy() - sz * 0.5f, sz, sz);
@@ -503,14 +497,14 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                     if (e.icon != null) {
                         drawAspectFit(e.icon, fx, fy, fSz, fSz);
                     }
-                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                             e.name, fx + fSz + 8f, r.y + r.h - 9f);
                 }
                 ctx.batch.flush();
                 ScissorStack.popScissors();
             }
         } else {
-            TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT,
+            TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                     selected.name, window.cx(), window.top() - ctx.headerLineH());
 
             // Detail sprite — aspect-fit inside the frame computed in
@@ -538,8 +532,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             }
             int   line  = 0;
             for (String s : detailFlavorLines) {
-                TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                        s, window.x + Pal.PAD_CONTENT,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                        s, window.x + UIVars.PAD_CONTENT,
                         top - line * lineH + scroll);
                 line++;
             }
@@ -547,17 +541,14 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             // so the rule doesn't crowd the surrounding text.
             if (!Float.isNaN(detailDividerY)) line += 2;
             for (String s : detailDetailsLines) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
-                        s, window.x + Pal.PAD_CONTENT,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                        s, window.x + UIVars.PAD_CONTENT,
                         top - line * lineH + scroll);
                 line++;
             }
             ctx.batch.flush();
             ScissorStack.popScissors();
 
-            // BackBtn glyph (icon-sheet sprite) draws in the text pass —
-            // outside the scissored body band so the clip can't hide it.
-            if (detailBack != null) detailBack.drawIcon(ctx);
         }
 
         ctx.batch.end();

@@ -111,8 +111,7 @@ public final class V2Saves extends V2Screen {
 
         back   = new BackBtn(ctx, game::popScreen);
         burger = makeBurger();
-        addBurgerItem("Title",    () -> game.setRootScreen(new V2Title(game, ctx)));
-        addBurgerItem("Settings", () -> game.pushScreen(new V2Settings(game, ctx)));
+        addStandardBurgerItems(game);
     }
 
     private SlotCard buildCard(int slot, float x, float y, float cardW) {
@@ -211,7 +210,7 @@ public final class V2Saves extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Saved Games",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Saved Games",
                 ctx.worldW() * 0.5f, ctx.worldH() - 24f);
         for (SlotCard c : cards) {
             float textTop  = c.rect.top() - CARD_PAD - 4f;
@@ -219,13 +218,13 @@ public final class V2Saves extends V2Screen {
             if (c.filled) {
                 String line1 = c.metadata.charClass + "   Lvl " + c.metadata.characterLevel;
                 String line2 = "Depth " + c.metadata.depth;
-                TextDraw.left(ctx, ctx.fontHeader, Pal.WHITE,
+                TextDraw.left(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
                         line1, textLeft, textTop);
-                TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         line2, textLeft,
                         textTop - ctx.fontHeader.getCapHeight() - 6f);
             } else {
-                TextDraw.centre(ctx, ctx.fontHeader, Pal.WHITE,
+                TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
                         "New Game",
                         c.rect.cx(),
                         c.rect.cy() + ctx.fontHeader.getCapHeight() * 0.5f);
@@ -311,24 +310,24 @@ public final class V2Saves extends V2Screen {
 
             // Text pass — title + Y/N labels.
             ctx.batch.begin();
-            TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT,
+            TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                     "Delete save?",
                     deleteModal.cx(),
                     deleteModal.top() - 28f);
             TextDraw.centre(ctx, ctx.fontHeader,
-                    yesPressed ? Pal.ACCENT : Pal.WHITE,
+                    yesPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                     "Yes", yesBtn.cx(), yesBtn.cy() + 8f);
             TextDraw.centre(ctx, ctx.fontHeader,
-                    noPressed ? Pal.ACCENT : Pal.WHITE,
+                    noPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                     "No",  noBtn.cx(),  noBtn.cy() + 8f);
             ctx.batch.end();
         }
 
         private void drawBtnChrome(ShapeRenderer s, Rect r, boolean pressed) {
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-            s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-            s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                    r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+            s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
 
         /** InputProcessor that consumes ALL events while the popup is up.

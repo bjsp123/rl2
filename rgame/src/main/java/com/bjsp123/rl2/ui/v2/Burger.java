@@ -1,5 +1,7 @@
 package com.bjsp123.rl2.ui.v2;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
@@ -14,8 +16,8 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
  */
 public final class Burger {
 
-    public static final float SIZE  = 56f;
-    public static final float INSET = 12f;
+    public static final float SIZE  = 44f;
+    public static final float INSET = 8f;
 
     public final Rect rect = new Rect();
     public boolean pressed;
@@ -31,10 +33,10 @@ public final class Burger {
 
     public void drawShape(UiCtx ctx) {
         ShapeRenderer s = ctx.shapes;
-        Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h, Pal.HUD_LINE_W);
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.HUD_BG);
-        s.rect(rect.x + Pal.HUD_BORDER, rect.y + Pal.HUD_BORDER,
-               rect.w - 2 * Pal.HUD_BORDER, rect.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h, UIVars.HUD_LINE_W);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.HUD_BG);
+        s.rect(rect.x + UIVars.HUD_BORDER, rect.y + UIVars.HUD_BORDER,
+               rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
 
         // Three horizontal bars — width ~50% of the button, vertically spaced
         // so the gap between bars matches the bar height (the canonical
@@ -44,11 +46,21 @@ public final class Burger {
         float barW = rect.w * 0.50f;
         float barH = 4f;
         float gap  = 6f;
-        s.setColor(pressed ? Pal.ACCENT : Pal.WHITE);
+        s.setColor(pressed ? UIVars.ACCENT : UIVars.TEXT_BODY);
         for (int i = -1; i <= 1; i++) {
             float by = cy - barH * 0.5f + i * (barH + gap);
             s.rect(cx - barW * 0.5f, by, barW, barH);
         }
+    }
+
+    /** Single-call draw: owns the full shape renderer lifecycle. */
+    public void draw(UiCtx ctx) {
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
+        drawShape(ctx);
+        ctx.shapes.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     public boolean hit(float px, float py) { return rect.contains(px, py); }

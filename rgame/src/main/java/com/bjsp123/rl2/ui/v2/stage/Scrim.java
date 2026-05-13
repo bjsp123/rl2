@@ -3,7 +3,7 @@ package com.bjsp123.rl2.ui.v2.stage;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.bjsp123.rl2.ui.v2.Pal;
+import com.bjsp123.rl2.ui.v2.UIVars;
 import com.bjsp123.rl2.ui.v2.UiCtx;
 
 /**
@@ -22,12 +22,12 @@ public final class Scrim {
     private Scrim() {}
 
     /** Paint a full-viewport semi-transparent black quad at
-     *  {@link Pal#DIM_ALPHA}. Caller is OUTSIDE both shape and batch
+     *  {@link UIVars#DIM_ALPHA}. Caller is OUTSIDE both shape and batch
      *  passes; this method opens / closes its own shape pass with GL
      *  blending enabled so the alpha composites correctly over whatever
      *  is already in the framebuffer. */
     public static void draw(UiCtx ctx) {
-        draw(ctx, Pal.DIM_ALPHA);
+        draw(ctx, UIVars.DIM_ALPHA);
     }
 
     /** Variant with explicit alpha — used by sub-popups (e.g. inventory

@@ -86,12 +86,12 @@ public final class ItemLore {
         // intrinsic, both numbers are reported so the player can see
         // where the bonus comes from.
         int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, holder);
-        if (effLvl > 1 || it.level > 1) {
+        if (effLvl > 0 || it.level > 0) {
             if (effLvl != it.level) {
-                hdr.append("Level: effective +").append(effLvl-1)
+                hdr.append("Effective level: +").append(effLvl)
                    .append(" (actual +").append(it.level).append(")\n");
             } else {
-                hdr.append("Level: +").append(effLvl-1).append('\n');
+                hdr.append("Level: +").append(effLvl).append('\n');
             }
         }
         if (it.brand != null && it.brand.name != null && !it.brand.name.isEmpty()) {

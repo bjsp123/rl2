@@ -46,8 +46,8 @@ public final class V2HallOfFame extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
-        float winH = Math.min(Pal.VIRTUAL_H - 144f, vh - 144f);
+        float winW = Math.min(360f, vw - UIVars.PAD_MODAL);
+        float winH = Math.min(UIVars.VIRTUAL_H - 144f, vh - 144f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         // Tab strip — square-ish icon buttons just below the header band.
@@ -66,10 +66,8 @@ public final class V2HallOfFame extends V2Screen {
         }
 
         back   = new BackBtn(ctx, game::popScreen);
-        back.anchorBottomRightOf(window);
         burger = makeBurger();
-        addBurgerItem("Title",    () -> game.setRootScreen(new V2Title(game, ctx)));
-        addBurgerItem("Settings", () -> game.pushScreen(new V2Settings(game, ctx)));
+        addStandardBurgerItems(game);
     }
 
     @Override
@@ -83,20 +81,20 @@ public final class V2HallOfFame extends V2Screen {
             boolean active  = Tab.values()[i] == currentTab;
             boolean pressed = tabPressed[i];
             if (active || pressed) {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W,
-                        UiColors.ACCENT, UiColors.BORDER_MID, UiColors.BORDER_INNER);
+                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
+                        UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
             } else {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             }
-            s.setColor(active ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-            s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                    r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+            s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
     }
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Hall of Fame",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Hall of Fame",
                 window.cx(), window.top() - ctx.headerLineH());
 
         // Tab icons — drawn in the text pass since icons are sprites.
@@ -108,7 +106,7 @@ public final class V2HallOfFame extends V2Screen {
             TextureRegion region = IconSprites.regionFor(icons[i]);
             if (region == null) continue;
             boolean active = Tab.values()[i] == currentTab;
-            ctx.batch.setColor(active ? UiColors.ACCENT : UiColors.TEXT_BODY);
+            ctx.batch.setColor(active ? UIVars.ACCENT : UIVars.TEXT_BODY);
             float sz = Math.min(r.w, r.h) * 0.6f;
             ctx.batch.draw(region,
                     r.cx() - sz * 0.5f, r.cy() - sz * 0.5f, sz, sz);
@@ -122,7 +120,7 @@ public final class V2HallOfFame extends V2Screen {
     }
 
     private float bandTop() { return tabRects[0].y - 16f; }
-    private float bandBottom() { return window.y + Pal.BACK_SIZE + 2 * BackBtn.INSET; }
+    private float bandBottom() { return window.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET; }
 
     private void drawHeroesTab(UiCtx ctx) {
         List<HallOfFameEntry> entries = game.hallOfFame.entries;
@@ -140,7 +138,7 @@ public final class V2HallOfFame extends V2Screen {
         float visibleH      = visibleTop - visibleBottom;
 
         if (entries.isEmpty()) {
-            TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM,
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                     "No entries yet.",
                     window.cx(), visibleTop - 24f);
             return;
@@ -150,15 +148,17 @@ public final class V2HallOfFame extends V2Screen {
         // (capped at 2 lines so rows don't grow unbounded).
         float[] rowHeights = new float[entries.size()];
         for (int i = 0; i < entries.size(); i++) {
-            String dm = entries.get(i).deathMessage;
+            HallOfFameEntry e = entries.get(i);
+            String dm = e.deathMessage;
             float deathH = 0f;
             if (dm != null && !dm.isEmpty()) {
                 List<String> tmp = new ArrayList<>();
                 TextDraw.wrap(ctx.fontRegular, dm, maxDeathW, 2, tmp);
                 deathH = tmp.size() * lh;
             }
+            float chipH = hasStatChips(e) ? lh : 0f;
             rowHeights[i] = Math.max(portSz + 2 * rowVPad,
-                    rowVPad + lh + lh * 0.3f + deathH + rowVPad);
+                    rowVPad + lh + chipH + lh * 0.3f + deathH + rowVPad);
         }
 
         // Cumulative Y offsets (pixels from visibleTop downward).
@@ -193,25 +193,53 @@ public final class V2HallOfFame extends V2Screen {
 
                 // Upper line: rank + class name / level + depth.
                 float upperY = yTop - rowVPad;
-                TextDraw.left (ctx, ctx.fontRegular, Pal.WHITE,
+                TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         (i + 1) + "  " + e.charClass, textLeft, upperY);
-                TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE,
+                TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         "Level:" + e.level + " Depth: " + e.depth, bodyRight, upperY);
+
+                // Stat chips — turns / beasts tamed / favourite perk.
+                float nextY = upperY - lh;
+                if (hasStatChips(e)) {
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                            statChipLine(e), textLeft, nextY);
+                    nextY -= lh;
+                }
 
                 // Death message — word-wrapped, max 2 lines.
                 String dm = e.deathMessage;
-                if (dm == null || dm.isEmpty())
-                    dm = "Died of unknown causes. asdfjadsf asdf dskfjsda fjdsaf ksdjf lksdjf lsdakfj sadlfj asdlkfjasdlf jasdfsad dsf asd fds f";
+                if (dm == null || dm.isEmpty()) dm = "Died of unknown causes.";
                 List<String> dmLines = new ArrayList<>();
                 TextDraw.wrap(ctx.fontRegular, dm, maxDeathW, 2, dmLines);
-                float deathY = upperY - lh - lh * 0.5f;
+                float deathY = nextY - lh * 0.5f;
                 for (String line : dmLines) {
-                    TextDraw.left(ctx, ctx.fontRegular, Pal.DIM, line, textLeft, deathY);
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, line, textLeft, deathY);
                     deathY -= lh;
                 }
-                
+
             }
         });
+    }
+
+    private static boolean hasStatChips(HallOfFameEntry e) {
+        return e.totalTurns > 0
+                || e.beastsTamed > 0
+                || (e.favPerk != null && !e.favPerk.isEmpty());
+    }
+
+    private static String statChipLine(HallOfFameEntry e) {
+        StringBuilder sb = new StringBuilder();
+        if (e.totalTurns > 0)
+            sb.append("T:").append(e.totalTurns);
+        if (e.beastsTamed > 0) {
+            if (sb.length() > 0) sb.append("   ");
+            sb.append(e.beastsTamed).append(" tamed");
+        }
+        if (e.favPerk != null && !e.favPerk.isEmpty()) {
+            if (sb.length() > 0) sb.append("   ");
+            sb.append(e.favPerk);
+        }
+        return sb.toString();
     }
 
     private static com.bjsp123.rl2.model.Mob.CharacterClass parseClass(String name) {
@@ -226,8 +254,8 @@ public final class V2HallOfFame extends V2Screen {
 
     private void drawAchievementsTab(UiCtx ctx) {
         Achievement[] all = Achievement.values();
-        float left  = window.x + Pal.PAD_CONTENT;
-        float right = window.right() - Pal.PAD_CONTENT;
+        float left  = window.x + UIVars.PAD_CONTENT;
+        float right = window.right() - UIVars.PAD_CONTENT;
         float visibleTop    = bandTop();
         float visibleBottom = bandBottom();
         float visibleH      = visibleTop - visibleBottom;
@@ -250,14 +278,14 @@ public final class V2HallOfFame extends V2Screen {
                         ? "Hidden achievement — keep playing."
                         : a.description;
                 com.badlogic.gdx.graphics.Color nameColor =
-                        unlocked ? Pal.WHITE : Pal.DIM;
+                        unlocked ? UIVars.TEXT_BODY : UIVars.TEXT_DIM;
                 TextDraw.left(ctx, ctx.fontRegular, nameColor,
                         name, left, yTop);
                 if (unlocked) {
-                    TextDraw.right(ctx, ctx.fontRegular, Pal.ACCENT,
+                    TextDraw.right(ctx, ctx.fontRegular, UIVars.ACCENT,
                             "earned", right, yTop);
                 }
-                TextDraw.left(ctx, ctx.fontRegular, Pal.DIM,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         desc, left, yTop - 16f);
             }
         });

@@ -2506,6 +2506,7 @@ public class MobSystem {
             Mob target = mobAt(level, dst);
             if (target != null && it.tameOnThrow.contains(target.mobType)) {
                 target.owner = thrower;
+                if (thrower != null) thrower.beastsTamed++;
                 target.attackTypes.remove(thrower.mobType);
                 target.fleeTypes.remove(thrower.mobType);
                 if (level.events != null) {

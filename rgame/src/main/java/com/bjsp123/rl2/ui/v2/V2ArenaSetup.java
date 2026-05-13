@@ -84,7 +84,7 @@ public final class V2ArenaSetup extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(380f, vw - Pal.PAD_MODAL);
+        float winW = Math.min(380f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(640f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -123,10 +123,8 @@ public final class V2ArenaSetup extends V2Screen {
                 () -> game.pushScreen(new V2ArenaHallOfFame(game))).header());
 
         back   = new BackBtn(ctx, game::popScreen);
-        back.anchorBottomRightOf(window);
         burger = makeBurger();
-        addBurgerItem("Title",    () -> game.setRootScreen(new V2Title(game, ctx)));
-        addBurgerItem("Settings", () -> game.pushScreen(new V2Settings(game, ctx)));
+        addStandardBurgerItems(game);
         addBurgerItem("Hall of Fame",
                 () -> game.pushScreen(new V2ArenaHallOfFame(game)));
     }
@@ -215,7 +213,7 @@ public final class V2ArenaSetup extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Arena",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Arena",
                 window.cx(), window.top() - ctx.headerLineH());
 
         float pad = 14f;
@@ -235,7 +233,7 @@ public final class V2ArenaSetup extends V2Screen {
                 window.w - 2 * pad, teamH);
 
         // "vs" sits in the band between the two teams.
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.WARN, "vs",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_WARN, "vs",
                 window.cx(), teamBTop + vsBandH * 0.5f + 8f);
     }
 
@@ -243,11 +241,11 @@ public final class V2ArenaSetup extends V2Screen {
                                 float x, float y, float w, float h) {
         float[] p  = teamLayout(y, h);
         float cx   = x + w * 0.5f;
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.WHITE,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 isA ? "Team A" : "Team B", cx, p[0]);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.ACCENT,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
                 types().get(isA ? teamAIdx : teamBIdx).label, cx, p[2]);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "Level", cx, p[3]);
-        TextDraw.centre(ctx, ctx.fontRegular, Pal.DIM, "Count", cx, p[5]);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Level", cx, p[3]);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Count", cx, p[5]);
     }
 }

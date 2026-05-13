@@ -194,7 +194,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // HUD strip at the bottom and a clear gap at the top.
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
+        float winW = Math.min(360f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(580f, vh - 96f);
         float winX = (vw - winW) * 0.5f;
         float winY = (vh - winH) * 0.5f;
@@ -415,7 +415,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         // Modal dim — half-transparent black covering the whole viewport
         // so the world below reads as backgrounded.
-        s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+        s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
 
         // Outer window with full chrome.
@@ -438,7 +438,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             drawSlot(s, c.rect);
             if (i == bagPressed) {
                 // Pressed highlight overlay.
-                s.setColor(Pal.PANEL_HI);
+                s.setColor(UIVars.BTN_PRESSED_BG);
                 s.rect(c.rect.x + 2, c.rect.y + 2, c.rect.w - 4, c.rect.h - 4);
             }
         }
@@ -494,16 +494,16 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 boolean bound = actionBar.get(i) == selectedItem;
                 boolean pressed = i == bindPressed;
                 if (bound) {
-                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W,
-                            UiColors.ACCENT, UiColors.BORDER_MID,
-                            UiColors.BORDER_INNER);
+                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
+                            UIVars.ACCENT, UIVars.BORDER_MID,
+                            UIVars.BORDER_INNER);
                 } else {
-                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+                    Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
                 }
-                s.setColor(pressed ? UiColors.BTN_PRESSED_BG
-                        : UiColors.SLOT_BG);
-                s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                        r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+                s.setColor(pressed ? UIVars.BTN_PRESSED_BG
+                        : UIVars.SLOT_BG);
+                s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                        r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
             }
         }
 
@@ -517,7 +517,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Horizontal rule between the bright flavor blurb and the
         // dim mechanical-details body.
         if (!Float.isNaN(detailDividerY)) {
-            s.setColor(UiColors.BORDER_MID);
+            s.setColor(UIVars.BORDER_MID);
             s.rect(detailWindow.x + 14f, detailDividerY,
                     detailWindow.w - 28f, 1f);
         }
@@ -530,10 +530,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
      *  SLOT_BG fill. Tri-line border keeps it visually consistent with
      *  the rest of the V2 chrome. */
     private void drawSlot(ShapeRenderer s, Rect r) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-        s.setColor(UiColors.SLOT_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        s.setColor(UIVars.SLOT_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     private static void drawWandChargeBar(ShapeRenderer s, Rect r, Item it,
@@ -574,21 +574,21 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private void drawTab(ShapeRenderer s, Rect r, boolean active, boolean pressed) {
         if (active || pressed) {
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W,
-                    UiColors.ACCENT, UiColors.BORDER_MID, UiColors.BORDER_INNER);
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
+                    UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
         } else {
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
         }
-        s.setColor(active ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     /** Inventory body text — header, equipment icons, tab icons, bag-grid
@@ -598,7 +598,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ctx.batch.begin();
 
         // Header.
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Backpack",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Backpack",
                 headerRect.cx(), headerRect.y + headerRect.h * 0.75f);
 
         // Equipment cells — render the equipped item icons via SpriteBatch.
@@ -622,7 +622,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             var region = com.bjsp123.rl2.world.render.IconSprites
                     .regionFor(tabIcon(Tab.values()[i]));
             if (region == null) continue;
-            ctx.batch.setColor(active ? Pal.ACCENT : Pal.WHITE);
+            ctx.batch.setColor(active ? UIVars.ACCENT : UIVars.TEXT_BODY);
             float sz = Math.min(r.w, r.h) * 0.65f;
             ctx.batch.draw(region,
                     r.cx() - sz * 0.5f, r.cy() - sz * 0.5f, sz, sz);
@@ -632,11 +632,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Bag grid icons + counts.
         for (BagCell c : bagCells) {
             drawCellIcon(c.rect, c.item);
-            if (c.item != null && c.item.count > 1) {
-                TextDraw.right(ctx, ctx.fontRegular, Pal.WHITE,
-                        Integer.toString(c.item.count),
-                        c.rect.right() - 3, c.rect.y + 11);
-            }
         }
 
         // Brand sparks — additive pass over all slots with branded items.
@@ -696,13 +691,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         com.bjsp123.rl2.world.render.BrandFx.phaseFor(selectedItem));
             }
             // Name — up to 2 wrapped lines, centred, in header font.
-            String name = com.bjsp123.rl2.logic.ItemSystem.displayName(selectedItem);
+            String name = com.bjsp123.rl2.logic.ItemSystem.displayName(selectedItem, player);
             if (name.isEmpty()) name = selectedItem.type != null ? selectedItem.type : "";
             java.util.List<String> nameLines = new java.util.ArrayList<>();
             TextDraw.wrap(ctx.fontHeader, name, detailWindow.w - 28f, 2, nameLines);
             float nameBaseY = detailIconRect.y - 12f;
             for (int ni = 0; ni < nameLines.size(); ni++) {
-                TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, nameLines.get(ni),
+                TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, nameLines.get(ni),
                         detailWindow.cx(), nameBaseY - ni * 18f);
             }
 
@@ -712,13 +707,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             float left = detailWindow.x + 14f;
             int line = 0;
             for (String s : detailFlavorLines) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         s, left, detailBodyTop - line * detailLineH());
                 line++;
             }
             if (!Float.isNaN(detailDividerY)) line += 2;
             for (String s : detailDetailsLines) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         s, left, detailBodyTop - line * detailLineH());
                 line++;
             }
@@ -731,7 +726,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     && !selectedItem.useVerb.isEmpty())
                     ? capitalize(selectedItem.useVerb) : "Use";
             TextDraw.centre(ctx, ctx.fontRegular,
-                    detailUsePressed ? Pal.ACCENT : Pal.WHITE,
+                    detailUsePressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                     useLabel, detailUseBtn.cx(), detailUseBtn.cy() + 6f);
             String equipLabel;
             if (selectedItem.isEquippable() && player != null
@@ -742,10 +737,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 equipLabel = "Equip";
             }
             TextDraw.centre(ctx, ctx.fontRegular,
-                    detailEquipPressed ? Pal.ACCENT : Pal.WHITE,
+                    detailEquipPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                     equipLabel, detailEquipBtn.cx(), detailEquipBtn.cy() + 6f);
             TextDraw.centre(ctx, ctx.fontRegular,
-                    detailThrowPressed ? Pal.ACCENT : Pal.WHITE,
+                    detailThrowPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                     "Throw", detailThrowBtn.cx(), detailThrowBtn.cy() + 6f);
             if (encyclopedia != null) {
                 // Standard info-icon button — same INFO glyph the
@@ -755,7 +750,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         .regionFor(com.bjsp123.rl2.world.render.IconSprites.Icon.INFO);
                 if (iregion != null) {
                     ctx.batch.setColor(detailInfoPressed
-                            ? Pal.ACCENT : Pal.WHITE);
+                            ? UIVars.ACCENT : UIVars.TEXT_BODY);
                     float isz = Math.min(detailInfoBtn.w, detailInfoBtn.h) * 0.6f;
                     ctx.batch.draw(iregion,
                             detailInfoBtn.cx() - isz * 0.5f,
@@ -766,7 +761,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
             // Quickslot bind labels — slot number 1..6 + "Quickslot" header.
             if (actionBar != null) {
-                TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         "Quickslot",
                         detailWindow.cx(),
                         bindBtnRects[0].top() + 16f);
@@ -774,7 +769,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     Rect r = bindBtnRects[i];
                     boolean bound = actionBar.get(i) == selectedItem;
                     TextDraw.centre(ctx, ctx.fontRegular,
-                            bound ? UiColors.ACCENT : UiColors.TEXT_BODY,
+                            bound ? UIVars.ACCENT : UIVars.TEXT_BODY,
                             Integer.toString(i + 1),
                             r.cx(), r.cy() + 6f);
                 }
@@ -796,28 +791,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private void drawCellIcon(Rect cell, Item item) {
-        if (item == null) return;
-        TextureRegion region = ItemSprites.regionFor(item);
-        if (region == null) return;
-        float pad = 4f;
-        ctx.batch.draw(region,
-                cell.x + pad, cell.y + pad,
-                cell.w - 2 * pad, cell.h - 2 * pad);
-        // Enchantment badge — "+N" tucked into the bottom-right corner
-        // when the item is above its design baseline of 1.
-        int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(item, player);
-        if (effLvl > 1) {
-            TextDraw.right(ctx, ctx.fontRegular, Pal.ACCENT,
-                    "+" + (effLvl - 1), cell.right() - 2f, cell.y + 12f);
-        }
-        // Stack count — "xN" tucked into the bottom-left corner when more
-        // than one of this item is in the slot. Equipped slots always
-        // hold count 1; this is purely a bag-stack readout.
-        if (item.count > 1) {
-            String tag = "x" + item.count;
-            TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
-                    tag, cell.x + 2f, cell.y + 12f);
-        }
+        ItemCell.draw(ctx, item, player, cell.x, cell.y, cell.w, cell.h, true);
     }
 
     // ── Input ───────────────────────────────────────────────────────────────

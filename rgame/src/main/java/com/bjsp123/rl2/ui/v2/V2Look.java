@@ -300,7 +300,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Thin separator between the fixed header and the scrollable body —
         // masks any ascender bleed from the top content line.
         float caTop = window.top() - HEADER_H;
-        s.setColor(UiColors.BORDER_MID);
+        s.setColor(UIVars.BORDER_MID);
         s.rect(window.x + 4f, caTop, window.w - 8f, 1f);
 
         float caBot = window.y;
@@ -318,7 +318,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Mob flavor-text / live-stats rule.
         if (!Float.isNaN(shapeMobDivY)
                 && shapeMobDivY >= caBot && shapeMobDivY <= caTop) {
-            s.setColor(UiColors.BORDER_MID);
+            s.setColor(UIVars.BORDER_MID);
             s.rect(window.x + 14f, shapeMobDivY, window.w - 28f, 1f);
         }
 
@@ -338,7 +338,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             float scrollFrac = scroller.scrollY() / (totalContentH - visH);
             // scrollFrac 0 = bar at top of content, 1 = bar at bottom.
             float barY = caBot + (visH - barH) * (1f - scrollFrac);
-            s.setColor(UiColors.BORDER_MID);
+            s.setColor(UIVars.BORDER_MID);
             s.rect(window.right() - 4f - barW, barY, barW, barH);
         }
 
@@ -347,10 +347,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private void drawInfoBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
-        s.setColor(pressed ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-        s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     // ── Text pass ─────────────────────────────────────────────────────────────
@@ -359,12 +359,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ctx.batch.begin();
 
         // Fixed header — always visible, never scrolls.
-        TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, "Look",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Look",
                 window.cx(), window.top() - ctx.headerLineH());
 
         Point cursor = lookMode != null ? lookMode.cursor() : null;
         if (cursor == null || level == null) {
-            TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                     "(no tile)", window.cx(), window.top() - 56f);
             ctx.batch.end();
             return;
@@ -387,12 +387,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // --- TILE SECTION --- name is the section header
         if (lookedTile != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontHeader, UiColors.TEXT_BODY,
+                TextDraw.left(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
                         lookedTile.name().toLowerCase(), left, drawY);
                 if (encyclopedia != null
                         && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= caBot) {
                     TextDraw.centre(ctx, ctx.fontRegular,
-                            tileInfoPressed ? UiColors.ACCENT : UiColors.TEXT_BODY,
+                            tileInfoPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                             "?", tileInfoBtn.cx(), tileInfoBtn.cy() + 6f);
                 }
             }
@@ -401,7 +401,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         if (inBounds && level.surface != null && level.surface[cx][cy] != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         "  " + describeSurface(level.surface[cx][cy]), left, drawY);
             }
             drawY -= lh;
@@ -409,7 +409,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         if (inBounds && level.vegetation != null && level.vegetation[cx][cy] != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         "  " + describeVegetation(level.vegetation[cx][cy]), left, drawY);
             }
             drawY -= lh;
@@ -420,7 +420,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]);
             if (type != null) {
                 if (inView(drawY, caTop, caBot)) {
-                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                             "  " + type.name().toLowerCase().replace('_', ' '),
                             left, drawY);
                 }
@@ -439,8 +439,8 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 int iy = (int) Math.floor(it.location.y());
                 if (ix == cx && iy == cy) {
                     if (inView(drawY, caTop, caBot)) {
-                        TextDraw.left(ctx, ctx.fontHeader, UiColors.TEXT_BODY,
-                                itemDisplayName(it), left, drawY);
+                        TextDraw.left(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
+                                com.bjsp123.rl2.logic.ItemSystem.displayName(it, null), left, drawY);
                     }
                     drawY -= hlh;
                     count++;
@@ -457,7 +457,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             // Flavor text — bright, above the rule.
             for (String line : mobFlavorLines) {
                 if (inView(drawY, caTop, caBot)) {
-                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                             line, left, drawY);
                 }
                 drawY -= lh;
@@ -472,7 +472,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (encyclopedia != null
                     && mobInfoBtn.top() <= caTop + 2f && mobInfoBtn.y >= caBot) {
                 TextDraw.centre(ctx, ctx.fontRegular,
-                        mobInfoPressed ? UiColors.ACCENT : UiColors.TEXT_BODY,
+                        mobInfoPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                         "?", mobInfoBtn.cx(), mobInfoBtn.cy() + 6f);
             }
         }
@@ -500,7 +500,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         String header = mname;
         if (m.characterLevel > 1) header += " (lvl " + m.characterLevel + ")";
         if (inView(drawY, caTop, caBot)) {
-            TextDraw.left(ctx, ctx.fontHeader, UiColors.TEXT_BODY, header, left, drawY);
+            TextDraw.left(ctx, ctx.fontHeader, UIVars.TEXT_BODY, header, left, drawY);
         }
         float lh = ctx.lineH();
         drawY -= ctx.headerLineH();
@@ -509,21 +509,21 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (inView(drawY, caTop, caBot)) {
             int hp    = (int) Math.round(m.hp);
             int maxHp = (int) Math.round(s.maxHp);
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                     "HP " + hp + " / " + maxHp, left, drawY);
         }
         drawY -= lh;
 
         // Att / Def.
         if (inView(drawY, caTop, caBot)) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                     "Att " + s.accuracy + "   Def " + s.evasion, left, drawY);
         }
         drawY -= lh;
 
         // Dmg / Arm.
         if (inView(drawY, caTop, caBot)) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                     "Dmg " + range(s.damage) + "   Arm " + range(s.armor), left, drawY);
         }
         drawY -= lh;
@@ -531,7 +531,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Ranged (optional).
         if (!s.rangedDamage.isZero()) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         "Ranged " + range(s.rangedDamage) + " @ " + s.rangedDistance + " sq",
                         left, drawY);
             }
@@ -555,7 +555,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         String state = stateOfMindLabel(m);
         if (state != null) {
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, state, left, drawY);
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, state, left, drawY);
             }
             drawY -= lh;
         }
@@ -565,7 +565,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             String ownerLabel = m.owner.behavior == Mob.Behavior.PLAYER ? "you"
                     : (m.owner.mobType != null ? m.owner.mobType.toLowerCase() : "unknown");
             if (inView(drawY, caTop, caBot)) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         "Loyal to: " + ownerLabel, left, drawY);
             }
             drawY -= lh;
@@ -605,15 +605,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             List<Item> eq = m.inventory.allEquipped();
             if (!eq.isEmpty()) {
                 if (inView(drawY, caTop, caBot)) {
-                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                             "Equipped:", left, drawY);
                 }
                 drawY -= lh;
                 for (Item it : eq) {
                     if (it == null) continue;
                     if (inView(drawY, caTop, caBot)) {
-                        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
-                                "  " + itemDisplayName(it), left, drawY);
+                        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                                "  " + com.bjsp123.rl2.logic.ItemSystem.displayName(it, null), left, drawY);
                     }
                     drawY -= lh;
                 }
@@ -624,7 +624,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             for (Item it : m.inventory.bag) if (it != null) bagNonNull++;
             if (bagNonNull > 0) {
                 if (inView(drawY, caTop, caBot)) {
-                    TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                             "Bag:", left, drawY);
                 }
                 drawY -= lh;
@@ -633,16 +633,16 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     if (it == null) continue;
                     if (shown >= MAX_BAG_DISPLAY) {
                         if (inView(drawY, caTop, caBot)) {
-                            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+                            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                                     "  ...", left, drawY);
                         }
                         drawY -= lh;
                         break;
                     }
-                    String iname = itemDisplayName(it);
+                    String iname = com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
                     if (it.count > 1) iname += " x" + it.count;
                     if (inView(drawY, caTop, caBot)) {
-                        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                                 "  " + iname, left, drawY);
                     }
                     drawY -= lh;
@@ -661,7 +661,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(UiColors.TEXT_DIM);
+        s.setColor(UIVars.TEXT_DIM);
         for (float[] d : pendingDots) {
             int dots = Math.min(8, (int) d[2]);
             for (int i = 0; i < dots; i++) {
@@ -673,13 +673,6 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     // ── Static helpers ────────────────────────────────────────────────────────
-
-    private static String itemDisplayName(Item it) {
-        String name = it.name != null ? it.name : it.type;
-        int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, null);
-        if (effLvl > 1) name += " +" + (effLvl-1);
-        return name;
-    }
 
     private static String describeSurface(com.bjsp123.rl2.model.Level.Surface s) {
         return switch (s) {
@@ -717,11 +710,11 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private static com.badlogic.gdx.graphics.Color attitudeColor(Mob viewer, Mob target) {
         com.bjsp123.rl2.logic.MobSystem.Attitude a =
                 com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(target, viewer);
-        if (a == null) return UiColors.TEXT_DIM;
+        if (a == null) return UIVars.TEXT_DIM;
         return switch (a) {
-            case ATTACK  -> UiColors.TEXT_WARN;
-            case FLEE    -> UiColors.ACCENT;
-            case NOTHING -> UiColors.TEXT_DIM;
+            case ATTACK  -> UIVars.TEXT_WARN;
+            case FLEE    -> UIVars.ACCENT;
+            case NOTHING -> UIVars.TEXT_DIM;
             case ALLY    -> ATTITUDE_FRIENDLY;
         };
     }

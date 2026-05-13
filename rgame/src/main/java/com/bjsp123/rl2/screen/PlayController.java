@@ -23,8 +23,10 @@ import com.bjsp123.rl2.world.anim.Animator;
 import com.bjsp123.rl2.world.render.LevelRenderer;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -322,10 +324,21 @@ final class PlayController {
             String cat = it.inventoryCategory != null ? it.inventoryCategory.name() : "equipped";
             equipment.add(cat + ": " + it.describe());
         }
-        return new HallOfFameEntry(
+        HallOfFameEntry entry = new HallOfFameEntry(
                 p.characterClass != null ? p.characterClass.displayName : "Adventurer",
                 p.characterLevel,
                 p.score, world.currentLevel().depth, equipment, System.currentTimeMillis());
+        entry.totalTurns  = world.turn;
+        entry.beastsTamed = p.beastsTamed;
+        entry.favPerk     = favPerkOf(p);
+        return entry;
+    }
+
+    private static String favPerkOf(Mob p) {
+        if (p.perks == null || p.perks.isEmpty()) return "";
+        return p.perks.entrySet().stream()
+                .max(Comparator.comparingInt(Map.Entry::getValue))
+                .map(e -> e.getKey().name()).orElse("");
     }
 
     /** Auto-move abort gate. Snapshots once then compares each tick. */

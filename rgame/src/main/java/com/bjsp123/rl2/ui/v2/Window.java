@@ -13,7 +13,7 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
  * {@link ShapeRenderer#begin(ShapeRenderer.ShapeType)} /
  * {@link ShapeRenderer#end()} pair. {@link V2Screen} enables GL blending
  * around its shapes pass so the shadow's alpha and the panel's
- * {@link Pal#PANEL_FILL_ALPHA} fill composite correctly.
+ * {@link UIVars#PANEL_FILL_ALPHA} fill composite correctly.
  *
  * <p>{@link #drawShapeOpaque} is for cells whose interior carries an image
  * (inventory slots, encyclopaedia detail icon backdrop) — those want
@@ -23,7 +23,7 @@ public final class Window {
     private Window() {}
 
     public static void drawShape(UiCtx ctx, float x, float y, float w, float h) {
-        drawShape(ctx, x, y, w, h, Pal.PANEL_FILL_ALPHA);
+        drawShape(ctx, x, y, w, h, UIVars.PANEL_FILL_ALPHA);
     }
 
     public static void drawShapeOpaque(UiCtx ctx, float x, float y, float w, float h) {
@@ -32,7 +32,7 @@ public final class Window {
 
     public static void drawShape(UiCtx ctx, float x, float y, float w, float h,
                                  float fillAlpha) {
-        drawShape(ctx, x, y, w, h, UiColors.WIN_BG, fillAlpha);
+        drawShape(ctx, x, y, w, h, UIVars.WIN_BG, fillAlpha);
     }
 
     /** Variant that accepts an explicit fill colour. */
@@ -41,15 +41,15 @@ public final class Window {
         ShapeRenderer s = ctx.shapes;
         // Pass 1 — faint black drop shadow, offset down-right so the panel
         // appears to float above whatever sits behind it.
-        s.setColor(UiColors.SHADOW);
-        s.rect(x + Pal.SHADOW_OFFSET, y - Pal.SHADOW_OFFSET, w, h);
+        s.setColor(UIVars.SHADOW);
+        s.rect(x + UIVars.SHADOW_OFFSET, y - UIVars.SHADOW_OFFSET, w, h);
         // Pass 2 — three-line border (outer / mid / inner). The interior is
         // left untouched here; pass 3 paints it.
-        Edges.drawTriLine(s, x, y, w, h, Pal.WIN_LINE_W);
+        Edges.drawTriLine(s, x, y, w, h, UIVars.WIN_LINE_W);
         // Pass 3 — warm dark-grey interior fill, inset by the full border
         // thickness so it doesn't overpaint the inner-line ring.
         s.setColor(fill.r, fill.g, fill.b, fillAlpha);
-        s.rect(x + Pal.WIN_BORDER, y + Pal.WIN_BORDER,
-               w - 2 * Pal.WIN_BORDER, h - 2 * Pal.WIN_BORDER);
+        s.rect(x + UIVars.WIN_BORDER, y + UIVars.WIN_BORDER,
+               w - 2 * UIVars.WIN_BORDER, h - 2 * UIVars.WIN_BORDER);
     }
 }

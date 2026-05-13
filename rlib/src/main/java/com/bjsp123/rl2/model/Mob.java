@@ -473,6 +473,8 @@ public class Mob {
     /** Player's perk levels — perk → level (≥1 = taken). Absence means perk not taken.
      *  Each entry consumed one perk point at acquisition. */
     public java.util.EnumMap<Perk, Integer> perks = new java.util.EnumMap<>(Perk.class);
+    /** Cumulative count of beasts tamed this run. Persisted in save files. */
+    public int beastsTamed = 0;
     /** Lifetime history — kills, level-ups, item finds — read by the character stats
      *  frame's History tab. */
     public java.util.List<HistoricalRecord> history = new java.util.ArrayList<>();

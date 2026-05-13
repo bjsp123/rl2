@@ -86,15 +86,13 @@ public final class V2CharacterSelect extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - Pal.PAD_MODAL);
+        float winW = Math.min(360f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(560f, vh - 144f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         back   = new BackBtn(ctx, game::popScreen);
-        back.anchorBottomRightOf(window);
         burger = makeBurger();
-        addBurgerItem("Title",    () -> game.setRootScreen(new V2Title(game, ctx)));
-        addBurgerItem("Settings", () -> game.pushScreen(new V2Settings(game, ctx)));
+        addStandardBurgerItems(game);
 
         if (optionsOpen) {
             buildOptionsPopup();
@@ -127,7 +125,7 @@ public final class V2CharacterSelect extends V2Screen {
     private void buildCharacterPopup() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float pw = Math.min(360f, vw - Pal.PAD_MODAL);
+        float pw = Math.min(360f, vw - UIVars.PAD_MODAL);
         float ph = Math.min(560f, vh - 144f);
         charPopup.set((vw - pw) * 0.5f, (vh - ph) * 0.5f, pw, ph);
 
@@ -151,7 +149,7 @@ public final class V2CharacterSelect extends V2Screen {
         float btnGap = 12f;
         float optionsW = btnH;                              // square
         float playW = pw - 2 * 14f - optionsW - btnGap;
-        float btnY = charPopup.y + Pal.BACK_SIZE + 2 * BackBtn.INSET;
+        float btnY = charPopup.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET;
         Btn optionsBtn = new Btn("",
                 charPopup.x + 14f, btnY, optionsW, btnH,
                 () -> { optionsOpen = true; show(); });
@@ -265,7 +263,7 @@ public final class V2CharacterSelect extends V2Screen {
         if (selected != null) {
             // Dim + opaque-backed character popup.
             ShapeRenderer s = ctx.shapes;
-            s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+            s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
             s.rect(0, 0, ctx.worldW(), ctx.worldH());
             s.setColor(0f, 0f, 0f, 1f);
             s.rect(charPopup.x, charPopup.y, charPopup.w, charPopup.h);
@@ -274,17 +272,17 @@ public final class V2CharacterSelect extends V2Screen {
 
             // Sprite frame chrome.
             Edges.drawTriLine(s, spriteFrame.x, spriteFrame.y,
-                    spriteFrame.w, spriteFrame.h, Pal.HUD_LINE_W);
-            s.setColor(UiColors.ICON_FRAME_BG);
-            s.rect(spriteFrame.x + Pal.HUD_BORDER,
-                    spriteFrame.y + Pal.HUD_BORDER,
-                    spriteFrame.w - 2 * Pal.HUD_BORDER,
-                    spriteFrame.h - 2 * Pal.HUD_BORDER);
+                    spriteFrame.w, spriteFrame.h, UIVars.HUD_LINE_W);
+            s.setColor(UIVars.ICON_FRAME_BG);
+            s.rect(spriteFrame.x + UIVars.HUD_BORDER,
+                    spriteFrame.y + UIVars.HUD_BORDER,
+                    spriteFrame.w - 2 * UIVars.HUD_BORDER,
+                    spriteFrame.h - 2 * UIVars.HUD_BORDER);
         }
 
         if (optionsOpen) {
             ShapeRenderer s = ctx.shapes;
-            s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+            s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
             s.rect(0, 0, ctx.worldW(), ctx.worldH());
             s.setColor(0f, 0f, 0f, 1f);
             s.rect(optionsPopup.x, optionsPopup.y,
@@ -306,8 +304,8 @@ public final class V2CharacterSelect extends V2Screen {
     }
 
     private void drawClassListText() {
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Choose Class",
-                window.cx(), window.top() - ctx.fontHeader.getCapHeight() - Pal.HUD_BORDER - 2f);
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Choose Class",
+                window.cx(), window.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f);
     }
 
     private void drawCharacterPopupText() {
@@ -316,8 +314,8 @@ public final class V2CharacterSelect extends V2Screen {
 
         String title = (def != null && def.name != null)
                 ? def.name : selected.displayName;
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, title,
-                charPopup.cx(), charPopup.top() - ctx.fontHeader.getCapHeight() - Pal.HUD_BORDER - 2f);
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, title,
+                charPopup.cx(), charPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f);
 
         // Aspect-fit the mob sprite inside the frame, with the same
         // 8-radial silhouette outline encyclopaedia entries use.
@@ -335,13 +333,13 @@ public final class V2CharacterSelect extends V2Screen {
         float right    = charPopup.right() - 14f;
         float top      = spriteFrame.y - lh;
         float maxLineW = right - left;
-        float guard    = charPopup.y + Pal.BACK_SIZE + 2 * BackBtn.INSET + 48f + lh;
+        float guard    = charPopup.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET + 48f + lh;
 
         if (def != null && def.description != null && !def.description.isEmpty()) {
             List<String> descLines = new ArrayList<>();
             TextDraw.wrap(ctx.fontRegular, def.description, maxLineW, 3, descLines);
             for (String line : descLines) {
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, line, left, top);
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, line, left, top);
                 top -= lh;
             }
             top -= 6f;
@@ -359,7 +357,7 @@ public final class V2CharacterSelect extends V2Screen {
 
         if (def != null && def.startingInventory != null
                 && !def.startingInventory.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, "Gear", left, top);
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Gear", left, top);
             top -= lh;
             for (MobDefinition.StartItem si : def.startingInventory) {
                 if (top < guard) break;
@@ -367,7 +365,7 @@ public final class V2CharacterSelect extends V2Screen {
                 String line = (si.count > 1)
                         ? "  " + iname + " x" + si.count
                         : "  " + iname;
-                TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE, line, left, top);
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY, line, left, top);
                 top -= lh;
             }
             top -= 4f;
@@ -375,11 +373,11 @@ public final class V2CharacterSelect extends V2Screen {
 
         if (def != null && def.startingPerks != null
                 && !def.startingPerks.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM, "Perks", left, top);
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Perks", left, top);
             top -= lh;
             for (Perk p : def.startingPerks) {
                 if (top < guard) break;
-                TextDraw.left(ctx, ctx.fontRegular, Pal.WHITE,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         "  " + p.displayName(), left, top);
                 top -= lh;
             }
@@ -387,8 +385,8 @@ public final class V2CharacterSelect extends V2Screen {
     }
 
     private void drawOptionsText() {
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.ACCENT, "Options",
-                optionsPopup.cx(), optionsPopup.top() - ctx.fontHeader.getCapHeight() - Pal.HUD_BORDER - 2f);
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Options",
+                optionsPopup.cx(), optionsPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f);
     }
 
     private static String lookupItemName(String type) {
@@ -410,9 +408,9 @@ public final class V2CharacterSelect extends V2Screen {
     }
 
     private float statRow(float x, float y, String label, String value) {
-        TextDraw.left (ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+        TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                 label, x, y);
-        TextDraw.right(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+        TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 value, charPopup.right() - 14f, y);
         return y - ctx.lineH();
     }

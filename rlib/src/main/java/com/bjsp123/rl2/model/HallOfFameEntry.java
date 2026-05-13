@@ -12,6 +12,10 @@ public class HallOfFameEntry {
     public long   timestampMillis;
     /** Last player-relevant log line at the moment of death — the "cause" sentence. */
     public String deathMessage = "";
+    public int    totalTurns   = 0;
+    public int    beastsTamed  = 0;
+    /** Perk.name() of the perk with the highest level at run-end, or "" if none. */
+    public String favPerk      = "";
 
     public HallOfFameEntry() {}
 

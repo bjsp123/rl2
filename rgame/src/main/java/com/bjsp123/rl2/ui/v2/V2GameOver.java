@@ -46,7 +46,7 @@ public final class V2GameOver extends V2Screen {
     protected void buildLayout() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(340f, vw - Pal.PAD_MODAL);
+        float winW = Math.min(340f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(460f, vh - 80f);
         float winX = (vw - winW) * 0.5f;
         float winY = (vh - winH) * 0.5f;
@@ -88,7 +88,7 @@ public final class V2GameOver extends V2Screen {
 
         // Portrait frame — a simple recessed rect slightly larger than the portrait.
         float pad = 4f;
-        ctx.shapes.setColor(UiColors.SLOT_RECESS);
+        ctx.shapes.setColor(UIVars.SLOT_RECESS);
         ctx.shapes.rect(portrait.x - pad, portrait.y - pad,
                 portrait.w + 2f * pad, portrait.h + 2f * pad);
     }
@@ -111,11 +111,11 @@ public final class V2GameOver extends V2Screen {
         }
 
         // Class name.
-        TextDraw.centre(ctx, ctx.fontHeader, Pal.WHITE, record.charClass, cx, nameY);
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, record.charClass, cx, nameY);
 
         // Score + depth.
         String stats = "Score: " + record.score + "   Depth: " + record.depth;
-        TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM, stats, cx, statsY);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, stats, cx, statsY);
 
         // Death message — word-wrapped up to 2 lines.
         if (record.deathMessage != null && !record.deathMessage.isEmpty()) {
@@ -125,7 +125,7 @@ public final class V2GameOver extends V2Screen {
             float lineH = ctx.fontRegular.getLineHeight() + 2f;
             float y = deathY;
             for (String line : lines) {
-                TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_DIM, line, cx, y);
+                TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, line, cx, y);
                 y -= lineH;
             }
         }

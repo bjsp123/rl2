@@ -100,7 +100,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(340f, vw - Pal.PAD_MODAL);
+        float winW = Math.min(340f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(540f, vh - 100f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
@@ -147,7 +147,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             float rowH   = 36f;
             float btnSz  = 28f;
             float btnGap = 6f;
-            float infoX  = window.right() - Pal.PAD_CONTENT - btnSz;
+            float infoX  = window.right() - UIVars.PAD_CONTENT - btnSz;
             float plusX  = infoX - btnGap - btnSz;
             for (Perk p : Perk.values()) {
                 if (rowTop < window.y + 16f) break;
@@ -170,7 +170,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
         // Modal dim.
-        s.setColor(0f, 0f, 0f, Pal.DIM_ALPHA);
+        s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
@@ -180,24 +180,24 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             boolean active  = Tab.values()[i] == currentTab;
             boolean pressed = tabPressed[i];
             if (active || pressed) {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W,
-                        UiColors.ACCENT, UiColors.BORDER_MID, UiColors.BORDER_INNER);
+                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
+                        UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
             } else {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             }
-            s.setColor(active ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-            s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                    r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+            s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
 
         // Character-tab sprite frame chrome — light-warm-grey backdrop
         // + tri-line border. Sprite paints aspect-fit in the text pass.
         if (currentTab == Tab.CHARACTER && player != null) {
             Rect f = characterFrame;
-            Edges.drawTriLine(s, f.x, f.y, f.w, f.h, Pal.HUD_LINE_W);
-            s.setColor(UiColors.ICON_FRAME_BG);
-            s.rect(f.x + Pal.HUD_BORDER, f.y + Pal.HUD_BORDER,
-                    f.w - 2 * Pal.HUD_BORDER, f.h - 2 * Pal.HUD_BORDER);
+            Edges.drawTriLine(s, f.x, f.y, f.w, f.h, UIVars.HUD_LINE_W);
+            s.setColor(UIVars.ICON_FRAME_BG);
+            s.rect(f.x + UIVars.HUD_BORDER, f.y + UIVars.HUD_BORDER,
+                    f.w - 2 * UIVars.HUD_BORDER, f.h - 2 * UIVars.HUD_BORDER);
         }
 
         // Perks-tab buttons — same chrome as a regular Btn (tri-line
@@ -207,11 +207,11 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         boolean hasPoints = player != null && player.perkPoints > 0;
         for (int i = 0; i < perkInfoRects.size(); i++) {
             Rect r = perkInfoRects.get(i);
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             s.setColor(i == perkInfoPressed
-                    ? UiColors.BTN_PRESSED_BG : UiColors.BTN_BG);
-            s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                    r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+                    ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
         for (int i = 0; i < perkPlusRects.size(); i++) {
             Rect r = perkPlusRects.get(i);
@@ -219,16 +219,16 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             int cur = (player != null && player.perks != null && p != null)
                     ? player.perks.getOrDefault(p, 0) : 0;
             boolean canSpend = hasPoints && cur < 5;
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, Pal.HUD_LINE_W);
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             if (!canSpend) {
-                s.setColor(UiColors.WIN_BG);
+                s.setColor(UIVars.WIN_BG);
             } else if (i == perkPlusPressed) {
-                s.setColor(UiColors.BTN_PRESSED_BG);
+                s.setColor(UIVars.BTN_PRESSED_BG);
             } else {
-                s.setColor(UiColors.BTN_BG);
+                s.setColor(UIVars.BTN_BG);
             }
-            s.rect(r.x + Pal.HUD_BORDER, r.y + Pal.HUD_BORDER,
-                    r.w - 2 * Pal.HUD_BORDER, r.h - 2 * Pal.HUD_BORDER);
+            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
 
         s.end();
@@ -238,7 +238,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     private void renderTextPass() {
         pendingDots.clear();
         ctx.batch.begin();
-        TextDraw.centre(ctx, ctx.fontHeader, UiColors.ACCENT, "Character",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Character",
                 window.cx(), window.top() - ctx.headerLineH());
 
         // Tab labels.
@@ -246,7 +246,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         for (int i = 0; i < tabRects.length; i++) {
             boolean active = Tab.values()[i] == currentTab;
             TextDraw.centre(ctx, ctx.fontRegular,
-                    active ? UiColors.ACCENT : UiColors.TEXT_BODY,
+                    active ? UIVars.ACCENT : UIVars.TEXT_BODY,
                     labels[i], tabRects[i].cx(), tabRects[i].cy() + 6f);
         }
 
@@ -265,7 +265,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     .regionFor(com.bjsp123.rl2.world.render.IconSprites.Icon.INFO);
             if (region == null) continue;
             ctx.batch.setColor(i == perkInfoPressed
-                    ? UiColors.ACCENT : UiColors.TEXT_BODY);
+                    ? UIVars.ACCENT : UIVars.TEXT_BODY);
             float sz = Math.min(r.w, r.h) * 0.6f;
             ctx.batch.draw(region,
                     r.cx() - sz * 0.5f, r.cy() - sz * 0.5f, sz, sz);
@@ -282,8 +282,8 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     ? player.perks.getOrDefault(p, 0) : 0;
             boolean canSpend = hasPoints && cur < 5;
             com.badlogic.gdx.graphics.Color c = !canSpend
-                    ? UiColors.TEXT_DIM
-                    : (i == perkPlusPressed ? UiColors.ACCENT : UiColors.TEXT_BODY);
+                    ? UIVars.TEXT_DIM
+                    : (i == perkPlusPressed ? UIVars.ACCENT : UIVars.TEXT_BODY);
             TextDraw.centre(ctx, ctx.fontHeader, c, "+",
                     r.cx(), r.cy() + 6f);
         }
@@ -297,7 +297,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         String name = player.name != null ? player.name
                 : (player.characterClass != null
                    ? player.characterClass.displayName : "Hero");
-        TextDraw.centre(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 name, window.cx(), characterFrame.top() + 16f);
 
         // Aspect-fit the player's mob sprite inside the frame, with the
@@ -310,7 +310,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         }
 
         StatBlock st = player.effectiveStats();
-        float left = window.x + Pal.PAD_CONTENT;
+        float left = window.x + UIVars.PAD_CONTENT;
         float top = characterFrame.y - 16f;
         top = row(left, top, "HP",        ((int) Math.round(player.hp))
                 + " / " + ((int) Math.round(st.maxHp)));
@@ -332,7 +332,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         pendingDots.clear();
         if (player.buffs != null && !player.buffs.isEmpty()) {
             top -= ctx.lineH();
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                     "Buffs", left, top);
             top -= ctx.lineH();
             int max = Math.min(player.buffs.size(), 8);
@@ -345,14 +345,14 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
                     ctx.batch.draw(bregion, left, top - 16f, 16f, 16f);
                 }
                 String buffName = BuffSystem.displayName(b.type);
-                TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         buffName + " (lvl " + b.level + ")",
                         left + 22f, top);
                 if (b.durationTurns > 0) {
                     pendingDots.add(new float[]{ left + 17f, top - 16f, b.durationTurns });
                 }
                 Rect hit = new Rect();
-                hit.set(left, top - 18f, window.right() - Pal.PAD_CONTENT - left, 20f);
+                hit.set(left, top - 18f, window.right() - UIVars.PAD_CONTENT - left, 20f);
                 buffIconRects.add(hit);
                 buffIconList.add(b);
                 top -= 20f;
@@ -361,17 +361,17 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
     }
 
     private void drawPerksTab() {
-        float left = window.x + Pal.PAD_CONTENT;
+        float left = window.x + UIVars.PAD_CONTENT;
         float top  = tabRects[0].y - 24f;
 
         // Header: "Available: N" — remaining perk points the player can
         // spend. Drawn even when the perk map is empty so the count is
         // always visible.
-        TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_DIM,
+        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                 "Available", left, top);
-        TextDraw.right(ctx, ctx.fontRegular, UiColors.ACCENT,
+        TextDraw.right(ctx, ctx.fontRegular, UIVars.ACCENT,
                 Integer.toString(player.perkPoints),
-                window.right() - Pal.PAD_CONTENT, top);
+                window.right() - UIVars.PAD_CONTENT, top);
         top -= 28f;
 
         // One row per Perk in the catalog — name on the left, current
@@ -382,23 +382,23 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
             Perk p = perksOrdered.get(i);
             int lvl = (player.perks != null && player.perks.get(p) != null)
                     ? player.perks.get(p) : 0;
-            TextDraw.left(ctx, ctx.fontRegular, UiColors.TEXT_BODY,
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                     p.displayName(), left, top);
             float lvlRight = perkPlusRects.size() > i
                     ? perkPlusRects.get(i).x - 8f
-                    : window.right() - Pal.PAD_CONTENT;
+                    : window.right() - UIVars.PAD_CONTENT;
             String lvlText = lvl > 0 ? Integer.toString(lvl) : "--";
             TextDraw.right(ctx, ctx.fontRegular,
-                    lvl > 0 ? UiColors.ACCENT : UiColors.TEXT_DIM,
+                    lvl > 0 ? UIVars.ACCENT : UIVars.TEXT_DIM,
                     lvlText, lvlRight, top);
             top -= 36f;
         }
     }
 
     private float row(float x, float y, String label, String value) {
-        TextDraw.left (ctx, ctx.fontRegular, UiColors.TEXT_DIM,   label, x, y);
-        TextDraw.right(ctx, ctx.fontRegular, UiColors.TEXT_BODY, value,
-                window.right() - Pal.PAD_CONTENT, y);
+        TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM,   label, x, y);
+        TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY, value,
+                window.right() - UIVars.PAD_CONTENT, y);
         return y - ctx.lineH();
     }
 
@@ -409,7 +409,7 @@ public final class V2CharacterStats implements com.bjsp123.rl2.ui.v2.stage.V2Pop
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(UiColors.TEXT_DIM);
+        s.setColor(UIVars.TEXT_DIM);
         for (float[] d : pendingDots) {
             int dots = Math.min(8, (int) d[2]);
             for (int i = 0; i < dots; i++) {
