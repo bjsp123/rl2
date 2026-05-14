@@ -32,24 +32,21 @@ public enum Perk {
     BOMB_JACK;
 
     public String displayName() {
-        return switch (this) {
-            case KILLER     -> "Killer";
-            case STEALTH    -> "Stealth";
-            case WANDMASTER -> "Wandmaster";
-            case JUMP       -> "Jump";
-            case KNOCKBACK  -> "Knockback";
-            case BOMB_JACK  -> "Bomb Jack";
-        };
+        return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".name");
     }
 
     public String description() {
+        return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".description");
+    }
+
+    private String key() {
         return switch (this) {
-            case KILLER     -> "On kill: -20% attack/move cost for 10 turns.";
-            case STEALTH    -> "Enemy wake radius and vision halved against you.";
-            case WANDMASTER -> "Wands gain +1 effective level.";
-            case JUMP       -> "Move to any tile within 2 squares for one moveCost.";
-            case KNOCKBACK  -> "+1 square of melee knockback per level.";
-            case BOMB_JACK  -> "+1 bomb effective level per perk level.";
+            case KILLER     -> "killer";
+            case STEALTH    -> "stealth";
+            case WANDMASTER -> "wandmaster";
+            case JUMP       -> "jump";
+            case KNOCKBACK  -> "knockback";
+            case BOMB_JACK  -> "bombJack";
         };
     }
 }

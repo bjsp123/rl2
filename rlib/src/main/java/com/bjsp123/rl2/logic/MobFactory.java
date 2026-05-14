@@ -19,7 +19,7 @@ public class MobFactory {
 
     public static Mob player(Point pos, CharacterClass cls) {
         String key = "PLAYER_" + cls.name();
-        MobDefinition def = MobRegistry.get(key);
+        MobDefinition def = Registries.mob(key);
         if (def == null) {
             throw new IllegalStateException("missing mobs.csv row: " + key);
         }
@@ -39,8 +39,8 @@ public class MobFactory {
      *  skipped. */
     private static void seedPlayerHostility(Mob player) {
         if (player.faction == null) return;
-        for (String type : MobRegistry.knownTypes()) {
-            MobDefinition def = MobRegistry.get(type);
+        for (String type : Registries.mobTypes()) {
+            MobDefinition def = Registries.mob(type);
             if (def == null || def.behavior == Behavior.PLAYER) continue;
             if (def.enemyFactions.contains(player.faction)) {
                 player.attackTypes.add(type);
@@ -54,7 +54,7 @@ public class MobFactory {
      *  only via {@link #player}) or for any unknown type. */
     public static Mob spawn(String type, Point pos) {
         if (type == null) return null;
-        MobDefinition def = MobRegistry.get(type);
+        MobDefinition def = Registries.mob(type);
         if (def == null) return null;
         if (def.behavior == Behavior.PLAYER) return null;
         Mob m = new Mob();

@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.BuffSystem;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Perk;
@@ -233,11 +234,15 @@ public final class V2CharacterStats extends BasePopup {
     protected void renderTextPass() {
         pendingDots.clear();
         ctx.batch.begin();
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Character",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.characterStats.title"),
                 window.cx(), window.top() - ctx.headerLineH());
 
         // Tab labels.
-        String[] labels = { "Stats", "Perks" };
+        String[] labels = {
+                TextCatalog.get("ui.characterStats.tab.stats"),
+                TextCatalog.get("ui.characterStats.tab.perks")
+        };
         for (int i = 0; i < tabRects.length; i++) {
             boolean active = Tab.values()[i] == currentTab;
             TextDraw.centre(ctx, ctx.fontRegular,
@@ -291,7 +296,7 @@ public final class V2CharacterStats extends BasePopup {
         // then stats, then buffs. Mirrors V2Encyclopedia.drawCharacterTab.
         String name = player.name != null ? player.name
                 : (player.characterClass != null
-                   ? player.characterClass.displayName : "Hero");
+                   ? player.characterClass.displayName() : TextCatalog.get("ui.characterStats.hero"));
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 name, window.cx(), characterFrame.top() + 16f);
 
@@ -307,16 +312,16 @@ public final class V2CharacterStats extends BasePopup {
         StatBlock st = player.effectiveStats();
         float left = window.x + UIVars.PAD_CONTENT;
         float top = characterFrame.y - 16f;
-        top = row(left, top, "HP",        ((int) Math.round(player.hp))
+        top = row(left, top, TextCatalog.get("ui.characterStats.hp"),        ((int) Math.round(player.hp))
                 + " / " + ((int) Math.round(st.maxHp)));
-        top = row(left, top, "Accuracy",  Integer.toString(st.accuracy));
-        top = row(left, top, "Evasion",   Integer.toString(st.evasion));
-        top = row(left, top, "Attack",    st.damage.min() + "-" + st.damage.max());
-        top = row(left, top, "Armor",     st.armor.min() + "-" + st.armor.max());
-        top = row(left, top, "Move cost", Integer.toString(st.moveCost));
-        top = row(left, top, "Atk cost",  Integer.toString(st.attackCost));
-        top = row(left, top, "Light",     Integer.toString((int) st.lightRadius));
-        top = row(left, top, "Satiety",   player.satiety
+        top = row(left, top, TextCatalog.get("ui.characterStats.accuracy"),  Integer.toString(st.accuracy));
+        top = row(left, top, TextCatalog.get("ui.characterStats.evasion"),   Integer.toString(st.evasion));
+        top = row(left, top, TextCatalog.get("ui.characterStats.attack"),    st.damage.min() + "-" + st.damage.max());
+        top = row(left, top, TextCatalog.get("ui.characterStats.armor"),     st.armor.min() + "-" + st.armor.max());
+        top = row(left, top, TextCatalog.get("ui.characterStats.moveCost"), Integer.toString(st.moveCost));
+        top = row(left, top, TextCatalog.get("ui.characterStats.attackCost"),  Integer.toString(st.attackCost));
+        top = row(left, top, TextCatalog.get("ui.characterStats.light"),     Integer.toString((int) st.lightRadius));
+        top = row(left, top, TextCatalog.get("ui.characterStats.satiety"),   player.satiety
                 + " / " + com.bjsp123.rl2.logic.GameBalance.STARTING_SATIETY);
 
         // Buff list - section heading + per-buff icon + name + duration.
@@ -328,7 +333,7 @@ public final class V2CharacterStats extends BasePopup {
         if (player.buffs != null && !player.buffs.isEmpty()) {
             top -= ctx.lineH();
             TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "Buffs", left, top);
+                    TextCatalog.get("ui.characterStats.buffs"), left, top);
             top -= ctx.lineH();
             int max = Math.min(player.buffs.size(), 8);
             for (int i = 0; i < max; i++) {
@@ -341,7 +346,8 @@ public final class V2CharacterStats extends BasePopup {
                 }
                 String buffName = BuffSystem.displayName(b.type);
                 TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                        buffName + " (lvl " + b.level + ")",
+                        TextCatalog.format("ui.characterStats.buffLevel",
+                                TextCatalog.vars("name", buffName, "level", b.level)),
                         left + 22f, top,
                         window.right() - UIVars.PAD_CONTENT - (left + 22f));
                 if (b.durationTurns > 0) {
@@ -364,7 +370,7 @@ public final class V2CharacterStats extends BasePopup {
         // spend. Drawn even when the perk map is empty so the count is
         // always visible.
         TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                "Available", left, top);
+                TextCatalog.get("ui.characterStats.available"), left, top);
         TextDraw.right(ctx, ctx.fontRegular, UIVars.ACCENT,
                 Integer.toString(player.perkPoints),
                 window.right() - UIVars.PAD_CONTENT, top);
@@ -440,7 +446,7 @@ public final class V2CharacterStats extends BasePopup {
         float drawH = srcH * scale;
         float drawX = x + (w - drawW) * 0.5f;
         float drawY = y + (h - drawH) * 0.5f;
-        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (oa > 0f) {
             ctx.batch.setColor(0f, 0f, 0f, oa);
             for (int i = 0; i < OUTLINE_DX.length; i++) {

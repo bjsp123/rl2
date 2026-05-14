@@ -67,9 +67,11 @@ public final class MobStats {
     public static void writeEffectiveStats(Mob mob, StatBlock dst) {
         dst.copyFrom(mob.intrinsic);
         characterLevelBonusInto(dst, mob);
-        for (Item eq : mob.inventory.allEquipped()) {
-            ItemSystem.contributeInto(dst, eq);
-        }
+        ItemStats.contributeInto(dst, mob.inventory.weapon);
+        ItemStats.contributeInto(dst, mob.inventory.offhand);
+        ItemStats.contributeInto(dst, mob.inventory.armor);
+        for (Item eq : mob.inventory.amulets) ItemStats.contributeInto(dst, eq);
+        for (Item eq : mob.inventory.gems)    ItemStats.contributeInto(dst, eq);
         BuffSystem.contributeInto(dst, mob);
     }
 

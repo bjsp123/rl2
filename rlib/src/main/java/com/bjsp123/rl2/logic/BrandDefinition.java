@@ -77,9 +77,9 @@ public final class BrandDefinition {
     private static BrandDefinition parseRow(Map<String, String> row) {
         BrandDefinition d = new BrandDefinition();
         d.brand       = CsvTable.str(row, "brand", null);
-        d.name        = CsvTable.str(row, "name", "");
+        d.name        = TextCatalog.brandName(d.brand, CsvTable.str(row, "name", ""));
         d.rarity      = CsvTable.dblCell(row, "rarity", 1.0);
-        d.description = CsvTable.str(row, "description", "");
+        d.description = TextCatalog.brandDescription(d.brand, CsvTable.str(row, "description", ""));
 
         // itemTypes: pipe-separated InventoryCategory names
         String types = CsvTable.str(row, "itemTypes", "");

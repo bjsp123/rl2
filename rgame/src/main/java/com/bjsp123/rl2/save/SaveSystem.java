@@ -150,7 +150,9 @@ public class SaveSystem {
         SaveMetadata m = new SaveMetadata();
         Mob player = TurnSystem.findPlayer(world.currentLevel());
         if (player != null) {
-            m.charClass      = player.characterClass != null ? player.characterClass.displayName : "Adventurer";
+            m.charClass      = player.characterClass != null
+                    ? player.characterClass.displayName()
+                    : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
             m.characterLevel = player.characterLevel;
             m.score          = player.score;
             m.hp             = (int) Math.round(player.hp);

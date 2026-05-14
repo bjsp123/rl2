@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.InventorySystem;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Inventory;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
@@ -97,7 +98,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private float detailDividerY = Float.NaN;
     /** Top of the body text region (the y of the first flavor line). */
     private float detailBodyTop;
-    private float detailLineH() { return ctx.lineH(); }
     /** Quickslot-binding buttons - six numbered cells in the detail popup
      *  that bind / unbind the chosen item to / from each action-bar slot.
      *  Built only when an {@link ActionBar} has been wired. */
@@ -280,7 +280,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             float dW = Math.min(300f, vw - 32f);
             float bodyWidth = dW - 2 * 14f;
 
-            String name = com.bjsp123.rl2.logic.ItemSystem.displayName(selectedItem, player);
+            String name = com.bjsp123.rl2.logic.ItemNames.displayName(selectedItem, player);
             if (name.isEmpty()) name = selectedItem.type != null ? selectedItem.type : "";
             detailNameBlock = TextDraw.block(ctx.fontHeader, name,
                     dW - 28f, 2, ctx.headerLineH());
@@ -333,7 +333,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             float bodyBottom = bindBtnRects[0].top() + 22f;
             int   maxLines   = Math.max(0,
                     (int) Math.floor((detailBodyTop - bodyBottom)
-                            / detailLineH()));
+                            / ctx.lineH()));
             detailFlavorLines.clear();
             detailDetailsLines.clear();
             // Cap flavor at half the body so the mechanical details block
@@ -343,7 +343,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     ? Math.max(2, maxLines / 2)
                     : maxLines;
             TextDraw.TextBlock flavorBlock = TextDraw.block(ctx.fontRegular,
-                    flavor, bodyWidth, flavorBudget, detailLineH());
+                    flavor, bodyWidth, flavorBudget, ctx.lineH());
             detailFlavorLines.addAll(flavorBlock.lines);
             int leftLines = maxLines - detailFlavorLines.size();
             // Reserve two line-slots for the divider gap when both halves
@@ -353,10 +353,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     && leftLines > 2;
             int detailMax = Math.max(0, hasRule ? leftLines - 2 : leftLines);
             TextDraw.TextBlock detailsBlock = TextDraw.block(ctx.fontRegular,
-                    details, bodyWidth, detailMax, detailLineH());
+                    details, bodyWidth, detailMax, ctx.lineH());
             detailDetailsLines.addAll(detailsBlock.lines);
             detailDividerY = hasRule
-                    ? detailBodyTop - detailFlavorLines.size() * detailLineH() - 4f
+                    ? detailBodyTop - detailFlavorLines.size() * ctx.lineH() - 4f
                     : Float.NaN;
         }
     }
@@ -371,7 +371,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private int lineCountFor(String text, float bodyWidth) {
         if (text == null || text.isEmpty()) return 0;
         TextDraw.TextBlock block = TextDraw.block(ctx.fontRegular, text,
-                bodyWidth, Integer.MAX_VALUE, detailLineH());
+                bodyWidth, Integer.MAX_VALUE, ctx.lineH());
         return block.lineCount();
     }
 
@@ -380,7 +380,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // row, and action buttons. The clamp keeps ordinary one-line items
         // from expanding into a huge mostly-empty panel.
         float fixedH = 220f + detailNameBlock.height();
-        return Math.max(440f, fixedH + bodyLines * detailLineH());
+        return Math.max(440f, fixedH + bodyLines * ctx.lineH());
     }
 
     /** Item currently equipped at one of the 5 equipment slots
@@ -574,7 +574,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private static void drawWandChargeBar(ShapeRenderer s, Rect r, Item it,
                                           com.bjsp123.rl2.model.Mob player) {
-        int max = com.bjsp123.rl2.logic.ItemSystem.effectiveMaxCharge(it, player);
+        int max = com.bjsp123.rl2.logic.ItemStats.effectiveMaxCharge(it, player);
         float pad = 4f, barH = 3f;
         float barW = r.w - 2 * pad;
         float bx = r.x + pad, by = r.y + 4f;
@@ -621,10 +621,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+        ButtonChrome.shape(ctx, r, pressed, false, false, UIVars.BTN_BG);
     }
 
     /** Inventory body text - header, equipment icons, tab icons, bag-grid
@@ -634,7 +631,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ctx.batch.begin();
 
         // Header.
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Backpack",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.inventory.title"),
                 headerRect.cx(), headerRect.y + headerRect.h * 0.75f);
 
         // Equipment cells - render the equipped item icons via SpriteBatch.
@@ -668,38 +666,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Bag grid icons + counts.
         for (BagCell c : bagCells) {
             drawCellIcon(c.rect, c.item);
-        }
-
-        // Brand sparks - additive pass over all slots with branded items.
-        if (player != null && player.inventory != null) {
-            Item[] equips = {
-                player.inventory.weapon, player.inventory.offhand,
-                player.inventory.armor,
-                player.inventory.amulets[0], player.inventory.amulets[1]
-            };
-            Rect[] eRects = {
-                equipRects[0], equipRects[1],
-                equipRects[2],
-                equipRects[3], equipRects[4]
-            };
-            for (int i = 0; i < equips.length; i++) {
-                if (equips[i] != null && equips[i].brand != null) {
-                    com.bjsp123.rl2.world.render.BrandFx.drawSparks(
-                            ctx.batch, ctx.whitePixel,
-                            eRects[i].x, eRects[i].y, eRects[i].w, eRects[i].h,
-                            equips[i].brand,
-                            com.bjsp123.rl2.world.render.BrandFx.phaseFor(equips[i]));
-                }
-            }
-        }
-        for (BagCell c : bagCells) {
-            if (c.item != null && c.item.brand != null) {
-                com.bjsp123.rl2.world.render.BrandFx.drawSparks(
-                        ctx.batch, ctx.whitePixel,
-                        c.rect.x, c.rect.y, c.rect.w, c.rect.h,
-                        c.item.brand,
-                        com.bjsp123.rl2.world.render.BrandFx.phaseFor(c.item));
-            }
         }
 
         ctx.batch.end();
@@ -736,13 +702,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             int line = 0;
             for (String s : detailFlavorLines) {
                 TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                        s, left, detailBodyTop - line * detailLineH());
+                        s, left, detailBodyTop - line * ctx.lineH());
                 line++;
             }
             if (!Float.isNaN(detailDividerY)) line += 2;
             for (String s : detailDetailsLines) {
                 TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        s, left, detailBodyTop - line * detailLineH());
+                        s, left, detailBodyTop - line * ctx.lineH());
                 line++;
             }
 
@@ -752,7 +718,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             // that didn't bother to specify one.
             String useLabel = (selectedItem.useVerb != null
                     && !selectedItem.useVerb.isEmpty())
-                    ? capitalize(selectedItem.useVerb) : "Use";
+                    ? TextCatalog.capitalize(selectedItem.useVerb)
+                    : TextCatalog.get("ui.inventory.use");
             TextDraw.centre(ctx, ctx.fontRegular,
                     detailUsePressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
                     TextDraw.ellipsize(ctx.fontRegular, useLabel, detailUseBtn.w - 8f),
@@ -761,9 +728,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (selectedItem.isEquippable() && player != null
                     && com.bjsp123.rl2.logic.InventorySystem
                             .isEquipped(player.inventory, selectedItem)) {
-                equipLabel = "Unequip";
+                equipLabel = TextCatalog.get("ui.inventory.unequip");
             } else {
-                equipLabel = "Equip";
+                equipLabel = TextCatalog.get("ui.inventory.equip");
             }
             TextDraw.centre(ctx, ctx.fontRegular,
                     detailEquipPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
@@ -771,29 +738,23 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     detailEquipBtn.cx(), detailEquipBtn.cy() + 6f);
             TextDraw.centre(ctx, ctx.fontRegular,
                     detailThrowPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                    TextDraw.ellipsize(ctx.fontRegular, "Throw", detailThrowBtn.w - 8f),
+                    TextDraw.ellipsize(ctx.fontRegular,
+                            TextCatalog.get("ui.inventory.throw"), detailThrowBtn.w - 8f),
                     detailThrowBtn.cx(), detailThrowBtn.cy() + 6f);
             if (encyclopedia != null) {
                 // Standard info-icon button - same INFO glyph the
                 // perks-tab info buttons use, so info affordances read
                 // identically across V2 surfaces.
-                var iregion = com.bjsp123.rl2.world.render.IconSprites
-                        .regionFor(com.bjsp123.rl2.world.render.IconSprites.Icon.INFO);
-                if (iregion != null) {
-                    ctx.batch.setColor(detailInfoPressed
-                            ? UIVars.ACCENT : UIVars.TEXT_BODY);
-                    float isz = Math.min(detailInfoBtn.w, detailInfoBtn.h) * 0.6f;
-                    ctx.batch.draw(iregion,
-                            detailInfoBtn.cx() - isz * 0.5f,
-                            detailInfoBtn.cy() - isz * 0.5f, isz, isz);
-                    ctx.batch.setColor(1f, 1f, 1f, 1f);
-                }
+                ButtonChrome.icon(ctx, detailInfoBtn,
+                        com.bjsp123.rl2.world.render.IconSprites.regionFor(
+                                com.bjsp123.rl2.world.render.IconSprites.Icon.INFO),
+                        detailInfoPressed, false);
             }
 
             // Quickslot bind labels - slot number 1..6 + "Quickslot" header.
             if (actionBar != null) {
                 TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        "Quickslot",
+                        TextCatalog.get("ui.inventory.quickslot"),
                         detailWindow.cx(),
                         bindBtnRects[0].top() + 16f);
                 for (int i = 0; i < bindBtnRects.length; i++) {
@@ -813,14 +774,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     /** Draw {@code item}'s sprite icon centred inside {@code cell}. Caller
      *  is in the SpriteBatch pass. */
-    /** Title-case the first letter of {@code s} for use as a button label
-     *  ("eat" -> "Eat", "zap" -> "Zap"). Returns the input unchanged when
-     *  it's null or empty. */
-    private static String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
-        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
-    }
-
     private void drawCellIcon(Rect cell, Item item) {
         ItemCell.draw(ctx, item, player, cell.x, cell.y, cell.w, cell.h, true);
     }

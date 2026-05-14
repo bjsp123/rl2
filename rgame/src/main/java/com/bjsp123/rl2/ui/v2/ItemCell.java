@@ -1,9 +1,10 @@
 package com.bjsp123.rl2.ui.v2;
 
 import com.badlogic.gdx.graphics.Color;
-import com.bjsp123.rl2.logic.ItemSystem;
+import com.bjsp123.rl2.logic.ItemStats;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.world.render.BrandFx;
 import com.bjsp123.rl2.world.render.ItemSprites;
 
 /**
@@ -39,8 +40,13 @@ public final class ItemCell {
             ctx.batch.draw(region, x + PAD, y + PAD, w - 2 * PAD, h - 2 * PAD);
         }
 
+        if (item.brand != null) {
+            BrandFx.drawSparks(ctx.batch, ctx.whitePixel,
+                    x, y, w, h, item.brand, BrandFx.phaseFor(item));
+        }
+
         // Level badge - top-right; green when a buff/perk/gear is boosting above base
-        int lvl     = ItemSystem.effectiveLevel(item, holder);
+        int lvl     = ItemStats.effectiveLevel(item, holder);
         int baseLvl = Math.max(0, item.level);
         if (lvl > 0) {
             com.badlogic.gdx.graphics.Color badgeColor =
@@ -69,7 +75,7 @@ public final class ItemCell {
 
     private static void drawChargeBar(UiCtx ctx, Item item, Mob holder,
                                       float x, float y, float w) {
-        int max = ItemSystem.effectiveMaxCharge(item, holder);
+        int max = ItemStats.effectiveMaxCharge(item, holder);
         float pad = 4f, barH = 3f;
         float barW = w - 2 * pad;
         float bx = x + pad, by = y + 4f;

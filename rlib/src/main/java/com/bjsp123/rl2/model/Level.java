@@ -142,6 +142,12 @@ public class Level {
     public transient boolean[][] lit;
     /** Re-derived per frame from the player's vision; not serialized. */
     public transient boolean[][] visible;
+    /** Reusable flat scratch buffers for FOV/lighting computations. */
+    public transient boolean[] lightBlockingScratch;
+    public transient boolean[] sightBlockingScratch;
+    public transient boolean[] visibilityAccumScratch;
+    public transient boolean[] visibilityTempScratch;
+    public transient boolean[] wallPropagationScratch;
     // Visual effects moved out - owned by rgame.render.EffectStage.
     /** Per-tile countdown to the next fire-particle emission. Ticked down by
      *  {@link com.bjsp123.rl2.logic.FireSystem}; on zero/negative, a particle Effect is
@@ -268,6 +274,7 @@ public class Level {
         this.explored = new boolean[width][height];
         this.lit = new boolean[width][height];
         this.visible = new boolean[width][height];
+        initVisibilityScratch();
         this.mobs = new ArrayList<>();
         this.items = new ArrayList<>();
 
@@ -282,6 +289,7 @@ public class Level {
     public void initTransients() {
         if (lit     == null) lit     = new boolean[width][height];
         if (visible == null) visible = new boolean[width][height];
+        initVisibilityScratch();
         if (events  == null) events  = new ArrayList<>();
         // Older saved levels may predate the overlay arrays.
         if (surface    == null) surface    = new Surface[width][height];
@@ -295,5 +303,24 @@ public class Level {
         if (side       == null) side       = Side.CENTER;
         if (reservedRects == null) reservedRects = new ArrayList<>();
         if (rooms == null) rooms = new ArrayList<>();
+    }
+
+    public void initVisibilityScratch() {
+        int n = Math.max(0, width * height);
+        if (lightBlockingScratch == null || lightBlockingScratch.length != n) {
+            lightBlockingScratch = new boolean[n];
+        }
+        if (sightBlockingScratch == null || sightBlockingScratch.length != n) {
+            sightBlockingScratch = new boolean[n];
+        }
+        if (visibilityAccumScratch == null || visibilityAccumScratch.length != n) {
+            visibilityAccumScratch = new boolean[n];
+        }
+        if (visibilityTempScratch == null || visibilityTempScratch.length != n) {
+            visibilityTempScratch = new boolean[n];
+        }
+        if (wallPropagationScratch == null || wallPropagationScratch.length != n) {
+            wallPropagationScratch = new boolean[n];
+        }
     }
 }

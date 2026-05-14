@@ -3,6 +3,7 @@ package com.bjsp123.rl2.ui.v2;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.save.SaveMetadata;
 import com.bjsp123.rl2.save.SaveSystem;
 import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
@@ -174,10 +175,10 @@ public final class V2Saves extends V2Screen {
     private void openDeleteConfirm(int slot) {
         pendingDeleteSlot = slot;
         deletePopup.configure(
-                "Delete save?",
-                "This removes the saved game in slot " + (slot + 1) + ".",
-                "Delete",
-                "Cancel",
+                TextCatalog.get("ui.saves.deleteTitle"),
+                TextCatalog.format("ui.saves.deleteBody", TextCatalog.vars("slot", slot + 1)),
+                TextCatalog.get("ui.common.delete"),
+                TextCatalog.get("ui.common.cancel"),
                 this::confirmDelete,
                 this::cancelDelete);
         deletePopup.open();
@@ -204,14 +205,14 @@ public final class V2Saves extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Saved Games",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, TextCatalog.get("ui.saves.title"),
                 ctx.worldW() * 0.5f, ctx.worldH() - 24f);
         for (SlotCard c : cards) {
             float textTop  = c.rect.top() - CARD_PAD - 4f;
             float textLeft = c.rect.x + CARD_PAD;
             if (c.filled) {
-                String line1 = c.metadata.charClass + "   Lvl " + c.metadata.characterLevel;
-                String line2 = "Depth " + c.metadata.depth;
+                String line1 = c.metadata.charClass + "   " + TextCatalog.format("ui.saves.level", TextCatalog.vars("level", c.metadata.characterLevel));
+                String line2 = TextCatalog.format("ui.saves.depth", TextCatalog.vars("depth", c.metadata.depth));
                 TextDraw.leftFit(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
                         line1, textLeft, textTop, c.rect.right() - textLeft - CARD_PAD);
                 TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
@@ -220,7 +221,7 @@ public final class V2Saves extends V2Screen {
                         c.rect.right() - textLeft - CARD_PAD);
             } else {
                 TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
-                        "New Game",
+                        TextCatalog.get("ui.saves.newGame"),
                         c.rect.cx(),
                         c.rect.cy() + ctx.fontHeader.getCapHeight() * 0.5f);
             }

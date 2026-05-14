@@ -3,7 +3,6 @@ package com.bjsp123.rl2.ui.v2;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
  * A V2 button. Rectangular hit-target with a primitive-drawn cream border,
@@ -51,24 +50,7 @@ public final class Btn {
      *  a brighter fill; checked-not-pressed buttons get an accent-yellow
      *  outer line so the active state pops. */
     public void drawShape(UiCtx ctx) {
-        ShapeRenderer s = ctx.shapes;
-        boolean hot = pressed || checked;
-        Color fill = hot ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG;
-        if (warn) {
-            Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h,
-                    UIVars.HUD_LINE_W,
-                    UIVars.WARN_HL, UIVars.TEXT_WARN, UIVars.WARN_SHADE);
-        } else if (checked && !pressed) {
-            Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h,
-                    UIVars.HUD_LINE_W,
-                    UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
-        } else {
-            Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h,
-                    UIVars.HUD_LINE_W);
-        }
-        s.setColor(fill);
-        s.rect(rect.x + UIVars.HUD_BORDER, rect.y + UIVars.HUD_BORDER,
-               rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
+        ButtonChrome.shape(ctx, rect, pressed, checked, warn, UIVars.BTN_BG);
     }
 
     /** Draw the centred label or icon. Caller is inside a SpriteBatch
@@ -78,13 +60,7 @@ public final class Btn {
     public void drawText(UiCtx ctx) {
         boolean hot = pressed || checked;
         if (icon != null) {
-            Color tint = hot ? UIVars.ACCENT : UIVars.TEXT_BODY;
-            ctx.batch.setColor(tint);
-            float size = Math.min(rect.w, rect.h) * 0.6f;
-            ctx.batch.draw(icon,
-                    rect.cx() - size * 0.5f, rect.cy() - size * 0.5f,
-                    size, size);
-            ctx.batch.setColor(1f, 1f, 1f, 1f);
+            ButtonChrome.icon(ctx, rect, icon, hot, warn);
             return;
         }
         BitmapFont font = header ? ctx.fontHeader : ctx.fontRegular;

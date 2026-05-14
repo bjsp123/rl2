@@ -6,10 +6,10 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.logic.ItemDefinition;
-import com.bjsp123.rl2.logic.ItemRegistry;
+import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.logic.MobDefinition;
 import com.bjsp123.rl2.logic.MobFactory;
-import com.bjsp123.rl2.logic.MobRegistry;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
 import com.bjsp123.rl2.model.Perk;
@@ -20,6 +20,7 @@ import com.bjsp123.rl2.world.render.MobSprites;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * V2 character-select screen - three big class buttons (Warrior / Rogue /
@@ -115,7 +116,7 @@ public final class V2CharacterSelect extends V2Screen {
         for (int i = 0; i < CLASSES.length; i++) {
             final CharacterClass c = CLASSES[i];
             float y = yTop - i * (btnH + gap);
-            buttons.add(new Btn(c.displayName,
+            buttons.add(new Btn(c.displayName(),
                     window.x + 16f, y, btnW, btnH,
                     () -> { selected = c; show(); }).header());
         }
@@ -156,7 +157,7 @@ public final class V2CharacterSelect extends V2Screen {
         optionsBtn.icon = com.bjsp123.rl2.world.render.IconSprites
                 .regionFor(com.bjsp123.rl2.world.render.IconSprites.Icon.SETTINGS);
         buttons.add(optionsBtn);
-        buttons.add(new Btn("PLAY",
+        buttons.add(new Btn(TextCatalog.get("ui.common.play"),
                 charPopup.x + 14f + optionsW + btnGap, btnY, playW, btnH,
                 this::launchGame).header());
     }
@@ -175,40 +176,45 @@ public final class V2CharacterSelect extends V2Screen {
         float btnW  = pw - 2 * pad;
         float yTop  = optionsPopup.top() - headerBandH() - btnH;
 
-        String godLabel = "God Mode: " + (godMode ? "ON" : "OFF");
-        buttons.add(new Btn(godLabel, optionsPopup.x + pad, yTop, btnW, btnH,
-                () -> { godMode = !godMode; show(); }));
-        yTop -= btnH + gap;
-
-        String seedLabel = customSeed != null
-                ? "Seed: " + SeedCode.encode(customSeed)
-                : "Seed: random";
-        buttons.add(new Btn(seedLabel, optionsPopup.x + pad, yTop, btnW, btnH,
-                this::promptForSeed));
-        yTop -= btnH + gap;
-
         int maxStartLevel = Math.max(1,
                 com.bjsp123.rl2.logic.GameBalance.DUNGEON_DEPTH);
-        String levelLabel = "Starting level: " + startingLevel;
-        buttons.add(new Btn(levelLabel, optionsPopup.x + pad, yTop, btnW, btnH,
-                () -> {
-                    startingLevel = (startingLevel % maxStartLevel) + 1;
-                    show();
-                }));
-        yTop -= btnH + gap;
+        for (OptionRow row : List.of(
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.godMode",
+                        TextCatalog.vars("state", onOff(godMode))),
+                        () -> { godMode = !godMode; show(); }),
+                new OptionRow(() -> customSeed != null
+                        ? TextCatalog.format("ui.characterSelect.seed",
+                                TextCatalog.vars("seed", SeedCode.encode(customSeed)))
+                        : TextCatalog.get("ui.characterSelect.seedRandom"),
+                        this::promptForSeed),
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.startingLevel",
+                        TextCatalog.vars("level", startingLevel)),
+                        () -> { startingLevel = (startingLevel % maxStartLevel) + 1; show(); }),
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.allItems",
+                        TextCatalog.vars("state", onOff(allItems))),
+                        () -> { allItems = !allItems; show(); }),
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.tenPerkPoints",
+                        TextCatalog.vars("state", onOff(tenPerkPoints))),
+                        () -> { tenPerkPoints = !tenPerkPoints; show(); })
+        )) {
+            buttons.add(new Btn(row.label.get(), optionsPopup.x + pad, yTop,
+                    btnW, btnH, row.onClick));
+            yTop -= btnH + gap;
+        }
 
-        String itemsLabel = "All items: " + (allItems ? "ON" : "OFF");
-        buttons.add(new Btn(itemsLabel, optionsPopup.x + pad, yTop, btnW, btnH,
-                () -> { allItems = !allItems; show(); }));
-        yTop -= btnH + gap;
-
-        String perksLabel = "+10 perk points: " + (tenPerkPoints ? "ON" : "OFF");
-        buttons.add(new Btn(perksLabel, optionsPopup.x + pad, yTop, btnW, btnH,
-                () -> { tenPerkPoints = !tenPerkPoints; show(); }));
-
-        buttons.add(new Btn("Done", optionsPopup.x + pad,
+        buttons.add(new Btn(TextCatalog.get("ui.common.done"), optionsPopup.x + pad,
                 optionsPopup.y + pad, btnW, btnH,
                 () -> { optionsOpen = false; show(); }).header());
+    }
+
+    private static final class OptionRow {
+        final Supplier<String> label;
+        final Runnable onClick;
+
+        OptionRow(Supplier<String> label, Runnable onClick) {
+            this.label = label;
+            this.onClick = onClick;
+        }
     }
 
     @Override
@@ -252,7 +258,8 @@ public final class V2CharacterSelect extends V2Screen {
                 // Invalid non-empty input: silently leave current value.
             }
             @Override public void canceled() { /* leave current */ }
-        }, "Seed (blank for random)", prefill, "e.g. AB12CD");
+        }, TextCatalog.get("ui.characterSelect.seedPrompt"), prefill,
+                TextCatalog.get("ui.characterSelect.seedExample"));
     }
 
     // -- Render passes ---------------------------------------------------
@@ -304,16 +311,16 @@ public final class V2CharacterSelect extends V2Screen {
     }
 
     private void drawClassListText() {
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Choose Class",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, TextCatalog.get("ui.characterSelect.title"),
                 window.cx(), window.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f);
     }
 
     private void drawCharacterPopupText() {
-        MobDefinition def = MobRegistry.get("PLAYER_" + selected.name());
+        MobDefinition def = Registries.mob("PLAYER_" + selected.name());
         Mob sample = sampleMob(selected);
 
         String title = (def != null && def.name != null)
-                ? def.name : selected.displayName;
+                ? def.name : selected.displayName();
         TextDraw.centreFit(ctx, ctx.fontHeader, UIVars.ACCENT, title,
                 charPopup.cx(), charPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f,
                 charPopup.w - 28f);
@@ -346,17 +353,22 @@ public final class V2CharacterSelect extends V2Screen {
 
         if (sample != null) {
             com.bjsp123.rl2.model.StatBlock st = sample.effectiveStats();
-            top = statRow(left, top, "HP",    Integer.toString((int) Math.round(st.maxHp)));
-            top = statRow(left, top, "Acc",   Integer.toString(st.accuracy));
-            top = statRow(left, top, "Eva",   Integer.toString(st.evasion));
-            top = statRow(left, top, "Atk",   st.damage.min() + "-" + st.damage.max());
-            top = statRow(left, top, "Armor", st.armor.min() + "-" + st.armor.max());
+            top = statRow(left, top, TextCatalog.get("ui.characterSelect.hp"),
+                    Integer.toString((int) Math.round(st.maxHp)));
+            top = statRow(left, top, TextCatalog.get("ui.characterSelect.acc"),
+                    Integer.toString(st.accuracy));
+            top = statRow(left, top, TextCatalog.get("ui.characterSelect.eva"),
+                    Integer.toString(st.evasion));
+            top = statRow(left, top, TextCatalog.get("ui.characterSelect.atk"),
+                    st.damage.min() + "-" + st.damage.max());
+            top = statRow(left, top, TextCatalog.get("ui.characterSelect.armor"),
+                    st.armor.min() + "-" + st.armor.max());
             top -= 6f;
         }
 
         if (def != null && def.startingInventory != null
                 && !def.startingInventory.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Gear", left, top);
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, TextCatalog.get("ui.characterSelect.gear"), left, top);
             top -= lh;
             for (MobDefinition.StartItem si : def.startingInventory) {
                 if (top < guard) break;
@@ -374,7 +386,7 @@ public final class V2CharacterSelect extends V2Screen {
 
         if (def != null && def.startingPerks != null
                 && !def.startingPerks.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Perks", left, top);
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, TextCatalog.get("ui.characterSelect.perks"), left, top);
             top -= lh;
             for (Perk p : def.startingPerks) {
                 if (top < guard) break;
@@ -387,14 +399,20 @@ public final class V2CharacterSelect extends V2Screen {
     }
 
     private void drawOptionsText() {
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Options",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, TextCatalog.get("ui.characterSelect.options"),
                 optionsPopup.cx(), optionsPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f);
     }
 
     private static String lookupItemName(String type) {
         if (type == null) return "?";
-        ItemDefinition def = ItemRegistry.get(type);
+        ItemDefinition def = Registries.item(type);
         return (def != null && def.name != null) ? def.name : type;
+    }
+
+    private static String onOff(boolean value) {
+        return TextCatalog.get(value
+                ? "ui.characterSelect.on"
+                : "ui.characterSelect.off");
     }
 
     /** Build (lazily) and cache a sample Mob for the class so we can
@@ -438,7 +456,7 @@ public final class V2CharacterSelect extends V2Screen {
         float drawH = srcH * scale;
         float drawX = x + (w - drawW) * 0.5f;
         float drawY = y + (h - drawH) * 0.5f;
-        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (oa > 0f) {
             ctx.batch.setColor(0f, 0f, 0f, oa);
             for (int i = 0; i < OUTLINE_DX.length; i++) {

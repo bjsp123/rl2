@@ -78,16 +78,20 @@ public final class BuffIcons {
        return attackFlashRegion(5);
     }
 
+    /** Number of icon columns per row in the buff-icon band. */
+    private static final int COLS_PER_ROW = 20;
+
     private static void load() {
         cache = new EnumMap<>(BuffType.class);
         try {
             sheet = new Texture(Gdx.files.internal("sprites/buffs16.png"));
             sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
             for (BuffType t : BuffType.values()) {
-                int col = iconCol(t);
-                if (col < 0) continue;
-                cache.put(t, new TextureRegion(sheet,
-                        col * BUFF_CELL, 0, BUFF_CELL, BUFF_CELL));
+                int idx = iconIndex(t);
+                if (idx < 0) continue;
+                int sx = (idx % COLS_PER_ROW) * BUFF_CELL;
+                int sy = (idx / COLS_PER_ROW) * BUFF_CELL;
+                cache.put(t, new TextureRegion(sheet, sx, sy, BUFF_CELL, BUFF_CELL));
             }
         } catch (Exception ignored) {
             sheet = null;
@@ -96,16 +100,18 @@ public final class BuffIcons {
     }
 
     /**
-     * Column on the single buff-icon row in {@code sprites/buffs16.png}.
-     * Renderer-side mapping - lives in rgame because the sheet layout is
-     * presentation, not game logic.
+     * Flat index into the buff-icon grid in {@code sprites/buffs16.png}.
+     * Index = col + row * {@link #COLS_PER_ROW}; the loader converts to
+     * pixel (x, y). Renderer-side mapping — lives in rgame because the
+     * sheet layout is presentation, not game logic.
      *
-     * <p>Single-row layout (left -> right): on fire, invisible, frightened,
-     * oily, sorcerous, levitating, regenerating, poisoned, blessed,
-     * ghostly, hasted, protection, anti-magic, ESP, chilled, starving,
-     * recharging (cooldown), killer.
+     * <p>Row 0 (left → right): on fire, invisible, frightened, oily,
+     * sorcerous, levitating, regenerating, poisoned, blessed, ghostly,
+     * hasted, protection, anti-magic, ESP, chilled, starving, recharging
+     * (cooldown), killer, wet, bleeding.
+     * <p>Row 1: phase (col 0).
      */
-    private static int iconCol(BuffType type) {
+    private static int iconIndex(BuffType type) {
         return switch (type) {
             case ON_FIRE      -> 0;
             case INVISIBLE    -> 1;
@@ -128,6 +134,8 @@ public final class BuffIcons {
             case KILLER       -> 17;
             case WET          -> 18;
             case BLEEDING     -> 19;
+            // Row 1
+            case PHASE        -> 20;
             default           -> 6;     // regeneration as fallback
         };
     }

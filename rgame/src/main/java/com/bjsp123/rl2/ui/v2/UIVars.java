@@ -1,19 +1,17 @@
 package com.bjsp123.rl2.ui.v2;
 
 import com.badlogic.gdx.graphics.Color;
+import com.bjsp123.rl2.util.CsvTable;
 
-import java.io.IOException;
-import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.Properties;
 
 /**
  * Single source of truth for every constant the V2 UI and HUD use.
  * Replaces {@code Pal} and {@code UiColors}.
  *
  * <p>All fields are {@code public static} (non-final) so {@link #load}
- * can override them from {@code assets/data/uivars.properties} at startup
+ * can override them from {@code assets/data/config.csv} at startup
  * without recompilation. Java-side defaults reproduce the original palette
  * and layout exactly when the properties file is absent.
  *
@@ -116,7 +114,7 @@ public final class UIVars {
     // -- Loading ---------------------------------------------------------------
 
     /**
-     * Parse {@code text} as a {@code .properties} file and override every
+     * Parse {@code text} as {@code assets/data/config.csv} and override every
      * matching {@code public static} field on this class. Unknown keys and
      * malformed values are silently ignored. Call once at startup before any
      * rendering code runs.
@@ -127,16 +125,12 @@ public final class UIVars {
      */
     public static void load(String text) {
         if (text == null || text.isEmpty()) return;
-        Properties props = new Properties();
-        try {
-            props.load(new StringReader(text));
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to parse uivars.properties", e);
-        }
-        for (String key : props.stringPropertyNames()) {
-            String raw = props.getProperty(key);
-            if (raw == null) continue;
-            String value = raw.trim();
+        CsvTable table = CsvTable.parse(text);
+        for (java.util.Map<String, String> row : table.rows) {
+            if (!"ui".equals(CsvTable.str(row, "kind", ""))) continue;
+            String key = CsvTable.str(row, "key", "");
+            String value = CsvTable.str(row, "value", "").trim();
+            if (key.isEmpty() || value.isEmpty()) continue;
             try {
                 Field f = UIVars.class.getDeclaredField(key);
                 int mods = f.getModifiers();

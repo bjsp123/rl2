@@ -32,25 +32,8 @@ public final class Burger {
     }
 
     public void drawShape(UiCtx ctx) {
-        ShapeRenderer s = ctx.shapes;
-        Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h, UIVars.HUD_LINE_W);
-        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.HUD_BG);
-        s.rect(rect.x + UIVars.HUD_BORDER, rect.y + UIVars.HUD_BORDER,
-               rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
-
-        // Three horizontal bars - width ~50% of the button, vertically spaced
-        // so the gap between bars matches the bar height (the canonical
-        // "hamburger" silhouette).
-        float cx = rect.cx();
-        float cy = rect.cy();
-        float barW = rect.w * 0.50f;
-        float barH = 4f;
-        float gap  = 6f;
-        s.setColor(pressed ? UIVars.ACCENT : UIVars.TEXT_BODY);
-        for (int i = -1; i <= 1; i++) {
-            float by = cy - barH * 0.5f + i * (barH + gap);
-            s.rect(cx - barW * 0.5f, by, barW, barH);
-        }
+        ButtonChrome.shape(ctx, rect, pressed, false, false, UIVars.HUD_BG);
+        ButtonChrome.burgerGlyph(ctx, rect, pressed);
     }
 
     /** Single-call draw: owns the full shape renderer lifecycle. */

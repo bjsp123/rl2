@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.ui;
 
 import com.bjsp123.rl2.logic.BuffSystem;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.ItemEffect;
@@ -72,87 +73,91 @@ public final class ItemLore {
         StringBuilder hdr = new StringBuilder();
         if (it.inventoryCategory != null) {
             if (it.inventoryCategory.isEquipment()) {
-                hdr.append("Equippable as ")
-                        .append(it.inventoryCategory.name().toLowerCase())
-                        .append('\n');
+                flag(hdr, TextCatalog.format("item.header.equippable",
+                        TextCatalog.vars("category", it.inventoryCategory.name().toLowerCase())));
             }
         }
+        /* 
         if (it.material != null) {
-            hdr.append("Made of ").append(it.material.name().toLowerCase()).append('\n');
-        }
+            flag(hdr, TextCatalog.format("item.header.material",
+                    TextCatalog.vars("material", it.material.name().toLowerCase())));
+        }*/ 
+       
         // Enchantment level - display the EFFECTIVE level (intrinsic +
         // perk / gear bonuses), only shown above the design baseline of
         // 1. When the holder bumps the effective level above the
         // intrinsic, both numbers are reported so the player can see
         // where the bonus comes from.
-        int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, holder);
+        int effLvl = com.bjsp123.rl2.logic.ItemStats.effectiveLevel(it, holder);
         if (effLvl > 0 || it.level > 0) {
             if (effLvl != it.level) {
-                hdr.append("Effective level: +").append(effLvl)
-                   .append(" (actual +").append(it.level).append(")\n");
+                flag(hdr, TextCatalog.format("item.header.effectiveLevel",
+                        TextCatalog.vars("effective", effLvl, "actual", it.level)));
             } else {
-                hdr.append("Level: +").append(effLvl).append('\n');
+                flag(hdr, TextCatalog.format("item.header.level",
+                        TextCatalog.vars("level", effLvl)));
             }
         }
         if (it.brand != null && it.brand.name != null && !it.brand.name.isEmpty()) {
-            hdr.append("Brand: ").append(it.brand.name).append('\n');
+            flag(hdr, TextCatalog.format("item.header.brand",
+                    TextCatalog.vars("brand", it.brand.name)));
         }
         if (hdr.length() > 0) sb.append(hdr);
 
         // -- Combat ----------------------------------------------------------
         StringBuilder combat = new StringBuilder();
         if (it.damage.max() > 0) {
-            line(combat, "Damage", range(it.damage),
+            line(combat, TextCatalog.get("lore.items.damage"), range(it.damage),
                     !it.damagePerLevel.isZero(),
-                    " plus " + range(it.damagePerLevel) + " per level");
+                    perLevelRange(it.damagePerLevel));
         }
         if (it.apDamage.max() > 0) {
-            line(combat, "AP damage", range(it.apDamage),
+            line(combat, TextCatalog.get("lore.items.apDamage"), range(it.apDamage),
                     !it.apDamagePerLevel.isZero(),
-                    " plus " + range(it.apDamagePerLevel) + " per level");
+                    perLevelRange(it.apDamagePerLevel));
         }
         if (it.armor.max() > 0) {
-            line(combat, "Armor", range(it.armor),
+            line(combat, TextCatalog.get("lore.items.armor"), range(it.armor),
                     !it.armorPerLevel.isZero(),
-                    " plus " + range(it.armorPerLevel) + " per level");
+                    perLevelRange(it.armorPerLevel));
         }
         if (it.magicResist.max() > 0) {
-            line(combat, "Magic resist", range(it.magicResist),
+            line(combat, TextCatalog.get("lore.items.magicResist"), range(it.magicResist),
                     !it.magicResistPerLevel.isZero(),
-                    " plus " + range(it.magicResistPerLevel) + " per level");
+                    perLevelRange(it.magicResistPerLevel));
         }
         if (it.accuracy != 0) {
-            line(combat, "Accuracy",
+            line(combat, TextCatalog.get("lore.items.accuracy"),
                     (it.accuracy > 0 ? "+" : "") + it.accuracy,
                     false, "");
         }
         if (it.evasion != 0) {
-            line(combat, "Evasion",
+            line(combat, TextCatalog.get("lore.items.evasion"),
                     (it.evasion > 0 ? "+" : "") + it.evasion,
                     false, "");
         }
         if (it.attackSpeed != Item.ATTACK_SPEED_DEFAULT) {
-            line(combat, "Attack speed",
+            line(combat, TextCatalog.get("lore.items.attackSpeed"),
                     speedLabel(it.attackSpeed),
                     false, "");
         }
         if (it.moveSpeed != Item.MOVE_SPEED_DEFAULT) {
-            line(combat, "Move speed",
+            line(combat, TextCatalog.get("lore.items.moveSpeed"),
                     speedLabel(it.moveSpeed),
                     false, "");
         }
         if (it.knockbackSquares > 0) {
-            line(combat, "Knockback", it.knockbackSquares + " sq on hit", false, "");
+            line(combat, TextCatalog.get("lore.items.knockback"), it.knockbackSquares + " sq on hit", false, "");
         }
         if (combat.length() > 0) sb.append('\n').append(combat);
 
         // -- Light / food ----------------------------------------------------
         StringBuilder bod = new StringBuilder();
         if (it.lightRadius > 0) {
-            line(bod, "Shines light over", trim(it.lightRadius) + " tiles", false, "");
+            line(bod, TextCatalog.get("lore.items.light"), trim(it.lightRadius) + " tiles", false, "");
         }
         if (it.foodValue > 0) {
-            line(bod, "Food value", ""+it.foodValue/1000, false, "");
+            line(bod, TextCatalog.get("lore.items.food"), ""+it.foodValue/1000, false, "");
         }
         if (bod.length() > 0) sb.append('\n').append(bod);
 
@@ -162,56 +167,66 @@ public final class ItemLore {
             String verb = it.useVerb != null && !it.useVerb.isEmpty()
                     ? it.useVerb : useBehaviorVerb(it.useBehavior);
             switch (it.useBehavior) {
-                case EAT -> flag(use, "Can be eaten to restore satiety.");
+                case EAT -> flag(use, TextCatalog.get("item.use.EAT"));
                 case DRINK -> {
                     if (!it.appliesBuff.isEmpty()) {
-                        flag(use, "Drink to gain " + buffList(it.appliesBuff)
-                                + buffDurationSuffix(it) + ".");
+                        flag(use, TextCatalog.format("item.use.DRINK.buff",
+                                TextCatalog.vars("buffs", buffList(it.appliesBuff),
+                                        "duration", buffDurationSuffix(it))));
                     }
                 }
-                case GRANT_PERK -> flag(use,
-                        "Consume to gain XP.");
+                case GRANT_PERK -> flag(use, TextCatalog.get("item.use.GRANT_PERK"));
                 case WAND -> {
                     if (it.summonsWhenUsed != null) {
-                        flag(use, "Aim and " + verb
-                                + " to summon a " + it.summonsWhenUsed.toLowerCase()
-                                + " at your side.");
+                        flag(use, TextCatalog.format("item.use.WAND.summon",
+                                TextCatalog.vars("verb", verb,
+                                        "mob", it.summonsWhenUsed.toLowerCase())));
                     } 
 
                     if (it.wandEffect != null) {
-                        flag(use, "Aim and " + verb + " to "
-                                + wandEffectVerb(it.wandEffect, it) + ".");
+                        flag(use, TextCatalog.format("item.use.WAND.effect",
+                                TextCatalog.vars("verb", verb,
+                                        "effect", wandEffectVerb(it.wandEffect, it))));
                         if (it.tilesAffected > 0) {
-                            line(use, "Area", it.tilesAffected + " tiles",
+                            line(use, TextCatalog.get("lore.items.area"), it.tilesAffected + " tiles",
                                     it.tilesAffectedPerLevel > 0,
-                                    " plus " + it.tilesAffectedPerLevel
-                                            + " per level");
+                                    perLevelTiles(it.tilesAffectedPerLevel));
                         }
                     } else {
-                        flag(use, "Aim and " + verb + " to fire it.");
+                        flag(use, TextCatalog.format("item.use.WAND.generic",
+                                TextCatalog.vars("verb", verb)));
                     }
                 }
                 case GRAPPLE -> {
-                    flag(use, "Aim and " + verb
-                            + " to yank the contents of the target tile to your side.");
+                    flag(use, TextCatalog.format("item.use.GRAPPLE",
+                            TextCatalog.vars("verb", verb)));
                     if (it.abilityPower > 0f) {
-                        line(use, "Max size",
+                        line(use, TextCatalog.get("lore.items.maxSize"),
                                 Integer.toString((int) it.abilityPower),
                                 false, "");
                     }
                 }
                 case JUMP -> {
-                    flag(use, "Aim and " + verb
-                            + " to leap to a chosen tile within range.");
+                    flag(use, TextCatalog.format("item.use.JUMP",
+                            TextCatalog.vars("verb", verb)));
                     if (it.abilityPower > 0f) {
-                        line(use, "Range",
+                        line(use, TextCatalog.get("lore.items.range"),
                                 ((int) it.abilityPower) + " squares",
                                 false, "");
                     }
                 }
                 case POWERUP -> {
                     if (it.wandEffect != null) {
-                        flag(use, "Walk over to " + powerupVerb(it.wandEffect, it) + ".");
+                        flag(use, TextCatalog.format("item.use.POWERUP",
+                                TextCatalog.vars("effect", powerupVerb(it.wandEffect, it))));
+                    }
+                }
+                case APPLYBUFF -> {
+                    if (!it.appliesBuff.isEmpty()) {
+                        flag(use, TextCatalog.format("item.use.APPLYBUFF",
+                                TextCatalog.vars("verb", verb,
+                                        "buffs", buffList(it.appliesBuff),
+                                        "duration", buffDurationSuffix(it))));
                     }
                 }
                 case NONE -> { /* unreachable - outer guard */ }
@@ -224,34 +239,34 @@ public final class ItemLore {
                 || it.throwResult == ThrowResult.CONSUME) {
             StringBuilder thr = new StringBuilder();
             if (it.throwEffect != null) {
-                flag(thr, "Throw it to " + wandEffectVerb(it.throwEffect, it) + ".");
+                flag(thr, TextCatalog.format("item.throw.effect",
+                        TextCatalog.vars("effect", wandEffectVerb(it.throwEffect, it))));
                 if (it.throwEffect == ItemEffect.APPLYBUFFS
                         && !it.appliesBuff.isEmpty()) {
-                    flag(thr, "Hit mobs gain "
-                            + buffList(it.appliesBuff) + buffDurationSuffix(it) + ".");
+                    flag(thr, TextCatalog.format("item.throw.applyBuffs",
+                            TextCatalog.vars("buffs", buffList(it.appliesBuff),
+                                    "duration", buffDurationSuffix(it))));
                 }
                 if (it.throwEffect == ItemEffect.POISONCLOUD) {
                     if (it.tilesAffected > 0) {
-                        line(thr, "Cloud area", it.tilesAffected + " tiles",
+                        line(thr, TextCatalog.get("lore.items.cloudArea"), it.tilesAffected + " tiles",
                                 it.tilesAffectedPerLevel > 0,
-                                " plus " + it.tilesAffectedPerLevel + " per level");
+                                perLevelTiles(it.tilesAffectedPerLevel));
                     }
                     if (it.abilityPower > 0f) {
-                        line(thr, "Cloud lifetime", ((int) it.abilityPower) + " turns",
+                        line(thr, TextCatalog.get("lore.items.cloudLifetime"), ((int) it.abilityPower) + " turns",
                                 false, "");
                     }
                 }
             }
             switch (it.throwResult) {
-                case CONSUME -> flag(thr, "Shatters on impact.");
-                case RETURN  -> flag(thr,
-                        "Bounces back to the thrower's feet after striking.");
+                case CONSUME -> flag(thr, TextCatalog.get("item.throw.consume"));
+                case RETURN  -> flag(thr, TextCatalog.get("item.throw.return"));
                 case NOTHING -> { /* default - no message */ }
             }
             if (!it.tameOnThrow.isEmpty()) {
-                flag(thr, "Throwing this at a "
-                        + joinLower(it.tameOnThrow)
-                        + " tames it.");
+                flag(thr, TextCatalog.format("item.throw.tame",
+                        TextCatalog.vars("mobs", joinLower(it.tameOnThrow))));
             }
             if (thr.length() > 0) sb.append('\n').append(thr);
         }
@@ -259,7 +274,7 @@ public final class ItemLore {
         // -- Special flags ---------------------------------------------------
         StringBuilder flags = new StringBuilder();
         if (it.glows) {
-            flag(flags, "Glows on the floor with an attention-catching twinkle.");
+            flag(flags, TextCatalog.get("item.flag.glows"));
         }
         if (flags.length() > 0) sb.append('\n').append(flags);
 
@@ -270,42 +285,19 @@ public final class ItemLore {
 
     private static String useBehaviorVerb(UseBehavior u) {
         return switch (u) {
-            case EAT        -> "eat";
-            case DRINK      -> "drink";
-            case WAND       -> "zap";
-            case GRANT_PERK -> "use";
-            case GRAPPLE    -> "grapple";
-            case JUMP       -> "jump";
-            case POWERUP    -> "absorb";
-            case NONE       -> "use";
+            case EAT, DRINK, WAND, GRANT_PERK, GRAPPLE, JUMP, POWERUP, APPLYBUFF, NONE ->
+                    TextCatalog.get("item.useVerb." + u.name());
         };
     }
 
 
     private static String wandEffectVerb(ItemEffect e, Item it) {
         return switch (e) {
-            case DAMAGE      -> "deal " + range(it.damage)
-                    + (it.damagePerLevel.isZero() ? ""
-                            : " (plus " + range(it.damagePerLevel)
-                                    + " per level)")
-                    + " damage to the target";
-            case FIRE        -> "set the target area ablaze";
-            case OIL         -> "spread a layer of oil across the target area";
-            case BLAST       -> "create an explosion at the target";
-            case FREEZE      -> "freeze the target area";
-            case WATER       -> "create a pool of  water at the target";
-            case GRASS       -> "grow vegetation at the target";
-            case FUNGUS      -> "coax mushrooms up from the target";
-            case DETONATION  -> "ignite a fireball at the target";
-            case MISSILE     -> "strike a single target for direct damage";
-            case BANISHMENT  -> "banish otherworldly beings";
-            case LIGHTNING   -> "shock the target and nearby creatures";
-            case APPLYBUFFS  -> "apply a magical effect to the target area";
-            case POISONCLOUD -> "release a poison cloud at the target";
-            case VOID        -> "tear a void at the target - pulls nearby creatures in and crumbles the ground";
-            case POLYMORPH   -> "reshape the target area - rerolls floor tiles and transforms nearby creatures into similarly-sized kin";
-            case LEVEL_UP, HP_UP, MANA_UP -> "absorb its power";
-            default -> "perform a magical action at the target";
+            case DAMAGE -> TextCatalog.format("item.effect.DAMAGE",
+                    TextCatalog.vars("damage", range(it.damage),
+                            "perLevel", it.damagePerLevel.isZero() ? "" : " (" + perLevelRange(it.damagePerLevel).trim() + ")"));
+            case LEVEL_UP, HP_UP, MANA_UP -> TextCatalog.get("item.effect.power.default");
+            default -> TextCatalog.getOrDefault("item.effect." + e.name(), "perform a magical action at the target");
         };
     }
 
@@ -321,19 +313,19 @@ public final class ItemLore {
 
     private static String buffDurationSuffix(Item it) {
         if (it.abilityPower <= 0f) return "";
-        return " for " + ((int) it.abilityPower)
-                + " turns (scaling with item level)";
+        return TextCatalog.format("item.buff.duration",
+                TextCatalog.vars("turns", (int) it.abilityPower));
     }
 
     /** User-facing verb describing what a {@link com.bjsp123.rl2.model.Item.UseBehavior#POWERUP}
      *  pickup does. */
     private static String powerupVerb(ItemEffect e, Item it) {
         return switch (e) {
-            case LEVEL_UP -> "gain a character level";
-            case HP_UP    -> "restore HP (" + ((int) Math.round(it.abilityPower * 100))
-                                + "% of maximum)";
-            case MANA_UP  -> "recharge every wand in your bag";
-            default       -> "absorb its power";
+            case LEVEL_UP -> TextCatalog.get("item.effect.power.LEVEL_UP");
+            case HP_UP    -> TextCatalog.format("item.effect.power.HP_UP",
+                    TextCatalog.vars("percent", (int) Math.round(it.abilityPower * 100)));
+            case MANA_UP  -> TextCatalog.get("item.effect.power.MANA_UP");
+            default       -> TextCatalog.get("item.effect.power.default");
         };
     }
 
@@ -371,6 +363,16 @@ public final class ItemLore {
         if (m == null) return "0";
         return m.min() == m.max() ? Integer.toString(m.min())
                                   : m.min() + "-" + m.max();
+    }
+
+    private static String perLevelRange(MinMax m) {
+        return TextCatalog.format("item.stat.perLevel",
+                TextCatalog.vars("range", range(m)));
+    }
+
+    private static String perLevelTiles(int tiles) {
+        return TextCatalog.format("item.stat.tilesPerLevel",
+                TextCatalog.vars("tiles", tiles));
     }
 
     private static String trim(double v) {

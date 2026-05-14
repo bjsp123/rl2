@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.ui.v2;
 
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.TextCatalog;
 
 /** V2 credits screen - single window with a few centred text lines. */
 public final class V2Credits extends V2Screen {
@@ -38,17 +39,18 @@ public final class V2Credits extends V2Screen {
     protected void drawBodyText(UiCtx ctx) {
         float cx = window.cx();
         float top = window.top() - ctx.headerLineH();
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Credits", cx, top);
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.credits.title"), cx, top);
         top -= ctx.headerLineH() * 2f;
         String[] lines = {
-                "rl2",
+                TextCatalog.get("ui.credits.line.game"),
                 "",
-                "Built with libgdx",
-                "Code by hwacha",
-                "Pixel Operator font",
-                "by Jayvee Enaguas",
+                TextCatalog.get("ui.credits.line.engine"),
+                TextCatalog.get("ui.credits.line.code"),
+                TextCatalog.get("ui.credits.line.font"),
+                TextCatalog.get("ui.credits.line.fontBy"),
                 "",
-                "Thanks for playing.",
+                TextCatalog.get("ui.credits.line.thanks"),
         };
         for (String s : lines) {
             TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, s, cx, top);

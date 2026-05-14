@@ -1,0 +1,870 @@
+key,en
+achievement.ARTISAN.description,Craft your first item.
+achievement.ARTISAN.name,Artisan
+achievement.BEGUN_THE_ADVENTURE.description,Descend to depth 2.
+achievement.BEGUN_THE_ADVENTURE.name,Begun the Adventure
+achievement.DUG_DEEPER.description,Descend to depth 5.
+achievement.DUG_DEEPER.name,Dug Deeper
+achievement.FIRST_BLOOD.description,Kill your first foe.
+achievement.FIRST_BLOOD.name,First Blood
+achievement.GIANT_SLAYER.description,Slay a unique creature.
+achievement.GIANT_SLAYER.name,Giant Slayer
+achievement.HALL_OF_FAMER.description,Complete a run - your name in the Hall of Fame.
+achievement.HALL_OF_FAMER.name,Memento Mori
+achievement.INTO_THE_DEPTHS.description,Take the stairs down for the first time.
+achievement.INTO_THE_DEPTHS.name,Into the Depths
+achievement.LEVELED_UP.description,Gain your first character level.
+achievement.LEVELED_UP.name,Leveling Up
+achievement.THROWN_AWAY.description,Throw an item for the first time.
+achievement.THROWN_AWAY.name,Thrown Away
+achievement.WAND_NEWBIE.description,Fire a wand for the first time.
+achievement.WAND_NEWBIE.name,Magical Education
+achievement.category.COMBAT,Combat
+achievement.category.DEPTH,Depth
+achievement.category.EXPLORATION,Exploration
+achievement.category.ITEMS,Items
+achievement.category.PROGRESSION,Progression
+achievement.category.RUN,Run
+achievement.earned,earned
+achievement.hidden,Hidden achievement - keep playing.
+brand.ACCURACY.description,This device magically increases the wielder's accuracy.
+brand.ACCURACY.name,accuracy
+brand.ANTIFIRE.description,You can't be hurt by fire while wearing this.
+brand.ANTIFIRE.name,extinguishing
+brand.ANTIMAGIC.description,This device weakens hostile magic before it can affect the wearer.
+brand.ANTIMAGIC.name,stability
+brand.ARMOR.description,"Magically warded, this device protects the user from physical hurt."
+brand.ARMOR.name,defence
+brand.DAMAGE.description,An enchantment on this device causes the wielder to do more damage.
+brand.DAMAGE.name,hurting
+brand.DEXTERITY.description,This amulet helps you act faster.
+brand.DEXTERITY.name,alacrity
+brand.EVASION.description,This device magically increases the wielder's ability to avoid attacks.
+brand.EVASION.name,evasion
+brand.FENCING.description,"While using this, you have both extra accuracy and exta evasion"
+brand.FENCING.name,swordplay
+brand.FLAME.description,This weapon burns with magical fire.
+brand.FLAME.name,flame
+brand.FREEZING.description,The air is chilly around this cold-infused weapon.
+brand.FREEZING.name,cold
+brand.HASTE.description,This amulet helps you move around faster.
+brand.HASTE.name,haste
+brand.IMMUNITY.description,This device renders you immune to poisons.
+brand.IMMUNITY.name,immunity
+brand.INVULNERABILITY.description,"This deluxe armor protects you from blows, magic, and even fire and poison."
+brand.INVULNERABILITY.name,invulnerability
+brand.KNOCKBACK.description,This weapon can help knock foes away from you and into each other.
+brand.KNOCKBACK.name,smiting
+brand.LIGHTNING.description,Sparks crackle from this lightning-infused weapon.
+brand.LIGHTNING.name,sparks
+brand.POISON.description,"Dripping with toxic fluids, this weapon poisons its wielder's foes."
+brand.POISON.name,venom
+brand.RESISTANCE.description,This device protects you from fire and poison.
+brand.RESISTANCE.name,resistance
+brand.SORCEROUS_FIRE.description,This exotic weapon burns with a magic flame that empowers your wands.
+brand.SORCEROUS_FIRE.name,sorcerous fire
+brand.SORCERY.description,This amulet empowers your wands.
+brand.SORCERY.name,sorcery
+brand.THUNDER.description,This weapon strikes with the power of a thunderclap.
+brand.THUNDER.name,thunder
+brand.VICIOUSNESS.description,A brutally damaging weapon that hits extra hard an accurately.
+brand.VICIOUSNESS.name,viciousness
+buff.ANTI_MAGIC.description,Incoming magic and fire damage is reduced.
+buff.ANTI_MAGIC.name,Anti-magic
+buff.BLEEDING.description,Open wound - losing HP each turn until it clots.
+buff.BLEEDING.name,Bleeding
+buff.CHILLED.description,Acting slower than normal.
+buff.CHILLED.name,Chilled
+buff.ESP.description,"Can see mobs through walls, but not their HP bars or names."
+buff.ESP.name,ESP
+buff.FRIGHTENED.description,Too scared to act effectively.
+buff.FRIGHTENED.name,Frightened
+buff.GHOSTLY.description,"Harder to hit, but attacking cancels the effect."
+buff.GHOSTLY.name,Ghostly
+buff.HASTED.description,Acting faster than normal.
+buff.HASTED.name,Hasted
+buff.HASTE_COOLDOWN.description,Can't cast haste again until this wears off.
+buff.HASTE_COOLDOWN.name,Recharging
+buff.HEAL_COOLDOWN.description,Can't cast heal again until this wears off.
+buff.HEAL_COOLDOWN.name,Recharging
+buff.HIDING.description,Hidden from enemies. Moving or attacking will cancel this.
+buff.HIDING.name,Hiding
+buff.HOPE.description,Feeling hopeful and courageous.
+buff.HOPE.name,Blessed
+buff.INSIGHT.description,The whole level layout is revealed at the start of every turn.
+buff.INSIGHT.name,Insight
+buff.INVISIBLE.description,"Harder to hit, but attacking cancels the effect."
+buff.INVISIBLE.name,Invisible
+buff.KILLER.description,Striking with deadly precision.
+buff.KILLER.name,Killer
+buff.LEVITATING.description,Unaffected by ground hazards and pits.
+buff.LEVITATING.name,Levitating
+buff.OILY.description,Takes extra damage from fire.
+buff.OILY.name,Oily
+buff.ON_FIRE.description,Losing HP each turn until it burns out.
+buff.ON_FIRE.name,On Fire
+buff.PHASE.description,Moving at blinding speed. Ends on taking or dealing damage.
+buff.PHASE.name,Phasing
+buff.POISONED.description,Losing HP each turn until the poison wears off.
+buff.POISONED.name,Poisoned
+buff.PROTECTION.description,Incoming physical damage is reduced.
+buff.PROTECTION.name,Protection
+buff.RANGED_COOLDOWN.description,Can't use ranged attacks until this wears off.
+buff.RANGED_COOLDOWN.name,Recharging
+buff.REGENERATION.description,Regenerating HP each turn.
+buff.REGENERATION.name,Regeneration
+buff.SORCERY.description,Your next spell or potion is empowered.
+buff.SORCERY.name,Sorcery
+buff.STARVING.description,Needs to eat soon or start taking damage.
+buff.STARVING.name,Starving
+buff.TELEPORT_COOLDOWN.description,Can't teleport again until this wears off.
+buff.TELEPORT_COOLDOWN.name,Recharging
+buff.WET.description,Takes extra damage from lightning.
+buff.WET.name,Wet
+buff.death.ON_FIRE, burns to a cinder
+buff.death.POISONED, succumbs to poison
+buff.info.level,Level {level}
+buff.info.permanent,Permanent
+buff.info.turns,{turns} turns
+characterClass.mage.blurb,"Fragile, but carries the amulet of light."
+characterClass.mage.name,Mage
+characterClass.rogue.blurb,"Quick and evasive, lightly armed."
+characterClass.rogue.name,Rogue
+characterClass.warrior.blurb,Hardy fighter with sword and scale mail.
+characterClass.warrior.name,Warrior
+effect.combat.blunt,blunt
+effect.combat.miss,miss
+effect.levelUp.up,up
+effect.mob.tamed,tame!
+eventlog.achievement.unlocked,Achievement unlocked: {achievement}.
+eventlog.combat.enemy.hit,The {attacker} hits {player} for {damage}.
+eventlog.combat.enemy.kill,The {attacker} kills {player}!
+eventlog.combat.enemy.miss,The {attacker} misses {player}.
+eventlog.combat.mob.hit,The {attacker} hits the {target} for {damage}.
+eventlog.combat.mob.kill,The {attacker} kills the {target}!
+eventlog.combat.mob.miss,The {attacker} misses the {target}.
+eventlog.combat.player.hit,{player} hits the {target} for {damage}.
+eventlog.combat.player.kill,{player} kills the {target}!
+eventlog.combat.player.miss,{player} misses the {target}.
+eventlog.combat.roll.damage,{attacker} -> {target}: {element} {rolled}{mitigations} -> {dealt}
+eventlog.combat.roll.miss,{attacker} -> {target}: {element} miss
+eventlog.combat.roll.mitigations, [{mitigations}]
+eventlog.fallback.adventurer,Adventurer
+eventlog.fallback.creature,creature
+eventlog.fallback.equipped,equipped
+eventlog.game.begin,{player} begins a new adventure.
+eventlog.item.fizzleOutOfCharge,The {item} fizzles - out of charge.
+eventlog.item.itemFallback,item
+eventlog.item.noCharge,The {item} has no charge left.
+eventlog.item.powerupAbsorb,{actor} absorbs the {item}.
+eventlog.item.powerupFallback,powerup
+eventlog.item.verb.drink,drink
+eventlog.item.verb.use,use
+eventlog.item.wandFallback,wand
+eventlog.level.enter,{player} enters level {depth}{flags}.
+eventlog.level.flag.BIGLEVEL,big level
+eventlog.level.flag.PLANTS,plants
+eventlog.level.flag.ROUGH,rough
+eventlog.level.flag.WALKWAY_LEVEL,plank corridors
+eventlog.level.flag.WATER,water
+eventlog.level.flags, ({flags})
+eventlog.mobaction.eatsVegetation,The {mob} eats the {vegetation}.
+eventlog.mobaction.hostileToPlayer,The {mob} becomes hostile{reason}!
+eventlog.mobaction.pickup,The {mob} picks up the {item}.
+eventlog.mobaction.spawn,A {mob} appears.
+eventlog.mobaction.turnsOnMob,The {mob} turns on the {target}{reason}.
+eventlog.mobaction.usesAbility,The {mob} uses {ability} on {target}.
+eventlog.mobaction.usesAbility.nonplayerTarget,the {target}
+eventlog.mobaction.usesItem,The {mob} uses the {item}.
+eventlog.mobaction.wakes,The {mob} wakes up{reason}.
+eventlog.path.damage,Path interrupted: you took damage.
+eventlog.path.hostileAppears,Path interrupted: a {mob} comes into view.
+eventlog.player.eats,{player} eats the {item}.
+eventlog.player.grappleBlocked,The rope can't pull the {target}.
+eventlog.player.pickup,{player} picks up a {item}.
+eventlog.player.starves,{player} is starving!
+eventlog.player.uses,{player} {verb} the {item}.
+eventlog.reason.parenthesized, ({reason})
+help.001.para1,*Potions* are good.
+help.001.para2,So is *food*.
+help.001.title,Potions and food
+help.002.para1,*Wands* help you attack from afar.
+help.002.para2,They can do many things.
+help.002.title,Wands
+help.003.para1,Ranged enemies such as *imps* can be a pain.  There are a lot of ways to deal with them.
+help.003.para2,"You could close the distance with them, use something like *smoke* to prevent them from shooting, or *grapple* them and pull them close."
+help.003.para3,Or you could trick them into shooting *their own allies*?
+help.003.title,Dealing with ranged enemies
+help.004.para1,The common orange *cat* is a frequent visitor to the dungeon.
+help.004.para2,Legend has it that these creatures can be powerful allies if treated well.
+help.004.para3,Cats sometimes bring their *kittens* into the dungeon.
+help.004.title,Animals and plants
+help.005.para1,"Leveling up is done by collecting *orbs*, not by killing enemies for xp"
+help.005.title,Levels and Perks
+item.AMULET_OF_DEFENCE.description,"A blue, shield shaped gem in a gold setting."
+item.AMULET_OF_DEFENCE.description2,Protects from physical blows.
+item.AMULET_OF_DEFENCE.name,protective amulet
+item.AMULET_OF_FINESSE.description,"An intricate sign traced in silver, it seems to aid your precision in combat."
+item.AMULET_OF_FINESSE.name,precise amulet
+item.AMULET_OF_LIGHT.description,"A pale gem set in silver, it shines brightly."
+item.AMULET_OF_LIGHT.description2,Light can change how creatures and plants act.
+item.AMULET_OF_LIGHT.name,glowing amulet
+item.AMULET_OF_NIMBLENESS.description,A complex magical token that helps you move faster.
+item.AMULET_OF_NIMBLENESS.name,nimble amulet
+item.AMULET_OF_WARDING.description,"A grey, unremarkable amulet to look at."
+item.AMULET_OF_WARDING.description2,Protects from magical and energy attacks.
+item.AMULET_OF_WARDING.name,warding amulet
+item.ANT_JELLY.description,"Ants make this ultra nourishing jelly, as healthy as it is revolting."
+item.ANT_JELLY.description2,Regenerates health.
+item.ANT_JELLY.name,ant jelly
+item.BLAST_BOMB.description,A heavy iron sphere full of magical powder.
+item.BLAST_BOMB.description2,Damages and pushes away everything around the point of impact.
+item.BLAST_BOMB.name,blast bomb
+item.BLINKSTONE.description,A very lifelike small enamel frog -- or is it a real frog staying very still?
+item.BLINKSTONE.description2,Use it from a quickslot to jump rapidly away from or toward your foes.
+item.BLINKSTONE.name,blinkstone
+item.BLOODYBLADE.description,"This nasty, underhanded weapon is permanently coated in poison."
+item.BLOODYBLADE.description2,Creates poison clouds on the target.
+item.BLOODYBLADE.name,venomblade
+item.CATCHERBALL.description,A lacquered ball with a spring-loaded brass hinge and a hungry little click.
+item.CATCHERBALL.description2,Throw it at a creature to trap it inside. Throw a full one to release its occupant.
+item.CATCHERBALL.name,catcherball
+item.CHAIN_MAIL.description,Mail made of rings.
+item.CHAIN_MAIL.description2,It protects you somewhat against physical attacks.
+item.CHAIN_MAIL.name,chain mail
+item.CHARGEPILL.description,A scrap of magical energy for your items.
+item.CHARGEPILL.description2,Absorbed instantly on touching.
+item.CHARGEPILL.name,chargepill
+item.CHERRY_BOMB.description,A small bomb.
+item.CHERRY_BOMB.name,cherry bomb
+item.CUTLASS.description,"A heavy, brutal sword that can block a good deal of damage"
+item.CUTLASS.description2,"Hits hard, knocks back, protects  a bit -- nice."
+item.CUTLASS.name,cutlass
+item.DAGGER.description,"A short bladed dagger, a classic weapon."
+item.DAGGER.description2,Not especially deadly but strikes rapidly.
+item.DAGGER.name,dagger
+item.FIRE_BOMB.description,A flask of unstable alchemy.
+item.FIRE_BOMB.description2," On impact, deals damage and ignites tiles around the target."
+item.FIRE_BOMB.name,fire bomb
+item.FISH.description,A small fresh fish. 
+item.FISH.description2,So tasty that a stray cat or dog you throw it to will follow you for the rest of its life.
+item.FISH.name,delicious fish
+item.FOUL_MEAT.description,"A rotting, disgusting gob of mystery meat."
+item.FOUL_MEAT.description2,There are probably particularly vile creatures that would be glad to be given this.
+item.FOUL_MEAT.name,foul meat
+item.FREEZE_BOMB.description,A frosted vial that shatters into a freezing burst.
+item.FREEZE_BOMB.description2,"Chills enemies, extinguishes flames."
+item.FREEZE_BOMB.name,freeze bomb
+item.FROG.description,A very lifelike small enamel frog -- or is it a real frog staying very still?
+item.FROG.description2,Use it from a quickslot to jump rapidly away from or toward your foes.
+item.FROG.name,frog of jumping
+item.FROG2.description,A multicolored enamel frog -- or is it a real frog staying very still?
+item.FROG2.description2,Use it from a quickslot to jump rapidly away from or toward your foes.
+item.FROG2.name,frog of somersaulting
+item.GRAPPLING_HOOK.description,A hook on a strong rope.
+item.GRAPPLING_HOOK.description2,"Can pull enemies -- smaller ones, at least -- toward you."
+item.GRAPPLING_HOOK.name,grappling hook
+item.HEALING_POTION.description,A vial of healing elixir.
+item.HEALING_POTION.description2,"It doesn't work instantly, it helps you regenerate over time."
+item.HEALING_POTION.name,healing potion
+item.HEALTHPILL.description,A valuable scrap of health.
+item.HEALTHPILL.description2,Absorbed instantly on touching.
+item.HEALTHPILL.name,healthpill
+item.HEAVY_MAIL.description,Thick plates of steel encase your body.
+item.HEAVY_MAIL.description2,"Lots of protection against physical attack, at the cost of speed."
+item.HEAVY_MAIL.name,heavy plate mail
+item.IPWERGIS.description,Ipwergis-pudding is a magically delectable food with many powers.
+item.IPWERGIS.description2,Grants insights if eaten; magical creatures might be very pleased to be given it.
+item.IPWERGIS.name,ipwergis-pudding
+item.JADE_FISH.description,"A peaceful green fish carved from jade, cool and smooth in the hand."
+item.JADE_FISH.description2,Hold the fish and you pass through the world like a blur.
+item.JADE_FISH.name,jade fish
+item.KATANA.description,"A deadly, razor sharp sword."
+item.KATANA.name,katana
+item.KITE_SHIELD.description,A sturdy kite shield offering good protection.
+item.KITE_SHIELD.name,kite shield
+item.OIL_BOMB.description,A glass sphere of dark oil. Shatters and slicks the floor on impact.
+item.OIL_BOMB.description2,Oil is highly flammable.
+item.OIL_BOMB.name,oil bomb
+item.PEAR.description,A ripe green pear.
+item.PEAR.description2,A surprisingly common and nutritious food.
+item.PEAR.name,pear
+item.PEAR_CONFERENCE.description,"A long elegant pear, reportedly the kind eaten at high meetings."
+item.PEAR_CONFERENCE.name,conference pear
+item.PEAR_SCRUMPTIOUS.description,"A specially ripe pear, dripping with juice. Five times more filling than the ordinary kind."
+item.PEAR_SCRUMPTIOUS.name,scrumptious pear
+item.PEAR_SILVERY.description,A pear with skin that shimmers like polished silver. Mysterious.
+item.PEAR_SILVERY.name,silvery pear
+item.POTION_ESP.description,A fizzy potion that seems to weigh nothing.
+item.POTION_ESP.description2,Confers levitation on the drinker.
+item.POTION_ESP.name,potion of levitation
+item.POTION_GHOSTLINESS.description,A swirling pearl-grey liquid.
+item.POTION_GHOSTLINESS.description2,The drinker becomes briefly ethereal and can pass through walls.
+item.POTION_GHOSTLINESS.name,potion of ghostliness
+item.POTION_INSIGHT.description,A clear potion that crackles faintly.
+item.POTION_INSIGHT.description2, Reveals the layout of the entire level on a draught.
+item.POTION_INSIGHT.name,potion of insight
+item.POTION_INVISIBILITY.description,A clear potion that hides the imbiber from sight for a short while.
+item.POTION_INVISIBILITY.description2,Invisibility ends if you attack.
+item.POTION_INVISIBILITY.name,potion of invisibility
+item.POTION_LEV.description,A glutinous potion that seems made of eyeballs.
+item.POTION_LEV.description2,Allows the drinker to percieve distant creatures.
+item.POTION_LEV.name,potion of perception
+item.POTION_POISON.description,"A sickly green elixir. Vile to drink, devastating to throw."
+item.POTION_POISON.description2,"If thrown, creates a puff of poison vapor."
+item.POTION_POISON.name,potion of poison
+item.POTION_SORCERY.description,A glittering brew that infuses the drinker with magical energy.
+item.POTION_SORCERY.description2,Increases the power of wands while its effects are active.
+item.POTION_SORCERY.name,potion of sorcery
+item.POWER_ORB.description,A sphere of power that makes you stronger.
+item.POWER_ORB.description2,Absorbed by touching.
+item.POWER_ORB.name,power orb
+item.PUNCH_DAGGER.description,A fine dagger capable of slicing a foe to ribbons.
+item.PUNCH_DAGGER.description2,Often manages to get right past a foe's armor plates.
+item.PUNCH_DAGGER.name,heavy dagger
+item.RAPIER.description,"A well-made blade, expertly balanced."
+item.RAPIER.description2,Rapiers do moderate damage but you can attack more often with them.
+item.RAPIER.name,rapier
+item.RAPIER2.description,"A beautiful, deadly stabbing blade."
+item.RAPIER2.description2,Rapiers do moderate damage but you can attack more often with them.
+item.RAPIER2.name,fine rapier
+item.SCALE_MAIL.description,Overlapping iron scales on a leather backing.
+item.SCALE_MAIL.description2,It protects you fairly well against physical attacks.
+item.SCALE_MAIL.name,scale mail
+item.SHIELD.description,A round wooden shield.
+item.SHIELD.description2,Protects a bit against physical damage.
+item.SHIELD.name,round shield
+item.SHOCK_BOMB.description,A ball of tightly coiled wire that can release powerful current.
+item.SHOCK_BOMB.description2,"Lighting bolts arc from foe to foe, doing extra damage to wet targets."
+item.SHOCK_BOMB.name,shock bomb
+item.SWORD.description,"A plain iron blade, friend of many an adventurer."
+item.SWORD.description2,"As well as decent damage, it's heavy enough to knock smaller enemies back a bit."
+item.SWORD.name,sword
+item.TASTY_MEAT.description,A plump pink chunk of tasty meat.
+item.TASTY_MEAT.name,tasty meat
+item.THROWING_KNIFE.description,This well balanced knife can be thrown from some way off.
+item.THROWING_KNIFE.description2,Minor magic helps it return to its thrower -- a bit.
+item.THROWING_KNIFE.name,throwing knife
+item.TORCH.description,A blazing torch that casts bright light all around.
+item.TORCH.description2,"Lights up the area, potentially changing how creatures and plants behave.  Also helps you go a bit faster."
+item.TORCH.name,torch
+item.VINE_HOOK.description,"This powerful magical vine wraps itself around a foe, allowing you to haul them nearer."
+item.VINE_HOOK.description2,Can pull enemies -- even quite large ones -- toward you.
+item.VINE_HOOK.name,grapplevine
+item.VOID_BOMB.description,"A powerful bomb that draws in matter, creating a void."
+item.VOID_BOMB.description2,Destroys floors and pulls creatures toward it.
+item.VOID_BOMB.name,void bomb
+item.WAND_BANISHMENT.description,A wand bound in tarnished silver and tipped with flickering crystals.
+item.WAND_BANISHMENT.description2,This specialized wand can instantly banish creatures that are not really real.
+item.WAND_BANISHMENT.name,wand of banishment
+item.WAND_DETONATION.description,A blackened iron wand inlaid with red runes. Detonates the target tile in a ball of fire.
+item.WAND_DETONATION.description2,Blows the target location to smithereens.
+item.WAND_DETONATION.name,wand of detonation
+item.WAND_DOG.description,A wand decorated with a small animal head.
+item.WAND_DOG.description2,Summons a loyal dog to protect you.
+item.WAND_DOG.name,wand of dog
+item.WAND_FIRE.description,A blackened wand crackling with embers. Ignites the target.
+item.WAND_FIRE.description2,Spreads fire around the target point
+item.WAND_FIRE.name,wand of fire
+item.WAND_FUNGUS.description,A spongy red-brown wand.
+item.WAND_FUNGUS.description2,Causes mushrooms to grow at the target area.
+item.WAND_FUNGUS.name,wand of fungus
+item.WAND_GRASS.description,A green wand bound with vine.
+item.WAND_GRASS.description2,Engenders vegetation at the target point.
+item.WAND_GRASS.name,wand of vegetation
+item.WAND_LIGHTNING.description,A wand that crackles with energy. 
+item.WAND_LIGHTNING.description2,Effect jumps from target to target and is stronger in water -- beware.
+item.WAND_LIGHTNING.name,wand of lightning
+item.WAND_MAGIC_MISSILE.description,A short wand topped with a pale chip of crystal.
+item.WAND_MAGIC_MISSILE.description2,Sends out a magical bolt that does moderate damage.
+item.WAND_MAGIC_MISSILE.name,wand of magic missile
+item.WAND_OIL.description,A dark wand slick to the touch. 
+item.WAND_OIL.description2,Creates a layer of oil at the target location.
+item.WAND_OIL.name,wand of oil
+item.WAND_POLYMORPH.description,A wand that constantly shifts and changes.
+item.WAND_POLYMORPH.description2,Can turn a creature into something else.
+item.WAND_POLYMORPH.name,wand of polymorph
+item.WAND_WATER.description,A pale blue wand that drips with water.
+item.WAND_WATER.description2,Creates a pool of water at the target location.
+item.WAND_WATER.name,wand of water
+item.buff.duration, for {turns} turns (scaling with item level)
+item.effect.APPLYBUFFS,apply a magical effect to the target area
+item.effect.BANISHMENT,banish otherworldly beings
+item.effect.BLAST,create an explosion at the target
+item.effect.CAPTURE,capture or release a creature
+item.effect.DAMAGE,deal {damage}{perLevel} damage to the target
+item.effect.DETONATION,ignite a fireball at the target
+item.effect.FIRE,set the target area ablaze
+item.effect.FREEZE,freeze the target area
+item.effect.FUNGUS,coax mushrooms up from the target
+item.effect.GRASS,grow vegetation at the target
+item.effect.LIGHTNING,shock the target and nearby creatures
+item.effect.MISSILE,strike a single target for direct damage
+item.effect.OIL,spread a layer of oil across the target area
+item.effect.POISONCLOUD,release a poison cloud at the target
+item.effect.POLYMORPH,reshape the target area - rerolls floor tiles and transforms nearby creatures into similarly-sized kin
+item.effect.VOID,tear a void at the target - pulls nearby creatures in and crumbles the ground
+item.effect.WATER,create a pool of water at the target
+item.effect.power.HP_UP,restore HP ({percent}% of maximum)
+item.effect.power.LEVEL_UP,gain a character level
+item.effect.power.MANA_UP,recharge every wand in your bag
+item.effect.power.default,absorb its power
+item.flag.glows,Glows on the floor with an attention-catching twinkle.
+item.header.brand,Brand: {brand}
+item.header.effectiveLevel,Effective level: +{effective} (actual +{actual})
+item.header.equippable,Equippable as {category}
+item.header.level,Level: +{level}
+item.header.material,Made of {material}
+item.stat.accuracy,Accuracy: {value}
+item.stat.apDamage,AP damage: {range}{perLevel}
+item.stat.area,Area: {tiles} tiles{perLevel}
+item.stat.armor,Armor: {range}{perLevel}
+item.stat.attackSpeed,Attack speed: {value}
+item.stat.cloudArea,Cloud area: {tiles} tiles{perLevel}
+item.stat.cloudLifetime,Cloud lifetime: {turns} turns
+item.stat.damage,Damage: {range}{perLevel}
+item.stat.evasion,Evasion: {value}
+item.stat.food,Food value: {value}
+item.stat.knockback,Knockback: {squares} sq on hit
+item.stat.light,Shines light over: {tiles} tiles
+item.stat.magicResist,Magic resist: {range}{perLevel}
+item.stat.maxSize,Max size: {value}
+item.stat.moveSpeed,Move speed: {value}
+item.stat.perLevel, plus {range} per level
+item.stat.range,Range: {squares} squares
+item.stat.tilesPerLevel, plus {tiles} per level
+item.throw.applyBuffs,Hit mobs gain {buffs}{duration}.
+item.throw.consume,Shatters on impact.
+item.throw.effect,Throw it to {effect}.
+item.throw.return,Bounces back to the throwers feet after striking.
+item.throw.tame,Throwing this at a {mobs} tames it.
+item.use.APPLYBUFF,{verb} to gain {buffs}{duration}.
+item.use.DRINK.buff,Drink to gain {buffs}{duration}.
+item.use.EAT,Can be eaten to restore satiety.
+item.use.GRANT_PERK,Consume to gain XP.
+item.use.GRAPPLE,Aim and {verb} to yank the contents of the target tile to your side.
+item.use.JUMP,Aim and {verb} to leap to a chosen tile within range.
+item.use.POWERUP,Walk over to {effect}.
+item.use.WAND.effect,Aim and {verb} to {effect}.
+item.use.WAND.generic,Aim and {verb} to fire it.
+item.use.WAND.summon,Aim and {verb} to summon a {mob} at your side.
+item.useVerb.APPLYBUFF,use
+item.useVerb.DRINK,drink
+item.useVerb.EAT,eat
+item.useVerb.GRANT_PERK,use
+item.useVerb.GRAPPLE,grapple
+item.useVerb.JUMP,jump
+item.useVerb.NONE,use
+item.useVerb.POWERUP,absorb
+item.useVerb.WAND,zap
+lore.items.accuracy,Accuracy
+lore.items.apDamage,AP damage
+lore.items.area,Area
+lore.items.armor,Armor
+lore.items.attackSpeed,Attack speed
+lore.items.cloudArea,Cloud area
+lore.items.cloudLifetime,Cloud lifetime
+lore.items.damage,Damage
+lore.items.evasion,Evasion
+lore.items.food,Food value
+lore.items.knockback,Knockback
+lore.items.light,Shines light over
+lore.items.magicResist,Magic resist
+lore.items.maxSize,Max size
+lore.items.moveSpeed,Move speed
+lore.items.range,Range
+mob.BARBARIAN_PRINCESS.description,"A fierce barbarian princess, fearless and pursuing her own goals"
+mob.BARBARIAN_PRINCESS.name,barbarian princess
+mob.BAT.description,"A large, menacing bat. It flutters around in the shadows, its eyes glowing with malevolent intent."
+mob.BAT.name,doom bat
+mob.BLACK_ANT.description,"A proud ant worker, far superior to its red ant foes."
+mob.BLACK_ANT.name,black ant
+mob.BLACK_ANT_HILL.description,"A colony of black ants has broken through into the dungeon here, intent on extracting resources."
+mob.BLACK_ANT_HILL.name,black ant hill
+mob.BLAZING_FIREMOUSE.description,"A small, skittering mouse with a fiery disposition."
+mob.BLAZING_FIREMOUSE.name,blazing firemouse
+mob.BLOB.description,"A large, unpleasant creature. It oozes across the floor, consuming everything in its path."
+mob.BLOB.name,blob
+mob.BUG_PRODIGY.description,"The Prodigy might once have been a soldier bug, but it has evolved into something disturbingly humanoid."
+mob.BUG_PRODIGY.name,bug prodigy
+mob.CAT.description,"A sleek and agile cat, always on the prowl for its next meal.  Mice beware."
+mob.CAT.name,cat
+mob.CAT_PB.description,A white cat from old Ireland that is an expert at catching mice. 
+mob.CAT_PB.name,pangur ban
+mob.DEVELOPED_MASK_IMP.description,"An imp of unusual size, hiding itself behind a leering mask."
+mob.DEVELOPED_MASK_IMP.name,developed mask imp
+mob.DOG.description,"A loyal and fierce dog, trained to hunt and protect."
+mob.DOG.name,hound
+mob.GHOST.description,"A twisted piece of cloth that adopts a malevolent form, ethereal yet all too real."
+mob.GHOST.name,sheet ghost
+mob.HORRIBLE_MASK_IMP.description,"Far, far bigger than imps are supposed to be, you dread to imagine what might be hidden beneath that ornate mask."
+mob.HORRIBLE_MASK_IMP.name,horrible mask imp
+mob.HORROR.description,"A towering, nightmarish creature of malice and hunger.  Stories say that if you run away it will simply reappear at your side."
+mob.HORROR.name,stalking horror
+mob.KISSYBLOB.description,"A large, revolting, indiscriminately predatory creature, capable of spawning further horrible blobs when fed enough flesh."
+mob.KISSYBLOB.name,kissyblob
+mob.KITTEN.description,A small kitten that looks up to its parent cat.  You can only hope it survives long enough to grow up.
+mob.KITTEN.name,kitten
+mob.KOBOLD_CLEAVER.description,"A heavyset, scaly humanoid hefting a battered meat-cleaver. The blade looks plenty capable of finding the gaps in plate."
+mob.KOBOLD_CLEAVER.name,kobold cleaver
+mob.KOBOLD_FIGHTER.description,"A small, scaly humanoid wielding a crude blade. It hisses at you with malice."
+mob.KOBOLD_FIGHTER.name,kobold fighter
+mob.KOBOLD_GENERAL.description,"A tall, scaly humanoid in worn ceremonial plate. He barks orders to his kin and raises a glowing standard."
+mob.KOBOLD_GENERAL.name,kobold general
+mob.KOBOLD_SPEARMAN.description,"A scaly humanoid clutching a bundle of crude spears. It hangs back from the fight, looking for a clear throw."
+mob.KOBOLD_SPEARMAN.name,kobold spearman
+mob.LARGE_MASK_IMP.description,An imp that hides its identity behind a grotesque mask.  It's slightly larger and stronger than its smaller kin.
+mob.LARGE_MASK_IMP.name,large mask imp
+mob.LOATHESOME_BUG.description,A loathsome bug. This cockroach-like creature has few redeeming features.  It's not very strong.
+mob.LOATHESOME_BUG.name,roach
+mob.MANEGARM.description,What twisted this huge dog into such a malevolent and brutal form?
+mob.MANEGARM.name,gorehound
+mob.MASK_IMP.description,"A small, hostile creature hiding behind a rudimentary mask."
+mob.MASK_IMP.name,mask imp
+mob.MOUSE.description,"A small, skittering mouse. It's timid and tends to flee from you."
+mob.MOUSE.name,dungeon mouse
+mob.ORC_HALBERDIER.description,What threats and lies drew him here?  Or is this just what he does?
+mob.ORC_HALBERDIER.name,sad orc
+mob.ORC_PRESIDENT.description,A stunted orc whose misshapen body can contain only evil.
+mob.ORC_PRESIDENT.name,orc mastermind
+mob.ORC_SNIPER.description,Why is he here?  Why is he shooting at you?  Does he even know?
+mob.ORC_SNIPER.name,sad orc sniper
+mob.PALUG.description,A feline horror bent on violence.  MAYBE it's on your side.
+mob.PALUG.name,cath palug
+mob.PLAYER_MAGE.description,"Fragile, but carries the amulet of light."
+mob.PLAYER_MAGE.name,Mage
+mob.PLAYER_ROGUE.description,"Quick and evasive, lightly armed."
+mob.PLAYER_ROGUE.name,Rogue
+mob.PLAYER_WARRIOR.description,Hardy fighter with sword and scale mail.
+mob.PLAYER_WARRIOR.name,Warrior
+mob.RAT.description,A mangy rat with too many teeth. Slightly tougher than a roach but no scarier.
+mob.RAT.name,dungeon rat
+mob.RED_ANT.description,"A proud ant worker, far superior to its black ant foes."
+mob.RED_ANT.name,red ant
+mob.RED_ANT_HILL.description,"A colony of red ants has broken through into the dungeon here, intent on extracting resources."
+mob.RED_ANT_HILL.name,red ant hill
+mob.SOLDIER_BUG.description,A soldier bug. This insect has a glossy carapace and razor-sharp pincers.  It's stronger than it looks.
+mob.SOLDIER_BUG.name,soldier bug
+mob.SPIDER.description,"A small, skittering spider. It could well be poisonous.  It's certainly fast moving."
+mob.SPIDER.name,needle spider
+mob.UNIQUE_BAT.description,"Far nastier than its ordinary doombat brethren, it wants to suck your blood."
+mob.UNIQUE_BAT.name,vampire bat
+mob.UNIQUE_BUG_PRODIGY.description,A bug that evolved into a humanoid -- but something went wrong.
+mob.UNIQUE_BUG_PRODIGY.name,mutated prodigy
+mob.UNIQUE_DEVELOPED_MASK_IMP.description,"A particularly horrid imp, this one capers and leers while still hiding behind its unpleasant mask."
+mob.UNIQUE_DEVELOPED_MASK_IMP.name,vile imp
+mob.UNIQUE_GHOST.description,A twisted piece of cloth whose mouth opens wider... and wider...
+mob.UNIQUE_GHOST.name,spectre
+mob.UNIQUE_HORRIBLE_MASK_IMP.description,This must be an imp -- but it's grown to insane proportions and moves with terrifying speed.
+mob.UNIQUE_HORRIBLE_MASK_IMP.name,horror mask
+mob.UNIQUE_KOBOLD_CLEAVER.description,"This kobold looks a lot stronger, a lot crazier, and a lot more dangerous than the rest."
+mob.UNIQUE_KOBOLD_CLEAVER.name,kobold butcher
+mob.UNIQUE_KOBOLD_FIGHTER.description,"This kobold is a lot tougher than the others, and seems to have a six pack.  Is... this... Sparta??"
+mob.UNIQUE_KOBOLD_FIGHTER.name,kobold spartan
+mob.UNIQUE_KOBOLD_GENERAL.description,"A kobold ruler, decked in gold and jewels."
+mob.UNIQUE_KOBOLD_GENERAL.name,kobold monarch
+mob.UNIQUE_KOBOLD_SPEARMAN.description,"Somehow, this otherwise harmless kobold has got hold of a crude firearm, which it uses to dominate its kin."
+mob.UNIQUE_KOBOLD_SPEARMAN.name,kobold rifleman
+mob.UNIQUE_LARGE_MASK_IMP.description,An imp that hides its identity behind a grotesque mask.  This one has grown really quite large and seems more independent.
+mob.UNIQUE_LARGE_MASK_IMP.name,elder large mask imp
+mob.UNIQUE_LOATHESOME_BUG.description,This cockroach like creature seethes with a malevolent intelligence.
+mob.UNIQUE_LOATHESOME_BUG.name,elder roach
+mob.UNIQUE_MASK_IMP.description,"A small, hostile creature hiding behind a rudimentary mask.  This particular one seems to be a bit bolder than the others."
+mob.UNIQUE_MASK_IMP.name,mask imp ringleader
+mob.UNIQUE_RAT.description,"This rat sees itself as an adventurer, but it's just as mangy and disease-ridden as the others."
+mob.UNIQUE_RAT.name,roland the dungeon rat
+mob.UNIQUE_SOLDIER_BUG.description,"A highly experienced insect, veteran of many tough fights."
+mob.UNIQUE_SOLDIER_BUG.name,elite soldier bug
+mob.UNIQUE_SPIDER.description,A revolting spider laden with venom.
+mob.UNIQUE_SPIDER.name,black widow
+mob.WOLF.description,"A prowling wolf, looking for flesh."
+mob.WOLF.name,cave wolf
+mob.abilities.header,Abilities:
+mob.ability.BUFF,Casts {buff} on an ally{duration}{cooldown}
+mob.ability.HEAL,Heals an ally for {amount} HP{cooldown}
+mob.ability.TELEPORT,Suddenly appears at the side of an enemy{cooldown}
+mob.ability.cooldown, every {turns} turns
+mob.ability.duration, for {turns} turns
+mob.carries,Carries:  {items}
+mob.enemyOf,Enemy of: {value}
+mob.equipped,Equipped: {items}
+mob.faction,Faction: {value}
+mob.flag.banishable,This otherwordly being is vulnerable to being Banished.
+mob.flag.eatSpawn,"By devouring corpses, this creature can spawn further beings."
+mob.flag.fireExplosionOnDeath,"On death, this creature explodes in fire."
+mob.flag.fireImmune,This creature is immune to fire.
+mob.flag.fireSpreadOnAttack,This creatures hits ignite tiles around the target.
+mob.flag.flying,This is a flying creature.
+mob.flag.mushroomEatSpawn,Feasting on mushrooms causes this creature to breed explosively.
+mob.flag.notTerrifiable,This creature does not frighten easily.
+mob.flag.poisonsOnAttack,This creatures venomous attacks poison the foe.
+mob.flag.terrifying,This terrifying being frightens nearby susceptible creatures.
+mob.flag.turnSpawn,Can send out servants to do its bidding.
+mob.flees,Flees: {value}
+mob.hostileTo,Hostile to: {value}
+mob.light,This creature glows with light!
+mob.notNecessarilyHostile,This is not necessarily a hostile creature.  
+mob.ranged.damage,This creature has a ranged attack with damage {range}
+mob.ranged.range,Its range is: {tiles} tiles.
+mob.ranged.rate,It can fire every: {turns} turns.
+mob.senses,"Sees for {vision} tiles, may wake if foe within {wake} tiles."
+mob.size.huge,This creature is huge in size.
+mob.size.large,This creature is large.
+mob.size.small,This creature is quite small.
+mob.size.tiny,This creature is tiny.
+mob.size.veryBig,This creature is very big.
+mob.speed.attack.extremelyFast,This creatures attacks are lightning-fast.
+mob.speed.attack.extremelySlow,This creature attacks sluggishly.
+mob.speed.attack.fast,This creature can attack rather quickly.
+mob.speed.attack.slow,This creatures attacks are rather slow.
+mob.speed.move.extremelyFast,This creature moves extremely fast.
+mob.speed.move.extremelySlow,This creature is extremely sluggish.
+mob.speed.move.fast,This creature moves rather swiftly.
+mob.speed.move.slow,This creature is somewhat slow-moving.
+mob.stat.apDamage,AP damage: {range}{perLevel}
+mob.stat.armor,Armor: {range}{perLevel}
+mob.stat.attack,Attack: {value}{perLevel}
+mob.stat.damage,Damage: {range}{perLevel}
+mob.stat.defense,Defense: {value}{perLevel}
+mob.stat.healRate,Heal rate: {value} HP/turn
+mob.stat.knockback,Knockback: {squares} sq
+mob.stat.magicResist,Magic resistance: {range}
+mob.stat.maxHp,Max HP: {value}{perLevel}
+mob.unique,Unique foe
+perk.bombJack.description,+1 bomb effective level per perk level.
+perk.bombJack.name,Bomb Jack
+perk.jump.description,Move to any tile within 2 squares for one moveCost.
+perk.jump.name,Jump
+perk.killer.description,On kill: -20% attack/move cost for 10 turns.
+perk.killer.name,Killer
+perk.knockback.description,+1 square of melee knockback per level.
+perk.knockback.name,Knockback
+perk.stealth.description,Enemy wake radius and vision halved against you.
+perk.stealth.name,Stealth
+perk.wandmaster.description,Wands gain +1 effective level.
+perk.wandmaster.name,Wandmaster
+ui.achievement.toast,Achievement: {achievement}
+ui.arena.abort,Abort
+ui.arena.backToSetup,Back to setup
+ui.arena.count,Count
+ui.arena.drawTurnLimit,Draw - turn limit
+ui.arena.fastForward,Fast forward
+ui.arena.fightAgain,Fight again
+ui.arena.hallOfFame,Hall of Fame
+ui.arena.level,Level
+ui.arena.mage,mage
+ui.arena.mutualWipe,Mutual wipe
+ui.arena.pause,Pause
+ui.arena.resume,Resume
+ui.arena.rogue,rogue
+ui.arena.setuptitle,Arena
+ui.arena.speed,Speed: {speed}
+ui.arena.startFight,Start Fight
+ui.arena.teamA,Team A
+ui.arena.teamAWins,Team A wins
+ui.arena.teamB,Team B
+ui.arena.teamBWins,Team B wins
+ui.arena.teamSpec,{label}x{count} L{level}
+ui.arena.teamSummary,{team}: {survivors}
+ui.arena.vs,vs
+ui.arena.warrior,warrior
+ui.arenaHall.empty,No matchups recorded yet.
+ui.arenaHall.match,Match
+ui.arenaHall.matchup,{teamA} vs {teamB}
+ui.arenaHall.result,A {teamA}  /  B {teamB}
+ui.arenaHall.setup,Arena Setup
+ui.arenaHall.survivors,Survivors
+ui.arenaHall.title,Arena Hall
+ui.characterSelect.acc,Acc
+ui.characterSelect.allItems,All items: {state}
+ui.characterSelect.armor,Armor
+ui.characterSelect.atk,Atk
+ui.characterSelect.eva,Eva
+ui.characterSelect.gear,Gear
+ui.characterSelect.godMode,God Mode: {state}
+ui.characterSelect.hp,HP
+ui.characterSelect.off,OFF
+ui.characterSelect.on,ON
+ui.characterSelect.options,Options
+ui.characterSelect.perks,Perks
+ui.characterSelect.seed,Seed: {seed}
+ui.characterSelect.seedExample,e.g. AB12CD
+ui.characterSelect.seedPrompt,Seed (blank for random)
+ui.characterSelect.seedRandom,Seed: random
+ui.characterSelect.startingLevel,Starting level: {level}
+ui.characterSelect.tenPerkPoints,+10 perk points: {state}
+ui.characterSelect.title,Choose Class
+ui.characterStats.accuracy,Accuracy
+ui.characterStats.armor,Armor
+ui.characterStats.attack,Attack
+ui.characterStats.attackCost,Atk cost
+ui.characterStats.available,Available
+ui.characterStats.buffLevel,{name} (lvl {level})
+ui.characterStats.buffs,Buffs
+ui.characterStats.evasion,Evasion
+ui.characterStats.hero,Hero
+ui.characterStats.hp,HP
+ui.characterStats.light,Light
+ui.characterStats.moveCost,Move cost
+ui.characterStats.satiety,Satiety
+ui.characterStats.tab.perks,Perks
+ui.characterStats.tab.stats,Stats
+ui.characterStats.title,Character
+ui.common.cancel,Cancel
+ui.common.clear,Clear
+ui.common.close,x
+ui.common.delete,Delete
+ui.common.done,Done
+ui.common.play,PLAY
+ui.crafting.cancel,Cancel
+ui.crafting.chooseIngredient,Tap a slot to choose an ingredient.
+ui.crafting.chooseItem,Choose item
+ui.crafting.combine,Combine
+ui.crafting.combined,Combined: {item}
+ui.crafting.recipes,Recipes:
+ui.crafting.title,Crafting
+ui.crafting.yields,Yields: {item}
+ui.credits.line.code,Code by hwacha
+ui.credits.line.engine,Built with libgdx
+ui.credits.line.font,Pixel Operator font
+ui.credits.line.fontBy,by Jayvee Enaguas
+ui.credits.line.game,rl2
+ui.credits.line.thanks,Thanks for playing.
+ui.credits.title,Credits
+ui.encyclopedia.gemDetails,"Theme: {theme}
+Tier: {tier}
+
+Gems combine: two of the same species and matching size yield one gem of the next size up."
+ui.encyclopedia.terrain.blocksMovement,Blocks movement.
+ui.encyclopedia.terrain.blocksSight,Blocks sight.
+ui.encyclopedia.terrain.seeThrough,See-through.
+ui.encyclopedia.terrain.walkable,Walkable.
+ui.encyclopedia.title,Encyclopedia
+ui.gameOver.mainMenu,Main Menu
+ui.gameOver.stats,Score: {score}   Depth: {depth}
+ui.gameOver.title,YOU DIED
+ui.hall.empty,No entries yet.
+ui.hall.hiddenName,???
+ui.hall.summary,Level:{level} Depth: {depth}
+ui.hall.tamed,{count} tamed
+ui.hall.title,Hall of Fame
+ui.hall.turns,T:{turns}
+ui.hall.unknownDeath,Died of unknown causes.
+ui.hud.bag,Bag
+ui.hud.menu.encyclopedia,Encyclopaedia
+ui.hud.menu.log,Log
+ui.hud.menu.main,Main Menu
+ui.hud.menu.map,Map
+ui.hud.menu.settings,Settings
+ui.hud.status,Lvl {depth}   Turn {turn}
+ui.inventory.equip,Equip
+ui.inventory.quickslot,Quickslot
+ui.inventory.throw,Throw
+ui.inventory.title,Backpack
+ui.inventory.unequip,Unequip
+ui.inventory.use,Use
+ui.levelInfo.chasms,Chasms    {value}
+ui.levelInfo.depth,Depth     {value}
+ui.levelInfo.doors,Doors     {value}
+ui.levelInfo.floors,Floors    {value}
+ui.levelInfo.items,Items     {value}
+ui.levelInfo.layout,Layout    {value}
+ui.levelInfo.mobs,Mobs      {value}
+ui.levelInfo.noLevel,(no level loaded)
+ui.levelInfo.size,Size      {value}
+ui.levelInfo.theme,Theme     {value}
+ui.levelInfo.title,Level Info
+ui.levelInfo.walls,Walls     {value}
+ui.log.lowPriority,Low priority
+ui.log.nonPlayer,Non-player
+ui.log.title,Game Log
+ui.look.attackDefense,Att {attack}   Def {defense}
+ui.look.attitude.ally,Friendly.
+ui.look.attitude.attack,Hostile.
+ui.look.attitude.flee,Fearful.
+ui.look.attitude.nothing,Neutral.
+ui.look.bag,Bag:
+ui.look.damageArmor,Dmg {damage}   Arm {armor}
+ui.look.equipped,Equipped:
+ui.look.hp,HP {hp} / {maxHp}
+ui.look.intent.chasingLastKnown, - chasing last seen
+ui.look.intent.fleeing, - fleeing
+ui.look.intent.followingLeader, - following its leader
+ui.look.intent.kiting, - keeping range
+ui.look.intent.pursuing, - pursuing a foe
+ui.look.intent.shooting, - taking aim
+ui.look.intent.wandering, - wandering
+ui.look.loyalTo,Loyal to: {owner}
+ui.look.mobFallback,mob
+ui.look.mobLevel,{name} (lvl {level})
+ui.look.noTile,(no tile)
+ui.look.owner.unknown,unknown
+ui.look.owner.you,you
+ui.look.ranged,Ranged {damage} @ {distance} sq
+ui.look.state.asleep,Asleep
+ui.look.state.awake,Awake
+ui.look.state.following,Following
+ui.look.state.hiding,Hiding
+ui.look.state.player,(this is you)
+ui.look.state.seekingHiding,Seeking cover
+ui.look.surface.blood,blood
+ui.look.surface.ice,ice
+ui.look.surface.oil,oil slick
+ui.look.surface.water,shallow water
+ui.look.terrain.fire,fire
+ui.look.terrain.grass,grass
+ui.look.terrain.mushrooms,mushrooms
+ui.look.terrain.trees,trees
+ui.look.title,Look
+ui.map.level,L{depth}
+ui.map.mobs,Mobs:  {mobs}
+ui.map.rooms,Rooms: {rooms}
+ui.map.title,Map
+ui.menu.levelInfo,Level Info
+ui.menu.log,Log
+ui.menu.main,Main Menu
+ui.menu.map,Map
+ui.menu.settings,Settings
+ui.saves.deleteBody,This removes the saved game in slot {slot}.
+ui.saves.deleteTitle,Delete save?
+ui.saves.depth,Depth {depth}
+ui.saves.level,Lvl {level}
+ui.saves.newGame,New Game
+ui.saves.title,Saved Games
+ui.settings.animationSpeed,Animation Speed
+ui.settings.clearHall,Clear Hall of Fame
+ui.settings.clearHallBody,This removes all hero records.
+ui.settings.clearHallTitle,Clear Hall of Fame?
+ui.settings.expandedLog,Expanded Log
+ui.settings.instantActions,Instant Actions
+ui.settings.logFontSize,Log Font Size
+ui.settings.lowPriorityLines,Low-Priority Lines
+ui.settings.mobVsMobLines,Mob-vs-Mob Lines
+ui.settings.off,Off
+ui.settings.on,On
+ui.settings.outlineDarkness,Mob Outline Darkness
+ui.settings.outlineSmoothing,Mob Outline Smoothing
+ui.settings.outlineWidth,Mob Outline Width
+ui.settings.pixel,Pixel
+ui.settings.queueAcceleration,Queue Acceleration
+ui.settings.quickslots,Quickslots
+ui.settings.showEventLog,Show Event Log
+ui.settings.smooth,Smooth
+ui.settings.tab.graphics,Graphics
+ui.settings.tab.log,Log
+ui.settings.tab.play,Play
+ui.settings.title,Settings
+ui.settings.uiFontSize,UI Font Size
+ui.settings.uiScale,UI Scale
+ui.title.arena,Arena
+ui.title.credits,Credits
+ui.title.hallOfFame,Hall of Fame
+ui.title.logo,rl2
+ui.title.quit,Quit
+ui.title.savedGames,Saved Games
+ui.title.settings,Settings
+world.mobState.asleep,asleep
+world.mobState.awake,awake
+world.mobState.fleeing,fleeing
+world.mobState.following,following
+world.mobState.hiding,hiding

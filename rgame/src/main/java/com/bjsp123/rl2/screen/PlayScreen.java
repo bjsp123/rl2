@@ -283,7 +283,8 @@ public class PlayScreen implements Screen {
             if (tenPerkPointsRequested) player.perkPoints += 10;
             if (allItemsRequested) grantOneOfEachItem(player);
             startLevel.mobs.add(player);
-            String playerName = player.name != null ? player.name : "Adventurer";
+            String playerName = player.name != null ? player.name
+                    : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
             EventLog.add(Messages.beginGame(playerName));
             EventLog.add(Messages.enterLevel(playerName, startLevel.depth, startLevel.flags));
         }
@@ -455,9 +456,11 @@ public class PlayScreen implements Screen {
     private void onAchievementUnlocked(com.bjsp123.rl2.save.Achievement a) {
         if (a == null) return;
         if (achievementToast != null) {
-            achievementToast.show("Achievement: " + a.displayName);
+            achievementToast.show(com.bjsp123.rl2.logic.TextCatalog.format(
+                    "ui.achievement.toast",
+                    com.bjsp123.rl2.logic.TextCatalog.vars("achievement", a.displayName())));
         }
-        EventLog.add(com.bjsp123.rl2.logic.Messages.achievementUnlocked(a.displayName));
+        EventLog.add(com.bjsp123.rl2.logic.Messages.achievementUnlocked(a.displayName()));
     }
 
     /** Forward the current depth to {@link com.bjsp123.rl2.save.AchievementSystem#observeDepth}.
@@ -474,7 +477,7 @@ public class PlayScreen implements Screen {
      *  the "All items" debug option on character creation. */
     private static void grantOneOfEachItem(Mob player) {
         if (player == null || player.inventory == null) return;
-        for (String type : com.bjsp123.rl2.logic.ItemRegistry.knownTypes()) {
+        for (String type : com.bjsp123.rl2.logic.Registries.itemTypes()) {
             try {
                 com.bjsp123.rl2.model.Item it =
                         com.bjsp123.rl2.logic.ItemFactory.build(type);
@@ -526,12 +529,14 @@ public class PlayScreen implements Screen {
         // frame instead of leaving a one-frame stationary gap that reads as jerky.
         // The drain count matches the Animator's frames-per-render multiplier so the
         // freeze gate clears at the user-selected animation speed.
-        animator.queue.tick(com.bjsp123.rl2.ui.skin.AnimationSpeed.framesPerRender());
+        animator.queue.tick(com.bjsp123.rl2.ui.skin.Settings.framesPerRender());
         // Single gate: any visible game-action animation in progress (step interpolation,
         // attack lunge / flinch, projectile in flight, death flicker / fade) bumps
         // animator.queue.freezeFrames; we wait for it to drain before letting another tick
         // advance. Off-screen actions add 0, so they never hold up the world.
-        boolean ticked = !overlayOpen && animator.queue.freezeFrames == 0 && controller.tick(level);
+        boolean ticked = !overlayOpen
+                && (com.bjsp123.rl2.ui.skin.Settings.instantActions() || animator.queue.freezeFrames == 0)
+                && controller.tick(level);
         if (ticked) {
             world.turn++;
             level.currentTurn = world.turn;

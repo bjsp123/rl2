@@ -7,7 +7,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector3;
-import com.bjsp123.rl2.logic.MobSystem;
+import com.bjsp123.rl2.logic.MobTargeting;
 import com.bjsp123.rl2.logic.TargetHistory;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
@@ -94,7 +94,7 @@ public class TargetingOverlay extends InputAdapter {
             Point p = history.pickInitial(level, player);
             if (p != null) return p;
         }
-        Mob hostile = MobSystem.nearestHostile(player, level);
+        Mob hostile = MobTargeting.nearestHostile(player, level);
         return hostile != null ? hostile.position : player.position;
     }
 
@@ -231,7 +231,7 @@ public class TargetingOverlay extends InputAdapter {
 
     /** Cycle through visible hostiles so the user can re-aim with a single keystroke. */
     private void cycleNextHostile() {
-        Mob next = MobSystem.nearestHostile(player, level);
+        Mob next = MobTargeting.nearestHostile(player, level);
         if (next != null) target = next.position;
     }
 }

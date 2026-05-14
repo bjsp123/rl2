@@ -9,8 +9,9 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.EventLog;
 import com.bjsp123.rl2.logic.InventorySystem;
-import com.bjsp123.rl2.logic.ItemSystem;
+import com.bjsp123.rl2.logic.ItemNames;
 import com.bjsp123.rl2.logic.RecipeSystem;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.model.Mob;
@@ -234,7 +235,8 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private void renderTextPass() {
         ctx.batch.begin();
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Crafting",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.crafting.title"),
                 window.cx(), window.top() - ctx.headerLineH());
 
         // Slot icons.
@@ -255,26 +257,28 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Button labels.
         TextDraw.centre(ctx, ctx.fontRegular,
                 result == null ? UIVars.TEXT_DIM : UIVars.TEXT_BODY,
-                "Combine", confirmBtn.cx(), confirmBtn.cy() + 6f);
+                TextCatalog.get("ui.crafting.combine"), confirmBtn.cx(), confirmBtn.cy() + 6f);
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                "Cancel", cancelBtn.cx(), cancelBtn.cy() + 6f);
+                TextCatalog.get("ui.crafting.cancel"), cancelBtn.cx(), cancelBtn.cy() + 6f);
 
         // Help line.
         if (result == null) {
             TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "Tap a slot to choose an ingredient.",
+                    TextCatalog.get("ui.crafting.chooseIngredient"),
                     window.cx(), confirmBtn.top() + 28f);
         } else {
             String name = result.name != null ? result.name : result.type;
             TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.ACCENT,
-                    "Yields: " + name,
+                    TextCatalog.format("ui.crafting.yields",
+                            TextCatalog.vars("item", name)),
                     window.cx(), confirmBtn.top() + 28f,
                     window.w - 28f);
         }
 
         // Recipe list under the slots - read-only summary.
         float top = resultRect.y - 20f;
-        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Recipes:",
+        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                TextCatalog.get("ui.crafting.recipes"),
                 window.x + 16f, top);
         top -= 18f;
         for (RecipeSystem.Recipe r : RecipeSystem.ALL) {
@@ -288,7 +292,7 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Picker overlay - item icons.
         if (pickerSlot >= 0) {
             TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                    "Choose item",
+                    TextCatalog.get("ui.crafting.chooseItem"),
                     pickerWindow.cx(),
                     pickerWindow.top() - ctx.headerLineH());
             for (int i = 0; i < pickerCells.size(); i++) {
@@ -317,7 +321,8 @@ public final class V2Crafting implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         }
         InventorySystem.addToBag(player.inventory, result);
         EventLog.add(new LogEvent(
-                "Combined: " + ItemSystem.displayName(result),
+                TextCatalog.format("ui.crafting.combined",
+                        TextCatalog.vars("item", ItemNames.displayName(result))),
                 LogEvent.EventPriority.HIGH, true));
         if (onCrafted != null) onCrafted.accept(result);
     }

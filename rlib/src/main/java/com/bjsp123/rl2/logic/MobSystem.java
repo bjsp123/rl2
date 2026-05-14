@@ -104,11 +104,6 @@ public class MobSystem {
      *  buff lasts when a mob steps onto a WATER surface. */
     public static final int WATER_STEP_BUFF_TURNS = 3;
 
-    /** Returns true if a non-INANIMATE mob or wall blocks the given tile. */
-    public static boolean blocksMovement(Level level, Mob self, Point p) {
-        return MobQueries.blocksMovement(level, self, p);
-    }
-
     /**
      * Use A* to move mob one tile toward its targetPosition, then apply move cost.
      * Clears targetPosition on arrival or if no path exists.
@@ -133,7 +128,7 @@ public class MobSystem {
             int jdx = tx - cx, jdy = ty - cy;
             if (Math.max(Math.abs(jdx), Math.abs(jdy)) == 2) {
                 Point dest = new Point(tx, ty);
-                if (!blocksMovement(level, mob, dest) && mobAt(level, dest) == null) {
+                if (!MobQueries.blocksMovement(level, mob, dest) && MobQueries.mobAt(level, dest) == null) {
                     int oldX = cx, oldY = cy;
                     if (jdx != 0) mob.facingEast = jdx > 0;
                     mob.position = dest;
@@ -170,12 +165,12 @@ public class MobSystem {
         }
         int stepDx = nx - cx, stepDy = ny - cy;
         if (stepDx != 0) mob.facingEast = stepDx > 0;
-        Mob occupant = mobAt(level, next);
+        Mob occupant = MobQueries.mobAt(level, next);
         if (occupant != null) {
             if (getAttitudeToMob(mob, occupant) == Attitude.ATTACK) {
                 attack(level, mob, occupant);
                 mob.targetPosition = null;
-                TurnSystem.applyMoveCost(mob, mob.effectiveStats().attackCost);
+                TurnSystem.applyActionCost(mob, mob.effectiveStats().attackCost);
                 return;
             }
             // The player is impassable to any non-hostile mob: even a FLEE / NOTHING swap
@@ -221,7 +216,7 @@ public class MobSystem {
         }
 
         int cost = mob.effectiveStats().moveCost;
-        if (!blocksMovement(level, mob, next)) {
+        if (!MobQueries.blocksMovement(level, mob, next)) {
             int oldX = cx, oldY = cy;
             mob.position = next;
             if (mob.behavior != Behavior.PLAYER) pickupAtFeet(level, mob);
@@ -493,7 +488,7 @@ public class MobSystem {
         if (b.attackTypes == null || b.attackTypes.isEmpty()) return false;
         if (a.mobType != null && b.attackTypes.contains(a.mobType)) return true;
         if (a.faction != null) {
-            for (String t : MobRegistry.mobsInFaction(a.faction)) {
+            for (String t : Registries.mobsInFaction(a.faction)) {
                 if (b.attackTypes.contains(t)) return true;
             }
         }
@@ -543,39 +538,7 @@ public class MobSystem {
      *  against walls / statues, magic missiles strike the first body in
      *  the line, etc. Returns {@code to} when the trajectory is clear. */
     public static Point firstMobBlocking(Level level, Point from, Point to, Mob shooter) {
-        if (level == null || from == null || to == null) return to;
-        int x0 = from.tileX(), y0 = from.tileY();
-        int x1 = to.tileX(),   y1 = to.tileY();
-        int dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-        int sx = x0 < x1 ? 1 : -1;
-        int sy = y0 < y1 ? 1 : -1;
-        int err = dx - dy;
-        int x = x0, y = y0;
-        while (true) {
-            if (!(x == x0 && y == y0)) {
-                // Mob first - a body in the way takes the hit.
-                for (Mob m : level.mobs) {
-                    if (m == shooter) continue;
-                    if (m.position == null) continue;
-                    if (m.position.tileX() == x && m.position.tileY() == y) {
-                        return m.position;
-                    }
-                }
-                // Then tile-level blockers (walls, statues, lamps,
-                // altars, thrones). A bomb thrown past a wall now
-                // detonates against the wall rather than passing
-                // through and landing on the floor beyond.
-                if (x >= 0 && y >= 0 && x < level.width && y < level.height
-                        && level.tiles[x][y] != null
-                        && level.tiles[x][y].blocksMovement()) {
-                    return new Point(x, y);
-                }
-            }
-            if (x == x1 && y == y1) return to;
-            int e2 = err << 1;
-            if (e2 > -dy) { err -= dy; x += sx; }
-            if (e2 <  dx) { err += dx; y += sy; }
-        }
+        return MobVisibility.firstMobBlocking(level, from, to, shooter);
     }
 
     /** Bresenham-walk every tile along the segment from {@code from} to {@code to} and
@@ -583,69 +546,20 @@ public class MobSystem {
      *  whether an in-flight projectile is observable; a missile streaking entirely
      *  through unseen rooms shouldn't pause the world. Both endpoints null-tolerant. */
     public static boolean trajectoryTouchesVisible(Level level, Point from, Point to) {
-        if (level == null || level.visible == null) return false;
-        if (from == null && to == null) return false;
-        if (from == null) return tileVisible(level, to.tileX(), to.tileY());
-        if (to == null)   return tileVisible(level, from.tileX(), from.tileY());
-        int x0 = from.tileX(), y0 = from.tileY();
-        int x1 = to.tileX(),   y1 = to.tileY();
-        int dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-        int sx = x0 < x1 ? 1 : -1;
-        int sy = y0 < y1 ? 1 : -1;
-        int err = dx - dy;
-        int x = x0, y = y0;
-        while (true) {
-            if (tileVisible(level, x, y)) return true;
-            if (x == x1 && y == y1) return false;
-            int e2 = err << 1;
-            if (e2 > -dy) { err -= dy; x += sx; }
-            if (e2 <  dx) { err += dx; y += sy; }
-        }
+        return MobVisibility.trajectoryTouchesVisible(level, from, to);
     }
-
-    private static boolean tileVisible(Level level, int x, int y) {
-        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
-        return level.visible[x][y];
-    }
-
 
     /** True iff {@code mob} is on a tile the player currently sees. The player counts as
      *  visible to themselves so messages and animations involving the player aren't
      *  redacted to "something". */
     public static boolean isVisibleToPlayer(Level level, Mob mob) {
-        if (level == null || mob == null || mob.position == null) return false;
-        if (mob.behavior == Behavior.PLAYER) return true;
-        if (level.visible == null) return false;
-        int x = mob.position.tileX(), y = mob.position.tileY();
-        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
-        return level.visible[x][y];
+        return MobVisibility.isVisibleToPlayer(level, mob);
     }
 
     /** Display name for a mob in the event log. The player is always shown by name; any
      *  other mob the player can't currently see is rendered as "something". */
     public static String nameForLog(Level level, Mob mob) {
-        if (mob == null) return "something";
-        if (mob.behavior == Behavior.PLAYER) {
-            return mob.name != null ? mob.name : "?";
-        }
-        if (!isVisibleToPlayer(level, mob)) return "something";
-        return mob.name != null ? mob.name : "?";
-    }
-
-    public static Mob mobAt(Level level, Point p) {
-        return MobQueries.mobAt(level, p);
-    }
-
-    /** True iff the level can accept a new effect-driven mob. Centralised so the
-     *  three magical-spawn sites (wand of dog, kissyblob eat-spawn, mouse
-     *  mushroom-eat-spawn) read off the same gate. */
-    public static boolean levelHasRoomForSpawn(Level level) {
-        return MobQueries.levelHasRoomForSpawn(level);
-    }
-
-    /** Count live mobs of {@code type} currently on the level. O(N) over level.mobs. */
-    public static int countMobsOfType(Level level, String type) {
-        return MobQueries.countMobsOfType(level, type);
+        return MobVisibility.nameForLog(level, mob);
     }
 
     /** Probability that {@code attacker} lands a hit on {@code target}. Reads the
@@ -851,6 +765,12 @@ public class MobSystem {
         }
         emitDamageRollLog(level, attacker, target, bk, dealt);
         target.hp -= dealt;
+        // PHASE ends the moment the mob takes or deals damage.
+        if (dealt > 0) {
+            BuffSystem.removeBuff(target,   com.bjsp123.rl2.model.Buff.BuffType.PHASE);
+            if (attacker != null)
+                BuffSystem.removeBuff(attacker, com.bjsp123.rl2.model.Buff.BuffType.PHASE);
+        }
         // God-mode clamp: damage applies normally but hp is floored at 1
         // so a god-mode target never dies. Set on the player Mob from
         // the character-select pre-game options popup.
@@ -1192,7 +1112,7 @@ public class MobSystem {
                 return;
             }
 
-            Mob collided = mobAt(level, new Point(nx, ny));
+            Mob collided = MobQueries.mobAt(level, new Point(nx, ny));
             if (collided != null) {
                 mob.position = new Point(cx, cy);
                 emitKnockBack(level, mob, start, true);
@@ -1450,7 +1370,7 @@ public class MobSystem {
                 BuffSystem.apply(level, caster, ab.cooldownTracker, 1,
                         ab.cooldownTurns, caster);
             }
-            TurnSystem.applyMoveCost(caster, caster.effectiveStats().attackCost);
+            TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
             return true;
         }
         return false;
@@ -1538,7 +1458,7 @@ public class MobSystem {
         if (item.useBehavior == null
                 || item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.NONE) return false;
         return switch (item.useBehavior) {
-            case DRINK   -> wouldDrinkHelp(mob, item);
+            case DRINK, APPLYBUFF -> wouldDrinkHelp(mob, item);
             case WAND    -> isWandUsableByAi(mob, item, level);
             case GRAPPLE -> isGrappleUsableByAi(mob, item, level);
             case JUMP    -> isJumpUsableByAi(mob, item, level);
@@ -1593,7 +1513,7 @@ public class MobSystem {
                     && pickTeleportDestination(mob, level) != null;
         }
         if (wand.summonsWhenUsed != null) {
-            return MobSystem.levelHasRoomForSpawn(level)
+            return MobQueries.levelHasRoomForSpawn(level)
                     && MobHooks.freeAdjacentFloor(level, mob.position) != null;
         }
         return false;
@@ -1614,7 +1534,7 @@ public class MobSystem {
      *  moment any tile holds a mob the thrower considers ALLY. */
     private static boolean allyInBombAoe(Mob thrower, com.bjsp123.rl2.model.Point centre,
                                          com.bjsp123.rl2.model.Item bomb, Level level) {
-        int radius = ItemSystem.effectiveTilesAffected(bomb);
+        int radius = ItemStats.effectiveTilesAffected(bomb);
         int r2 = radius * radius;
         int cx = centre.tileX(), cy = centre.tileY();
         for (Mob m : level.mobs) {
@@ -1642,7 +1562,7 @@ public class MobSystem {
             return;
         }
         switch (item.useBehavior) {
-            case DRINK   -> ItemSystem.useItem(level, mob, item);
+            case DRINK, APPLYBUFF -> ItemSystem.useItem(level, mob, item);
             case WAND    -> aiCastWand(mob, item, level);
             case GRAPPLE -> aiCastGrapple(mob, item, level);
             case JUMP    -> aiCastJump(mob, item, level);
@@ -1703,7 +1623,7 @@ public class MobSystem {
                 if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
                 if (level.tiles[nx][ny].blocksMovement()) continue;
                 com.bjsp123.rl2.model.Point p = new com.bjsp123.rl2.model.Point(nx, ny);
-                if (mobAt(level, p) != null) continue;
+                if (MobQueries.mobAt(level, p) != null) continue;
                 int d = Math.max(Math.abs(nx - tx), Math.abs(ny - ty));
                 if (d > bestDist) { bestDist = d; best = p; }
             }
@@ -1723,7 +1643,7 @@ public class MobSystem {
             for (int x = 0; x < level.width; x++) {
                 if (level.tiles[x][y].blocksMovement()) continue;
                 com.bjsp123.rl2.model.Point p = new com.bjsp123.rl2.model.Point(x, y);
-                if (mobAt(level, p) != null) continue;
+                if (MobQueries.mobAt(level, p) != null) continue;
                 if (threat != null
                         && LevelFactoryUtils.chebyshev(p, threat.position) <= currentDist) continue;
                 candidates.add(p);
@@ -1892,6 +1812,11 @@ public class MobSystem {
             return false;
         }
         int dmg = rollRange(ss.rangedDamage);
+        com.bjsp123.rl2.model.Mob.RangedDamageType rdt = shooter.rangedDamageType != null
+                ? shooter.rangedDamageType
+                : com.bjsp123.rl2.model.Mob.RangedDamageType.MAGIC;
+        DamageElement rangedElement = rdt == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL
+                ? DamageElement.PHYSICAL : DamageElement.MAGIC;
         if (level.events != null) {
             // Clip to the first mob in the way so the missile resolves on whoever
             // it actually hits visually rather than passing through them.
@@ -1906,7 +1831,7 @@ public class MobSystem {
                     com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN, /*level=*/1,
                     cooldownTurns, shooter);
         }
-        TurnSystem.applyMoveCost(shooter, ss.rangedCost > 0 ? ss.rangedCost : ss.attackCost);
+        TurnSystem.applyActionCost(shooter, ss.rangedCost > 0 ? ss.rangedCost : ss.attackCost);
         // Combat memory is recorded on impact (in processAttack) when the missile actually
         // damages the target, not at the moment of firing.
         return true;
@@ -1924,7 +1849,7 @@ public class MobSystem {
                 if (dx == 0 && dy == 0) continue;
                 int nx = sx + dx, ny = sy + dy;
                 Point cand = new Point(nx, ny);
-                if (blocksMovement(level, mob, cand)) continue;
+                if (MobQueries.blocksMovement(level, mob, cand)) continue;
                 int d = Math.max(Math.abs(nx - tx), Math.abs(ny - ty));
                 if (d > bestDist) { bestDist = d; best = cand; }
             }
@@ -2374,8 +2299,8 @@ public class MobSystem {
             level.vegetation[px][py] = null;
             EventLog.add(Messages.vegetationEaten(
                     mob.name != null ? mob.name : "?", "mushroom"));
-            if (mob.mushroomEatSpawnType != null && mobAt(level, before) == null
-                    && levelHasRoomForSpawn(level)) {
+            if (mob.mushroomEatSpawnType != null && MobQueries.mobAt(level, before) == null
+                    && MobQueries.levelHasRoomForSpawn(level)) {
                 Mob bud = MobFactory.spawn(mob.mushroomEatSpawnType, before);
                 if (bud != null) {
                     level.mobs.add(bud);
@@ -2420,7 +2345,7 @@ public class MobSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemThrown(
                     thrower, it, thrower.position, impact, trajectoryVisible));
         }
-        TurnSystem.applyMoveCost(thrower, thrower.effectiveStats().attackCost);
+        TurnSystem.applyActionCost(thrower, thrower.effectiveStats().attackCost);
     }
 
     /**
@@ -2444,6 +2369,32 @@ public class MobSystem {
             level.tiles[tx][ty] = Tile.DOOR_OPEN;
         }
 
+        if (te == ItemEffect.CAPTURE && inBounds) {
+            if (it.capturedMob != null) {
+                Point release = releasePointForCapturedMob(level, dst, thrower);
+                if (release != null) {
+                    Mob released = it.capturedMob;
+                    it.capturedMob = null;
+                    released.position = release;
+                    if (!level.mobs.contains(released)) level.mobs.add(released);
+                    if (level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(released, release));
+                    }
+                    return; // full catcherball opens and disappears.
+                }
+            } else {
+                Mob target = MobQueries.mobAt(level, dst);
+                if (target != null && target != thrower && target.hp > 0) {
+                    level.mobs.remove(target);
+                    target.position = null;
+                    it.capturedMob = target;
+                    if (level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(dst));
+                    }
+                }
+            }
+        }
+
         // Potion preflight: drink and throw apply the same per-mob effect (buff
         // + damage). Throwing splashes that effect onto every mob within
         // Chebyshev range 1 of the impact tile, then short-circuits the
@@ -2455,12 +2406,12 @@ public class MobSystem {
         }
 
         if (te == ItemEffect.DAMAGE && it.damage.max() > 0) {
-            Mob target = mobAt(level, dst);
+            Mob target = MobQueries.mobAt(level, dst);
             if (target != null && getAttitudeToMob(target, thrower) != Attitude.ALLY) {
                 // processAttack records combat memory and floating-text centrally when
                 // damage actually lands. Damage range comes from ItemSystem so the
                 // weapon's level increment lands on thrown impact too.
-                int dmg = rollRange(ItemSystem.effectiveDamageRange(it));
+                int dmg = rollRange(ItemStats.effectiveDamageRange(it));
                 processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL);
             }
         }
@@ -2473,7 +2424,7 @@ public class MobSystem {
         // the ground.
         boolean consumedByTame = false;
         if (!it.tameOnThrow.isEmpty() && inBounds) {
-            Mob target = mobAt(level, dst);
+            Mob target = MobQueries.mobAt(level, dst);
             if (target != null && it.tameOnThrow.contains(target.mobType)) {
                 target.owner = thrower;
                 if (thrower != null) thrower.beastsTamed++;
@@ -2485,17 +2436,17 @@ public class MobSystem {
                 consumedByTame = true;
             }
         }
-        int lvl = ItemSystem.effectiveLevel(it, thrower);
+        int lvl = ItemStats.effectiveLevel(it, thrower);
         // Bomb damage and AoE come from ItemSystem so every bomb-class throw shares
         // the same level-scaling formula with the rest of the item-stat math.
-        int bombDamage = rollRange(ItemSystem.effectiveDamageRange(it, thrower));
-        int bombTiles  = ItemSystem.effectiveTilesAffected(it, thrower);
+        int bombDamage = rollRange(ItemStats.effectiveDamageRange(it, thrower));
+        int bombTiles  = ItemStats.effectiveTilesAffected(it, thrower);
         int bombRadius = ItemSystem.radiusForTileCount(bombTiles);
         int r2 = bombRadius * bombRadius;
         if (te == ItemEffect.FIRE && inBounds) {
             // Fire bomb: bomb damage at impact, ignite a Euclidean disc covering
             // tilesAffected + level * tilesAffectedPerLevel tiles around the impact tile.
-            Mob target = mobAt(level, dst);
+            Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
                 processAttack(level, thrower, target, bombDamage, AttackType.THROWN, DamageElement.PHYSICAL);
                 BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE,
@@ -2552,7 +2503,7 @@ public class MobSystem {
                         CloudSystem.addCloud(level, x, y,
                                 com.bjsp123.rl2.model.Level.Cloud.SMOKE, smokeDur);
                     }
-                    Mob m = mobAt(level, p);
+                    Mob m = MobQueries.mobAt(level, p);
                     if (m != null && m != thrower) {
                         processAttack(level, thrower, m, dmg, AttackType.THROWN, DamageElement.PHYSICAL);
                         if (blastSurvivors != null && m.hp > 0) blastSurvivors.add(m);
@@ -2568,8 +2519,8 @@ public class MobSystem {
             // to every mob in a Chebyshev radius 1 disc around the impact
             // tile. Item level + abilityPower scale via the standard
             // ItemSystem helpers.
-            int buffLvl = ItemSystem.effectiveBuffLevel(it);
-            int buffDur = ItemSystem.effectiveBuffDuration(it);
+            int buffLvl = ItemStats.effectiveBuffLevel(it);
+            int buffDur = ItemStats.effectiveBuffDuration(it);
             for (Mob m : level.mobs) {
                 if (m == null || m.position == null || m.hp <= 0) continue;
                 int d = Math.max(Math.abs(m.position.tileX() - tx),
@@ -2585,7 +2536,7 @@ public class MobSystem {
             // to mobs standing in it on each per-turn pass, so a longer
             // cloud lifetime keeps poisoning whoever lingers in it. The
             // cloud's duration is the item's scaled abilityPower.
-            int dur = ItemSystem.effectiveBuffDuration(it);
+            int dur = ItemStats.effectiveBuffDuration(it);
             for (int dx = -bombRadius; dx <= bombRadius; dx++) {
                 for (int dy = -bombRadius; dy <= bombRadius; dy++) {
                     if (dx * dx + dy * dy > r2) continue;
@@ -2605,7 +2556,7 @@ public class MobSystem {
             // Freeze bomb: bomb damage to the target, CHILLED applied to every mob in
             // the freeze disc. Removes fire vegetation in the disc. Water-to-ice
             // conversion is blocked on a new ICE surface type - TODO.
-            Mob target = mobAt(level, dst);
+            Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
                 processAttack(level, thrower, target, bombDamage, AttackType.THROWN, DamageElement.PHYSICAL);
             }
@@ -2668,6 +2619,24 @@ public class MobSystem {
         // time, not here - the deferred-impact path keeps the player's
         // turn-cost model unchanged regardless of how long the visual
         // arc takes.
+    }
+
+    private static Point releasePointForCapturedMob(Level level, Point preferred, Mob thrower) {
+        if (canReleaseCapturedMobAt(level, preferred)) return preferred;
+        Point nearImpact = MobHooks.freeAdjacentFloor(level, preferred);
+        if (nearImpact != null) return nearImpact;
+        return thrower == null || thrower.position == null
+                ? null
+                : MobHooks.freeAdjacentFloor(level, thrower.position);
+    }
+
+    private static boolean canReleaseCapturedMobAt(Level level, Point p) {
+        if (level == null || p == null) return false;
+        int x = p.tileX(), y = p.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        if (level.tiles[x][y].blocksMovement()) return false;
+        if (level.tiles[x][y] == Tile.CHASM) return false;
+        return MobQueries.mobAt(level, p) == null;
     }
 
     // eat / drinkPotion moved to ItemSystem - they're item-effect dispatchers, not
@@ -2804,40 +2773,6 @@ public class MobSystem {
         }
         if (wasEquipped) return;
         InventorySystem.removeOneFromBag(mob.inventory, it);
-    }
-
-    /**
-     * Nearest visible, non-ally, non-inanimate mob to {@code around}. Returns null if the
-     * player can see no valid hostile. Chebyshev distance (diagonals count as 1) matches how
-     * the rest of the game measures proximity.
-     */
-    public static Mob nearestHostile(Mob around, Level level) {
-        if (around == null) return null;
-        Mob best = null;
-        int bestD = Integer.MAX_VALUE;
-        int ax = around.position.tileX(), ay = around.position.tileY();
-        for (Mob m : level.mobs) {
-            if (m == around || getAttitudeToMob(m, around) == Attitude.ALLY) continue;
-            if (m.behavior == Behavior.INANIMATE) continue;
-            int mx = m.position.tileX(), my = m.position.tileY();
-            if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
-            if (!level.visible[mx][my]) continue;
-            int d = Math.max(Math.abs(mx - ax), Math.abs(my - ay));
-            if (d < bestD) { bestD = d; best = m; }
-        }
-        return best;
-    }
-
-    public static void processAllAiTurns(Level level) {
-        List<Mob> snapshot = new ArrayList<>(level.mobs);
-        for (Mob mob : snapshot) {
-            if (mob.ticksTillMove != 0) continue;
-            // PLAYER and INANIMATE are skipped by processAiTurn itself; everything else
-            // gets a turn. The previous allow-list omitted RANGED_MOB_DUMB and
-            // RANGED_MOB_STANDOFF, which silently froze every mask imp on every level.
-            if (mob.behavior == Behavior.PLAYER || mob.behavior == Behavior.INANIMATE) continue;
-            processAiTurn(mob, level);
-        }
     }
 
     private static Point randomFloorPoint(Level level) {

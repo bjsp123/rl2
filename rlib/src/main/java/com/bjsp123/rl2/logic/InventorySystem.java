@@ -216,6 +216,7 @@ public final class InventorySystem {
         out.useBehavior = src.useBehavior;
         out.wandEffect = src.wandEffect;
         out.useVerb = src.useVerb;
+        out.capturedMob = src.capturedMob;
         out.level = src.level;
         out.tameOnThrow = src.tameOnThrow;
         out.gemSpecies = src.gemSpecies;

@@ -47,7 +47,7 @@ public final class LootSystem {
     public static void rollAndStashLoot(Level level, Mob mob, Random rng) {
         if (level == null || mob == null || mob.inventory == null) return;
         if (mob.behavior == Mob.Behavior.PLAYER) return;
-        MobDefinition def = MobRegistry.get(mob.mobType);
+        MobDefinition def = Registries.mob(mob.mobType);
         if (def == null || def.drops == null || def.drops.isEmpty()) return;
 
         double powerLevel = itemLevelToPower(Math.max(1, mob.characterLevel - 2));

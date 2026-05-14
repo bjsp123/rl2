@@ -13,8 +13,7 @@ import com.bjsp123.rl2.save.HallOfFameStore;
 import com.bjsp123.rl2.save.SaveSystem;
 import com.bjsp123.rl2.persistence.Persistence;
 import com.bjsp123.rl2.screen.PlayScreen;
-import com.bjsp123.rl2.ui.skin.UiPixelScale;
-import com.bjsp123.rl2.ui.skin.UiScale;
+import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.ui.v2.UiCtx;
 import com.bjsp123.rl2.ui.v2.V2Title;
 
@@ -88,31 +87,27 @@ public class Rl2Game extends Game {
         // Data-driven configs - read once at startup, before any factory call or
         // gameplay code reads a balance number. Game-balance loads first because
         // some Mob field initializers reference GameBalance.STARTING_SATIETY etc.
+        loadStrings();
         loadGameBalance();
         loadUiVars();
+        loadAnimationVars();
         loadMobConfig();
         loadItemConfig();
         loadBrandConfig();
         loadThemedRoomConfig();
         loadTipsConfig();
         loadHelpConfig();
-        UiScale.init(persistence);
-        UiPixelScale.init(persistence);
-        com.bjsp123.rl2.ui.skin.UiFontScale.init(persistence);
-        com.bjsp123.rl2.ui.skin.MobOutline.init(persistence);
-        com.bjsp123.rl2.ui.skin.UseBuffIcons.init(persistence);
-        com.bjsp123.rl2.ui.skin.AnimationSpeed.init(persistence);
-        com.bjsp123.rl2.ui.skin.QuickslotCount.init(persistence);
+        Settings.init(persistence);
         // Plug the rgame-side icon-pref toggle into the in-world Animator so its
         // BuffApplied event handler renders an icon when the user wants icons and a
         // text float otherwise.
         com.bjsp123.rl2.world.anim.Animator.setIconPreferenceSupplier(
-                com.bjsp123.rl2.ui.skin.UseBuffIcons::enabled);
+                com.bjsp123.rl2.ui.skin.Settings::useBuffIcons);
         // Same pattern: the Animator advances {@code framesPerRender()} animation
         // frames per render frame so the user-facing animation-speed setting (1x,
         // 2x, 4x) shortens authored durations uniformly.
         com.bjsp123.rl2.world.anim.Animator.setAnimationSpeedSupplier(
-                com.bjsp123.rl2.ui.skin.AnimationSpeed::framesPerRender);
+                Settings::framesPerRender);
         hallOfFame      = HallOfFameStore.load(persistence);
         arenaHallOfFame = ArenaHallOfFameStore.load(persistence);
         achievements    = AchievementsStore.load(persistence);
@@ -128,23 +123,37 @@ public class Rl2Game extends Game {
     }
 
 
-    /** Read {@code assets/data/uivars.properties} and override matching
+    private void loadStrings() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/strings.csv");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.logic.TextCatalog.load(fh.readString());
+    }
+
+    /** Read {@code assets/data/config.csv} and override matching
      *  {@link com.bjsp123.rl2.ui.v2.UIVars} fields. Missing file is non-fatal. */
     private void loadUiVars() {
         com.badlogic.gdx.files.FileHandle fh =
-                com.badlogic.gdx.Gdx.files.internal("data/uivars.properties");
+                com.badlogic.gdx.Gdx.files.internal("data/config.csv");
         if (!fh.exists()) return;
         com.bjsp123.rl2.ui.v2.UIVars.load(fh.readString());
     }
 
-    /** Read {@code assets/data/gamebalance.properties} and override matching
+    /** Read {@code assets/data/config.csv} and override matching
      *  {@link com.bjsp123.rl2.logic.GameBalance} fields. Missing file is non-fatal -
      *  the Java-side baselines stand. */
     private void loadGameBalance() {
         com.badlogic.gdx.files.FileHandle fh =
-                com.badlogic.gdx.Gdx.files.internal("data/gamebalance.properties");
+                com.badlogic.gdx.Gdx.files.internal("data/config.csv");
         if (!fh.exists()) return;
         com.bjsp123.rl2.logic.GameBalance.load(fh.readString());
+    }
+
+    private void loadAnimationVars() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/config.csv");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.world.anim.AnimationVars.load(fh.readString());
     }
 
     /** Read {@code assets/data/mobs.csv} and feed it into both the gameplay-side
@@ -153,7 +162,7 @@ public class Rl2Game extends Game {
      *  - rlib reads the gameplay columns, rgame reads the sprite columns. */
     private void loadMobConfig() {
         String csv = com.badlogic.gdx.Gdx.files.internal("data/mobs.csv").readString();
-        com.bjsp123.rl2.logic.MobRegistry.load(csv);
+        com.bjsp123.rl2.logic.Registries.loadMobs(csv);
         com.bjsp123.rl2.world.render.MobSprites.loadFromCsv(csv);
     }
 
@@ -162,7 +171,7 @@ public class Rl2Game extends Game {
      *  {@code item_sprites.csv} loaded by {@code ItemSprites}. */
     private void loadItemConfig() {
         String csv = com.badlogic.gdx.Gdx.files.internal("data/items.csv").readString();
-        com.bjsp123.rl2.logic.ItemRegistry.load(csv);
+        com.bjsp123.rl2.logic.Registries.loadItems(csv);
     }
 
     /** Read {@code assets/data/brands.csv} into {@link com.bjsp123.rl2.logic.BrandRegistry}. */
@@ -170,7 +179,7 @@ public class Rl2Game extends Game {
         com.badlogic.gdx.files.FileHandle fh =
                 com.badlogic.gdx.Gdx.files.internal("data/brands.csv");
         if (!fh.exists()) return;
-        com.bjsp123.rl2.logic.BrandRegistry.load(fh.readString());
+        com.bjsp123.rl2.logic.Registries.loadBrands(fh.readString());
     }
 
     /** Read {@code assets/data/themedrooms.csv} into
@@ -180,7 +189,7 @@ public class Rl2Game extends Game {
         com.badlogic.gdx.files.FileHandle fh =
                 com.badlogic.gdx.Gdx.files.internal("data/themedrooms.csv");
         if (!fh.exists()) return;
-        com.bjsp123.rl2.logic.ThemedRoomRegistry.load(fh.readString());
+        com.bjsp123.rl2.logic.Registries.loadThemedRooms(fh.readString());
     }
 
     private void loadTipsConfig() {

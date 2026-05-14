@@ -49,7 +49,7 @@ public final class TargetHistory {
             return lastMob.position;
         if (isInBounds(lastFloor, level) && LevelUtilities.getLineOfSight(level, player, lastFloor) ) 
             return lastFloor;
-        Mob hostile = MobSystem.nearestHostile(player, level);              
+        Mob hostile = MobTargeting.nearestHostile(player, level);              
         if (hostile != null) return hostile.position;
         return player.position;
     }

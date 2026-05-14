@@ -2,6 +2,7 @@ package com.bjsp123.rl2.ui.v2;
 
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.logic.MobFactory;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 
@@ -65,11 +66,11 @@ public final class V2ArenaSetup extends V2Screen {
     private static List<TeamType> types() {
         if (types == null) {
             List<TeamType> out = new ArrayList<>();
-            out.add(new TeamType(null, Mob.CharacterClass.WARRIOR, "warrior"));
-            out.add(new TeamType(null, Mob.CharacterClass.ROGUE,   "rogue"));
-            out.add(new TeamType(null, Mob.CharacterClass.MAGE,    "mage"));
+            out.add(new TeamType(null, Mob.CharacterClass.WARRIOR, TextCatalog.get("ui.arena.warrior")));
+            out.add(new TeamType(null, Mob.CharacterClass.ROGUE,   TextCatalog.get("ui.arena.rogue")));
+            out.add(new TeamType(null, Mob.CharacterClass.MAGE,    TextCatalog.get("ui.arena.mage")));
             Point dummy = new Point(0, 0);
-            for (String t : com.bjsp123.rl2.logic.MobRegistry.knownTypes()) {
+            for (String t : com.bjsp123.rl2.logic.Registries.mobTypes()) {
                 Mob template = MobFactory.spawn(t, dummy);
                 String label = template != null && template.name != null
                         ? template.name : t.toLowerCase();
@@ -110,7 +111,7 @@ public final class V2ArenaSetup extends V2Screen {
         float btnW = winW - 2 * pad;
         float btnX = window.x + pad;
         float btnY = window.y + 16f + bottomBtnH + 8f;
-        buttons.add(new Btn("Start Fight", btnX, btnY, btnW, bottomBtnH,
+        buttons.add(new Btn(TextCatalog.get("ui.arena.startFight"), btnX, btnY, btnW, bottomBtnH,
                 () -> {
                     TeamSpec a = new TeamSpec(
                             types().get(teamAIdx), teamALevel, teamACount);
@@ -119,13 +120,13 @@ public final class V2ArenaSetup extends V2Screen {
                     game.pushScreen(new V2Arena(game, a, b));
                 }).header());
         btnY -= bottomBtnH + 8f;
-        buttons.add(new Btn("Hall of Fame", btnX, btnY, btnW, bottomBtnH,
+        buttons.add(new Btn(TextCatalog.get("ui.arena.hallOfFame"), btnX, btnY, btnW, bottomBtnH,
                 () -> game.pushScreen(new V2ArenaHallOfFame(game))).header());
 
         back   = new BackBtn(ctx, game::popScreen);
         burger = makeBurger();
         addStandardBurgerItems(game);
-        addBurgerItem("Hall of Fame",
+        addBurgerItem(TextCatalog.get("ui.arena.hallOfFame"),
                 () -> game.pushScreen(new V2ArenaHallOfFame(game)));
     }
 
@@ -213,7 +214,8 @@ public final class V2ArenaSetup extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Arena",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.arena.setuptitle"),
                 window.cx(), window.top() - ctx.headerLineH());
 
         float pad = 14f;
@@ -233,7 +235,8 @@ public final class V2ArenaSetup extends V2Screen {
                 window.w - 2 * pad, teamH);
 
         // "vs" sits in the band between the two teams.
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_WARN, "vs",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_WARN,
+                TextCatalog.get("ui.arena.vs"),
                 window.cx(), teamBTop + vsBandH * 0.5f + 8f);
     }
 
@@ -242,11 +245,13 @@ public final class V2ArenaSetup extends V2Screen {
         float[] p  = teamLayout(y, h);
         float cx   = x + w * 0.5f;
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                isA ? "Team A" : "Team B", cx, p[0]);
+                TextCatalog.get(isA ? "ui.arena.teamA" : "ui.arena.teamB"), cx, p[0]);
         TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.ACCENT,
                 types().get(isA ? teamAIdx : teamBIdx).label, cx, p[2],
                 Math.max(24f, w - 64f));
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Level", cx, p[3]);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Count", cx, p[5]);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                TextCatalog.get("ui.arena.level"), cx, p[3]);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                TextCatalog.get("ui.arena.count"), cx, p[5]);
     }
 }

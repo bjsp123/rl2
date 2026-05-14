@@ -175,7 +175,9 @@ public final class LevelUtilities {
         if (cx < 0 || cy < 0 || cx >= w || cy >= h) return false;
 
         boolean[] blocking = LevelSystem.buildBlocking(level, /*forLight=*/ false);
-        boolean[] fov = new boolean[w * h];
+        level.initVisibilityScratch();
+        boolean[] fov = level.visibilityTempScratch;
+        java.util.Arrays.fill(fov, 0, w * h, false);
         int radius = (int) Math.ceil(mob.effectiveStats().visionRadius);
         ShadowCaster.castShadow(cx, cy, w, fov, blocking, radius);
         return fov[ty * w + tx];

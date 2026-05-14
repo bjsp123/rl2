@@ -94,8 +94,8 @@ public final class LevelFactoryPopulate {
     private static List<String> guaranteedItems(Level level) {
         List<String> out = new ArrayList<>();
         double f = depthFraction(level);
-        for (String type : ItemRegistry.knownTypes()) {
-            ItemDefinition def = ItemRegistry.get(type);
+        for (String type : Registries.itemTypes()) {
+            ItemDefinition def = Registries.item(type);
             if (def == null || def.guaranteedPerLevel <= 0) continue;
             if (def.theme != null && def.theme != level.theme) continue;
             if (powerWeight(def.powerMin, def.powerMax, f) <= 0) continue;
@@ -114,8 +114,8 @@ public final class LevelFactoryPopulate {
         List<String> keys = new ArrayList<>();
         List<Double>  ws  = new ArrayList<>();
         double f = depthFraction(level);
-        for (String type : MobRegistry.knownTypes()) {
-            MobDefinition def = MobRegistry.get(type);
+        for (String type : Registries.mobTypes()) {
+            MobDefinition def = Registries.mob(type);
             if (def == null) continue;
             if (def.behavior == Mob.Behavior.PLAYER) continue;
             if (def.unique) continue;
@@ -139,8 +139,8 @@ public final class LevelFactoryPopulate {
         List<String> out = new ArrayList<>();
         if (unique == null) return out;
         double f = depthFraction(level);
-        for (String type : MobRegistry.knownTypes()) {
-            MobDefinition def = MobRegistry.get(type);
+        for (String type : Registries.mobTypes()) {
+            MobDefinition def = Registries.mob(type);
             if (def == null || !def.unique) continue;
             if (def.behavior == Mob.Behavior.PLAYER) continue;
             if (unique.mobs.contains(type)) continue;
@@ -263,7 +263,7 @@ public final class LevelFactoryPopulate {
             if (template == null) break;
             Point seed = nonReservedInnerTile(level, rng);
             if (seed == null) return;
-            ItemDefinition def = ItemRegistry.get(template.type);
+            ItemDefinition def = Registries.item(template.type);
             int n = rollMinMax(def == null ? null : def.clusterSize, rng);
             List<Point> spots = adjacentFloorTiles(level, seed, n);
             // First placement uses the freshly-rolled template; subsequent
@@ -366,7 +366,7 @@ public final class LevelFactoryPopulate {
                 if (inStairsUpRoom(level, seed.tileX(), seed.tileY())) continue;
                 String type = pickWeighted(pool, weightHolder[0], rng);
                 if (type == null) break;
-                MobDefinition def = MobRegistry.get(type);
+                MobDefinition def = Registries.mob(type);
                 int n = Math.max(1, rollMinMax(def == null ? null : def.clusterSize, rng));
                 List<Point> spots = adjacentFloorTiles(level, seed, n);
                 int before = level.mobs.size();
@@ -391,7 +391,7 @@ public final class LevelFactoryPopulate {
         // Base chance is 50%; multiplied by theme factor (so matching theme
         // raises it to 100%, mismatching lowers it to 25%).
         for (String type : eligibleUniqueMobs(level, unique)) {
-            MobDefinition ud = MobRegistry.get(type);
+            MobDefinition ud = Registries.mob(type);
             double chance = Math.min(1.0, 0.5 * themeMultiplier(
                     ud == null ? null : ud.theme, level.theme));
             if (rng.nextDouble() >= chance) continue;
@@ -424,7 +424,7 @@ public final class LevelFactoryPopulate {
         // dungeon's loot deterministic for a given world seed.
         LootSystem.rollAndStashLoot(level, m, rng);
         level.mobs.add(m);
-        if (withRetainers) placeRetainers(level, m, MobRegistry.get(type), rng, spawnLevel);
+        if (withRetainers) placeRetainers(level, m, Registries.mob(type), rng, spawnLevel);
         return m;
     }
 

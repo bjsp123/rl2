@@ -1,9 +1,7 @@
 package com.bjsp123.rl2.util;
 
 import com.bjsp123.rl2.logic.GameBalance;
-import com.bjsp123.rl2.logic.ItemRegistry;
-import com.bjsp123.rl2.logic.MobRegistry;
-import com.bjsp123.rl2.logic.ThemedRoomRegistry;
+import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.UniqueTracker;
 import com.bjsp123.rl2.model.World;
 import com.bjsp123.rl2.model.WorldTopology;
@@ -80,13 +78,15 @@ public final class WorldDumpMain {
     }
 
     private static void loadData(Path assets) throws IOException {
-        Path balance = assets.resolve("gamebalance.properties");
-        if (Files.exists(balance)) GameBalance.load(Files.readString(balance));
+        Path strings = assets.resolve("strings.csv");
+        if (Files.exists(strings)) com.bjsp123.rl2.logic.TextCatalog.load(Files.readString(strings));
+        Path config = assets.resolve("config.csv");
+        if (Files.exists(config)) GameBalance.load(Files.readString(config));
 
-        MobRegistry.load(Files.readString(assets.resolve("mobs.csv")));
-        ItemRegistry.load(Files.readString(assets.resolve("items.csv")));
+        Registries.loadMobs(Files.readString(assets.resolve("mobs.csv")));
+        Registries.loadItems(Files.readString(assets.resolve("items.csv")));
 
         Path themed = assets.resolve("themedrooms.csv");
-        if (Files.exists(themed)) ThemedRoomRegistry.load(Files.readString(themed));
+        if (Files.exists(themed)) Registries.loadThemedRooms(Files.readString(themed));
     }
 }

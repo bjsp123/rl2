@@ -20,6 +20,61 @@ tasks.named('run') {
     workingDir = rootProject.file('assets')
 }
 
+def defaultProfileFile = rootProject.layout.buildDirectory.file('reports/jfr/rl2-profile.jfr')
+
+tasks.register('profileRun', JavaExec) {
+    group = 'profiling'
+    description = 'Runs the desktop game with Java Flight Recorder enabled.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = application.mainClass
+    workingDir = rootProject.file('assets')
+
+    def profileDuration = providers.gradleProperty('profileDuration').orElse('60s')
+    def profileDelay = providers.gradleProperty('profileDelay').orElse('0s')
+    def profileFile = providers.gradleProperty('profileFile')
+            .orElse(defaultProfileFile.map { it.asFile.absolutePath })
+
+    doFirst {
+        def outFile = file(profileFile.get())
+        outFile.parentFile.mkdirs()
+        jvmArgs application.applicationDefaultJvmArgs
+        jvmArgs "-XX:StartFlightRecording=filename=${outFile.absolutePath},delay=${profileDelay.get()},duration=${profileDuration.get()},settings=profile,dumponexit=true"
+        println "Recording Java Flight Recorder profile to ${outFile.absolutePath} after ${profileDelay.get()} for ${profileDuration.get()}."
+    }
+}
+
+tasks.register('profileHotMethods', Exec) {
+    group = 'profiling'
+    description = 'Prints the hottest Java methods from the latest JFR recording.'
+
+    def profileFile = providers.gradleProperty('profileFile')
+            .orElse(defaultProfileFile.map { it.asFile.absolutePath })
+
+    doFirst {
+        def inFile = file(profileFile.get())
+        if (!inFile.exists()) {
+            throw new GradleException("No JFR recording found at ${inFile.absolutePath}. Run :desktop:profileRun first.")
+        }
+        commandLine 'jfr', 'view', '--width', '160', 'hot-methods', inFile.absolutePath
+    }
+}
+
+tasks.register('profileAllocations', Exec) {
+    group = 'profiling'
+    description = 'Prints allocation hot spots from the latest JFR recording.'
+
+    def profileFile = providers.gradleProperty('profileFile')
+            .orElse(defaultProfileFile.map { it.asFile.absolutePath })
+
+    doFirst {
+        def inFile = file(profileFile.get())
+        if (!inFile.exists()) {
+            throw new GradleException("No JFR recording found at ${inFile.absolutePath}. Run :desktop:profileRun first.")
+        }
+        commandLine 'jfr', 'view', '--width', '160', 'allocation-by-site', inFile.absolutePath
+    }
+}
+
 // IMPORTANT: do NOT add /assets to sourceSets.main.resources.srcDirs. Doing so makes
 // processResources copy every PNG into build/resources/main/, which then takes precedence
 // over the working-dir filesystem copy (libgdx's Internal handle checks the classpath

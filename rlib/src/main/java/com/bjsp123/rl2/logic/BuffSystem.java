@@ -255,14 +255,15 @@ public final class BuffSystem {
 
     /**
      * Single contributor entry-point for the StatBlock pipeline. Adds every active
-     * buff's stat contribution into {@code dst} in place. Replaces the historical
-     * per-stat helpers - accuracy/evasion bonuses now flow through here. CHILLED is the
-     * one exception: its move/attack-cost penalty stays as an action-time modifier in
-     * {@link #chilledCostPenalty} so the ranged-cost path (which doesn't go through the
-     * StatBlock) gets the same treatment as melee.
+     * buff's stat contribution into {@code dst} in place. Accuracy/evasion bonuses and
+     * speed/cost changes all flow through here, so {@link Mob#effectiveStats()} is the
+     * single source for current mob stats.
      */
     public static void contributeInto(com.bjsp123.rl2.model.StatBlock dst, Mob mob) {
         if (mob == null || dst == null || mob.buffs == null) return;
+        int chilledPenalty = 0;
+        double moveMultiplier = 1.0;
+        double actionMultiplier = 1.0;
         for (Buff b : mob.buffs) {
             if (b == null || b.type == null) continue;
             switch (b.type) {
@@ -272,38 +273,32 @@ public final class BuffSystem {
                 }
                 case INVISIBLE -> dst.evasion += 20;
                 case GHOSTLY   -> dst.evasion += 20;
-                // CHILLED and HASTED are action-time modifiers (applied inside
-                // applyMoveCost / its multiplicative sibling), not stat baselines, so they
-                // intentionally don't contribute to the StatBlock. Keeps the StatBlock
-                // representing "stats before action resolution" rather than "exact cost
-                // of the next tick", and avoids double-applying the penalty when the
-                // ranged code path adds its own cost outside the move/attack split.
+                case PHASE -> {
+                    dst.evasion += 20;
+                    moveMultiplier *= 0.3;
+                }
+                case HASTED -> moveMultiplier *= Math.pow(0.8, b.level);
+                case KILLER -> {
+                    moveMultiplier *= 0.8;
+                    actionMultiplier *= 0.8;
+                }
+                case CHILLED -> chilledPenalty = Math.max(chilledPenalty, 50 + b.level * 10);
                 default -> { /* other buff types don't yet contribute to the stat block */ }
             }
+        }
+        dst.moveCost = scaledCost(dst.moveCost + chilledPenalty, moveMultiplier);
+        dst.attackCost = scaledCost(dst.attackCost + chilledPenalty, actionMultiplier);
+        if (dst.rangedCost > 0) {
+            dst.rangedCost = scaledCost(dst.rangedCost + chilledPenalty, actionMultiplier);
         }
     }
 
     // effectiveAccuracy / effectiveEvasion deleted: their contributions now flow
     // through StatBlock via {@link #contributeInto}.
 
-    /** Combined move/attack cost multiplier from {@link BuffType#HASTED} (-20% per
-     *  level) and {@link BuffType#KILLER} (flat -20% while active). Returns {@code 1.0}
-     *  when neither buff is present, so callers can multiply their base cost
-     *  unconditionally. Used by {@link TurnSystem#applyMoveCost}. */
-    public static double actionCostMultiplier(Mob mob) {
-        double m = 1.0;
-        Buff hasted = get(mob, BuffType.HASTED);
-        if (hasted != null) m *= Math.pow(0.8, hasted.level);
-        if (hasBuff(mob, BuffType.KILLER)) m *= 0.8;
-        return m;
-    }
-
-    /** Additive penalty applied to {@code moveCost} and {@code attackCost} from
-     *  {@link BuffType#CHILLED}: {@code 50 + level * 10}. Returns 0 when the buff is
-     *  absent. Callers should add this to their base cost. */
-    public static int chilledCostPenalty(Mob mob) {
-        Buff c = get(mob, BuffType.CHILLED);
-        return c == null ? 0 : 50 + c.level * 10;
+    /** Clamp resolved action costs so even extreme speed stacks still consume time. */
+    private static int scaledCost(int cost, double multiplier) {
+        return Math.max(1, (int) Math.round(cost * multiplier));
     }
 
     /** True if the mob takes double damage from fire - i.e. carries the
@@ -355,63 +350,11 @@ public final class BuffSystem {
     /** Player-facing label for a buff type. Used by the apply VFX and by HUD / look
      *  rendering code that lists buffs on a mob. */
     public static String displayName(BuffType type) {
-        return switch (type) {
-            case SORCERY      -> "Sorcery";
-            case ON_FIRE      -> "On Fire";
-            case FRIGHTENED   -> "Frightened";
-            case INVISIBLE    -> "Invisible";
-            case GHOSTLY      -> "Ghostly";
-            case LEVITATING   -> "Levitating";
-            case ANTI_MAGIC   -> "Anti-magic";
-            case PROTECTION   -> "Protection";
-            case REGENERATION -> "Regeneration";
-            case POISONED     -> "Poisoned";
-            case HASTED       -> "Hasted";
-            case HOPE         -> "Blessed";
-            case ESP          -> "ESP";
-            case INSIGHT      -> "Insight";
-            case CHILLED      -> "Chilled";
-            case OILY         -> "Oily";
-            case WET          -> "Wet";
-            case STARVING     -> "Starving";
-            case TELEPORT_COOLDOWN -> "Recharging";
-            case RANGED_COOLDOWN   -> "Recharging";
-            case HASTE_COOLDOWN    -> "Recharging";
-            case HEAL_COOLDOWN     -> "Recharging";
-            case HIDING            -> "Hiding";
-            case KILLER            -> "Killer";
-            case BLEEDING          -> "Bleeding";
-        };
+        return TextCatalog.getOrDefault("buff." + type + ".name", type.name());
     }
 
     public static String description(BuffType type) {
-        return switch (type) {
-            case SORCERY -> "Your next spell or potion is empowered.";
-            case ON_FIRE -> "Losing HP each turn until it burns out.";
-            case FRIGHTENED -> "Too scared to act effectively.";
-            case INVISIBLE -> "Harder to hit, but attacking cancels the effect.";
-            case GHOSTLY -> "Harder to hit, but attacking cancels the effect.";
-            case LEVITATING -> "Unaffected by ground hazards and pits.";
-            case ANTI_MAGIC -> "Incoming magic and fire damage is reduced.";
-            case PROTECTION -> "Incoming physical damage is reduced.";
-            case REGENERATION -> "Regenerating HP each turn.";
-            case POISONED -> "Losing HP each turn until the poison wears off.";
-            case HASTED -> "Acting faster than normal.";
-            case HOPE -> "Feeling hopeful and courageous.";
-            case ESP -> "Can see mobs through walls, but not their HP bars or names.";
-            case INSIGHT -> "The whole level layout is revealed at the start of every turn.";
-            case CHILLED -> "Acting slower than normal.";
-            case OILY -> "Takes extra damage from fire.";
-            case WET -> "Takes extra damage from lightning.";
-            case STARVING -> "Needs to eat soon or start taking damage.";
-            case TELEPORT_COOLDOWN -> "Can't teleport again until this wears off.";
-            case RANGED_COOLDOWN   -> "Can't use ranged attacks until this wears off.";
-            case HASTE_COOLDOWN    -> "Can't cast haste again until this wears off.";
-            case HEAL_COOLDOWN     -> "Can't cast heal again until this wears off.";
-            case HIDING            -> "Hidden from enemies. Moving or attacking will cancel this.";
-            case KILLER            -> "Striking with deadly precision.";
-            case BLEEDING          -> "Open wound - losing HP each turn until it clots.";
-        };
+        return TextCatalog.getOrDefault("buff." + type + ".description", "");
     }
 
     /** Pretty multi-line summary of every buff on a mob, one line per buff. Used by
@@ -436,8 +379,8 @@ public final class BuffSystem {
      *  carries neither, so callers can default to their normal "X killed Y" message. */
     public static String deathMessageSuffix(Mob deadMob) {
         if (deadMob == null || deadMob.buffs == null) return "";
-        if (hasBuff(deadMob, BuffType.ON_FIRE))   return " burns to a cinder";
-        if (hasBuff(deadMob, BuffType.POISONED))  return " succumbs to poison";
+        if (hasBuff(deadMob, BuffType.ON_FIRE))   return TextCatalog.get("buff.death.ON_FIRE");
+        if (hasBuff(deadMob, BuffType.POISONED))  return TextCatalog.get("buff.death.POISONED");
         return "";
     }
 }

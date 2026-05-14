@@ -2,6 +2,7 @@ package com.bjsp123.rl2.ui.v2;
 
 import com.badlogic.gdx.Gdx;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.TextCatalog;
 
 /**
  * V2 title screen - game logo at the top, vertical column of chunky buttons
@@ -53,26 +54,26 @@ public final class V2Title extends V2Screen {
         float btnX = winX + WINDOW_PAD;
         float y = winY + WINDOW_PAD;
 
-        addBtn("Quit",          btnX, y, btnW, Gdx.app::exit);
+        addBtn(TextCatalog.get("ui.title.quit"), btnX, y, btnW, Gdx.app::exit);
         y += UIVars.BTN_H + BTN_GAP;
-        addBtn("Credits",       btnX, y, btnW,
+        addBtn(TextCatalog.get("ui.title.credits"), btnX, y, btnW,
                 () -> game.pushScreen(new V2Credits(game)));
         y += UIVars.BTN_H + BTN_GAP;
-        addBtn("Settings",      btnX, y, btnW,
+        addBtn(TextCatalog.get("ui.title.settings"), btnX, y, btnW,
                 () -> game.pushScreen(new V2Settings(game, ctx)));
         y += UIVars.BTN_H + BTN_GAP;
-        addBtn("Arena",         btnX, y, btnW,
+        addBtn(TextCatalog.get("ui.title.arena"), btnX, y, btnW,
                 () -> game.pushScreen(new V2ArenaSetup(game)));
         y += UIVars.BTN_H + BTN_GAP;
-        addBtn("Hall of Fame",  btnX, y, btnW,
+        addBtn(TextCatalog.get("ui.title.hallOfFame"), btnX, y, btnW,
                 () -> game.pushScreen(new V2HallOfFame(game)));
         y += UIVars.BTN_H + BTN_GAP;
-        addBtn("Saved Games",   btnX, y, btnW,
+        addBtn(TextCatalog.get("ui.title.savedGames"), btnX, y, btnW,
                 () -> game.pushScreen(new V2Saves(game, ctx)));
 
         // Burger at top-right; no back button (root screen).
         burger = makeBurger();
-        addBurgerItem("Settings", () -> game.pushScreen(new V2Settings(game, ctx)));
+        addBurgerItem(TextCatalog.get("ui.menu.settings"), () -> game.pushScreen(new V2Settings(game, ctx)));
     }
 
     private void addBtn(String label, float x, float y, float w, Runnable onClick) {
@@ -91,6 +92,6 @@ public final class V2Title extends V2Screen {
         // the window's top edge.
         float headerY = window.top() - WINDOW_PAD;
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                        "rl2", window.cx(), headerY);
+                        TextCatalog.get("ui.title.logo"), window.cx(), headerY);
     }
 }

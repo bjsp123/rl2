@@ -66,7 +66,7 @@ public final class GemSystem {
         it.inventoryCategory = InventoryCategory.GEM;
         it.gemSpecies = species;
         it.gemSize = Math.max(1, size);
-        it.name = ItemSystem.gemDisplayName(it);
+        it.name = ItemNames.gemDisplayName(it);
         return it;
     }
 }

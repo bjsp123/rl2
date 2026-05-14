@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.input.LookMode;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
@@ -233,7 +234,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 if (it == null || it.location == null) continue;
                 if ((int) Math.floor(it.location.x()) == cx
                         && (int) Math.floor(it.location.y()) == cy) {
-                    String name = com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
+                    String name = com.bjsp123.rl2.logic.ItemNames.displayName(it, null);
                     h += TextDraw.block(ctx.fontHeader, name, textW, 2, hlh).height();
                     count++;
                     if (count >= 3) break;
@@ -273,7 +274,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     h += lh;               // "Equipped:" header
                     for (Item it : eq) {
                         if (it == null) continue;
-                        String name = "  " + com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
+                        String name = "  " + com.bjsp123.rl2.logic.ItemNames.displayName(it, null);
                         h += TextDraw.block(ctx.fontRegular, name, textW, 2, lh).height();
                     }
                 }
@@ -287,7 +288,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     for (Item it : lookedMob.inventory.bag) {
                         if (it == null) continue;
                         if (seen >= shown) break;
-                        String iname = com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
+                        String iname = com.bjsp123.rl2.logic.ItemNames.displayName(it, null);
                         if (it.count > 1) iname += " x" + it.count;
                         h += TextDraw.block(ctx.fontRegular, "  " + iname, textW, 2, lh).height();
                         seen++;
@@ -361,10 +362,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private void drawInfoBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+        ButtonChrome.shape(ctx, r, pressed, false, false, UIVars.BTN_BG);
     }
 
     // -- Text pass -------------------------------------------------------------
@@ -373,13 +371,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ctx.batch.begin();
 
         // Fixed header - always visible, never scrolls.
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Look",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.look.title"),
                 window.cx(), window.top() - ctx.headerLineH());
 
         Point cursor = lookMode != null ? lookMode.cursor() : null;
         if (cursor == null || level == null) {
             TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "(no tile)", window.cx(), window.top() - 56f);
+                    TextCatalog.get("ui.look.noTile"), window.cx(), window.top() - 56f);
             ctx.batch.end();
             return;
         }
@@ -406,9 +405,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         lookedTile.name().toLowerCase(), left, drawY, textW);
                 if (encyclopedia != null
                         && tileInfoBtn.top() <= caTop + 2f && tileInfoBtn.y >= caBot) {
-                    TextDraw.centre(ctx, ctx.fontRegular,
-                            tileInfoPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                            "?", tileInfoBtn.cx(), tileInfoBtn.cy() + 6f);
+                    ButtonChrome.icon(ctx, tileInfoBtn,
+                            com.bjsp123.rl2.world.render.IconSprites.regionFor(
+                                    com.bjsp123.rl2.world.render.IconSprites.Icon.INFO),
+                            tileInfoPressed, false);
                 }
             }
             drawY -= hlh;
@@ -454,7 +454,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 int iy = (int) Math.floor(it.location.y());
                 if (ix == cx && iy == cy) {
                     TextDraw.TextBlock itemName = TextDraw.block(ctx.fontHeader,
-                            com.bjsp123.rl2.logic.ItemSystem.displayName(it, null),
+                            com.bjsp123.rl2.logic.ItemNames.displayName(it, null),
                             textW, 2, hlh);
                     if (inView(drawY, caTop, caBot)) {
                         TextDraw.wrapped(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
@@ -489,9 +489,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             // of any overlapping buff icons drawn to the batch.
             if (encyclopedia != null
                     && mobInfoBtn.top() <= caTop + 2f && mobInfoBtn.y >= caBot) {
-                TextDraw.centre(ctx, ctx.fontRegular,
-                        mobInfoPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                        "?", mobInfoBtn.cx(), mobInfoBtn.cy() + 6f);
+                ButtonChrome.icon(ctx, mobInfoBtn,
+                        com.bjsp123.rl2.world.render.IconSprites.regionFor(
+                                com.bjsp123.rl2.world.render.IconSprites.Icon.INFO),
+                        mobInfoPressed, false);
             }
         }
 
@@ -527,21 +528,27 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             int hp    = (int) Math.round(m.hp);
             int maxHp = (int) Math.round(s.maxHp);
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "HP " + hp + " / " + maxHp, left, drawY, textW);
+                    TextCatalog.format("ui.look.hp",
+                            TextCatalog.vars("hp", hp, "maxHp", maxHp)),
+                    left, drawY, textW);
         }
         drawY -= lh;
 
         // Att / Def.
         if (inView(drawY, caTop, caBot)) {
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "Att " + s.accuracy + "   Def " + s.evasion, left, drawY, textW);
+                    TextCatalog.format("ui.look.attackDefense",
+                            TextCatalog.vars("attack", s.accuracy, "defense", s.evasion)),
+                    left, drawY, textW);
         }
         drawY -= lh;
 
         // Dmg / Arm.
         if (inView(drawY, caTop, caBot)) {
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "Dmg " + range(s.damage) + "   Arm " + range(s.armor), left, drawY, textW);
+                    TextCatalog.format("ui.look.damageArmor",
+                            TextCatalog.vars("damage", range(s.damage), "armor", range(s.armor))),
+                    left, drawY, textW);
         }
         drawY -= lh;
 
@@ -549,7 +556,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (!s.rangedDamage.isZero()) {
             if (inView(drawY, caTop, caBot)) {
                 TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        "Ranged " + range(s.rangedDamage) + " @ " + s.rangedDistance + " sq",
+                        TextCatalog.format("ui.look.ranged",
+                                TextCatalog.vars("damage", range(s.rangedDamage),
+                                        "distance", s.rangedDistance)),
                         left, drawY, textW);
             }
             drawY -= lh;
@@ -579,11 +588,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         // Loyalty.
         if (m.owner != null) {
-            String ownerLabel = m.owner.behavior == Mob.Behavior.PLAYER ? "you"
-                    : (m.owner.mobType != null ? m.owner.mobType.toLowerCase() : "unknown");
+            String ownerLabel = m.owner.behavior == Mob.Behavior.PLAYER
+                    ? TextCatalog.get("ui.look.owner.you")
+                    : (m.owner.mobType != null ? m.owner.mobType.toLowerCase()
+                            : TextCatalog.get("ui.look.owner.unknown"));
             if (inView(drawY, caTop, caBot)) {
                 TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                        "Loyal to: " + ownerLabel, left, drawY, textW);
+                        TextCatalog.format("ui.look.loyalTo",
+                                TextCatalog.vars("owner", ownerLabel)),
+                        left, drawY, textW);
             }
             drawY -= lh;
         }
@@ -623,13 +636,13 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (!eq.isEmpty()) {
                 if (inView(drawY, caTop, caBot)) {
                     TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                            "Equipped:", left, drawY);
+                            TextCatalog.get("ui.look.equipped"), left, drawY);
                 }
                 drawY -= lh;
                 for (Item it : eq) {
                     if (it == null) continue;
                     TextDraw.TextBlock itemName = TextDraw.block(ctx.fontRegular,
-                            "  " + com.bjsp123.rl2.logic.ItemSystem.displayName(it, null),
+                            "  " + com.bjsp123.rl2.logic.ItemNames.displayName(it, null),
                             textW, 2, lh);
                     if (inView(drawY, caTop, caBot)) {
                         TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
@@ -645,7 +658,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (bagNonNull > 0) {
                 if (inView(drawY, caTop, caBot)) {
                     TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                            "Bag:", left, drawY);
+                            TextCatalog.get("ui.look.bag"), left, drawY);
                 }
                 drawY -= lh;
                 int shown = 0;
@@ -659,7 +672,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         drawY -= lh;
                         break;
                     }
-                    String iname = com.bjsp123.rl2.logic.ItemSystem.displayName(it, null);
+                    String iname = com.bjsp123.rl2.logic.ItemNames.displayName(it, null);
                     if (it.count > 1) iname += " x" + it.count;
                     TextDraw.TextBlock itemName = TextDraw.block(ctx.fontRegular,
                             "  " + iname, textW, 2, lh);
@@ -680,9 +693,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (lookedMob == null) {
             return TextDraw.block(ctx.fontHeader, "", textW, 0, ctx.headerLineH());
         }
-        String mname = lookedMob.name != null ? lookedMob.name : "mob";
+        String mname = lookedMob.name != null ? lookedMob.name : TextCatalog.get("ui.look.mobFallback");
         String header = mname;
-        if (lookedMob.characterLevel > 1) header += " (lvl " + lookedMob.characterLevel + ")";
+        if (lookedMob.characterLevel > 1) {
+            header = TextCatalog.format("ui.look.mobLevel",
+                    TextCatalog.vars("name", mname, "level", lookedMob.characterLevel));
+        }
         return TextDraw.block(ctx.fontHeader, header, textW, 2, ctx.headerLineH());
     }
 
@@ -708,19 +724,19 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private static String describeSurface(com.bjsp123.rl2.model.Level.Surface s) {
         return switch (s) {
-            case WATER -> "shallow water";
-            case BLOOD -> "blood";
-            case OIL   -> "oil slick";
-            case ICE   -> "ice";
+            case WATER -> TextCatalog.get("ui.look.surface.water");
+            case BLOOD -> TextCatalog.get("ui.look.surface.blood");
+            case OIL   -> TextCatalog.get("ui.look.surface.oil");
+            case ICE   -> TextCatalog.get("ui.look.surface.ice");
         };
     }
 
     private static String describeVegetation(com.bjsp123.rl2.model.Level.Vegetation v) {
         return switch (v) {
-            case GRASS     -> "grass";
-            case MUSHROOMS -> "mushrooms";
-            case FIRE      -> "fire";
-            case TREES     -> "trees";
+            case GRASS     -> TextCatalog.get("ui.look.terrain.grass");
+            case MUSHROOMS -> TextCatalog.get("ui.look.terrain.mushrooms");
+            case FIRE      -> TextCatalog.get("ui.look.terrain.fire");
+            case TREES     -> TextCatalog.get("ui.look.terrain.trees");
         };
     }
 
@@ -729,10 +745,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(target, viewer);
         if (a == null) return null;
         return switch (a) {
-            case ATTACK  -> "Hostile.";
-            case FLEE    -> "Fearful.";
-            case NOTHING -> "Neutral.";
-            case ALLY    -> "Friendly.";
+            case ATTACK  -> TextCatalog.get("ui.look.attitude.attack");
+            case FLEE    -> TextCatalog.get("ui.look.attitude.flee");
+            case NOTHING -> TextCatalog.get("ui.look.attitude.nothing");
+            case ALLY    -> TextCatalog.get("ui.look.attitude.ally");
         };
     }
 
@@ -752,24 +768,24 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private static String stateOfMindLabel(Mob m) {
-        if (m.behavior == Mob.Behavior.PLAYER) return "(this is you)";
+        if (m.behavior == Mob.Behavior.PLAYER) return TextCatalog.get("ui.look.state.player");
         if (m.stateOfMind == null) return null;
         String prefix = switch (m.stateOfMind) {
-            case ASLEEP         -> "Asleep";
-            case AWAKE          -> "Awake";
-            case SEEKING_HIDING -> "Seeking cover";
-            case HIDING         -> "Hiding";
-            case FOLLOWING      -> "Following";
+            case ASLEEP         -> TextCatalog.get("ui.look.state.asleep");
+            case AWAKE          -> TextCatalog.get("ui.look.state.awake");
+            case SEEKING_HIDING -> TextCatalog.get("ui.look.state.seekingHiding");
+            case HIDING         -> TextCatalog.get("ui.look.state.hiding");
+            case FOLLOWING      -> TextCatalog.get("ui.look.state.following");
         };
         String suffix = m.intent == null ? "" : switch (m.intent) {
             case IDLE               -> "";
-            case WANDERING          -> " - wandering";
-            case PURSUING           -> " - pursuing a foe";
-            case CHASING_LAST_KNOWN -> " - chasing last seen";
-            case SHOOTING           -> " - taking aim";
-            case KITING             -> " - keeping range";
-            case FLEEING            -> " - fleeing";
-            case FOLLOWING_LEADER   -> " - following its leader";
+            case WANDERING          -> TextCatalog.get("ui.look.intent.wandering");
+            case PURSUING           -> TextCatalog.get("ui.look.intent.pursuing");
+            case CHASING_LAST_KNOWN -> TextCatalog.get("ui.look.intent.chasingLastKnown");
+            case SHOOTING           -> TextCatalog.get("ui.look.intent.shooting");
+            case KITING             -> TextCatalog.get("ui.look.intent.kiting");
+            case FLEEING            -> TextCatalog.get("ui.look.intent.fleeing");
+            case FOLLOWING_LEADER   -> TextCatalog.get("ui.look.intent.followingLeader");
         };
         return prefix + suffix;
     }

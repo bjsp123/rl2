@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.ui.v2;
 
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Tile;
 
@@ -39,10 +40,10 @@ public final class V2LevelInfo extends V2Screen {
 
         rows.clear();
         if (level != null) {
-            rows.add("Depth     " + level.depth);
-            rows.add("Size      " + level.width + "x" + level.height);
-            rows.add("Layout    " + level.layout);
-            rows.add("Theme     " + level.theme);
+            rows.add(TextCatalog.format("ui.levelInfo.depth", TextCatalog.vars("value", level.depth)));
+            rows.add(TextCatalog.format("ui.levelInfo.size", TextCatalog.vars("value", level.width + "x" + level.height)));
+            rows.add(TextCatalog.format("ui.levelInfo.layout", TextCatalog.vars("value", level.layout)));
+            rows.add(TextCatalog.format("ui.levelInfo.theme", TextCatalog.vars("value", level.theme)));
 
             int floor = 0, wall = 0, chasm = 0, door = 0;
             for (int x = 0; x < level.width; x++) {
@@ -58,14 +59,14 @@ public final class V2LevelInfo extends V2Screen {
                     }
                 }
             }
-            rows.add("Floors    " + floor);
-            rows.add("Walls     " + wall);
-            rows.add("Chasms    " + chasm);
-            rows.add("Doors     " + door);
-            rows.add("Mobs      " + (level.mobs == null ? 0 : level.mobs.size()));
-            rows.add("Items     " + (level.items == null ? 0 : level.items.size()));
+            rows.add(TextCatalog.format("ui.levelInfo.floors", TextCatalog.vars("value", floor)));
+            rows.add(TextCatalog.format("ui.levelInfo.walls", TextCatalog.vars("value", wall)));
+            rows.add(TextCatalog.format("ui.levelInfo.chasms", TextCatalog.vars("value", chasm)));
+            rows.add(TextCatalog.format("ui.levelInfo.doors", TextCatalog.vars("value", door)));
+            rows.add(TextCatalog.format("ui.levelInfo.mobs", TextCatalog.vars("value", level.mobs == null ? 0 : level.mobs.size())));
+            rows.add(TextCatalog.format("ui.levelInfo.items", TextCatalog.vars("value", level.items == null ? 0 : level.items.size())));
         } else {
-            rows.add("(no level loaded)");
+            rows.add(TextCatalog.get("ui.levelInfo.noLevel"));
         }
 
         back = new BackBtn(ctx, onBack);
@@ -81,7 +82,7 @@ public final class V2LevelInfo extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         float top = window.top() - ctx.headerLineH();
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Level Info",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, TextCatalog.get("ui.levelInfo.title"),
                 window.cx(), top);
         top -= 50f;
         for (String s : rows) {

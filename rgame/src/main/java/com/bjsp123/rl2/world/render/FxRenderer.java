@@ -6,6 +6,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.bjsp123.rl2.world.anim.AnimationVars;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Tile;
@@ -32,8 +33,6 @@ final class FxRenderer {
     private static final int CELL = 16;
     private static final int ENTITY_Y_OFFSET = 4;
 
-    /** Wall-clock duration of one painted-fire frame, in milliseconds. */
-    private static final int  FIRE_FRAME_MS      = 90;
     private static final int  FIRE_SHEET_FRAME_W = 32;
     private static final int  FIRE_SHEET_FRAME_H = 48;
     private static final int  FIRE_SHEET_FRAMES  = 8;
@@ -42,11 +41,6 @@ final class FxRenderer {
      *  aspect at 12x18. */
     private static final int  FIRE_DISPLAY_W     = 12;
     private static final int  FIRE_DISPLAY_H     = 18;
-
-    /** Constant downward acceleration applied to PARTICLE_BURST particles, in pixels/frame^2. */
-    private static final float PARTICLE_GRAVITY = 0.32f;
-    /** Pixel size of each particle (square). */
-    private static final float PARTICLE_SIZE    = 1.5f;
 
     /** Cached tint colours so the inner draw loop doesn't allocate. */
     private static final Color TINT_BLUE   = new Color(0.4f, 0.6f, 1f, 1f);
@@ -103,6 +97,8 @@ final class FxRenderer {
             drawExplosion(effect);
         } else if (effect.type == EffectType.MAGIC_MISSILE) {
             drawMagicMissile(effect);
+        } else if (effect.type == EffectType.PHYSICAL_MISSILE) {
+            drawPhysicalMissile(effect);
         } else if (effect.type == EffectType.FIRE_PARTICLE) {
             if (!level.visible[ex][ey]) return;
             drawFireParticle(effect);
@@ -160,7 +156,7 @@ final class FxRenderer {
     /**
      * Draw the flame at tile {@code (x, y)}. Each tile picks one of the painted fire
      * sheets by hash for variety and animates through the 8 frames at
-     * {@link #FIRE_FRAME_MS} per frame, with a per-tile phase offset so adjacent fires
+     * {@link #AnimationVars.FIRE_FRAME_MS} per frame, with a per-tile phase offset so adjacent fires
      * don't flicker in lockstep. If neither sheet loaded, draws nothing.
      */
     void drawFireAt(int x, int y) {
@@ -179,7 +175,7 @@ final class FxRenderer {
         Texture sheet = pickPaintedFireSheetFromSeed(seed);
         if (sheet == null) return;
         int phase = Math.floorMod(seed >>> 4, FIRE_SHEET_FRAMES);
-        int frame = (int) Math.floorMod(System.currentTimeMillis() / FIRE_FRAME_MS + phase,
+        int frame = (int) Math.floorMod(System.currentTimeMillis() / AnimationVars.FIRE_FRAME_MS + phase,
                                         FIRE_SHEET_FRAMES);
         int jitterX = Math.floorMod(seed >>> 8, 3) - 1;
         int spanY   = Math.max(1, CELL / 4);
@@ -509,14 +505,13 @@ final class FxRenderer {
 
         if (e.particleSpawnFrame != null
                 && e.particleSpawnFrame.length == e.particleX0.length) {
-            // Per-particle path - each particle lives for PARTICLE_LIFE frames
+            // Per-particle path - each particle lives for AnimationVars.PARTICLE_LIFE frames
             // starting at its own spawn frame, independent of the others.
-            final int PARTICLE_LIFE = 40;
             Color base = tintToColor(e.tint, Color.WHITE);
             for (int i = 0; i < e.particleX0.length; i++) {
                 int age = e.frame - e.particleSpawnFrame[i];
-                if (age < 0 || age >= PARTICLE_LIFE) continue;
-                float lifeFrac = age / (float) PARTICLE_LIFE;
+                if (age < 0 || age >= AnimationVars.PARTICLE_LIFE) continue;
+                float lifeFrac = age / (float) AnimationVars.PARTICLE_LIFE;
                 // First half: tint -> white.  Second half: white, alpha fades.
                 float whiteFrac = Math.min(1f, lifeFrac * 2f);
                 float cr = base.r + (1f - base.r) * whiteFrac;
@@ -528,7 +523,7 @@ final class FxRenderer {
                 float px = baseX + e.particleX0[i] + dx;
                 float py = baseY + e.particleY0[i] + dy;
                 batch.setColor(cr, cg, cb, alpha);
-                batch.draw(whiteRegion, px, py, PARTICLE_SIZE, PARTICLE_SIZE);
+                batch.draw(whiteRegion, px, py, AnimationVars.PARTICLE_SIZE, AnimationVars.PARTICLE_SIZE);
             }
             batch.setColor(Color.WHITE);
             return;
@@ -550,10 +545,10 @@ final class FxRenderer {
         batch.setColor(cr, cg, cb, alpha);
         for (int i = 0; i < e.particleX0.length; i++) {
             float dx = e.particleVX[i] * t;
-            float dy = e.particleVY[i] * t - 0.5f * PARTICLE_GRAVITY * t * t;
+            float dy = e.particleVY[i] * t - 0.5f * AnimationVars.PARTICLE_GRAVITY * t * t;
             float px = baseX + e.particleX0[i] + dx;
             float py = baseY + e.particleY0[i] + dy;
-            batch.draw(whiteRegion, px, py, PARTICLE_SIZE, PARTICLE_SIZE);
+            batch.draw(whiteRegion, px, py, AnimationVars.PARTICLE_SIZE, AnimationVars.PARTICLE_SIZE);
         }
         batch.setColor(Color.WHITE);
     }
@@ -610,6 +605,34 @@ final class FxRenderer {
             }
         }
         batch.setColor(Color.WHITE);
+    }
+
+    /** Physical projectile: the col-3 slash sprite translated along the
+     *  from→to line, rotated to face its direction of travel. The sprite
+     *  points up (+Y) at 0°, so the rotation is {@code atan2(dy,dx) - 90°}. */
+    private void drawPhysicalMissile(Effect e) {
+        if (e.endLocation == null) return;
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float t = Math.min(1f, e.frame / (float) total);
+        if (t >= 1f) return;
+        TextureRegion region = BuffIcons.attackFlashRegion(3);
+        if (region == null) return;
+        float sx = (e.location.tileX()    + 0.5f) * CELL;
+        float sy = (e.location.tileY()    + 0.5f) * CELL;
+        float dx = (e.endLocation.tileX() + 0.5f) * CELL;
+        float dy = (e.endLocation.tileY() + 0.5f) * CELL;
+        float px = sx + (dx - sx) * t;
+        float py = sy + (dy - sy) * t;
+        float angle = (float) Math.toDegrees(Math.atan2(dy - sy, dx - sx)) - 90f;
+        float size = CELL;
+        batch.setColor(Color.WHITE);
+        batch.draw(region,
+                px - size * 0.5f, py - size * 0.5f,
+                size * 0.5f, size * 0.5f,
+                size, size,
+                1f, 1f,
+                angle);
     }
 
     /** Per-floor dust-cloud tints - looked up from the tile under the

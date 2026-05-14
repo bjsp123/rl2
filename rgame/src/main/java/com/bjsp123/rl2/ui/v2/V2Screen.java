@@ -6,6 +6,7 @@ import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.bjsp123.rl2.logic.TextCatalog;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -294,16 +295,16 @@ public abstract class V2Screen extends ScreenAdapter {
      *  Main Menu / Settings, plus Level Info / Map / Log when a run is in
      *  progress. Call once in {@link #buildLayout()} after {@link #makeBurger()}. */
     protected final void addStandardBurgerItems(com.bjsp123.rl2.Rl2Game game) {
-        addBurgerItem("Main Menu", () -> game.setRootScreen(new V2Title(game, ctx)));
-        addBurgerItem("Settings",  () -> game.pushScreen(new V2Settings(game, ctx)));
+        addBurgerItem(TextCatalog.get("ui.menu.main"), () -> game.setRootScreen(new V2Title(game, ctx)));
+        addBurgerItem(TextCatalog.get("ui.menu.settings"),  () -> game.pushScreen(new V2Settings(game, ctx)));
         if (game.currentPlay != null) {
-            addBurgerItem("Level Info", () -> game.pushScreen(new V2LevelInfo(game, ctx,
+            addBurgerItem(TextCatalog.get("ui.menu.levelInfo"), () -> game.pushScreen(new V2LevelInfo(game, ctx,
                     game::popScreen,
                     game.currentPlay.getWorld().currentLevel())));
-            addBurgerItem("Map", () -> game.pushScreen(new V2Map(game, ctx,
+            addBurgerItem(TextCatalog.get("ui.menu.map"), () -> game.pushScreen(new V2Map(game, ctx,
                     game::popScreen,
                     game.currentPlay.getWorld())));
-            addBurgerItem("Log", () -> game.setRootScreen(game.currentPlay));
+            addBurgerItem(TextCatalog.get("ui.menu.log"), () -> game.setRootScreen(game.currentPlay));
         }
     }
 

@@ -47,8 +47,8 @@ public final class LevelFactoryThemedRooms {
         if (level.layout == LevelFactory.Layout.VILLAGE) return;
         double f = depthFraction(level);
         List<ThemedRoomDefinition> candidates = new ArrayList<>();
-        for (String type : ThemedRoomRegistry.knownTypes()) {
-            ThemedRoomDefinition d = ThemedRoomRegistry.get(type);
+        for (String type : Registries.themedRoomTypes()) {
+            ThemedRoomDefinition d = Registries.themedRoom(type);
             if (d == null || !d.unique) continue;
             if (unique.rooms.contains(d.type)) continue;
             if (f < d.powerMin || f > d.powerMax) continue;
@@ -95,8 +95,8 @@ public final class LevelFactoryThemedRooms {
         boolean walkwayLevel = level.flags.contains(Level.LevelFlag.WALKWAY_LEVEL);
 
         List<ThemedRoomDefinition> regulars = new ArrayList<>();
-        for (String type : ThemedRoomRegistry.knownTypes()) {
-            ThemedRoomDefinition d = ThemedRoomRegistry.get(type);
+        for (String type : Registries.themedRoomTypes()) {
+            ThemedRoomDefinition d = Registries.themedRoom(type);
             if (d == null || d.unique) continue;
             // WALKWAY_LEVEL paints corridors as planks over chasm - stamping a
             // walkway-shaped room on top would be redundant.

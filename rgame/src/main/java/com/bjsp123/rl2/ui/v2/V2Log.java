@@ -6,9 +6,9 @@ import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.EventLog;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.LogEvent;
-import com.bjsp123.rl2.ui.skin.LogPreferences;
-import com.bjsp123.rl2.ui.v2.stage.V2Popup;
+import com.bjsp123.rl2.ui.skin.Settings;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,10 +27,9 @@ import java.util.List;
  * means {@code scrollY = maxScrollY} so the newest entries sit at the
  * visible bottom edge.
  */
-public final class V2Log implements V2Popup {
+public final class V2Log extends BasePopup {
 
     // -- Constants ------------------------------------------------------------
-    private float lineH() { return ctx.lineH(); }
     private static final float LINE_PAD_L   =  8f;
     private static final float BADGE_R      =  3f;   // radius of the priority dot
     private static final float BADGE_COL_W  = 12f;   // horizontal space reserved for dot
@@ -40,19 +39,13 @@ public final class V2Log implements V2Popup {
     private static final Color LOW_COLOR    = new Color(0.4f, 0.4f, 0.4f, 1f);
 
     // -- State -----------------------------------------------------------------
-    private final UiCtx ctx;
-    private boolean open;
-
     // Layout rects - recomputed each frame while open.
-    private final Rect window      = new Rect();
     private final Rect headerRect  = new Rect();
     private final Rect closeBtn    = new Rect();
     private final Rect filterLow   = new Rect();
     private final Rect filterNon   = new Rect();
     private final Rect bodyRect    = new Rect();
-
-    // Scroll state.
-    private final Scroller scroller = new Scroller();
+    private final ScrollBand bodyBand = new ScrollBand();
 
     // Filtered entry cache - rebuilt each frame so filter toggles take effect
     // immediately. Each entry may occupy several physical display lines.
@@ -60,44 +53,23 @@ public final class V2Log implements V2Popup {
 
     // -- Constructor -----------------------------------------------------------
     public V2Log(UiCtx ctx) {
-        this.ctx = ctx;
+        super(ctx);
     }
 
     // -- V2Popup / public API --------------------------------------------------
-    @Override public boolean isOpen() { return open; }
-
-    public void toggle() { if (open) close(); else open(); }
-
-    public void open() {
-        open = true;
+    @Override
+    protected void onOpened() {
         scrollToBottom();
-    }
-
-    public void close() {
-        open = false;
     }
 
     /** Snap the scroll so the most-recent entries are visible. */
     public void scrollToBottom() {
         rebuildLines();
-        float totalH = totalPhysicalLines() * lineH();
+        float totalH = totalPhysicalLines() * ctx.lineH();
         float bodyH  = computeBodyH();
         float max = Math.max(0f, totalH - bodyH);
-        scroller.resetTop();
-        scroller.onScrolled(max / Math.max(1f, lineH()), lineH());
-    }
-
-    // -- V2Popup render entry point --------------------------------------------
-    @Override
-    public void renderSelf() {
-        if (!open) return;
-        ctx.applyProjection();
-        layoutRects();
-        rebuildLines();
-        updateScroll();
-
-        renderShapesPass();
-        renderTextPass();
+        bodyBand.scroller.resetTop();
+        bodyBand.scroller.onScrolled(max / Math.max(1f, ctx.lineH()), ctx.lineH());
     }
 
     /** Convenience non-V2Popup render - equivalent to {@link #renderSelf()}.
@@ -107,7 +79,8 @@ public final class V2Log implements V2Popup {
     }
 
     // -- Layout ----------------------------------------------------------------
-    private void layoutRects() {
+    @Override
+    protected void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
 
@@ -139,6 +112,7 @@ public final class V2Log implements V2Popup {
         float bodyTop = filterY - 2f;
         float bodyY   = winY + inset;
         bodyRect.set(innerX, bodyY, innerW, bodyTop - bodyY);
+        bodyBand.set(bodyRect.x, bodyRect.y, bodyRect.w, bodyRect.h);
     }
 
     private float computeBodyH() {
@@ -156,8 +130,8 @@ public final class V2Log implements V2Popup {
     private void rebuildLines() {
         visibleLines.clear();
         List<LogEvent> all = EventLog.all();
-        boolean showLow = LogPreferences.showLowPriority();
-        boolean showNon = LogPreferences.showNonPlayer();
+        boolean showLow = Settings.showLowPriority();
+        boolean showNon = Settings.showNonPlayer();
         float ww = wrapWidth();
         for (LogEvent e : all) {
             if (e.priority == LogEvent.EventPriority.LOW && !showLow) continue;
@@ -170,12 +144,16 @@ public final class V2Log implements V2Popup {
     }
 
     private void updateScroll() {
-        float totalH = totalPhysicalLines() * lineH();
-        scroller.setMaxScroll(Math.max(0f, totalH - bodyRect.h));
+        float totalH = totalPhysicalLines() * ctx.lineH();
+        bodyBand.update(totalH);
     }
 
     // -- Shape pass ------------------------------------------------------------
-    private void renderShapesPass() {
+    @Override
+    protected void renderShapesPass() {
+        rebuildLines();
+        updateScroll();
+        ctx.applyProjection();
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
 
@@ -192,8 +170,8 @@ public final class V2Log implements V2Popup {
         s.rect(headerRect.x, headerRect.y, headerRect.w, headerRect.h);
 
         // Filter buttons.
-        drawFilterBtnShape(s, filterLow, LogPreferences.showLowPriority());
-        drawFilterBtnShape(s, filterNon, LogPreferences.showNonPlayer());
+        drawFilterBtnShape(s, filterLow, Settings.showLowPriority());
+        drawFilterBtnShape(s, filterNon, Settings.showNonPlayer());
 
         // Body background.
         s.setColor(UIVars.SLOT_RECESS.r, UIVars.SLOT_RECESS.g,
@@ -205,17 +183,7 @@ public final class V2Log implements V2Popup {
 
         // Scroll indicator - a thin bar on the right edge of the body when
         // the content is taller than the visible area.
-        float totalH = totalPhysicalLines() * lineH();
-        if (totalH > bodyRect.h && totalH > 0f) {
-            float barW    = 3f;
-            float ratio   = bodyRect.h / totalH;
-            float barH    = Math.max(12f, bodyRect.h * ratio);
-            float scrollFrac = (totalH <= bodyRect.h) ? 0f
-                    : scroller.scrollY() / (totalH - bodyRect.h);
-            float barY = bodyRect.y + (bodyRect.h - barH) * scrollFrac;
-            s.setColor(UIVars.BORDER_MID);
-            s.rect(bodyRect.right() - barW, barY, barW, barH);
-        }
+        bodyBand.drawScrollbar(s, totalPhysicalLines() * ctx.lineH());
 
         s.end();
     }
@@ -236,15 +204,15 @@ public final class V2Log implements V2Popup {
 
     private void drawLineBadges(ShapeRenderer s) {
         if (visibleLines.isEmpty()) return;
-        float contentBottom = bodyRect.y - scroller.scrollY();
-        float totalH        = totalPhysicalLines() * lineH();
+        float contentBottom = bodyRect.y - bodyBand.scroller.scrollY();
+        float totalH        = totalPhysicalLines() * ctx.lineH();
         float dotX = bodyRect.x + LINE_PAD_L * 0.5f + BADGE_R;
 
         // Walk entries from oldest (top) to newest (bottom).
         float cursor = contentBottom + totalH; // starts at content top
         for (LogEntry le : visibleLines) {
             float entryTop = cursor;
-            float entryBot = cursor - le.lineCount() * lineH();
+            float entryBot = cursor - le.lineCount() * ctx.lineH();
             cursor = entryBot;
             float entryMid = (entryTop + entryBot) * 0.5f;
             if (entryMid + BADGE_R < bodyRect.y)     continue;
@@ -256,27 +224,28 @@ public final class V2Log implements V2Popup {
     }
 
     // -- Text pass -------------------------------------------------------------
-    private void renderTextPass() {
+    @Override
+    protected void renderTextPass() {
         ctx.batch.begin();
 
         // Header label.
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                "Game Log",
+                TextCatalog.get("ui.log.title"),
                 headerRect.cx(),
                 headerRect.top() - 2f);
 
         // Close button "x".
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
-                "x",
+                TextCatalog.get("ui.common.close"),
                 closeBtn.cx(),
                 closeBtn.top() - 2f);
 
         // Filter button labels.
-        drawFilterLabel("Low priority", filterLow, LogPreferences.showLowPriority());
-        drawFilterLabel("Non-player",  filterNon, LogPreferences.showNonPlayer());
+        drawFilterLabel(TextCatalog.get("ui.log.lowPriority"), filterLow, Settings.showLowPriority());
+        drawFilterLabel(TextCatalog.get("ui.log.nonPlayer"),  filterNon, Settings.showNonPlayer());
 
         // Log lines.
-        drawLogLines();
+        bodyBand.clip(ctx, this::drawLogLines);
 
         ctx.batch.end();
     }
@@ -289,23 +258,23 @@ public final class V2Log implements V2Popup {
 
     private void drawLogLines() {
         if (visibleLines.isEmpty()) return;
-        float contentBottom = bodyRect.y - scroller.scrollY();
-        float totalH        = totalPhysicalLines() * lineH();
+        float contentBottom = bodyRect.y - bodyBand.scroller.scrollY();
+        float totalH        = totalPhysicalLines() * ctx.lineH();
         float textX = bodyRect.x + LINE_PAD_L + BADGE_COL_W;
 
         // Walk entries from oldest (top of content) to newest (bottom).
         float cursor = contentBottom + totalH;
         for (LogEntry le : visibleLines) {
             float entryTop = cursor;
-            cursor -= le.lineCount() * lineH();
+            cursor -= le.lineCount() * ctx.lineH();
             // Skip entries entirely outside the body.
             if (entryTop <= bodyRect.y)     break;
             if (cursor   >= bodyRect.top()) continue;
             Color col = lineColor(le.event);
             for (int j = 0; j < le.lines.size(); j++) {
-                float lineTop = entryTop - j * lineH();
+                float lineTop = entryTop - j * ctx.lineH();
                 if (lineTop <= bodyRect.y)      break;
-                if (lineTop >  bodyRect.top() + lineH()) continue;
+                if (lineTop >  bodyRect.top() + ctx.lineH()) continue;
                 TextDraw.left(ctx, ctx.fontRegular, col, le.lines.get(j), textX, lineTop);
             }
         }
@@ -329,7 +298,7 @@ public final class V2Log implements V2Popup {
 
             @Override
             public boolean touchDown(int sx, int sy, int pointer, int button) {
-                if (!open) return false;
+                if (!isOpen()) return false;
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
                 maybeOutside = !window.contains(vx, vy);
@@ -338,17 +307,17 @@ public final class V2Log implements V2Popup {
                 maybeNon   = filterNon.contains(vx, vy);
                 draggingBody = bodyRect.contains(vx, vy);
                 if (draggingBody) {
-                    scroller.onTouchDown(vy);
+                    bodyBand.scroller.onTouchDown(vy);
                 }
                 return true;
             }
 
             @Override
             public boolean touchDragged(int sx, int sy, int pointer) {
-                if (!open) return false;
+                if (!isOpen()) return false;
                 float vy = ctx.unprojectY(sx, sy);
                 if (draggingBody) {
-                    boolean nowDragging = scroller.onTouchDragged(vy);
+                    boolean nowDragging = bodyBand.scroller.onTouchDragged(vy);
                     if (nowDragging) {
                         // Clear button intents once classified as a drag.
                         maybeClose = false;
@@ -361,19 +330,19 @@ public final class V2Log implements V2Popup {
 
             @Override
             public boolean touchUp(int sx, int sy, int pointer, int button) {
-                if (!open) return false;
+                if (!isOpen()) return false;
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
-                scroller.onTouchUp();
+                bodyBand.scroller.onTouchUp();
                 if (maybeOutside && !window.contains(vx, vy)) {
                     close();
                 } else if (maybeClose && closeBtn.contains(vx, vy)) {
                     close();
                 } else if (maybeLow && filterLow.contains(vx, vy)) {
-                    LogPreferences.setShowLowPriority(!LogPreferences.showLowPriority());
+                    Settings.setShowLowPriority(!Settings.showLowPriority());
                     scrollToBottom();
                 } else if (maybeNon && filterNon.contains(vx, vy)) {
-                    LogPreferences.setShowNonPlayer(!LogPreferences.showNonPlayer());
+                    Settings.setShowNonPlayer(!Settings.showNonPlayer());
                     scrollToBottom();
                 }
                 maybeOutside = false;
@@ -386,14 +355,14 @@ public final class V2Log implements V2Popup {
 
             @Override
             public boolean scrolled(float amountX, float amountY) {
-                if (!open) return false;
-                scroller.onScrolled(amountY, lineH());
+                if (!isOpen()) return false;
+                bodyBand.scrolled(amountY, ctx.lineH());
                 return true;
             }
 
             @Override
             public boolean keyDown(int keycode) {
-                if (!open) return false;
+                if (!isOpen()) return false;
                 if (keycode == Input.Keys.ESCAPE || keycode == Input.Keys.BACK) {
                     close();
                     return true;

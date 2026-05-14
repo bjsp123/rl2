@@ -5,6 +5,7 @@ import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
 import com.bjsp123.rl2.world.render.IconSprites;
@@ -72,7 +73,7 @@ public final class V2GameOver extends V2Screen {
         float mainX   = winX + 16f;
         float iconX   = mainX + mainW + btnGap;
 
-        Btn mainMenu = new Btn("Main Menu", mainX, btnY, mainW, btnH,
+        Btn mainMenu = new Btn(TextCatalog.get("ui.gameOver.mainMenu"), mainX, btnY, mainW, btnH,
                 () -> game.setRootScreen(new V2Title(game, ctx))).header();
         buttons.add(mainMenu);
 
@@ -98,7 +99,8 @@ public final class V2GameOver extends V2Screen {
         float cx = window.cx();
 
         // "YOU DIED" title.
-        TextDraw.centre(ctx, ctx.fontHeader, DIM_WARN, "YOU DIED", cx,
+        TextDraw.centre(ctx, ctx.fontHeader, DIM_WARN,
+                TextCatalog.get("ui.gameOver.title"), cx,
                 window.top() - ctx.headerLineH());
 
         // Portrait.
@@ -114,7 +116,8 @@ public final class V2GameOver extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, record.charClass, cx, nameY);
 
         // Score + depth.
-        String stats = "Score: " + record.score + "   Depth: " + record.depth;
+        String stats = TextCatalog.format("ui.gameOver.stats",
+                TextCatalog.vars("score", record.score, "depth", record.depth));
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, stats, cx, statsY);
 
         // Death message - word-wrapped up to 2 lines.
@@ -147,7 +150,7 @@ public final class V2GameOver extends V2Screen {
     private static CharacterClass parseClass(String name) {
         if (name == null) return null;
         for (CharacterClass c : CharacterClass.values()) {
-            if (c.displayName.equalsIgnoreCase(name) || c.name().equalsIgnoreCase(name))
+            if (c.displayName().equalsIgnoreCase(name) || c.name().equalsIgnoreCase(name))
                 return c;
         }
         return null;

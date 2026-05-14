@@ -1,64 +1,66 @@
-type,name,description,description 2,theme,powerLevel,clusterSize,inventoryCategory,guaranteedPerLevel,damage,damagePerLevel,attackSpeed,apDamage,apDamagePerLevel,armor,armorPerLevel,antiMagic,antiMagicPerLevel,moveSpeed,tilesAffected,tilesAffectedPerLevel,lightRadius,throwEffect,tameOnThrow,useBehavior,useVerb,foodValue,appliesBuff,abilityPower,wandEffect,summonsWhenUsed,chargeGain,baseChargeMax,knockbackSquares,throwResult,glows,spriteCol,spriteRow
-SWORD,sword,"A plain iron blade, friend of many an adventurer.","As well as decent damage, it's heavy enough to knock smaller enemies back a bit.",,0.2_0.6,,WEAPON,,2_5,1,1,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,1,,,0,7
-RAPIER,rapier,"A well-made blade, expertly balanced.",Rapiers do moderate damage but you can attack more often with them.,,0.4_0.8,,WEAPON,,3_7,2,0.8,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,2,7
-RAPIER2,fine rapier,"A beautiful, deadly stabbing blade.",Rapiers do moderate damage but you can attack more often with them.,,0.6_1.0,,WEAPON,,5_9,2,0.7,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,7,7
-KATANA,katana,"A deadly, razor sharp sword.",,,0.6_1.0,,WEAPON,,5_10,3,1,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,3,7
-CUTLASS,cutlass,"A heavy, brutal sword that can block a good deal of damage","Hits hard, knocks back, protects  a bit -- nice.",,0.7_1.0,,WEAPON,,5_10,3,1,,,2_3,,,,,,,,DAMAGE,,NONE,,,,,,,,,1,,,4,7
-BLOODYBLADE,venomblade,"This nasty, underhanded weapon is permanently coated in poison.",Creates poison clouds on the target.,,0.7_1.0,,WEAPON,,4_9,3,1,,,,,,,,2,1,,POISONCLOUD,,NONE,,,POISONCLOUD,2,,,,,,,,5,7
-SHIELD,round shield,A round wooden shield.,Protects a bit against physical damage.,,0.1_0.5,,OFFHAND,,,,,,,1_2,1_1,,,,,,,,,NONE,,,,,,,,,,,,0,5
-KITE_SHIELD,kite shield,A sturdy kite shield offering good protection.,,,0.3_1.0,,OFFHAND,,,,,,,3_4,1_2,,,,,,,,,NONE,,,,,,,,,,,,1,5
-TORCH,torch,A blazing torch that casts bright light all around.,"Lights up the area, potentially changing how creatures and plants behave.  Also helps you go a bit faster.",,0.2_0.6,,OFFHAND,,,,,,,,,,,0.9,,1,5,FIRE,,NONE,,,,,,,,,,,,2,5
-CHAIN_MAIL,chain mail,Mail made of rings.,It protects you somewhat against physical attacks.,,0_0.4,,ARMOR,,,,,,,2_3,1_1,,,,,,,,,NONE,,,,,,,,,,,,3,4
-SCALE_MAIL,scale mail,Overlapping iron scales on a leather backing.,It protects you fairly well against physical attacks.,,0.3_0.7,,ARMOR,,,,,,,4_5,1_2,,,,,,,,,NONE,,,,,,,,,,,,0,4
-HEAVY_MAIL,heavy plate mail,Thick plates of steel encase your body.,"Lots of protection against physical attack, at the cost of speed.",,0.6_1.0,,ARMOR,,,,1.1,,,6_8,2_4,,,1.1,,,,,,NONE,,,,,,,,,,,,2,4
-DAGGER,dagger,"A short bladed dagger, a classic weapon.",Not especially deadly but strikes rapidly.,,0_0.3,,WEAPON,,1_3,1,0.8,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,6,7
-THROWING_KNIFE,throwing knife,This well balanced knife can be thrown from some way off.,Minor magic helps it return to its thrower -- a bit.,,0_0.3,3,WEAPON,,2_3,1,1,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,RETURN,,8,7
-PUNCH_DAGGER,heavy dagger,A fine dagger capable of slicing a foe to ribbons.,Often manages to get right past a foe's armor plates.,,0.4_1.0,,WEAPON,,1_3,2,1,2,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,1,7
-AMULET_OF_NIMBLENESS,nimble amulet,A complex magical token that helps you move faster.,,,0.3_0.7,,AMULET,,,,,,,,,,,0.8,,,,,,NONE,,,,,,,,,,,,0,6
-AMULET_OF_FINESSE,precise amulet,"An intricate sign traced in silver, it seems to aid your precision in combat.",,,0.1_0.4,,AMULET,,,,0.8,,,,,,,,,,,,,NONE,,,,,,,,,,,,1,6
-AMULET_OF_DEFENCE,protective amulet,"A blue, shield shaped gem in a gold setting.",Protects from physical blows.,,0.2_0.8,,AMULET,,,,,,,1_2,1_3,,,,,,,,,NONE,,,,,,,,,,,,2,6
-AMULET_OF_WARDING,warding amulet,"A grey, unremarkable amulet to look at.",Protects from magical and energy attacks.,,0.3_1.0,,AMULET,,,,,,,,,2_4,1_3,,,,,,,NONE,,,,,,,,,,,,3,6
-AMULET_OF_LIGHT,glowing amulet,"A pale gem set in silver, it shines brightly.",Light can change how creatures and plants act.,,0.3_0.7,,AMULET,,,,,,,,,,,,,,10,,,NONE,,,,,,,,,,,,4,6
-CHERRY_BOMB,cherry bomb,A small bomb.,,,0_0.5,5,BOMB,5,4,1,,,,,,,,,1,1,,BLAST,,NONE,,,,,,,,,1,CONSUME,,5,3
-FIRE_BOMB,fire bomb,A flask of unstable alchemy.," On impact, deals damage and ignites tiles around the target.",,0.1_0.7,3,BOMB,,6,2,,,,,,,,,2,1,,FIRE,,NONE,,,,,,,,,,CONSUME,,0,3
-BLAST_BOMB,blast bomb,A heavy iron sphere full of magical powder.,Damages and pushes away everything around the point of impact.,,0.3_0.8,3,BOMB,,6,4,,,,,,,,,2,1,,BLAST,,NONE,,,,,,,,,2,CONSUME,,2,3
-SHOCK_BOMB,shock bomb,A ball of tightly coiled wire that can release powerful current.,"Lighting bolts arc from foe to foe, doing extra damage to wet targets.",,0.5_0.9,3,BOMB,,6,3,,,,,,,,,2,1,,LIGHTNING,,NONE,,,,,,,,,,CONSUME,,6,3
-FREEZE_BOMB,freeze bomb,A frosted vial that shatters into a freezing burst.,"Chills enemies, extinguishes flames.",,0.5_0.9,3,BOMB,,3,2,,,,,,,,,2,1,,FREEZE,,NONE,,,,,,,,,,CONSUME,,3,3
-OIL_BOMB,oil bomb,A glass sphere of dark oil. Shatters and slicks the floor on impact.,Oil is highly flammable.,,0.1_0.5,3,BOMB,,3,2,,,,,,,,,2,1,,OIL,,NONE,,,,,,,,,,CONSUME,,1,3
-VOID_BOMB,void bomb,"A powerful bomb that draws in matter, creating a void.",Destroys floors and pulls creatures toward it.,,0.2_1.0,3,BOMB,,6,6,,,,,,,,,2,1,,VOID,,NONE,,,,,,,,,,CONSUME,,4,3
-HEALING_POTION,healing potion,A vial of healing elixir.,"It doesn't work instantly, it helps you regenerate over time.",,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,REGENERATION,4,,,,,,CONSUME,,2,2
-POWER_ORB,power orb,A sphere of power that makes you stronger.,Absorbed by touching.,,0_1.0,,FOOD,1,,,,,,,,,,,,,,,,POWERUP,absorb,,,,LEVEL_UP,,,,,,TRUE,0,8
-WAND_WATER,wand of water,A pale blue wand that drips with water.,Creates a pool of water at the target location.,,0.1_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,WATER,,2,2,,,,4,0
-WAND_OIL,wand of oil,A dark wand slick to the touch. ,Creates a layer of oil at the target location.,,0.2_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,OIL,,2,2,,,,1,0
-WAND_GRASS,wand of vegetation,A green wand bound with vine.,Engenders vegetation at the target point.,,0.2_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,GRASS,,2,2,,,,5,0
-WAND_FUNGUS,wand of fungus,A spongy red-brown wand.,Causes mushrooms to grow at the target area.,,0.4_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,FUNGUS,,2,2,,,,6,0
-WAND_FIRE,wand of fire,A blackened wand crackling with embers. Ignites the target.,Spreads fire around the target point,,0.4_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,FIRE,,0.5,3,,,,2,0
-WAND_DOG,wand of dog,A wand decorated with a small animal head.,Summons a loyal dog to protect you.,,0.1_0.4,,WAND,,,,,,,,,,,,,,,,,WAND,summon,,,,,DOG,0.25,1,,,,3,0
-WAND_DETONATION,wand of detonation,A blackened iron wand inlaid with red runes. Detonates the target tile in a ball of fire.,Blows the target location to smithereens.,,0.5_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,DETONATION,,0.5,1,1,,,10,0
-WAND_MAGIC_MISSILE,wand of magic missile,A short wand topped with a pale chip of crystal.,Sends out a magical bolt that does moderate damage.,,0_1.0,,WAND,,3_6,1_2,,,,,,,,,,,,,,WAND,zap,,,,MISSILE,,3,3,,,,0,0
-WAND_BANISHMENT,wand of banishment,A wand bound in tarnished silver and tipped with flickering crystals.,This specialized wand can instantly banish creatures that are not really real.,,0.6_1.0,,WAND,,,,,,,,,,,,,,,,,WAND,zap,,,,BANISHMENT,,0.5,1,,,,7,0
-WAND_LIGHTNING,wand of lightning,A wand that crackles with energy. ,Effect jumps from target to target and is stronger in water -- beware.,,0.2_1.0,,WAND,,4_10,1_2,,,,,,,,,,,,BLAST,,WAND,zap,,,,LIGHTNING,,0.5,2,,,,8,0
-WAND_POLYMORPH,wand of polymorph,A wand that constantly shifts and changes.,Can turn a creature into something else.,,0.5_1.0,,WAND,,,,,,,,,,,,,,,,,WAND,zap,,,,POLYMORPH,,0.25,1,,,,9,0
-PEAR,pear,A ripe green pear.,A surprisingly common and nutritious food.,,0_1.0,,FOOD,1,,,,,,,,,,,,,,,,EAT,eat,100000,REGENERATION,5,,,,,,,,0,1
-FISH,delicious fish,A small fresh fish. ,So tasty that a stray cat or dog you throw it to will follow you for the rest of its life.,CONCRETE,0_1.0,,FOOD,,,,,,,,,,,,,,,,CAT|DOG,EAT,eat,300000,REGENERATION,5,,,,,,,,1,1
-PEAR_SCRUMPTIOUS,scrumptious pear,"A specially ripe pear, dripping with juice. Five times more filling than the ordinary kind.",,,0.2_1.0,,FOOD,,,,,,,,,,,,,,,,,EAT,eat,500000,REGENERATION,5,,,,,,,,2,1
-PEAR_SILVERY,silvery pear,A pear with skin that shimmers like polished silver. Mysterious.,,CONCRETE,0.4_1.0,,FOOD,,,,,,,,,,,,,,,,,EAT,eat,100000,HOPE|REGENERATION,5,,,,,,,,3,1
-PEAR_CONFERENCE,conference pear,"A long elegant pear, reportedly the kind eaten at high meetings.",,CONCRETE,0.3_1.0,,FOOD,,,,,,,,,,,,,,,,,EAT,eat,100000,ESP|REGENERATION,5,,,,,,,,4,1
-POTION_SORCERY,potion of sorcery,A glittering brew that infuses the drinker with magical energy.,Increases the power of wands while its effects are active.,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,SORCERY,2,,,,,,CONSUME,,0,2
-POTION_GHOSTLINESS,potion of ghostliness,A swirling pearl-grey liquid.,The drinker becomes briefly ethereal and can pass through walls.,,0.3_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,GHOSTLY,2,,,,,,CONSUME,,1,2
-POTION_INVISIBILITY,potion of invisibility,A clear potion that hides the imbiber from sight for a short while.,Invisibility ends if you attack.,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,INVISIBLE,5,,,,,,CONSUME,,3,2
-POTION_POISON,potion of poison,"A sickly green elixir. Vile to drink, devastating to throw.","If thrown, creates a puff of poison vapor.",,0_1.0,,POTION,,4_8,1_2,,,,,,,,,,,,POISONCLOUD,,DRINK,drink,,POISONED,3,,,,,,CONSUME,,4,2
-POTION_INSIGHT,potion of insight,A clear potion that crackles faintly., Reveals the layout of the entire level on a draught.,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,INSIGHT,1,,,,,,CONSUME,,5,2
-POTION_ESP,potion of levitation,A fizzy potion that seems to weigh nothing.,Confers levitation on the drinker.,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,ESP,10,,,,,,CONSUME,,7,2
-POTION_LEV,potion of perception,A glutinous potion that seems made of eyeballs.,Allows the drinker to percieve distant creatures.,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,LEVITATING,10,,,,,,CONSUME,,6,2
-FOUL_MEAT,foul meat,"A rotting, disgusting gob of mystery meat.",There are probably particularly vile creatures that would be glad to be given this.,CONCRETE,0.3_0.7,,FOOD,,,,,,,,,,,,,,,,BLOB,EAT,eat,50000,,1,,,,,,,,5,1
-ANT_JELLY,ant jelly,"Ants make this ultra nourishing jelly, as healthy as it is revolting.",Regenerates health.,CONCRETE,0.5_1.0,,FOOD,,,,,,,,,,,,,,,,RED_ANT|BLACK_ANT,EAT,eat,400000,REGENERATION,10,,,,,,,,6,1
-TASTY_MEAT,tasty meat,A plump pink chunk of tasty meat.,,CONCRETE,0.4_0.8,,FOOD,,,,,,,,,,,,,,,,,EAT,eat,300000,,1,,,,,,,,7,1
-IPWERGIS,ipwergis-pudding,Ipwergis-pudding is a magically delectable food with many powers.,Grants insights if eaten; magical creatures might be very pleased to be given it.,CONCRETE,0.7_1.0,,FOOD,,,,,,,,,,,,,,,,MASK_IMP|LARGE_MASK_IMP|DEVELOPED_MASK_IMP|HORRIBLE_MASK_IMP,EAT,eat,1000000,ESP|INSIGHT,1,,,,,,,TRUE,8,1
-GRAPPLING_HOOK,grappling hook,A hook on a strong rope.,"Can pull enemies -- smaller ones, at least -- toward you.",CONCRETE,0_0.5,,TOOL,,,,,,,,,,,,,,,,,GRAPPLE,grapple,,,3,,,5,5,,,,5,8
-VINE_HOOK,grapplevine,"This powerful magical vine wraps itself around a foe, allowing you to haul them nearer.",Can pull enemies -- even quite large ones -- toward you.,CONCRETE,0_0.5,,TOOL,,,,,,,,,,,,,,,,,GRAPPLE,grapple,,,6,,,1,2,,,,6,8
-FROG,frog of jumping,A very lifelike small enamel frog -- or is it a real frog staying very still?,Use it from a quickslot to jump rapidly away from or toward your foes.,CONCRETE,0.6_1.0,,TOOL,,,,,,,,,,,,,,,,,JUMP,jump,,,2,,,5,5,,,,7,8
-FROG2,frog of somersaulting,A multicolored enamel frog -- or is it a real frog staying very still?,Use it from a quickslot to jump rapidly away from or toward your foes.,CONCRETE,0.8_1.0,,TOOL,,,,,,,,,,,,,,,,,JUMP,jump,,,4,,,2,3,,,,8,8
-BLINKSTONE,blinkstone,A very lifelike small enamel frog -- or is it a real frog staying very still?,Use it from a quickslot to jump rapidly away from or toward your foes.,CONCRETE,0_1.0,,TOOL,,,,,,,,,,,,,,,,,WAND,blink,,,6,TELEPORT,,0.5,2,,,,9,8
-HEALTHPILL,healthpill,A valuable scrap of health.,Absorbed instantly on touching.,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,0.2,HP_UP,,,,,,TRUE,1,8
-CHARGEPILL,chargepill,A scrap of magical energy for your items.,Absorbed instantly on touching.,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,2,MANA_UP,,,,,,TRUE,2,8
+type,theme,powerLevel,clusterSize,inventoryCategory,guaranteedPerLevel,damage,damagePerLevel,attackSpeed,apDamage,apDamagePerLevel,armor,armorPerLevel,antiMagic,antiMagicPerLevel,moveSpeed,tilesAffected,tilesAffectedPerLevel,lightRadius,throwEffect,tameOnThrow,useBehavior,useVerb,foodValue,appliesBuff,abilityPower,wandEffect,summonsWhenUsed,chargeGain,baseChargeMax,knockbackSquares,throwResult,glows,spriteCol,spriteRow
+SWORD,,0.2_0.6,,WEAPON,,2_5,1,1,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,1,,,0,7
+RAPIER,,0.4_0.8,,WEAPON,,3_7,2,0.8,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,2,7
+RAPIER2,,0.6_1.0,,WEAPON,,5_9,2,0.7,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,7,7
+KATANA,,0.6_1.0,,WEAPON,,5_10,3,1,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,3,7
+CUTLASS,,0.7_1.0,,WEAPON,,5_10,3,1,,,2_3,,,,,,,,DAMAGE,,NONE,,,,,,,,,1,,,4,7
+BLOODYBLADE,,0.7_1.0,,WEAPON,,4_9,3,1,,,,,,,,2,1,,POISONCLOUD,,NONE,,,,2,,,,,,,,5,7
+SHIELD,,0.1_0.5,,OFFHAND,,,,,,,1_2,1_1,,,,,,,,,NONE,,,,,,,,,,,,0,5
+KITE_SHIELD,,0.3_1.0,,OFFHAND,,,,,,,3_4,1_2,,,,,,,,,NONE,,,,,,,,,,,,1,5
+TORCH,,0.2_0.6,,OFFHAND,,,,,,,,,,,0.9,,1,5,FIRE,,NONE,,,,,,,,,,,,2,5
+CHAIN_MAIL,,0_0.4,,ARMOR,,,,,,,2_3,1_1,,,,,,,,,NONE,,,,,,,,,,,,3,4
+SCALE_MAIL,,0.3_0.7,,ARMOR,,,,,,,4_5,1_2,,,,,,,,,NONE,,,,,,,,,,,,0,4
+HEAVY_MAIL,,0.6_1.0,,ARMOR,,,,1.1,,,6_8,2_4,,,1.1,,,,,,NONE,,,,,,,,,,,,2,4
+DAGGER,,0_0.3,,WEAPON,,1_3,1,0.8,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,6,7
+THROWING_KNIFE,,0_0.3,3,WEAPON,,2_3,1,1,,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,RETURN,,8,7
+PUNCH_DAGGER,,0.4_1.0,,WEAPON,,1_3,2,1,2,,,,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,1,7
+AMULET_OF_NIMBLENESS,,0.3_0.7,,AMULET,,,,,,,,,,,0.8,,,,,,NONE,,,,,,,,,,,,0,6
+AMULET_OF_FINESSE,,0.1_0.4,,AMULET,,,,0.8,,,,,,,,,,,,,NONE,,,,,,,,,,,,1,6
+AMULET_OF_DEFENCE,,0.2_0.8,,AMULET,,,,,,,1_2,1_3,,,,,,,,,NONE,,,,,,,,,,,,2,6
+AMULET_OF_WARDING,,0.3_1.0,,AMULET,,,,,,,,,2_4,1_3,,,,,,,NONE,,,,,,,,,,,,3,6
+AMULET_OF_LIGHT,,0.3_0.7,,AMULET,,,,,,,,,,,,,,10,,,NONE,,,,,,,,,,,,4,6
+CHERRY_BOMB,,0_0.5,5,BOMB,5,4,1,,,,,,,,,1,1,,BLAST,,NONE,,,,,,,,,1,CONSUME,,5,3
+FIRE_BOMB,,0.1_0.7,3,BOMB,,6,2,,,,,,,,,2,1,,FIRE,,NONE,,,,,,,,,,CONSUME,,0,3
+BLAST_BOMB,,0.3_0.8,3,BOMB,,6,4,,,,,,,,,2,1,,BLAST,,NONE,,,,,,,,,2,CONSUME,,2,3
+SHOCK_BOMB,,0.5_0.9,3,BOMB,,6,3,,,,,,,,,2,1,,LIGHTNING,,NONE,,,,,,,,,,CONSUME,,6,3
+FREEZE_BOMB,,0.5_0.9,3,BOMB,,3,2,,,,,,,,,2,1,,FREEZE,,NONE,,,,,,,,,,CONSUME,,3,3
+OIL_BOMB,,0.1_0.5,3,BOMB,,3,2,,,,,,,,,2,1,,OIL,,NONE,,,,,,,,,,CONSUME,,1,3
+VOID_BOMB,,0.2_1.0,3,BOMB,,6,6,,,,,,,,,2,1,,VOID,,NONE,,,,,,,,,,CONSUME,,4,3
+HEALING_POTION,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,REGENERATION,4,,,,,,CONSUME,,2,2
+POWER_ORB,,0_1.0,,FOOD,1,,,,,,,,,,,,,,,,POWERUP,absorb,,,,LEVEL_UP,,,,,,TRUE,0,8
+WAND_WATER,,0.1_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,WATER,,2,2,,,,4,0
+WAND_OIL,,0.2_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,OIL,,2,2,,,,1,0
+WAND_GRASS,,0.2_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,GRASS,,2,2,,,,5,0
+WAND_FUNGUS,,0.4_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,FUNGUS,,2,2,,,,6,0
+WAND_FIRE,,0.4_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,FIRE,,0.5,3,,,,2,0
+WAND_DOG,,0.1_0.4,,WAND,,,,,,,,,,,,,,,,,WAND,summon,,,,,DOG,0.25,1,,,,3,0
+WAND_DETONATION,,0.5_1.0,,WAND,,,,,,,,,,,,5,4,,,,WAND,zap,,,,DETONATION,,0.5,1,1,,,10,0
+WAND_MAGIC_MISSILE,,0_1.0,,WAND,,3_6,1_2,,,,,,,,,,,,,,WAND,zap,,,,MISSILE,,3,3,,,,0,0
+WAND_BANISHMENT,,0.6_1.0,,WAND,,,,,,,,,,,,,,,,,WAND,zap,,,,BANISHMENT,,0.5,1,,,,7,0
+WAND_LIGHTNING,,0.2_1.0,,WAND,,4_10,1_2,,,,,,,,,,,,BLAST,,WAND,zap,,,,LIGHTNING,,0.5,2,,,,8,0
+WAND_POLYMORPH,,0.5_1.0,,WAND,,,,,,,,,,,,,,,,,WAND,zap,,,,POLYMORPH,,0.25,1,,,,9,0
+PEAR,,0_1.0,,FOOD,1,,,,,,,,,,,,,,,,EAT,eat,100000,REGENERATION,5,,,,,,,,0,1
+FISH,CONCRETE,0_1.0,,FOOD,,,,,,,,,,,,,,,,CAT|DOG,EAT,eat,300000,REGENERATION,5,,,,,,,,1,1
+PEAR_SCRUMPTIOUS,,0.2_1.0,,FOOD,,,,,,,,,,,,,,,,,EAT,eat,500000,REGENERATION,5,,,,,,,,2,1
+PEAR_SILVERY,CONCRETE,0.4_1.0,,FOOD,,,,,,,,,,,,,,,,,EAT,eat,100000,HOPE|REGENERATION,5,,,,,,,,3,1
+PEAR_CONFERENCE,CONCRETE,0.3_1.0,,FOOD,,,,,,,,,,,,,,,,,EAT,eat,100000,ESP|REGENERATION,5,,,,,,,,4,1
+POTION_SORCERY,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,SORCERY,2,,,,,,CONSUME,,0,2
+POTION_GHOSTLINESS,,0.3_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,GHOSTLY,2,,,,,,CONSUME,,1,2
+POTION_INVISIBILITY,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,INVISIBLE,5,,,,,,CONSUME,,3,2
+POTION_POISON,,0_1.0,,POTION,,4_8,1_2,,,,,,,,,,,,POISONCLOUD,,DRINK,drink,,POISONED,3,,,,,,CONSUME,,4,2
+POTION_INSIGHT,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,INSIGHT,1,,,,,,CONSUME,,5,2
+POTION_ESP,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,ESP,10,,,,,,CONSUME,,7,2
+POTION_LEV,,0_1.0,,POTION,,,,,,,,,,,,,,,APPLYBUFFS,,DRINK,drink,,LEVITATING,10,,,,,,CONSUME,,6,2
+FOUL_MEAT,CONCRETE,0.3_0.7,,FOOD,,,,,,,,,,,,,,,,BLOB,EAT,eat,50000,,1,,,,,,,,5,1
+ANT_JELLY,CONCRETE,0.5_1.0,,FOOD,,,,,,,,,,,,,,,,RED_ANT|BLACK_ANT,EAT,eat,400000,REGENERATION,10,,,,,,,,6,1
+TASTY_MEAT,CONCRETE,0.4_0.8,,FOOD,,,,,,,,,,,,,,,,CAT|DOG,EAT,eat,300000,,1,,,,,,,,7,1
+IPWERGIS,CONCRETE,0.7_1.0,,FOOD,,,,,,,,,,,,,,,,MASK_IMP|LARGE_MASK_IMP|DEVELOPED_MASK_IMP|HORRIBLE_MASK_IMP,EAT,eat,1000000,ESP|INSIGHT,1,,,,,,,TRUE,8,1
+GRAPPLING_HOOK,CONCRETE,0_0.5,,TOOL,,,,,,,,,,,,,,,,,GRAPPLE,grapple,,,3,,,5,5,,,,5,8
+VINE_HOOK,CONCRETE,0_0.5,,TOOL,,,,,,,,,,,,,,,,,GRAPPLE,grapple,,,6,,,1,2,,,,6,8
+FROG,CONCRETE,0.6_1.0,,TOOL,,,,,,,,,,,,,,,,,JUMP,jump,,,2,,,5,5,,,,7,8
+FROG2,CONCRETE,0.8_1.0,,TOOL,,,,,,,,,,,,,,,,,JUMP,jump,,,4,,,2,3,,,,8,8
+BLINKSTONE,CONCRETE,0_1.0,,TOOL,,,,,,,,,,,,,,,,,WAND,blink,,,6,TELEPORT,,0.5,2,,,,9,8
+CATCHERBALL,CONCRETE,0.4_1.0,,TOOL,,,,,,,,,,,,,,,CAPTURE,,NONE,,,,,,,,,,,,10,8
+JADE_FISH,CONCRETE,0.4_1.0,,TOOL,,,,,,,,,,,,,,,,,APPLYBUFF,invoke,,PHASE,8,,,0.25,3,,,,11,8
+HEALTHPILL,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,0.2,HP_UP,,,,,,TRUE,1,8
+CHARGEPILL,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,2,MANA_UP,,,,,,TRUE,2,8

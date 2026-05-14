@@ -14,12 +14,13 @@ import com.bjsp123.rl2.logic.CombatArena;
 import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.MobFactory;
 import com.bjsp123.rl2.logic.MobProgression;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.World;
 import com.bjsp123.rl2.save.ArenaHallOfFameEntry;
-import com.bjsp123.rl2.ui.skin.AnimationSpeed;
+import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.world.anim.Animator;
 import com.bjsp123.rl2.world.render.DefaultLevelRenderer;
 import com.bjsp123.rl2.world.render.LevelRenderer;
@@ -148,7 +149,7 @@ public final class V2Arena extends ScreenAdapter {
                 cameraController, hudInput()));
 
         animator.consume(level);
-        AnimationSpeed.setTransientOverride(ARENA_ANIM_SPEED);
+        Settings.setAnimationTransientOverride(ARENA_ANIM_SPEED);
     }
 
     private Mob spawnTeamMob(V2ArenaSetup.TeamSpec spec, Point pos) {
@@ -179,7 +180,7 @@ public final class V2Arena extends ScreenAdapter {
             }
         }
         if (wand == null) return;
-        mage.intrinsic.rangedDamage = com.bjsp123.rl2.logic.ItemSystem.effectiveDamageRange(wand);
+        mage.intrinsic.rangedDamage = com.bjsp123.rl2.logic.ItemStats.effectiveDamageRange(wand);
         mage.intrinsic.rangedDistance   = 6;
         mage.intrinsic.rangedRateOfFire = 1;
         mage.intrinsic.rangedCost       = mage.intrinsic.attackCost;
@@ -191,7 +192,7 @@ public final class V2Arena extends ScreenAdapter {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         int dtMs = Math.min(100, (int) (Gdx.graphics.getDeltaTime() * 1000f));
-        animator.queue.tick(AnimationSpeed.framesPerRender());
+        animator.queue.tick(Settings.framesPerRender());
         if (!fightOver && !paused) {
             int budget = com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS;
             while (budget-- > 0
@@ -279,7 +280,9 @@ public final class V2Arena extends ScreenAdapter {
     }
 
     private static String describeTeamSpec(V2ArenaSetup.TeamSpec spec) {
-        return spec.type.label + "x" + spec.count + " L" + spec.level;
+        return TextCatalog.format("ui.arena.teamSpec",
+                TextCatalog.vars("label", spec.type.label,
+                        "count", spec.count, "level", spec.level));
     }
 
     private static String describeSurvivors(List<Mob> team) {
@@ -328,14 +331,17 @@ public final class V2Arena extends ScreenAdapter {
 
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                paused ? "Resume" : "Pause",
+                TextCatalog.get(paused ? "ui.arena.resume" : "ui.arena.pause"),
                 pauseBtn.cx(), pauseBtn.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Fast forward",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.get("ui.arena.fastForward"),
                 ffBtn.cx(), ffBtn.cy() + 6f);
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                "Speed: " + (fastSpeed ? "4x" : "1x"),
+                TextCatalog.format("ui.arena.speed",
+                        TextCatalog.vars("speed", fastSpeed ? "4x" : "1x")),
                 speedBtn.cx(), speedBtn.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_WARN, "Abort",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_WARN,
+                TextCatalog.get("ui.arena.abort"),
                 abortBtn.cx(), abortBtn.cy() + 6f);
         ctx.batch.end();
     }
@@ -368,25 +374,31 @@ public final class V2Arena extends ScreenAdapter {
 
         int winner = decideWinner();
         String headline =
-                winner == 1 ? "Team A wins"
-              : winner == 2 ? "Team B wins"
-              : standardTurnsElapsed >= MAX_STANDARD_TURNS ? "Draw - turn limit"
-              : "Mutual wipe";
+                winner == 1 ? TextCatalog.get("ui.arena.teamAWins")
+              : winner == 2 ? TextCatalog.get("ui.arena.teamBWins")
+              : standardTurnsElapsed >= MAX_STANDARD_TURNS ? TextCatalog.get("ui.arena.drawTurnLimit")
+              : TextCatalog.get("ui.arena.mutualWipe");
 
         ctx.batch.begin();
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, headline,
                 bannerWindow.cx(), bannerWindow.top() - ctx.headerLineH());
         TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                "Team A: " + describeSurvivors(teamA),
+                TextCatalog.format("ui.arena.teamSummary",
+                        TextCatalog.vars("team", TextCatalog.get("ui.arena.teamA"),
+                                "survivors", describeSurvivors(teamA))),
                 bannerWindow.cx(), bannerWindow.top() - 64f,
                 bannerWindow.w - 28f);
         TextDraw.centreFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                "Team B: " + describeSurvivors(teamB),
+                TextCatalog.format("ui.arena.teamSummary",
+                        TextCatalog.vars("team", TextCatalog.get("ui.arena.teamB"),
+                                "survivors", describeSurvivors(teamB))),
                 bannerWindow.cx(), bannerWindow.top() - 86f,
                 bannerWindow.w - 28f);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Fight again",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.get("ui.arena.fightAgain"),
                 bannerFightAgain.cx(), bannerFightAgain.cy() + 6f);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Back to setup",
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.get("ui.arena.backToSetup"),
                 bannerBack.cx(), bannerBack.cy() + 6f);
         ctx.batch.end();
     }
@@ -456,7 +468,7 @@ public final class V2Arena extends ScreenAdapter {
                     speedPressed = false;
                     if (speedBtn.contains(vx, vy)) {
                         fastSpeed = !fastSpeed;
-                        AnimationSpeed.setTransientOverride(
+                        Settings.setAnimationTransientOverride(
                                 fastSpeed ? ARENA_ANIM_SPEED : NORMAL_ANIM_SPEED);
                     }
                     return true;
@@ -496,11 +508,11 @@ public final class V2Arena extends ScreenAdapter {
     }
 
     @Override
-    public void hide() { AnimationSpeed.setTransientOverride(0); }
+    public void hide() { Settings.setAnimationTransientOverride(0); }
 
     @Override
     public void dispose() {
-        AnimationSpeed.setTransientOverride(0);
+        Settings.setAnimationTransientOverride(0);
         if (levelRenderer != null) levelRenderer.dispose();
     }
 }

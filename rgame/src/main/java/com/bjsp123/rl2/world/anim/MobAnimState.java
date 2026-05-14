@@ -41,10 +41,6 @@ public final class MobAnimState {
      *  Decremented each frame by {@link Animator}; renderer outlines the
      *  player sprite while {@code > 0}. */
     public int borderFlashFrames;
-    /** Duration of the white border flash - 0.5 s at the default
-     *  framesPerRender cadence. */
-    public static final int BORDER_FLASH_FRAMES = 30;
-
     // -- Spawn-grow ---------------------------------------------------------
     /** Frames elapsed in the spawn-grow animation. {@code 0} when no spawn anim
      *  is active. The renderer scales the mob's sprite from {@code 0} to {@code 1}
@@ -53,18 +49,6 @@ public final class MobAnimState {
      *  {@code MobSpawned} event; advanced by the per-frame tick loop. */
     public int spawnFrame;
     public int spawnTotalFrames;
-    /** Total spawn-grow duration in frames. ~half a second at the default
-     *  framesPerRender=1 cadence. */
-    public static final int SPAWN_GROW_FRAMES = 30;
-
-    /** Death-animation timing - flicker twice (4 phases x 6 frames = 24 frames),
-     *  then linear fade over 30 frames (~half a second at 60fps). */
-    public static final int   DEATH_FLICKER_HALF_FRAMES = 6;
-    public static final int   DEATH_FLICKER_FRAMES      = DEATH_FLICKER_HALF_FRAMES * 4;
-    public static final int   DEATH_FADE_FRAMES         = 30;
-    public static final int   DEATH_TOTAL_FRAMES        = DEATH_FLICKER_FRAMES + DEATH_FADE_FRAMES;
-    public static final float DEATH_FLICKER_LOW_ALPHA   = 0.4f;
-
     public float animOffsetX() { return animOffsetAlong(animPeakX); }
     public float animOffsetY() { return animOffsetAlong(animPeakY); }
 

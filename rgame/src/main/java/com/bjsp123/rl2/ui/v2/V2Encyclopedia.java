@@ -12,6 +12,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ScissorStack;
 import com.bjsp123.rl2.logic.BuffSystem;
 import com.bjsp123.rl2.logic.ItemFactory;
 import com.bjsp123.rl2.logic.MobFactory;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff.BuffType;
 import com.bjsp123.rl2.model.GemSpecies;
 import com.bjsp123.rl2.model.Item;
@@ -468,7 +469,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         ctx.batch.begin();
 
         if (selected == null) {
-            TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Encyclopedia",
+            TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                    TextCatalog.get("ui.encyclopedia.title"),
                     window.cx(), window.top() - ctx.headerLineH());
 
             // Tabs render as icons - same source sheet as the Settings
@@ -607,7 +609,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         // multiplies sprite RGB by the batch colour, so RGB=0 paints a
         // black silhouette of the same alpha mask; the offset draws fill
         // the rim, the main draw on top covers the interior.
-        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (oa > 0f) {
             ctx.batch.setColor(0f, 0f, 0f, oa);
             for (int i = 0; i < OUTLINE_DX.length; i++) {
@@ -778,7 +780,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
 
     private static List<Entry> buildItemEntries() {
         List<Entry> out = new ArrayList<>();
-        for (String type : com.bjsp123.rl2.logic.ItemRegistry.knownTypes()) {
+        for (String type : com.bjsp123.rl2.logic.Registries.itemTypes()) {
             Item it = ItemFactory.build(type);
             String name = it.name != null ? it.name : type;
             out.add(new Entry(type, ItemSprites.regionFor(it), name,
@@ -791,7 +793,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private static List<Entry> buildCreatureEntries() {
         List<Entry> out = new ArrayList<>();
         Point dummy = new Point(0, 0);
-        for (String t : com.bjsp123.rl2.logic.MobRegistry.knownTypes()) {
+        for (String t : com.bjsp123.rl2.logic.Registries.mobTypes()) {
             Mob m = MobFactory.spawn(t, dummy);
             if (m == null) continue;
             String name = m.name != null && !m.name.isEmpty() ? m.name : t;
@@ -818,9 +820,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private static List<Entry> buildGemEntries() {
         List<Entry> out = new ArrayList<>();
         for (GemSpecies sp : GemSpecies.values()) {
-            String desc = "Theme: " + sp.theme + "\nTier: " + sp.tier
-                    + "\n\nGems combine: two of the same species and matching size yield "
-                    + "one gem of the next size up.";
+            String desc = TextCatalog.format("ui.encyclopedia.gemDetails",
+                    TextCatalog.vars("theme", sp.theme, "tier", sp.tier));
             out.add(new Entry(sp, GemSprites.regionFor(sp, 5), sp.pretty(), desc));
         }
         return out;
@@ -830,8 +831,12 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         List<Entry> out = new ArrayList<>();
         for (Tile t : Tile.values()) {
             StringBuilder sb = new StringBuilder();
-            sb.append(t.isFloorLike() ? "Walkable.\n" : "Blocks movement.\n");
-            sb.append(t.blocksSight() ? "Blocks sight." : "See-through.");
+            sb.append(TextCatalog.get(t.isFloorLike()
+                    ? "ui.encyclopedia.terrain.walkable"
+                    : "ui.encyclopedia.terrain.blocksMovement")).append("\n");
+            sb.append(TextCatalog.get(t.blocksSight()
+                    ? "ui.encyclopedia.terrain.blocksSight"
+                    : "ui.encyclopedia.terrain.seeThrough"));
             out.add(new Entry(t, null, t.name().toLowerCase(), sb.toString()));
         }
         return out;
@@ -856,14 +861,14 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
 
     private static TextureRegion regionForKey(String key, Point dummy) {
         if (key == null || key.isEmpty()) return null;
-        if (com.bjsp123.rl2.logic.ItemRegistry.knownTypes().contains(key)) {
+        if (com.bjsp123.rl2.logic.Registries.itemTypes().contains(key)) {
             Item it = ItemFactory.build(key);
             if (it != null) {
                 TextureRegion r = ItemSprites.regionFor(it);
                 if (r != null) return r;
             }
         }
-        if (com.bjsp123.rl2.logic.MobRegistry.knownTypes().contains(key)) {
+        if (com.bjsp123.rl2.logic.Registries.mobTypes().contains(key)) {
             Mob m = MobFactory.spawn(key, dummy);
             if (m != null) return MobSprites.regionFor(m);
         }

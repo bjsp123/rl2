@@ -16,8 +16,7 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
-import com.bjsp123.rl2.ui.skin.UiFontScale;
-import com.bjsp123.rl2.ui.skin.UiScale;
+import com.bjsp123.rl2.ui.skin.Settings;
 
 /**
  * Per-game V2 rendering context. Owns the ShapeRenderer + SpriteBatch + the
@@ -81,9 +80,9 @@ public final class UiCtx implements Disposable {
     /** Re-apply {@link UiFontScale#scale()} to both fonts. Mutates the
      *  BitmapFont instances in place so every screen using the shared
      *  context picks up the new size on the next frame. Call after
-     *  {@code UiFontScale.set(...)}. */
+     *  {@code Settings.setUiFontScale(...)}. */
     public void applyFontScale() {
-        float s = UiFontScale.scale();
+        float s = Settings.uiFontScale();
         if (s <= 0f) s = 1f;
         fontRegular.getData().setScale(s);
         fontHeader.getData().setScale(s);
@@ -92,11 +91,11 @@ public final class UiCtx implements Disposable {
     /** Re-apply {@link UiScale#scale()} to the viewport's
      *  {@code unitsPerPixel}. {@code units = pixels / scale} means a
      *  larger scale draws each world unit across more pixels, so chrome
-     *  reads bigger on screen. Call after {@code UiScale.set(...)};
+     *  reads bigger on screen. Call after {@code Settings.setUiScale(...)};
      *  fires a viewport update against the current GL surface so the
      *  change takes effect on the next draw. */
     public void applyUiScale() {
-        float s = UiScale.scale();
+        float s = Settings.uiScale();
         if (s <= 0f) s = 1f;
         viewport.setUnitsPerPixel(1f / s);
         if (Gdx.graphics != null && Gdx.graphics.getWidth() > 0) {

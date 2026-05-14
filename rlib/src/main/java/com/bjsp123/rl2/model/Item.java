@@ -66,7 +66,9 @@ public class Item {
          *  {@link Item#chargeGain} of charge (capped at max charge). */
         MANA_UP,
         /** Wand effect: teleport the caster to the target tile instantly. */
-        TELEPORT
+        TELEPORT,
+        /** Thrown tool: empty item captures the target mob; full item releases it. */
+        CAPTURE
     }
 
     /** What happens to a thrown item AFTER its throw-effect resolves.
@@ -147,7 +149,10 @@ public class Item {
          *  {@code maxHP * abilityPower} HP; {@code MANA_UP} adds each
          *  inventory item's own {@code chargeGain} to its current
          *  charge. POWERUP items are never picked up into the bag. */
-        POWERUP
+        POWERUP,
+        /** Non-targeted charged tool that applies {@link Item#appliesBuff}
+         *  to the user without consuming the item. */
+        APPLYBUFF
     }
 
     /** Identifier - string key matching the {@code type} column of a row in
@@ -295,7 +300,7 @@ public class Item {
     public int baseChargeMax = 0;
 
     /** Intrinsic maximum charge - {@code baseChargeMax + level}. Use
-     *  {@code ItemSystem.effectiveMaxCharge(item, holder)} when the holder
+     *  {@code ItemStats.effectiveMaxCharge(item, holder)} when the holder
      *  is available so WANDMASTER / BOMB_JACK bonuses apply. */
     public int maxCharge() { return Math.max(1, baseChargeMax + level); }
 
@@ -312,6 +317,10 @@ public class Item {
      *  {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto} and add an
      *  "of [name]" suffix to the display name. */
     public com.bjsp123.rl2.logic.BrandDefinition brand;
+
+    /** Mob captured inside this item, or {@code null} when empty. Used by
+     *  catcherball-style thrown tools. */
+    public Mob capturedMob;
 
     /** Authoritative item-kind tag - see {@link InventoryCategory}. Drives
      *  equip routing, inventory tab grouping, and {@code ItemGenerator}

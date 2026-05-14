@@ -1,6 +1,6 @@
-title,image,para1,para2,para3
-Potions and food,POTION_OF_HEALING,*Potions* are good.,So is *food*.,
-Wands,WANT_OF_MAGIC_MISSILE,*Wands* help you attack from afar.,They can do many things.,
-Dealing with ranged enemies,MASK_IMP,Ranged enemies such as *imps* can be a pain.  There are a lot of ways to deal with them.,"You could close the distance with them, use something like *smoke* to prevent them from shooting, or *grapple* them and pull them close.",Or you could trick them into shooting *their own allies*?
-Animals and plants,CAT,The common orange *cat* is a frequent visitor to the dungeon.,Legend has it that these creatures can be powerful allies if treated well.,Cats sometimes bring their *kittens* into the dungeon.
-Levels and Perks,POWER_ORB,"Leveling up is done by collecting *orbs*, not by killing enemies for xp",,
+key,image
+help.001,HEALING_POTION
+help.002,WAND_MAGIC_MISSILE
+help.003,MASK_IMP
+help.004,CAT
+help.005,POWER_ORB

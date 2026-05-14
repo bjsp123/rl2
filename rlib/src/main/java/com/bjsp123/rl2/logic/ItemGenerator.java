@@ -78,7 +78,11 @@ public final class ItemGenerator {
         /** Throwable bombs (IGNITE / OIL_SPLASH / BLAST / FREEZE thrown behaviors). */
         BOMBS,
         /** Food + potions + bombs - the "supplies stash" bucket. */
-        CONSUMABLES;
+        CONSUMABLES,
+        /** Meat drops from carnivorous animals. */
+        MEAT,
+        /** Character-progression pickup items such as power orbs. */
+        POWERUPS;
 
         /** Token -> category. Whitespace-trimmed, case-insensitive. {@code null}
          *  or empty strings => {@link #ANY}. Unknown strings => {@code null} so
@@ -167,7 +171,7 @@ public final class ItemGenerator {
             return null;
         }
         if (it == null) return null;
-        ItemDefinition d = ItemRegistry.get(type);
+        ItemDefinition d = Registries.item(type);
         if (d != null && d.useBehavior != UseBehavior.EAT) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
@@ -222,8 +226,8 @@ public final class ItemGenerator {
         if (cached != null) return cached;
         Predicate<ItemDefinition> p = categoryPredicate(cat);
         List<String> out = new ArrayList<>();
-        for (String type : ItemRegistry.knownTypes()) {
-            ItemDefinition d = ItemRegistry.get(type);
+        for (String type : Registries.itemTypes()) {
+            ItemDefinition d = Registries.item(type);
             if (d == null) continue;
             // Gems are excluded from every non-GEM bucket - the GEM bucket is
             // the only legitimate gem path.
@@ -249,6 +253,9 @@ public final class ItemGenerator {
             case CONSUMABLES  -> d -> d.useBehavior == UseBehavior.EAT
                                    || d.useBehavior == UseBehavior.DRINK
                                    || isBomb(d);
+            case MEAT         -> d -> "FOUL_MEAT".equals(d.type)
+                                   || "TASTY_MEAT".equals(d.type);
+            case POWERUPS     -> d -> d.useBehavior == UseBehavior.POWERUP;
         };
     }
 
@@ -288,7 +295,7 @@ public final class ItemGenerator {
         List<Double> weights = new ArrayList<>(candidates.size());
         double total = 0;
         for (String type : candidates) {
-            ItemDefinition d = ItemRegistry.get(type);
+            ItemDefinition d = Registries.item(type);
             if (d == null) continue;
             double w = powerWeight(d.powerMin, d.powerMax, powerLevel);
             if (w <= 0) continue;
@@ -310,7 +317,7 @@ public final class ItemGenerator {
 
         Item it = ItemFactory.build(pick);
         if (it == null) return null;
-        ItemDefinition d = ItemRegistry.get(pick);
+        ItemDefinition d = Registries.item(pick);
         // Food and gems don't carry plusses (existing convention from
         // assignItemLevel); WANDs / EQUIPMENT / etc. all do.
         if (d != null && d.useBehavior != UseBehavior.EAT) {

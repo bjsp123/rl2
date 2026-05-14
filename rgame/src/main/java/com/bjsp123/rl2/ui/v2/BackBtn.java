@@ -28,14 +28,7 @@ public final class BackBtn {
     }
 
     public void drawShape(UiCtx ctx) {
-        ShapeRenderer s = ctx.shapes;
-        // Tri-line border in red - outer bright red, mid mid-red, inner dark
-        // red. Distinguishes the back affordance from grey-bordered chrome.
-        Edges.drawTriLine(s, rect.x, rect.y, rect.w, rect.h, UIVars.HUD_LINE_W,
-                UIVars.WARN_HL, UIVars.TEXT_WARN, UIVars.WARN_SHADE);
-        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-        s.rect(rect.x + UIVars.HUD_BORDER, rect.y + UIVars.HUD_BORDER,
-               rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
+        ButtonChrome.shape(ctx, rect, pressed, false, true, UIVars.BTN_BG);
     }
 
     /** Single-call draw: owns the full shape + icon renderer lifecycle. */
@@ -57,12 +50,7 @@ public final class BackBtn {
     public void drawIcon(UiCtx ctx) {
         var region = com.bjsp123.rl2.world.render.IconSprites
                 .regionFor(com.bjsp123.rl2.world.render.IconSprites.Icon.BACK);
-        if (region == null) return;
-        ctx.batch.setColor(pressed ? UIVars.WARN_HL : UIVars.TEXT_WARN);
-        float sz = Math.min(rect.w, rect.h) * 0.6f;
-        ctx.batch.draw(region,
-                rect.cx() - sz * 0.5f, rect.cy() - sz * 0.5f, sz, sz);
-        ctx.batch.setColor(1f, 1f, 1f, 1f);
+        ButtonChrome.icon(ctx, rect, region, pressed, true);
     }
 
     public boolean hit(float px, float py) { return rect.contains(px, py); }

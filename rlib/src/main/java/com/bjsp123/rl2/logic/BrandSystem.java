@@ -31,7 +31,7 @@ public final class BrandSystem {
     public static void applyRandomBrand(Item item, Random rng) {
         if (!isBrandable(item)) return;
         if (rng.nextInt(5) != 0) return;
-        List<BrandDefinition> pool = BrandRegistry.forCategory(item.inventoryCategory);
+        List<BrandDefinition> pool = Registries.brandsForCategory(item.inventoryCategory);
         if (pool.isEmpty()) return;
         double total = 0;
         for (BrandDefinition b : pool) total += 1.0 / b.rarity;

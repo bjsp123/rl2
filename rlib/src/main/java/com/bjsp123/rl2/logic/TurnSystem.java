@@ -49,7 +49,7 @@ public class TurnSystem {
             if (mob.ticksTillMove > 0) mob.ticksTillMove--;
         }
 
-        MobSystem.processAllAiTurns(level);
+        MobAi.processAllAiTurns(level);
 
         level.standardTurnTickAcc++;
         if (level.standardTurnTickAcc >= STANDARD_TURN_TICKS) {
@@ -83,9 +83,9 @@ public class TurnSystem {
             // Per-type cap (so an anthill stops budding when its species fills the
             // level) AND the global cap (a level full of other mobs blocks spawn
             // too). Both must pass before we even look for a free tile.
-            if (MobSystem.countMobsOfType(level, mob.turnSpawnType)
+            if (MobQueries.countMobsOfType(level, mob.turnSpawnType)
                     >= GameBalance.MAX_MOBS_FROM_SPAWNER) continue;
-            if (!MobSystem.levelHasRoomForSpawn(level)) continue;
+            if (!MobQueries.levelHasRoomForSpawn(level)) continue;
             Point spawnPos = MobHooks.freeAdjacentFloor(level, mob.position);
             if (spawnPos == null) continue;
             Mob bud = MobFactory.spawn(mob.turnSpawnType, spawnPos);
@@ -201,14 +201,16 @@ public class TurnSystem {
         return null;
     }
 
+    /** Charge a movement (step) cost. Buff speed modifiers are already folded into the
+     *  cost supplied by {@link Mob#effectiveStats()}. */
     public static void applyMoveCost(Mob mob, int cost) {
-        // CHILLED adds a flat penalty to every action cost. The penalty applies once
-        // per applyMoveCost call regardless of cost magnitude, so a chilled mob's
-        // every step / swing / ranged shot is slowed by the same amount.
-        cost += BuffSystem.chilledCostPenalty(mob);
-        // HASTED + KILLER multiplicatively reduce action cost.
-        double scaled = cost * BuffSystem.actionCostMultiplier(mob);
-        mob.ticksTillMove += Math.max(1, (int) Math.round(scaled));
+        mob.ticksTillMove += Math.max(1, cost);
+    }
+
+    /** Charge an attack / action cost (melee, ranged, wand, throw). Buff speed
+     *  modifiers are already folded into the cost supplied by {@link Mob#effectiveStats()}. */
+    public static void applyActionCost(Mob mob, int cost) {
+        mob.ticksTillMove += Math.max(1, cost);
     }
 
     // Effect-frame advancement moved to rgame.render.EffectStage; freeze scheduling

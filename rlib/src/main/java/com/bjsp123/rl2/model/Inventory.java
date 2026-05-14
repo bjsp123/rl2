@@ -4,6 +4,7 @@ import com.bjsp123.rl2.model.Item.InventoryCategory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Per-mob inventory: a bag (variable-size stack list) plus equipment slots
@@ -86,5 +87,15 @@ public class Inventory {
         for (Item a : amulets) if (a != null) out.add(a);
         for (Item g : gems)    if (g != null) out.add(g);
         return out;
+    }
+
+    /** Visit each equipped item without allocating a snapshot list. */
+    public void forEachEquipped(Consumer<Item> visitor) {
+        if (visitor == null) return;
+        if (weapon  != null) visitor.accept(weapon);
+        if (offhand != null) visitor.accept(offhand);
+        if (armor   != null) visitor.accept(armor);
+        for (Item a : amulets) if (a != null) visitor.accept(a);
+        for (Item g : gems)    if (g != null) visitor.accept(g);
     }
 }

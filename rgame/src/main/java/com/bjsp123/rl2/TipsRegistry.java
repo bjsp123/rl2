@@ -1,6 +1,7 @@
 package com.bjsp123.rl2;
 
 import com.bjsp123.rl2.util.CsvTable;
+import com.bjsp123.rl2.logic.TextCatalog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,7 +16,10 @@ public final class TipsRegistry {
         TIPS.clear();
         CsvTable table = CsvTable.parse(csv);
         for (Map<String, String> row : table.rows) {
-            String desc = CsvTable.str(row, "description", "");
+            String key = CsvTable.str(row, "key", "");
+            String desc = key.isEmpty()
+                    ? CsvTable.str(row, "description", "")
+                    : TextCatalog.getOrDefault(key, "");
             if (!desc.isEmpty()) TIPS.add(desc);
         }
     }

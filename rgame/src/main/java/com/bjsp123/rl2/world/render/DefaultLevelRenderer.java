@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Mob.CharacterClass;
 import com.bjsp123.rl2.ui.v2.UIVars;
 import com.bjsp123.rl2.model.Item;
@@ -21,10 +22,7 @@ import com.bjsp123.rl2.model.Level.Surface;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.Level.Vegetation;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import com.bjsp123.rl2.world.anim.MobAnimState;
 import com.bjsp123.rl2.logic.TurnSystem;
 
@@ -244,12 +242,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
     /** Cached per-cell item index. Rebuilt lazily when {@link #indexesDirty} is true -
      *  items only move on game ticks (pickup, drop, throw) so between-tick frames can
      *  reuse the prior frame's index verbatim. */
-    private Map<Long, List<Item>> cachedItemsByCell;
+    private LevelRenderIndexes.CellBuckets<Item> cachedItemsByCell;
     /** Cached per-cell mob index. Same caching scheme as {@link #cachedItemsByCell} -
      *  mobs' positions only change on ticks. The flicker / fade of a dying mob is a
      *  frame-counter bump inside {@link Mob}, not a position change, so it doesn't need
      *  the index rebuilt. */
-    private Map<Long, List<Mob>>  cachedMobsByCell;
+    private LevelRenderIndexes.CellBuckets<Mob>  cachedMobsByCell;
     /** When true, {@link #cachedItemsByCell} and {@link #cachedMobsByCell} need to be
      *  repopulated from the current level. Set by {@link #markDirty()} and also on the
      *  very first render after creation. Fx are NOT cached - they get added / removed
@@ -328,9 +326,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // (bat, ghost, ...) get the floating y-lift; everyone else stands flat
         // on their tile. The registry is populated from {@code mobs.csv} at
         // bootstrap, so this loop picks up new species without code edits.
-        for (String type : com.bjsp123.rl2.logic.MobRegistry.knownTypes()) {
+        for (String type : com.bjsp123.rl2.logic.Registries.mobTypes()) {
             com.bjsp123.rl2.logic.MobDefinition def =
-                    com.bjsp123.rl2.logic.MobRegistry.get(type);
+                    com.bjsp123.rl2.logic.Registries.mob(type);
             Sprite[] pair = (def != null && def.flying)
                     ? mobsFloatingFacingPair(type)
                     : mobsFacingPair(type);
@@ -478,13 +476,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Effects that span two tiles (missiles, thrown items) anchor at their SOUTHMOST
         // endpoint so the N->S loop paints them after every mob along their path.
         if (indexesDirty || cachedItemsByCell == null || cachedMobsByCell == null) {
-            cachedItemsByCell = indexItemsByCell(level);
-            cachedMobsByCell  = indexMobsByCell(level);
+            cachedItemsByCell = LevelRenderIndexes.itemsByCell(level);
+            cachedMobsByCell  = LevelRenderIndexes.mobsByCell(level);
             indexesDirty = false;
         }
-        Map<Long, List<Item>>   itemsByCell = cachedItemsByCell;
-        Map<Long, List<Mob>>    mobsByCell  = cachedMobsByCell;
-        Map<Long, List<Effect>> fxByCell    = indexEffectsByCell(animator.stage);
+        LevelRenderIndexes.CellBuckets<Item>   itemsByCell = cachedItemsByCell;
+        LevelRenderIndexes.CellBuckets<Mob>    mobsByCell  = cachedMobsByCell;
+        LevelRenderIndexes.CellBuckets<Effect> fxByCell    = LevelRenderIndexes.effectsByCell(level, animator.stage);
 
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
@@ -630,60 +628,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static String stateOfMindLabel(com.bjsp123.rl2.model.Mob.StateOfMind s) {
         if (s == null) return "";
         return switch (s) {
-            case ASLEEP         -> "asleep";
-            case AWAKE          -> "awake";
-            case SEEKING_HIDING -> "fleeing";
-            case HIDING         -> "hiding";
-            case FOLLOWING      -> "following";
+            case ASLEEP         -> TextCatalog.get("world.mobState.asleep");
+            case AWAKE          -> TextCatalog.get("world.mobState.awake");
+            case SEEKING_HIDING -> TextCatalog.get("world.mobState.fleeing");
+            case HIDING         -> TextCatalog.get("world.mobState.hiding");
+            case FOLLOWING      -> TextCatalog.get("world.mobState.following");
         };
-    }
-
-    private static long cellKey(int x, int y) {
-        return (((long) y) << 32) | (x & 0xFFFFFFFFL);
-    }
-
-    private static Map<Long, List<Item>> indexItemsByCell(Level level) {
-        Map<Long, List<Item>> out = new HashMap<>();
-        for (Item it : level.items) {
-            if (it.location == null) continue;
-            out.computeIfAbsent(cellKey(it.location.tileX(), it.location.tileY()),
-                                k -> new ArrayList<>()).add(it);
-        }
-        return out;
-    }
-
-    private static Map<Long, List<Mob>> indexMobsByCell(Level level) {
-        Map<Long, List<Mob>> out = new HashMap<>();
-        for (Mob mob : level.mobs) {
-            if (mob.position == null) continue;
-            out.computeIfAbsent(cellKey(mob.position.tileX(), mob.position.tileY()),
-                                k -> new ArrayList<>()).add(mob);
-        }
-        return out;
-    }
-
-    /**
-     * Anchor each effect at its SOUTHMOST endpoint's cell. In the N->S loop that means the
-     * effect renders only after every mob it could visually overlap (source, destination,
-     * or any cell between) has already drawn, so missiles and thrown items stay on top.
-     */
-    private static Map<Long, List<Effect>> indexEffectsByCell(EffectStage stage) {
-        Map<Long, List<Effect>> out = new HashMap<>();
-        for (Effect e : stage.active) {
-            if (e.location == null) continue;
-            // Foot-dust is rendered in a separate top-of-stack pass so
-            // every cloud lands ON TOP of the player sprite - see
-            // {@link #drawAllDustClouds}. Skip here to avoid double-draws.
-            if (e.type == com.bjsp123.rl2.world.render.Effect.EffectType.DUST_CLOUD) continue;
-            int ax = e.location.tileX();
-            int ay = e.location.tileY();
-            if (e.endLocation != null && e.endLocation.tileY() < ay) {
-                ax = e.endLocation.tileX();
-                ay = e.endLocation.tileY();
-            }
-            out.computeIfAbsent(cellKey(ax, ay), k -> new ArrayList<>()).add(e);
-        }
-        return out;
     }
 
     /**
@@ -1659,14 +1609,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
         return x >= 0 && y >= 0 && x < level.width && y < level.height;
     }
 
-    private void drawItemsAt(Level level, int x, int y, Map<Long, List<Item>> itemsByCell) {
-        List<Item> list = itemsByCell.get(cellKey(x, y));
+    private void drawItemsAt(Level level, int x, int y, LevelRenderIndexes.CellBuckets<Item> itemsByCell) {
+        List<Item> list = itemsByCell.at(x, y);
         if (list == null) return;
         for (Item it : list) drawItem(level, it);
     }
 
-    private void drawMobsAt(Level level, int x, int y, Map<Long, List<Mob>> mobsByCell) {
-        List<Mob> list = mobsByCell.get(cellKey(x, y));
+    private void drawMobsAt(Level level, int x, int y, LevelRenderIndexes.CellBuckets<Mob> mobsByCell) {
+        List<Mob> list = mobsByCell.at(x, y);
         if (list == null) return;
         for (Mob mob : list) drawMob(level, mob);
     }
@@ -1734,8 +1684,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         return pair == null ? null : pair[f];
     }
 
-    private void drawFxAt(Level level, int x, int y, Map<Long, List<Effect>> fxByCell) {
-        List<Effect> list = fxByCell.get(cellKey(x, y));
+    private void drawFxAt(Level level, int x, int y, LevelRenderIndexes.CellBuckets<Effect> fxByCell) {
+        List<Effect> list = fxByCell.at(x, y);
         if (list == null) return;
         batch.setColor(Color.WHITE);
         for (Effect e : list) fxRenderer.drawEffect(level, e);
@@ -1789,7 +1739,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         } else {
             System.err.println("No sprite for item " + it.type + " at (" + x + ", " + y + ")");
         }
-        int effLvl = com.bjsp123.rl2.logic.ItemSystem.effectiveLevel(it, null);
+        int effLvl = com.bjsp123.rl2.logic.ItemStats.effectiveLevel(it, null);
         drawItemLevelBadge(effLvl, x, y);
     }
 
@@ -2072,8 +2022,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // where the original sprite is transparent, the offset draws are also
         // transparent - so the rim only "shows" around the silhouette's edge.
         // Death-fade alpha modulates it too.
-        float outlineW = com.bjsp123.rl2.ui.skin.MobOutline.width();
-        float outlineA = com.bjsp123.rl2.ui.skin.MobOutline.darkness() * alpha;
+        float outlineW = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
+        float outlineA = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness() * alpha;
         if (outlineA > 0f && outlineW > 0f) {
             ensureOutlineTaps(outlineW);
             Texture mobTex = s.region.getTexture();
@@ -2107,7 +2057,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  (Nearest in normal use), keeping the original pixel-aligned look. */
     private void setOutlineFilter(Texture tex, boolean enterOutlinePass) {
         if (tex == null) return;
-        if (!com.bjsp123.rl2.ui.skin.MobOutline.smooth()) return;
+        if (!com.bjsp123.rl2.ui.skin.Settings.mobOutlineSmooth()) return;
         batch.flush();
         Texture.TextureFilter f = enterOutlinePass ? Texture.TextureFilter.Linear
                                                    : Texture.TextureFilter.Nearest;
@@ -2121,8 +2071,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  source texture's filter is briefly swapped to Linear so the outline edge
      *  reads at sub-texel resolution; see {@link #setOutlineFilter}. */
     private void drawRegionOutline(TextureRegion r, float x, float y, float w, float h) {
-        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
-        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
+        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || r == null) return;
         ensureOutlineTaps(ow);
         Texture tex = r.getTexture();
@@ -2140,8 +2090,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  to the normal black outline. */
     private void drawRegionOutlineTinted(TextureRegion r, float x, float y, float w, float h,
                                          float pr, float pg, float pb, float pulseStrength) {
-        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
-        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
+        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || r == null) return;
         ensureOutlineTaps(ow);
         Texture tex = r.getTexture();
@@ -2194,8 +2144,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  vegetation extracted Textures (grass / mushroom / fire-skipped) which the
      *  draw loop hands out as raw {@link Texture} not {@link TextureRegion}. */
     private void drawTextureOutline(Texture tex, float x, float y, float w, float h) {
-        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
-        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
+        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || tex == null) return;
         ensureOutlineTaps(ow);
         setOutlineFilter(tex, true);
@@ -2211,8 +2161,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  which slice the 32x64 tree texture into upper and lower 32x32 sub-rects. */
     private void drawTextureOutlineSrc(Texture tex, float x, float y, float w, float h,
                                        int srcX, int srcY, int srcW, int srcH) {
-        float ow = com.bjsp123.rl2.ui.skin.MobOutline.width();
-        float oa = com.bjsp123.rl2.ui.skin.MobOutline.darkness();
+        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
+        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || tex == null) return;
         ensureOutlineTaps(ow);
         setOutlineFilter(tex, true);

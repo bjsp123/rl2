@@ -21,7 +21,7 @@ public final class ItemFactory {
      *  {@link ItemRegistry} (typo, or trying to build a procedural item like
      *  a gem through this path). */
     public static Item build(String type) {
-        ItemDefinition def = ItemRegistry.get(type);
+        ItemDefinition def = Registries.item(type);
         if (def == null) {
             throw new IllegalArgumentException("no items.csv row for type: " + type);
         }

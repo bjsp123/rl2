@@ -24,17 +24,17 @@ public final class Ghost {
     }
 
     public boolean done() {
-        return frame >= MobAnimState.DEATH_TOTAL_FRAMES;
+        return frame >= AnimationVars.deathTotalFrames();
     }
 
     /** Render alpha for the ghost - flicker twice then linear fade to zero. */
     public float alpha() {
-        if (frame < MobAnimState.DEATH_FLICKER_FRAMES) {
-            int half = frame / MobAnimState.DEATH_FLICKER_HALF_FRAMES;
-            return (half % 2 == 0) ? MobAnimState.DEATH_FLICKER_LOW_ALPHA : 1f;
+        if (frame < AnimationVars.deathFlickerFrames()) {
+            int half = frame / AnimationVars.DEATH_FLICKER_HALF_FRAMES;
+            return (half % 2 == 0) ? AnimationVars.DEATH_FLICKER_LOW_ALPHA : 1f;
         }
-        int fadeFrame = frame - MobAnimState.DEATH_FLICKER_FRAMES;
-        if (fadeFrame >= MobAnimState.DEATH_FADE_FRAMES) return 0f;
-        return 1f - fadeFrame / (float) MobAnimState.DEATH_FADE_FRAMES;
+        int fadeFrame = frame - AnimationVars.deathFlickerFrames();
+        if (fadeFrame >= AnimationVars.DEATH_FADE_FRAMES) return 0f;
+        return 1f - fadeFrame / (float) AnimationVars.DEATH_FADE_FRAMES;
     }
 }

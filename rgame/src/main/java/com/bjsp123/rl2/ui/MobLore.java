@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.ui;
 
 import com.bjsp123.rl2.logic.BuffSystem;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.StatBlock;
@@ -31,9 +32,9 @@ public final class MobLore {
         StringBuilder sb = new StringBuilder();
         if (m.mobType != null) {
             com.bjsp123.rl2.logic.MobDefinition def =
-                    com.bjsp123.rl2.logic.MobRegistry.get(m.mobType);
+                    com.bjsp123.rl2.logic.Registries.mob(m.mobType);
             if (def != null && def.unique) {
-                sb.append("Unique foe");
+                sb.append(TextCatalog.get("mob.unique"));
             }
         }
         if (m.description != null && !m.description.isEmpty()) {
@@ -55,91 +56,91 @@ public final class MobLore {
         StringBuilder sb = new StringBuilder();
 
         // -- Combat ----------------------------------------------------------
-        line(sb, "Max HP: ",       Integer.toString((int) Math.round(s.maxHp)), m.hpPerLevel>0, " plus " + m.hpPerLevel + " per level");
-        line(sb, "Attack: ",   ""+s.accuracy, m.accuracyPerLevel > 0, " plus " + m.accuracyPerLevel + " per level");
-        line(sb, "Defense: ",  ""+s.evasion, m.evasionPerLevel > 0, " plus " + m.evasionPerLevel + " per level");
-        line(sb, "Damage: ",   range(s.damage), !m.damagePerLevel.isZero(), " plus " + range(m.damagePerLevel) + " per level");
-        line(sb, "Armor: ",    range(s.armor), !m.armorPerLevel.isZero(), " plus " + range(m.armorPerLevel) + " per level");
-        if (!s.apDamage.isZero())    line(sb, "AP damage",   range(s.apDamage), !m.apPerLevel.isZero(), " plus " + range(m.apPerLevel) + " per level");
-        if (!s.magicResist.isZero()) line(sb, "Magic resistance: ", range(s.magicResist));
-        if (s.knockbackSquares > 0)  line(sb, "Knockback: ",   s.knockbackSquares + " sq");
-        if (s.healRate > 0)          line(sb, "Heal rate: ",   trim(s.healRate) + " HP/turn");
+        flag(sb, TextCatalog.format("mob.stat.maxHp", TextCatalog.vars("value", (int) Math.round(s.maxHp), "perLevel", m.hpPerLevel > 0 ? perLevelInt(m.hpPerLevel) : "")));
+        flag(sb, TextCatalog.format("mob.stat.attack", TextCatalog.vars("value", s.accuracy, "perLevel", m.accuracyPerLevel > 0 ? perLevelInt(m.accuracyPerLevel) : "")));
+        flag(sb, TextCatalog.format("mob.stat.defense", TextCatalog.vars("value", s.evasion, "perLevel", m.evasionPerLevel > 0 ? perLevelInt(m.evasionPerLevel) : "")));
+        flag(sb, TextCatalog.format("mob.stat.damage", TextCatalog.vars("range", range(s.damage), "perLevel", !m.damagePerLevel.isZero() ? perLevelRange(m.damagePerLevel) : "")));
+        flag(sb, TextCatalog.format("mob.stat.armor", TextCatalog.vars("range", range(s.armor), "perLevel", !m.armorPerLevel.isZero() ? perLevelRange(m.armorPerLevel) : "")));
+        if (!s.apDamage.isZero())    flag(sb, TextCatalog.format("mob.stat.apDamage", TextCatalog.vars("range", range(s.apDamage), "perLevel", !m.apPerLevel.isZero() ? perLevelRange(m.apPerLevel) : "")));
+        if (!s.magicResist.isZero()) flag(sb, TextCatalog.format("mob.stat.magicResist", TextCatalog.vars("range", range(s.magicResist))));
+        if (s.knockbackSquares > 0)  flag(sb, TextCatalog.format("mob.stat.knockback", TextCatalog.vars("squares", s.knockbackSquares)));
+        if (s.healRate > 0)          flag(sb, TextCatalog.format("mob.stat.healRate", TextCatalog.vars("value", trim(s.healRate))));
 
         // -- Ranged ----------------------------------------------------------
         if (!s.rangedDamage.isZero() || s.rangedDistance > 0) {
             sb.append('\n');
-            line(sb, "This creature has a ranged attack with damage ",   range(s.rangedDamage));
-            if (s.rangedDistance > 0)   line(sb, "Its range is",        s.rangedDistance + " tiles.");
-            if (s.rangedRateOfFire > 0) line(sb, "It can fire every", s.rangedRateOfFire + " turns.");
+            flag(sb, TextCatalog.format("mob.ranged.damage", TextCatalog.vars("range", range(s.rangedDamage))));
+            if (s.rangedDistance > 0)   flag(sb, TextCatalog.format("mob.ranged.range", TextCatalog.vars("tiles", s.rangedDistance)));
+            if (s.rangedRateOfFire > 0) flag(sb, TextCatalog.format("mob.ranged.rate", TextCatalog.vars("turns", s.rangedRateOfFire)));
         }
 
         // -- Perception + lighting -------------------------------------------
         sb.append('\n');
-        flag(sb, "Sees for " + trim(s.visionRadius) + " tiles, may wake if foe within " + s.wakeRadius + " tiles.");
+        flag(sb, TextCatalog.format("mob.senses", TextCatalog.vars("vision", trim(s.visionRadius), "wake", trim(s.wakeRadius))));
         if (s.lightRadius > 0) 
-            flag(sb, "This creature glows with light!");
+            flag(sb, TextCatalog.get("mob.light"));
 
         // -- Movement / body -------------------------------------------------
         sb.append('\n');
         if(s.moveCost > 140){
-            flag(sb, "This creature is extemely sluggish.");
+            flag(sb, TextCatalog.get("mob.speed.move.extremelySlow"));
         } else if (s.moveCost > 100){
-            flag(sb, "This creature is somewhat slow-moving.");
+            flag(sb, TextCatalog.get("mob.speed.move.slow"));
         } else if (s.moveCost < 80) {
-            flag(sb, "This creature moves extremely fast.");
+            flag(sb, TextCatalog.get("mob.speed.move.extremelyFast"));
         } else if (s.moveCost < 100) {
-            flag(sb, "This creature moves rather swiftly.");
+            flag(sb, TextCatalog.get("mob.speed.move.fast"));
         }
 
         if(s.attackCost > 140){
-            flag(sb, "This creature attacks sluggishly.");
+            flag(sb, TextCatalog.get("mob.speed.attack.extremelySlow"));
         } else if (s.attackCost > 100){
-            flag(sb, "This creature's attacks are rather slow.");
+            flag(sb, TextCatalog.get("mob.speed.attack.slow"));
         } else if (s.attackCost < 80) {
-            flag(sb, "This creature's attacks are lightning-fast.");
+            flag(sb, TextCatalog.get("mob.speed.attack.extremelyFast"));
         } else if (s.attackCost < 100) {
-            flag(sb, "This creature can attack rather quickly.");
+            flag(sb, TextCatalog.get("mob.speed.attack.fast"));
         }
 
         if(s.size < 2){
-            flag(sb, "This creature is tiny.");
+            flag(sb, TextCatalog.get("mob.size.tiny"));
         } else if (s.size < 4){
-            flag(sb, "This creature is quite small.");
+            flag(sb, TextCatalog.get("mob.size.small"));
         } else if (s.size > 7) {
-            flag(sb, "This creature is huge in size.");
+            flag(sb, TextCatalog.get("mob.size.huge"));
         } else if (s.size > 5) {
-            flag(sb, "This creature is very big.");
+            flag(sb, TextCatalog.get("mob.size.veryBig"));
         } else if (s.size > 4) {
-            flag(sb, "This creature is large.");
+            flag(sb, TextCatalog.get("mob.size.large"));
         }
 
         // -- Special behaviours / immunities (each is a one-liner) -----------
         StringBuilder flags = new StringBuilder();
-        if (s.flying)             flag(flags, "This is a flying creature.");
-        if (s.fireImmune)         flag(flags, "This creature is immune to fire.");
-        if (s.fireSpreadOnAttack) flag(flags, "This creature's hits ignite tiles around the target.");
-        if (s.poisonsOnAttack)    flag(flags, "This creature's venomous attacks poison the foe..");
-        if (s.terrifying)         flag(flags, "This terrifying being frightens nearby susceptible creatures.");
-        if (!s.terrifiable)       flag(flags, "This creature does not frighten easily.");
-        if (m.banishable)         flag(flags, "This otherwordly being is vulnerable to being Banished.");
+        if (s.flying)             flag(flags, TextCatalog.get("mob.flag.flying"));
+        if (s.fireImmune)         flag(flags, TextCatalog.get("mob.flag.fireImmune"));
+        if (s.fireSpreadOnAttack) flag(flags, TextCatalog.get("mob.flag.fireSpreadOnAttack"));
+        if (s.poisonsOnAttack)    flag(flags, TextCatalog.get("mob.flag.poisonsOnAttack"));
+        if (s.terrifying)         flag(flags, TextCatalog.get("mob.flag.terrifying"));
+        if (!s.terrifiable)       flag(flags, TextCatalog.get("mob.flag.notTerrifiable"));
+        if (m.banishable)         flag(flags, TextCatalog.get("mob.flag.banishable"));
         if (s.fireExplosionRadiusOnDeath > 0)
-            flag(flags, "On death, this creature explodes in fire.");
+            flag(flags, TextCatalog.get("mob.flag.fireExplosionOnDeath"));
         // Teleport now lives on the abilities list (kind = TELEPORT) and
         // is rendered by {@link #describeAbility}, so no special-case line
         // is needed here.
         if (s.eatSpawnChance > 0)
-            flag(flags, "By devouring corpses, this creature can spawn further beings.");
+            flag(flags, TextCatalog.get("mob.flag.eatSpawn"));
         if (s.mushroomEatSpawnChance > 0)
-            flag(flags, "Feasting on mushrooms causes this creature to breed explosively.");
+            flag(flags, TextCatalog.get("mob.flag.mushroomEatSpawn"));
         if (s.turnSpawnChance > 0 && m.turnSpawnType != null)
-            flag(flags, "Can send out servants to do its bidding.");
+            flag(flags, TextCatalog.get("mob.flag.turnSpawn"));
         if (flags.length() > 0) {
             sb.append('\n').append(flags);
         }
 
         // -- Abilities -------------------------------------------------------
         if (m.abilities != null && !m.abilities.isEmpty()) {
-            sb.append('\n').append("Abilities:\n");
+            sb.append('\n').append(TextCatalog.get("mob.abilities.header")).append('\n');
             for (Mob.MobAbility a : m.abilities) {
                 sb.append("* ").append(describeAbility(a)).append('\n');
             }
@@ -149,20 +150,20 @@ public final class MobLore {
         //    species so the player stats screen stays clean) ----------------
         StringBuilder fac = new StringBuilder();
         if (m.faction != null && !m.faction.isEmpty()) {
-            fac.append("Faction: ").append(m.faction).append('\n');
+            flag(fac, TextCatalog.format("mob.faction", TextCatalog.vars("value", m.faction)));
         }
         if (m.attackTypes != null && !m.attackTypes.isEmpty()) {
-            fac.append("Hostile to: ").append(joinSorted(m.attackTypes)).append('\n');
+            flag(fac, TextCatalog.format("mob.hostileTo", TextCatalog.vars("value", joinSorted(m.attackTypes))));
         }
 
         if (!m.enemyFactions.contains("PLAYER")) {
-            fac.append("This is not necessarily a hostile creature.  ");
+            fac.append(TextCatalog.get("mob.notNecessarilyHostile"));
         }
         if (m.enemyFactions != null && !m.enemyFactions.isEmpty()) {
-            fac.append("Enemy of: ").append(joinSorted(m.enemyFactions)).append('\n');
+            flag(fac, TextCatalog.format("mob.enemyOf", TextCatalog.vars("value", joinSorted(m.enemyFactions))));
         }
         if (m.fleeTypes != null && !m.fleeTypes.isEmpty()) {
-            fac.append("Flees: ").append(joinSorted(m.fleeTypes)).append('\n');
+            flag(fac, TextCatalog.format("mob.flees", TextCatalog.vars("value", joinSorted(m.fleeTypes))));
         }
         if (fac.length() > 0) {
             sb.append('\n').append(fac);
@@ -176,10 +177,10 @@ public final class MobLore {
         if (m.inventory != null) {
             java.util.List<com.bjsp123.rl2.model.Item> equipped = m.inventory.allEquipped();
             if (!equipped.isEmpty()) {
-                inv.append("Equipped: ").append(joinItemNames(equipped)).append('\n');
+                flag(inv, TextCatalog.format("mob.equipped", TextCatalog.vars("items", joinItemNames(equipped))));
             }
             if (m.inventory.bag != null && !m.inventory.bag.isEmpty()) {
-                inv.append("Carries:  ").append(joinItemNames(m.inventory.bag)).append('\n');
+                flag(inv, TextCatalog.format("mob.carries", TextCatalog.vars("items", joinItemNames(m.inventory.bag))));
             }
         }
         if (inv.length() > 0) {
@@ -210,15 +211,15 @@ public final class MobLore {
 
     private static String describeAbility(Mob.MobAbility a) {
         if (a == null) return "";
-        String cd = a.cooldownTurns > 0 ? " every " + a.cooldownTurns + " turns" : "";
+        String cd = a.cooldownTurns > 0 ? TextCatalog.format("mob.ability.cooldown", TextCatalog.vars("turns", a.cooldownTurns)) : "";
         return switch (a.kind) {
-            case HEAL -> "Heals an ally for " + a.healAmount + " HP" + cd;
+            case HEAL -> TextCatalog.format("mob.ability.HEAL", TextCatalog.vars("amount", a.healAmount, "cooldown", cd));
             case BUFF -> {
                 String name = BuffSystem.displayName(a.applies);
-                String dur  = a.appliedDuration > 0 ? " for " + a.appliedDuration + " turns" : "";
-                yield "Casts " + name + " on an ally" + dur + cd;
+                String dur  = a.appliedDuration > 0 ? TextCatalog.format("mob.ability.duration", TextCatalog.vars("turns", a.appliedDuration)) : "";
+                yield TextCatalog.format("mob.ability.BUFF", TextCatalog.vars("buff", name, "duration", dur, "cooldown", cd));
             }
-            case TELEPORT -> "Suddenly appears at the side of an enemy" + cd;
+            case TELEPORT -> TextCatalog.format("mob.ability.TELEPORT", TextCatalog.vars("cooldown", cd));
         };
     }
 
@@ -258,6 +259,14 @@ public final class MobLore {
         if (m == null) return "0";
         return m.min() == m.max() ? Integer.toString(m.min())
                                   : m.min() + "-" + m.max();
+    }
+
+    private static String perLevelInt(int value) {
+        return " plus " + value + " per level";
+    }
+
+    private static String perLevelRange(MinMax value) {
+        return " plus " + range(value) + " per level";
     }
 
     private static String plusRange(MinMax m) {

@@ -1,4 +1,5 @@
 package com.bjsp123.rl2.world.render;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
@@ -83,7 +84,12 @@ public class Effect {
          *  redraws the player's sprite tinted, cycling grey -> white ->
          *  gold over the effect's lifetime. The mob whose sprite to
          *  redraw is carried in {@link Effect#fallenMob}. */
-        POWERUP_FLASH(36);
+        POWERUP_FLASH(36),
+        /** Physical projectile (spear, arrow) travelling from
+         *  {@link Effect#location} to {@link Effect#endLocation},
+         *  rotated to face its travel direction. Sprite is col 3 of
+         *  the slash band in {@code buffs16.png}. */
+        PHYSICAL_MISSILE(36);
 
         public final int frameCount;
 
@@ -96,8 +102,6 @@ public class Effect {
         RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN
     }
 
-    public static final float MAGIC_MISSILE_PX_PER_FRAME = 2.25f;
-    public static final float THROWN_ITEM_PX_PER_FRAME   = 3.0f;
     private static final float TILE_PX = 16f;
     private static final float MAGIC_MISSILE_FLIGHT_FRACTION = 0.7f;
 
@@ -211,7 +215,7 @@ public class Effect {
         Effect e = new Effect(from, EffectType.THROWN_ITEM);
         e.endLocation = to;
         e.thrownItem = item;
-        e.frameCount = framesForDistance(from, to, THROWN_ITEM_PX_PER_FRAME);
+        e.frameCount = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.THROWN_ITEM_PX_PER_FRAME);
         return e;
     }
 
@@ -222,7 +226,7 @@ public class Effect {
         Effect e = new Effect(from, EffectType.LOOT_TOSS);
         e.endLocation = to;
         e.thrownItem = item;
-        e.frameCount = framesForDistance(from, to, THROWN_ITEM_PX_PER_FRAME);
+        e.frameCount = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.THROWN_ITEM_PX_PER_FRAME);
         return e;
     }
 
@@ -312,7 +316,7 @@ public class Effect {
     public static Effect magicMissile(Point from, Point to, Random rng) {
         Effect e = new Effect(from, EffectType.MAGIC_MISSILE);
         e.endLocation = to;
-        int flightFrames = framesForDistance(from, to, MAGIC_MISSILE_PX_PER_FRAME);
+        int flightFrames = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
         int flightEnd    = flightFrames;
         e.frameCount     = Math.max(1, Math.round(flightFrames / MAGIC_MISSILE_FLIGHT_FRACTION));
         int count = 24;
@@ -342,7 +346,7 @@ public class Effect {
         e.particleGravity = gravity;
         e.particleSize    = size;
         e.particleBright  = bright;
-        int flightFrames = framesForDistance(from, to, MAGIC_MISSILE_PX_PER_FRAME);
+        int flightFrames = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
         int flightEnd    = flightFrames;
         e.frameCount     = Math.max(1, Math.round(flightFrames / MAGIC_MISSILE_FLIGHT_FRACTION));
         int count = 36;
@@ -531,7 +535,7 @@ public class Effect {
     public static Effect upArrow(Point at, EffectTint tint, int startDelay) {
         Effect e = new Effect(at, EffectType.UP_ARROW);
         e.tint       = tint;
-        e.text       = "up";   // up
+        e.text       = TextCatalog.get("effect.levelUp.up");
         e.startDelay = Math.max(0, startDelay);
         return e;
     }
@@ -542,6 +546,16 @@ public class Effect {
     public static Effect powerupFlash(com.bjsp123.rl2.model.Mob mob, Point at) {
         Effect e = new Effect(at, EffectType.POWERUP_FLASH);
         e.fallenMob = mob;
+        return e;
+    }
+
+    /** Physical projectile travelling from {@code from} to {@code to} at the
+     *  standard missile speed. The sprite (col 3 of the slash band) is rotated
+     *  to face the travel direction at draw time. */
+    public static Effect physicalMissile(Point from, Point to) {
+        Effect e = new Effect(from, EffectType.PHYSICAL_MISSILE);
+        e.endLocation = to;
+        e.frameCount = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
         return e;
     }
 }

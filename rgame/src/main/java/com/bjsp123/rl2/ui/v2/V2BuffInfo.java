@@ -3,6 +3,7 @@ package com.bjsp123.rl2.ui.v2;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.logic.BuffSystem;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.world.render.BuffIcons;
 
@@ -75,7 +76,8 @@ public final class V2BuffInfo extends BasePopup {
 
         top -= ctx.headerLineH();
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                "Level " + buff.level, window.cx(), top);
+                TextCatalog.format("buff.info.level",
+                        TextCatalog.vars("level", buff.level)), window.cx(), top);
 
         top -= ctx.lineH() * 1.5f;
         for (String line : descLines) {
@@ -84,7 +86,10 @@ public final class V2BuffInfo extends BasePopup {
         }
 
         top -= 6f;
-        String durStr = buff.durationTurns > 0 ? buff.durationTurns + " turns" : "Permanent";
+        String durStr = buff.durationTurns > 0
+                ? TextCatalog.format("buff.info.turns",
+                        TextCatalog.vars("turns", buff.durationTurns))
+                : TextCatalog.get("buff.info.permanent");
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, durStr, window.cx(), top);
 
         ctx.batch.end();

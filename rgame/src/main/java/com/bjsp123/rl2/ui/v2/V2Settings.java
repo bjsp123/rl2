@@ -3,12 +3,8 @@ package com.bjsp123.rl2.ui.v2;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
 import com.bjsp123.rl2.Rl2Game;
-import com.bjsp123.rl2.ui.skin.AnimationSpeed;
-import com.bjsp123.rl2.ui.skin.LogFontScale;
-import com.bjsp123.rl2.ui.skin.LogPreferences;
-import com.bjsp123.rl2.ui.skin.MobOutline;
-import com.bjsp123.rl2.ui.skin.UiFontScale;
-import com.bjsp123.rl2.ui.skin.UiScale;
+import com.bjsp123.rl2.logic.TextCatalog;
+import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
 import com.bjsp123.rl2.world.render.IconSprites;
 
@@ -26,7 +22,7 @@ import java.util.List;
  */
 public final class V2Settings extends V2Screen {
 
-    private enum Tab { GAMEPLAY, GRAPHICS, LOG, DANGER }
+    private enum Tab { GAMEPLAY, GRAPHICS, LOG }
     private static Tab currentTab = Tab.GRAPHICS;
 
     private final Rl2Game game;
@@ -91,7 +87,7 @@ public final class V2Settings extends V2Screen {
         // n*tabW + (n-1)*TAB_GAP = innerW; solve for tabW.
         float tabsY = winY + winH - WIN_PAD - TAB_H;
         float tabsX = winX + WIN_PAD;
-        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.DANGER };
+        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG };
         float innerW = winW - 2 * WIN_PAD;
         float tabW   = (innerW - (tabs.length - 1) * TAB_GAP) / tabs.length;
         for (int i = 0; i < tabs.length; i++) {
@@ -124,24 +120,24 @@ public final class V2Settings extends V2Screen {
             }
             case GAMEPLAY -> {
                 yCursor = addAnimationSpeedRow(winX + WIN_PAD, yCursor);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Queue Acceleration",
-                        AnimationSpeed::queueAccelEnabled, AnimationSpeed::setQueueAccelEnabled);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.instantActions"),
+                        Settings::instantActions, Settings::setInstantActions);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
+                        Settings::queueAccelEnabled, Settings::setQueueAccelEnabled);
                 yCursor = addQuickslotCountRow(winX + WIN_PAD, yCursor);
-                yCursor = addButtonRow(winX + WIN_PAD, yCursor, "Clear Hall of Fame");
+                yCursor = addButtonRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.clearHall"));
             }
             case LOG -> {
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Show Event Log",
-                        LogPreferences::logOn, LogPreferences::setLogOn);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Low-Priority Lines",
-                        LogPreferences::showLowPriority, LogPreferences::setShowLowPriority);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Mob-vs-Mob Lines",
-                        LogPreferences::showNonPlayer, LogPreferences::setShowNonPlayer);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, "Expanded Log",
-                        LogPreferences::expanded, LogPreferences::setExpanded);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.showEventLog"),
+                        Settings::logOn, Settings::setLogOn);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.lowPriorityLines"),
+                        Settings::showLowPriority, Settings::setShowLowPriority);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.mobVsMobLines"),
+                        Settings::showNonPlayer, Settings::setShowNonPlayer);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.expandedLog"),
+                        Settings::logExpanded, Settings::setLogExpanded);
                 yCursor = addLogFontScaleRow(winX + WIN_PAD, yCursor);
             }
-            case DANGER -> addButtonRow(winX + WIN_PAD,
-                    contentTop, "Clear Hall of Fame");
         }
 
         // Back button at bottom-right - pops the navigation stack so the
@@ -186,105 +182,105 @@ public final class V2Settings extends V2Screen {
 
     private float addUiScaleRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (float s : UiScale.CHOICES) {
+        for (float s : Settings.UI_SCALE_CHOICES) {
             final float chosen = s;
             choices.add(new ChoiceSpec(formatNumber(s) + "x", 50f,
-                    Math.abs(UiScale.scale() - s) < 0.001f,
+                    Math.abs(Settings.uiScale() - s) < 0.001f,
                     () -> {
-                        UiScale.set(chosen);
+                        Settings.setUiScale(chosen);
                         ctx.applyUiScale();
                         show();
                     }));
         }
-        return addRow("UI Scale", x, yTop, choices);
+        return addRow(TextCatalog.get("ui.settings.uiScale"), x, yTop, choices);
     }
 
     private float addUiFontScaleRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (float s : UiFontScale.CHOICES) {
+        for (float s : Settings.UI_FONT_SCALE_CHOICES) {
             final float chosen = s;
             choices.add(new ChoiceSpec(formatNumber(s) + "x", 56f,
-                    Math.abs(UiFontScale.scale() - s) < 0.001f,
+                    Math.abs(Settings.uiFontScale() - s) < 0.001f,
                     () -> {
-                        UiFontScale.set(chosen);
+                        Settings.setUiFontScale(chosen);
                         ctx.applyFontScale();
                         show();
                     }));
         }
-        return addRow("UI Font Size", x, yTop, choices);
+        return addRow(TextCatalog.get("ui.settings.uiFontSize"), x, yTop, choices);
     }
 
     private float addOutlineWidthRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (float w : MobOutline.WIDTH_CHOICES) {
+        for (float w : Settings.MOB_OUTLINE_WIDTH_CHOICES) {
             final float chosen = w;
             choices.add(new ChoiceSpec(formatNumber(w), 50f,
-                    Math.abs(MobOutline.width() - w) < 0.0001f,
-                    () -> { MobOutline.setWidth(chosen); show(); }));
+                    Math.abs(Settings.mobOutlineWidth() - w) < 0.0001f,
+                    () -> { Settings.setMobOutlineWidth(chosen); show(); }));
         }
-        return addRow("Mob Outline Width", x, yTop, choices);
+        return addRow(TextCatalog.get("ui.settings.outlineWidth"), x, yTop, choices);
     }
 
     private float addOutlineDarknessRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (float a : MobOutline.DARKNESS_CHOICES) {
+        for (float a : Settings.MOB_OUTLINE_DARKNESS_CHOICES) {
             final float chosen = a;
             choices.add(new ChoiceSpec(formatNumber(a), 50f,
-                    Math.abs(MobOutline.darkness() - a) < 0.0001f,
-                    () -> { MobOutline.setDarkness(chosen); show(); }));
+                    Math.abs(Settings.mobOutlineDarkness() - a) < 0.0001f,
+                    () -> { Settings.setMobOutlineDarkness(chosen); show(); }));
         }
-        return addRow("Mob Outline Darkness", x, yTop, choices);
+        return addRow(TextCatalog.get("ui.settings.outlineDarkness"), x, yTop, choices);
     }
 
     private float addOutlineSmoothRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        choices.add(new ChoiceSpec("Smooth", 88f, MobOutline.smooth(),
-                () -> { MobOutline.setSmooth(true);  show(); }));
-        choices.add(new ChoiceSpec("Pixel",  88f, !MobOutline.smooth(),
-                () -> { MobOutline.setSmooth(false); show(); }));
-        return addRow("Mob Outline Smoothing", x, yTop, choices);
+        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.smooth"), 88f, Settings.mobOutlineSmooth(),
+                () -> { Settings.setMobOutlineSmooth(true);  show(); }));
+        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.pixel"),  88f, !Settings.mobOutlineSmooth(),
+                () -> { Settings.setMobOutlineSmooth(false); show(); }));
+        return addRow(TextCatalog.get("ui.settings.outlineSmoothing"), x, yTop, choices);
     }
 
     private float addAnimationSpeedRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (float n : AnimationSpeed.CHOICES) {
+        for (float n : Settings.ANIMATION_SPEED_CHOICES) {
             final float chosen = n;
             choices.add(new ChoiceSpec(n + "x", 56f,
-                    AnimationSpeed.framesPerRender() == n,
-                    () -> { AnimationSpeed.setFramesPerRender(chosen); show(); }));
+                    Settings.framesPerRender() == n,
+                    () -> { Settings.setFramesPerRender(chosen); show(); }));
         }
-        return addRow("Animation Speed", x, yTop, choices);
+        return addRow(TextCatalog.get("ui.settings.animationSpeed"), x, yTop, choices);
     }
 
     private float addQuickslotCountRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (int n : com.bjsp123.rl2.ui.skin.QuickslotCount.CHOICES) {
+        for (int n : Settings.QUICKSLOT_COUNT_CHOICES) {
             final int chosen = n;
             choices.add(new ChoiceSpec(String.valueOf(n), 56f,
-                    com.bjsp123.rl2.ui.skin.QuickslotCount.count() == n,
-                    () -> { com.bjsp123.rl2.ui.skin.QuickslotCount.set(chosen); show(); }));
+                    Settings.quickslotCount() == n,
+                    () -> { Settings.setQuickslotCount(chosen); show(); }));
         }
-        return addRow("Quickslots", x, yTop, choices);
+        return addRow(TextCatalog.get("ui.settings.quickslots"), x, yTop, choices);
     }
 
     private float addLogFontScaleRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        for (float f : LogFontScale.CHOICES) {
+        for (float f : Settings.LOG_FONT_SCALE_CHOICES) {
             final float chosen = f;
             choices.add(new ChoiceSpec(formatNumber(f) + "x", 50f,
-                    Math.abs(LogFontScale.scale() - f) < 0.001f,
-                    () -> { LogFontScale.set(chosen); show(); }));
+                    Math.abs(Settings.logFontScale() - f) < 0.001f,
+                    () -> { Settings.setLogFontScale(chosen); show(); }));
         }
-        return addRow("Log Font Size", x, yTop, choices);
+        return addRow(TextCatalog.get("ui.settings.logFontSize"), x, yTop, choices);
     }
 
     private float addBoolRow(float x, float yTop, String label,
                              java.util.function.BooleanSupplier getter,
                              java.util.function.Consumer<Boolean> setter) {
         List<ChoiceSpec> choices = new ArrayList<>();
-        choices.add(new ChoiceSpec("On", 70f, getter.getAsBoolean(),
+        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.on"), 70f, getter.getAsBoolean(),
                 () -> { setter.accept(true);  show(); }));
-        choices.add(new ChoiceSpec("Off", 70f, !getter.getAsBoolean(),
+        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.off"), 70f, !getter.getAsBoolean(),
                 () -> { setter.accept(false); show(); }));
         return addRow(label, x, yTop, choices);
     }
@@ -298,7 +294,7 @@ public final class V2Settings extends V2Screen {
     protected void drawBodyText(UiCtx ctx) {
         // Window title bar - a header label drawn ABOVE the window for now,
         // since our window content is fully consumed by tabs + choosers.
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Settings",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, TextCatalog.get("ui.settings.title"),
                 ctx.worldW() * 0.5f, ctx.worldH() - 24f);
 
         for (RowLabel rl : rowLabels) {
@@ -308,10 +304,10 @@ public final class V2Settings extends V2Screen {
 
     private void openClearHallPopup() {
         clearHallPopup.configure(
-                "Clear Hall of Fame?",
-                "This removes all hero records.",
-                "Clear",
-                "Cancel",
+                TextCatalog.get("ui.settings.clearHallTitle"),
+                TextCatalog.get("ui.settings.clearHallBody"),
+                TextCatalog.get("ui.common.clear"),
+                TextCatalog.get("ui.common.cancel"),
                 () -> {
                     game.hallOfFame.entries.clear();
                     com.bjsp123.rl2.save.HallOfFameStore.save(
@@ -338,10 +334,9 @@ public final class V2Settings extends V2Screen {
 
     private static String label(Tab t) {
         return switch (t) {
-            case GAMEPLAY -> "Play";
-            case GRAPHICS -> "Graphics";
-            case LOG      -> "Log";
-            case DANGER   -> "Danger";
+            case GAMEPLAY -> TextCatalog.get("ui.settings.tab.play");
+            case GRAPHICS -> TextCatalog.get("ui.settings.tab.graphics");
+            case LOG      -> TextCatalog.get("ui.settings.tab.log");
         };
     }
 
@@ -351,7 +346,6 @@ public final class V2Settings extends V2Screen {
             case GAMEPLAY -> IconSprites.Icon.GAME;
             case GRAPHICS -> IconSprites.Icon.VIDEO;
             case LOG      -> IconSprites.Icon.BOOK;
-            case DANGER   -> IconSprites.Icon.CANCEL;
         };
     }
 

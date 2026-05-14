@@ -48,6 +48,8 @@ public final class MobDefinition {
     public int    rangedDistance;
     public int    rangedCost;
     public int    rangedRateOfFire;
+    public com.bjsp123.rl2.model.Mob.RangedDamageType rangedDamageType
+            = com.bjsp123.rl2.model.Mob.RangedDamageType.MAGIC;
     public boolean flying;
     public boolean fireImmune;
     public boolean fireSpreadOnAttack;
@@ -212,8 +214,8 @@ public final class MobDefinition {
         // cell behaves exactly like the field had never been touched.
         MobDefinition d = new MobDefinition();
         d.type        = CsvTable.str(row, "type", null);
-        d.name        = CsvTable.str(row, "name", null);
-        d.description = CsvTable.str(row, "description", null);
+        d.name        = TextCatalog.mobName(d.type, CsvTable.str(row, "name", null));
+        d.description = TextCatalog.mobDescription(d.type, CsvTable.str(row, "description", null));
         d.material    = CsvTable.enumCell(row, "material", Mob.Material.class, Mob.Material.FLESH);
         d.behavior    = CsvTable.enumCell(row, "behavior", Mob.Behavior.class, Mob.Behavior.MOB);
 
@@ -237,6 +239,9 @@ public final class MobDefinition {
         d.rangedDistance   = CsvTable.intCell(row, "rangedDistance", 0);
         d.rangedCost       = CsvTable.intCell(row, "rangedCost", 0);
         d.rangedRateOfFire = CsvTable.intCell(row, "rangedRateOfFire", 0);
+        d.rangedDamageType = CsvTable.enumCell(row, "rangedType",
+                com.bjsp123.rl2.model.Mob.RangedDamageType.class,
+                com.bjsp123.rl2.model.Mob.RangedDamageType.MAGIC);
 
         d.flying              = CsvTable.boolCell(row, "flying", false);
         d.fireImmune          = CsvTable.boolCell(row, "fireImmune", false);
@@ -430,6 +435,7 @@ public final class MobDefinition {
         m.intrinsic.rangedDistance   = rangedDistance;
         m.intrinsic.rangedCost       = rangedCost;
         m.intrinsic.rangedRateOfFire = rangedRateOfFire;
+        m.rangedDamageType           = rangedDamageType;
 
         m.intrinsic.flying             = flying;
         m.intrinsic.fireImmune         = fireImmune;
@@ -468,7 +474,7 @@ public final class MobDefinition {
         if (!attackAllExcept.isEmpty()) {
             Set<String> excluded = new HashSet<>(attackAllExcept);
             if (m.mobType != null) excluded.add(m.mobType);
-            for (String t : MobRegistry.knownTypes()) {
+            for (String t : Registries.mobTypes()) {
                 if (!excluded.contains(t)) m.attackTypes.add(t);
             }
         }

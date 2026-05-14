@@ -4,8 +4,8 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.bjsp123.rl2.logic.MobRegistry;
-import com.bjsp123.rl2.logic.ThemedRoomRegistry;
+import com.bjsp123.rl2.logic.TextCatalog;
+import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Tile;
@@ -438,7 +438,8 @@ public final class V2Map extends V2Screen {
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Map",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.map.title"),
                 window.cx(), window.top() - ctx.headerLineH());
         if (world == null || world.levels == null) return;
 
@@ -469,7 +470,9 @@ public final class V2Map extends V2Screen {
             Level lvl = world.levels[i];
             if (lvl == null) continue;
             float[] xy = transformBox(lvl, minCol, maxCol, minD, maxD);
-            String label = lvl.visited ? "L" + lvl.depth : "?";
+            String label = lvl.visited
+                    ? TextCatalog.format("ui.map.level", TextCatalog.vars("depth", lvl.depth))
+                    : "?";
             // Place the label in the lower band of the trapezoid (the
             // wider, closer edge) so it stays legible above the
             // perspective-shrunk top.
@@ -502,7 +505,7 @@ public final class V2Map extends V2Screen {
         float left = info.x + 12f;
         float top  = info.top() - 18f;
         // Header: depth + theme.
-        String header = "L" + lvl.depth;
+        String header = TextCatalog.format("ui.map.level", TextCatalog.vars("depth", lvl.depth));
         if (lvl.theme != null) {
             header += "   " + lvl.theme.name().toLowerCase();
         }
@@ -515,7 +518,9 @@ public final class V2Map extends V2Screen {
         String roomsLine = collectUniqueRooms(lvl);
         if (!roomsLine.isEmpty()) {
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    "Rooms: " + roomsLine, left, top, textW);
+                    TextCatalog.format("ui.map.rooms",
+                            TextCatalog.vars("rooms", roomsLine)),
+                    left, top, textW);
             top -= 16f;
         }
 
@@ -523,7 +528,9 @@ public final class V2Map extends V2Screen {
         String mobsLine = collectUniqueMobs(lvl);
         if (!mobsLine.isEmpty()) {
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    "Mobs:  " + mobsLine, left, top, textW);
+                    TextCatalog.format("ui.map.mobs",
+                            TextCatalog.vars("mobs", mobsLine)),
+                    left, top, textW);
         }
     }
 
@@ -533,7 +540,7 @@ public final class V2Map extends V2Screen {
         StringBuilder sb = new StringBuilder();
         for (Level.RoomSnapshot r : lvl.rooms) {
             if (r == null || r.kind == null) continue;
-            var def = ThemedRoomRegistry.get(r.kind);
+            var def = Registries.themedRoom(r.kind);
             if (def == null || !def.unique) continue;
             String label = r.kind.toLowerCase().replace('_', ' ');
             if (!seen.add(label)) continue;
@@ -549,7 +556,7 @@ public final class V2Map extends V2Screen {
         StringBuilder sb = new StringBuilder();
         for (Mob m : lvl.mobs) {
             if (m == null || m.mobType == null) continue;
-            var def = MobRegistry.get(m.mobType);
+            var def = Registries.mob(m.mobType);
             if (def == null || !def.unique) continue;
             String label = m.name != null && !m.name.isEmpty()
                     ? m.name : m.mobType.toLowerCase();

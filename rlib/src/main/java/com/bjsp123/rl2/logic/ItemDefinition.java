@@ -126,39 +126,6 @@ public final class ItemDefinition {
     public int spriteCol;
     public int spriteRow;
 
-    private static InventoryCategory defaultCategory(String type) {
-        if (type == null) return null;
-        return switch (type) {
-            case "SWORD", "RAPIER", "RAPIER2", "KATANA", "DAGGER", "THROWING_KNIFE",
-                 "PUNCH_DAGGER", "CUTLASS", "BLOODYBLADE"
-                    -> InventoryCategory.WEAPON;
-            case "SHIELD", "KITE_SHIELD", "TORCH"
-                    -> InventoryCategory.OFFHAND;
-            case "CHAIN_MAIL", "SCALE_MAIL", "HEAVY_MAIL"
-                    -> InventoryCategory.ARMOR;
-            case "AMULET_OF_NIMBLENESS", "AMULET_OF_FINESSE", "AMULET_OF_DEFENCE",
-                 "AMULET_OF_WARDING", "AMULET_OF_LIGHT"
-                    -> InventoryCategory.AMULET;
-            case "WAND_WATER", "WAND_OIL", "WAND_GRASS", "WAND_FUNGUS", "WAND_FIRE",
-                 "WAND_DOG", "WAND_DETONATION", "WAND_MAGIC_MISSILE", "WAND_BANISHMENT",
-                 "WAND_LIGHTNING", "WAND_POLYMORPH", "BLINKSTONE"
-                    -> InventoryCategory.WAND;
-            case "PEAR", "FISH", "PEAR_SCRUMPTIOUS", "PEAR_SILVERY", "PEAR_CONFERENCE",
-                 "FOUL_MEAT", "ANT_JELLY", "TASTY_MEAT", "IPWERGIS"
-                    -> InventoryCategory.FOOD;
-            case "HEALING_POTION", "POTION_SORCERY", "POTION_GHOSTLINESS",
-                 "POTION_INVISIBILITY", "POTION_POISON", "POTION_INSIGHT",
-                 "POTION_ESP", "POTION_LEV"
-                    -> InventoryCategory.POTION;
-            case "FIRE_BOMB", "BLAST_BOMB", "FREEZE_BOMB", "OIL_BOMB", "VOID_BOMB",
-                 "CHERRY_BOMB", "SHOCK_BOMB"
-                    -> InventoryCategory.BOMB;
-            case "GRAPPLING_HOOK", "VINE_HOOK", "FROG", "FROG2"
-                    -> InventoryCategory.ITEM;
-            default -> InventoryCategory.ORB;
-        };
-    }
-
     public static List<ItemDefinition> parseAll(String csv) {
         CsvTable table = CsvTable.parse(csv);
         List<ItemDefinition> out = new ArrayList<>(table.rows.size());
@@ -171,9 +138,9 @@ public final class ItemDefinition {
     private static ItemDefinition parseRow(Map<String, String> row) {
         ItemDefinition d = new ItemDefinition();
         d.type        = CsvTable.str(row, "type", null);
-        d.name        = CsvTable.str(row, "name", null);
-        d.description  = CsvTable.str(row, "description", "");
-        d.description2 = CsvTable.str(row, "description 2", "");
+        d.name        = TextCatalog.itemName(d.type, CsvTable.str(row, "name", null));
+        d.description  = TextCatalog.itemDescription(d.type, CsvTable.str(row, "description", ""));
+        d.description2 = TextCatalog.itemDescription2(d.type, CsvTable.str(row, "description 2", ""));
         d.material    = CsvTable.enumCell(row, "material", Material.class, Material.MAGIC);
 
         d.damage         = CsvTable.minMaxCell(row, "damage", MinMax.ZERO);
@@ -217,7 +184,7 @@ public final class ItemDefinition {
         d.knockbackSquares      = CsvTable.intCell(row, "knockbackSquares", 0);
         d.glows                 = CsvTable.boolCell(row, "glows", false);
         d.inventoryCategory     = CsvTable.enumCell(row, "inventoryCategory",
-                InventoryCategory.class, defaultCategory(d.type));
+                InventoryCategory.class, null);
         double[] power      = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
         d.powerMin          = power[0];
         d.powerMax          = power[1];

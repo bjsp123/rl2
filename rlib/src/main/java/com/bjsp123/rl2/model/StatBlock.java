@@ -7,7 +7,7 @@ package com.bjsp123.rl2.model;
  * <pre>
  *     effective = mob.intrinsic
  *               + characterLevelBonus(mob)
- *               + sum ItemSystem.contributeInto(equipped slot)
+ *               + sum ItemStats.contributeInto(equipped slot)
  *               + BuffSystem.contributeInto(active buff)
  * </pre>
  *

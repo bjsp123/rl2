@@ -63,6 +63,11 @@ public class Mob {
         MAGIC_MISSILE
     }
 
+    /** Elemental class of a mob's ranged attack. Defaults to MAGIC so existing
+     *  mobs that predate this field stay unchanged. Set PHYSICAL for mundane
+     *  ranged attacks (thrown spears, arrows). */
+    public enum RangedDamageType { MAGIC, PHYSICAL }
+
     /** Physical substance of a mob (or item) - drives e.g. fire interactions and damage
      *  modifiers. Shared with {@link Item} since both have a material. */
     public enum Material {
@@ -153,16 +158,18 @@ public class Mob {
 
     /** Player class chosen at character creation. Drives starting kit and base stats. */
     public enum CharacterClass {
-        WARRIOR("Warrior", "Hardy fighter with sword and scale mail."),
-        ROGUE  ("Rogue",   "Quick and evasive, lightly armed."),
-        MAGE   ("Mage",    "Fragile, but carries the amulet of light.");
+        WARRIOR,
+        ROGUE,
+        MAGE;
 
-        public final String displayName;
-        public final String blurb;
+        public String displayName() {
+            return com.bjsp123.rl2.logic.TextCatalog.get(
+                    "characterClass." + name().toLowerCase(java.util.Locale.ROOT) + ".name");
+        }
 
-        CharacterClass(String displayName, String blurb) {
-            this.displayName = displayName;
-            this.blurb       = blurb;
+        public String blurb() {
+            return com.bjsp123.rl2.logic.TextCatalog.get(
+                    "characterClass." + name().toLowerCase(java.util.Locale.ROOT) + ".blurb");
         }
     }
 
@@ -283,6 +290,9 @@ public class Mob {
      *  option today; future variants (arrow, breath, ...) plug in here. Categorical, not
      *  a stat - stays on Mob. */
     public RangedAttackType rangedAttackType = RangedAttackType.MAGIC_MISSILE;
+    /** Elemental class of this mob's ranged attacks. MAGIC by default so
+     *  existing mobs that predate this field are unchanged. */
+    public RangedDamageType rangedDamageType = RangedDamageType.MAGIC;
 
     // -- Perception + lighting -----------------------------------------------
     // (was: visionRadius, wakeRadius, baseLightRadius - moved to {@link #intrinsic}

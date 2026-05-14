@@ -11,9 +11,10 @@ import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.ui.hud.ActionBar;
 import com.bjsp123.rl2.logic.EventLog;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.LogEvent;
-import com.bjsp123.rl2.ui.skin.LogPreferences;
+import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.world.render.BuffIcons;
 import com.bjsp123.rl2.world.render.IconSprites;
 import com.bjsp123.rl2.world.render.PortraitSprites;
@@ -116,6 +117,11 @@ public final class V2Hud {
     // -- Pressed state for visual feedback -----------------------------------
     private final boolean[] actionPressed = new boolean[ActionBar.SLOTS];
     private boolean invPressed, lookPressed, burgerPressed;
+
+    // -- Mana-gain flash state ------------------------------------------------
+    private static final float CHARGE_FLASH_FRAMES = 45f;
+    private final float[] prevCharge  = new float[ActionBar.SLOTS];
+    private final float[] chargeFlash = new float[ActionBar.SLOTS];
     private boolean menuOpen;
     /** True when the action slots are folded into a grid because the viewport
      *  is too narrow for a single row. Set each frame by {@link #layoutRects()};
@@ -136,7 +142,11 @@ public final class V2Hud {
 
     // -- Public API (mirrors HudRenderer.setOn* surface) ---------------------
     public void setPlayerSupplier(Supplier<Mob> s)  { this.playerSupplier = s; }
-    public void setActionBar(ActionBar a)           { this.actionBar = a; }
+    public void setActionBar(ActionBar a) {
+        this.actionBar = a;
+        java.util.Arrays.fill(prevCharge,  0f);
+        java.util.Arrays.fill(chargeFlash, 0f);
+    }
     public void setOnActionUse(IntConsumer fn)      { this.onActionUse = fn; }
     public void setOnOpenInventory(Runnable fn)     { this.onOpenInventory = fn; }
     public void setOnLook(Runnable fn)              { this.onLook = fn; }
@@ -197,7 +207,7 @@ public final class V2Hud {
 
         // Bottom-right: inventory button at far right, action slots to its left.
         // If the single row would overlap the look button, fold into a grid.
-        int n = com.bjsp123.rl2.ui.skin.QuickslotCount.count();
+        int n = com.bjsp123.rl2.ui.skin.Settings.quickslotCount();
         invRect.set(w - ACTION_BTN, MARGIN, ACTION_BTN, ACTION_BTN);
         float stripW1row = n * ACTION_BTN + (n - 1) * ACTION_GAP;
         float ax1row = invRect.x - ACTION_GAP - stripW1row;
@@ -286,7 +296,7 @@ public final class V2Hud {
         // Buttons - chrome only; icons land in the SpriteBatch pass.
         // Action quickslots + inventory button carry item / chest icons,
         // so they paint with the paler SLOT_BG so the icon stays legible.
-        for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) drawSlotBtn(s, actionRects[i], actionPressed[i]);
+        for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) drawSlotBtn(s, actionRects[i], actionPressed[i]);
         drawSlotBtn(s, invRect, invPressed);
         // Look + burger have no item icon - plain HUD chrome.
         drawBtn(s, lookRect,   lookPressed);
@@ -354,19 +364,13 @@ public final class V2Hud {
      *  the item icon drawn over it is legible. Used for the bottom-right
      *  action buttons and the inventory button (both carry sprites). */
     private void drawSlotBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.SLOT_BG);
-        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-               r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+        ButtonChrome.shape(ctx, r, pressed, false, false, UIVars.SLOT_BG);
     }
 
     /** Plain HUD button chrome - tri-line border + mid warm-grey fill.
      *  Used for buttons WITHOUT item icons (look button, burger). */
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-        s.setColor(pressed ? UIVars.BTN_PRESSED_BG : UIVars.HUD_BG);
-        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-               r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+        ButtonChrome.shape(ctx, r, pressed, false, false, UIVars.HUD_BG);
     }
 
 
@@ -398,22 +402,34 @@ public final class V2Hud {
 
         // Action button icons - pull from ActionBar.
         if (actionBar != null) {
-            for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
+            for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) {
                 Item it = actionBar.get(i);
                 if (it == null) continue;
                 Rect r = actionRects[i];
                 ItemCell.draw(ctx, it, currentPlayer(), r.x, r.y, r.w, r.h, true);
             }
-            // Brand sparks - additive pass over the icons.
-            for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
+            // Mana-gain flash - detect charge increase, then draw additive overlay.
+            for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) {
                 Item it = actionBar.get(i);
-                if (it != null && it.brand != null) {
-                    Rect r = actionRects[i];
-                    com.bjsp123.rl2.world.render.BrandFx.drawSparks(
-                            ctx.batch, ctx.whitePixel,
-                            r.x, r.y, r.w, r.h, it.brand,
-                            com.bjsp123.rl2.world.render.BrandFx.phaseFor(it));
-                }
+                float cur = (it != null) ? it.charge : 0f;
+                if (it != null && cur > prevCharge[i] + 0.01f)
+                    chargeFlash[i] = CHARGE_FLASH_FRAMES;
+                prevCharge[i] = cur;
+            }
+            for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) {
+                if (chargeFlash[i] <= 0f) continue;
+                float alpha = (chargeFlash[i] / CHARGE_FLASH_FRAMES) * 0.55f;
+                Rect r = actionRects[i];
+                ctx.batch.setBlendFunction(
+                        com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                        com.badlogic.gdx.graphics.GL20.GL_ONE);
+                ctx.batch.setColor(0.35f, 0.75f, 1f, alpha);
+                ctx.batch.draw(ctx.whitePixel, r.x, r.y, r.w, r.h);
+                ctx.batch.setBlendFunction(
+                        com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                        com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+                ctx.batch.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+                chargeFlash[i] = Math.max(0f, chargeFlash[i] - 1f);
             }
         }
 
@@ -424,7 +440,7 @@ public final class V2Hud {
                     invRect.x + ICON_PAD, invRect.y + ICON_PAD,
                     invRect.w - 2 * ICON_PAD, invRect.h - 2 * ICON_PAD);
         } else {
-            TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, "Bag",
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, TextCatalog.get("ui.hud.bag"),
                     invRect.cx(), invRect.y + invRect.h * 0.5f + 4);
         }
 
@@ -438,7 +454,7 @@ public final class V2Hud {
 
         // Status line - under the satiety bar.
         TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                "Lvl " + depth + "   Turn " + turn,
+                TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth, "turn", turn)),
                 MARGIN, satBarRect.y - 6f, Math.max(40f, ctx.worldW() - 2f * MARGIN));
 
         // Player buff icons row - under the status line, anchored at the
@@ -473,14 +489,14 @@ public final class V2Hud {
         // to the action bar; older lines stack upward. Filtered through
         // {@link LogPreferences} so the user's "show low-priority / mob-vs-
         // mob / log on" toggles drive what shows.
-        if (LogPreferences.logOn()) {
+        if (Settings.logOn()) {
             float logRight = invRect.x - ACTION_GAP;
             float logLeft  = MARGIN;
             float logBottom = MARGIN + (gridLayout
                     ? actionGridRows * ACTION_BTN + (actionGridRows - 1) * ACTION_GAP
                     : ACTION_BTN) + 6f;
             float lineH = ctx.lineH();
-            int maxLines = LogPreferences.expanded() ? 6 : 3;
+            int maxLines = Settings.logExpanded() ? 6 : 3;
             // Walk recent entries newest-first; render newest at logBottom
             // and stack older ones upward. tail() returns oldest-first, so
             // iterate in reverse.
@@ -489,9 +505,9 @@ public final class V2Hud {
             for (int i = recent.size() - 1; i >= 0 && lines < maxLines; i--) {
                 LogEvent e = recent.get(i);
                 if (e == null || e.text == null) continue;
-                if (!LogPreferences.showLowPriority()
+                if (!Settings.showLowPriority()
                         && e.priority == LogEvent.EventPriority.LOW) continue;
-                if (!LogPreferences.showNonPlayer()
+                if (!Settings.showNonPlayer()
                         && !e.involvesPlayer) continue;
                 com.badlogic.gdx.graphics.Color col =
                         e.priority == LogEvent.EventPriority.HIGH
@@ -511,7 +527,12 @@ public final class V2Hud {
         // Burger menu items - centred header-weight labels, matching the
         // V2Screen menu-screen burger style.
         if (menuOpen) {
-            String[] labels = { "Settings", "Map", "Encyclopaedia", "Log", "Main Menu" };
+            String[] labels = {
+                    TextCatalog.get("ui.hud.menu.settings"),
+                    TextCatalog.get("ui.hud.menu.map"),
+                    TextCatalog.get("ui.hud.menu.encyclopedia"),
+                    TextCatalog.get("ui.hud.menu.log"),
+                    TextCatalog.get("ui.hud.menu.main") };
             for (int i = 0; i < labels.length; i++) {
                 Rect r = menuItemRects[i];
                 TextDraw.centre(ctx, ctx.fontHeader,
@@ -528,16 +549,7 @@ public final class V2Hud {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
-        s.setColor(burgerPressed || menuOpen ? UIVars.ACCENT : UIVars.TEXT_BODY);
-        float cx   = burgerRect.cx();
-        float cy   = burgerRect.cy();
-        float barW = burgerRect.w * 0.5f;
-        float barH = 4f;
-        float gap  = 6f;
-        for (int i = -1; i <= 1; i++) {
-            s.rect(cx - barW * 0.5f, cy - barH * 0.5f + i * (barH + gap),
-                    barW, barH);
-        }
+        ButtonChrome.burgerGlyph(ctx, burgerRect, burgerPressed || menuOpen);
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
@@ -582,7 +594,7 @@ public final class V2Hud {
                         return true;
                     }
                 }
-                for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
+                for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) {
                     if (actionRects[i].contains(vx, vy)) {
                         actionPressed[i] = true;
                         return true;
@@ -649,7 +661,7 @@ public final class V2Hud {
                     }
                     return true;
                 }
-                for (int i = 0; i < com.bjsp123.rl2.ui.skin.QuickslotCount.count(); i++) {
+                for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) {
                     if (actionPressed[i]) {
                         actionPressed[i] = false;
                         if (actionRects[i].contains(vx, vy) && onActionUse != null) {

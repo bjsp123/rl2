@@ -7,6 +7,8 @@ import com.bjsp123.rl2.model.Mob.Behavior;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.Level.Vegetation;
 
+import java.util.Arrays;
+
 public class LevelSystem {
 
     /** Fixed light radius for a LAMP tile. */
@@ -41,8 +43,8 @@ public class LevelSystem {
     public static void computeLighting(Level level) {
         int w = level.width, h = level.height;
         boolean[] blocking = buildBlocking(level, /*forLight=*/ true);
-        boolean[] accum = new boolean[w * h];
-        boolean[] temp  = new boolean[w * h];
+        boolean[] accum = scratchAccum(level);
+        boolean[] temp  = scratchTemp(level);
 
         for (Mob mob : level.mobs) {
             double radius = mob.lightRadius();
@@ -134,8 +136,8 @@ public class LevelSystem {
     public static void updateVisibility(Level level) {
         int w = level.width, h = level.height;
         boolean[] blocking = buildBlocking(level, /*forLight=*/ false);
-        boolean[] accum = new boolean[w * h];
-        boolean[] temp  = new boolean[w * h];
+        boolean[] accum = scratchAccum(level);
+        boolean[] temp  = scratchTemp(level);
 
         for (Mob mob : level.mobs) {
             if (mob.behavior != Behavior.PLAYER) continue;
@@ -195,12 +197,13 @@ public class LevelSystem {
      */
     static boolean[] buildBlocking(Level level, boolean forLight) {
         int w = level.width, h = level.height;
-        boolean[] blocking = new boolean[w * h];
+        boolean[] blocking = blockingScratch(level, forLight);
+        Arrays.fill(blocking, 0, w * h, false);
         // Map of mob positions for O(1) lookups while we paint the grid. Track LARGE mobs
         // separately because they block both sight AND light, where small/medium mobs only
         // block light.
-        boolean[] hasMob = new boolean[w * h];
-        boolean[] hasLargeMob = new boolean[w * h];
+        boolean[] hasMob = scratchAccum(level);
+        boolean[] hasLargeMob = scratchTemp(level);
         for (Mob m : level.mobs) {
             int mx = m.position.tileX(), my = m.position.tileY();
             if (mx >= 0 && my >= 0 && mx < w && my < h) {
@@ -257,24 +260,48 @@ public class LevelSystem {
      * reveals the outer layer of wall masses between rooms, which the player shouldn't see.
      */
     private static void propagateToWalls(Level level, boolean[][] flag) {
-        boolean[][] add = new boolean[level.width][level.height];
+        boolean[] add = wallScratch(level);
         for (int x = 0; x < level.width; x++) {
             for (int y = 0; y < level.height; y++) {
                 if (!level.tiles[x][y].blocksSight()) continue;
                 if (flag[x][y]) continue;
-                for (int dx = -1; dx <= 1 && !add[x][y]; dx++) {
+                int idx = y * level.width + x;
+                for (int dx = -1; dx <= 1 && !add[idx]; dx++) {
                     for (int dy = -1; dy <= 1; dy++) {
                         if (dx == 0 && dy == 0) continue;
                         int nx = x + dx, ny = y + dy;
                         if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
                         if (level.tiles[nx][ny].blocksSight()) continue;
-                        if (flag[nx][ny]) { add[x][y] = true; break; }
+                        if (flag[nx][ny]) { add[idx] = true; break; }
                     }
                 }
             }
         }
         for (int x = 0; x < level.width; x++)
             for (int y = 0; y < level.height; y++)
-                if (add[x][y]) flag[x][y] = true;
+                if (add[y * level.width + x]) flag[x][y] = true;
+    }
+
+    private static boolean[] blockingScratch(Level level, boolean forLight) {
+        level.initVisibilityScratch();
+        return forLight ? level.lightBlockingScratch : level.sightBlockingScratch;
+    }
+
+    private static boolean[] scratchAccum(Level level) {
+        level.initVisibilityScratch();
+        Arrays.fill(level.visibilityAccumScratch, 0, level.width * level.height, false);
+        return level.visibilityAccumScratch;
+    }
+
+    private static boolean[] scratchTemp(Level level) {
+        level.initVisibilityScratch();
+        Arrays.fill(level.visibilityTempScratch, 0, level.width * level.height, false);
+        return level.visibilityTempScratch;
+    }
+
+    private static boolean[] wallScratch(Level level) {
+        level.initVisibilityScratch();
+        Arrays.fill(level.wallPropagationScratch, 0, level.width * level.height, false);
+        return level.wallPropagationScratch;
     }
 }

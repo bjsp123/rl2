@@ -3,7 +3,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.logic.ItemDefinition;
-import com.bjsp123.rl2.logic.ItemRegistry;
+import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.Item;
 
 import java.util.HashMap;
@@ -54,8 +54,8 @@ public final class ItemSprites {
         if (saiItemsTex == null) return;
         // Pull (col, row) for every catalogued item type from ItemRegistry. New
         // items added to items.csv pick up sprites here without any code change.
-        for (String type : ItemRegistry.knownTypes()) {
-            ItemDefinition def = ItemRegistry.get(type);
+        for (String type : Registries.itemTypes()) {
+            ItemDefinition def = Registries.item(type);
             if (def == null) continue;
             regions.put(type, sai(def.spriteCol, def.spriteRow));
         }

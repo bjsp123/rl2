@@ -2,7 +2,7 @@ package com.bjsp123.rl2.save;
 
 import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.logic.MobDefinition;
-import com.bjsp123.rl2.logic.MobRegistry;
+import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
@@ -68,7 +68,7 @@ public final class AchievementSystem {
         if (ev instanceof GameEvent.MobKilled m) {
             if (player != null && m.killer() == player && m.mob() != null) {
                 unlock(Achievement.FIRST_BLOOD);
-                MobDefinition def = MobRegistry.get(m.mob().mobType);
+                MobDefinition def = Registries.mob(m.mob().mobType);
                 if (def != null && def.unique) {
                     unlock(Achievement.GIANT_SLAYER);
                 }

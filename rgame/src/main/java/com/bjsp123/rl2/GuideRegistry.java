@@ -1,6 +1,7 @@
 package com.bjsp123.rl2;
 
 import com.bjsp123.rl2.util.CsvTable;
+import com.bjsp123.rl2.logic.TextCatalog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,11 +33,14 @@ public final class GuideRegistry {
         PAGES.clear();
         CsvTable table = CsvTable.parse(csv);
         for (Map<String, String> row : table.rows) {
-            String title    = CsvTable.str(row, "title",  "");
+            String key      = CsvTable.str(row, "key", "");
+            String title    = key.isEmpty()
+                    ? CsvTable.str(row, "title",  "")
+                    : TextCatalog.getOrDefault(key + ".title", "");
             String imageKey = CsvTable.str(row, "image",  "");
-            String para1    = CsvTable.str(row, "para1",  "");
-            String para2    = CsvTable.str(row, "para2",  "");
-            String para3    = CsvTable.str(row, "para3",  "");
+            String para1    = key.isEmpty() ? CsvTable.str(row, "para1",  "") : TextCatalog.getOrDefault(key + ".para1", "");
+            String para2    = key.isEmpty() ? CsvTable.str(row, "para2",  "") : TextCatalog.getOrDefault(key + ".para2", "");
+            String para3    = key.isEmpty() ? CsvTable.str(row, "para3",  "") : TextCatalog.getOrDefault(key + ".para3", "");
             if (!title.isEmpty()) {
                 PAGES.add(new HelpPage(title, imageKey, para1, para2, para3));
             }

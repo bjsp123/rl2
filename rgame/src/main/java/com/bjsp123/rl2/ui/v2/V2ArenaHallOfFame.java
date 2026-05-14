@@ -2,6 +2,7 @@ package com.bjsp123.rl2.ui.v2;
 
 import com.badlogic.gdx.graphics.Color;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.save.ArenaHallOfFameEntry;
 
 import java.text.SimpleDateFormat;
@@ -40,7 +41,7 @@ public final class V2ArenaHallOfFame extends V2Screen {
         back   = new BackBtn(ctx, game::popScreen);
         burger = makeBurger();
         addStandardBurgerItems(game);
-        addBurgerItem("Arena Setup",
+        addBurgerItem(TextCatalog.get("ui.arenaHall.setup"),
                 () -> game.setRootScreen(new V2ArenaSetup(game)));
     }
 
@@ -54,13 +55,14 @@ public final class V2ArenaHallOfFame extends V2Screen {
     protected void drawBodyText(UiCtx ctx) {
         float cx = window.cx();
         float lh = ctx.lineH();
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Arena Hall",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.arenaHall.title"),
                 cx, window.top() - ctx.headerLineH());
 
         List<ArenaHallOfFameEntry> entries = game.arenaHallOfFame.entries;
         if (entries.isEmpty()) {
             TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "No matchups recorded yet.",
+                    TextCatalog.get("ui.arenaHall.empty"),
                     cx, window.top() - headerBandH() - lh);
             return;
         }
@@ -71,8 +73,10 @@ public final class V2ArenaHallOfFame extends V2Screen {
         float right       = window.right() - 14f;
 
         float headerY = window.top() - headerBandH() - lh * 0.5f;
-        TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Match",     contentLeft, headerY);
-        TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_DIM, "Survivors", right,       headerY);
+        TextDraw.left (ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                TextCatalog.get("ui.arenaHall.match"), contentLeft, headerY);
+        TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                TextCatalog.get("ui.arenaHall.survivors"), right, headerY);
 
         float visibleTop    = headerY - lh;
         float visibleBottom = window.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET;
@@ -85,8 +89,10 @@ public final class V2ArenaHallOfFame extends V2Screen {
         listContentH = 0f;
         for (int i = 0; i < entries.size(); i++) {
             ArenaHallOfFameEntry e = entries.get(i);
-            String match = e.teamADescription + " vs " + e.teamBDescription;
-            String result = "A " + e.teamASurvivors + "  /  B " + e.teamBSurvivors;
+            String match = TextCatalog.format("ui.arenaHall.matchup",
+                    TextCatalog.vars("teamA", e.teamADescription, "teamB", e.teamBDescription));
+            String result = TextCatalog.format("ui.arenaHall.result",
+                    TextCatalog.vars("teamA", e.teamASurvivors, "teamB", e.teamBSurvivors));
             int matchLines = TextDraw.block(ctx.fontRegular, match,
                     textW, 2, lh).lineCount();
             int resultLines = TextDraw.block(ctx.fontRegular, result,
@@ -128,8 +134,10 @@ public final class V2ArenaHallOfFame extends V2Screen {
                         badgeX + badgeSz * 0.5f, badgeBottom + badgeSz * 0.5f + lh * 0.25f);
 
                 String when = TS_FMT.format(new Date(e.timestampMillis));
-                String match = e.teamADescription + " vs " + e.teamBDescription;
-                String result = "A " + e.teamASurvivors + "  /  B " + e.teamBSurvivors;
+                String match = TextCatalog.format("ui.arenaHall.matchup",
+                        TextCatalog.vars("teamA", e.teamADescription, "teamB", e.teamBDescription));
+                String result = TextCatalog.format("ui.arenaHall.result",
+                        TextCatalog.vars("teamA", e.teamASurvivors, "teamB", e.teamBSurvivors));
                 TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         when, contentLeft, yTop - lh * 0.35f, textW);
                 TextDraw.TextBlock matchBlock = TextDraw.block(ctx.fontRegular,

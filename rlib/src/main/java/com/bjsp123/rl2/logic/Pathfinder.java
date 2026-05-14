@@ -8,10 +8,6 @@ import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
 
 import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.PriorityQueue;
-import java.util.Set;
 
 public class Pathfinder {
 
@@ -32,54 +28,56 @@ public class Pathfinder {
 
         int w = level.width;
         int size = w * level.height;
+        Workspace ws = WORKSPACE.get();
+        ws.ensure(size);
 
-        int[] gScore = new int[size];
-        int[] parent = new int[size];
-        Arrays.fill(gScore, Integer.MAX_VALUE);
-        Arrays.fill(parent, -1);
+        Arrays.fill(ws.gScore, 0, size, Integer.MAX_VALUE);
+        Arrays.fill(ws.parent, 0, size, -1);
+        Arrays.fill(ws.closed, 0, size, false);
+        ws.heapClear();
 
         int startIdx = cell(sx, sy, w);
-        gScore[startIdx] = 0;
+        ws.gScore[startIdx] = 0;
+        ws.heapAdd(startIdx, chebyshev(sx, sy, tx, ty));
 
-        PriorityQueue<int[]> open = new PriorityQueue<>(Comparator.comparingInt(a -> a[1]));
-        open.add(new int[]{startIdx, chebyshev(sx, sy, tx, ty)});
+        com.bjsp123.rl2.model.StatBlock moverStats = mover.effectiveStats();
+        boolean moverFlying = moverStats.flying;
+        int moverSize = moverStats.size;
 
-        Set<Integer> closed = new HashSet<>();
-
-        while (!open.isEmpty()) {
-            int[] cur = open.poll();
-            int ci = cur[0];
-            if (closed.contains(ci)) continue;
-            closed.add(ci);
+        while (!ws.heapEmpty()) {
+            int ci = ws.heapPoll();
+            if (ws.closed[ci]) continue;
+            ws.closed[ci] = true;
 
             int cx = ci % w, cy = ci / w;
             if (cx == tx && cy == ty) {
                 // Trace back to find the first step from start
                 int node = ci;
-                while (parent[node] != startIdx) node = parent[node];
+                while (ws.parent[node] != startIdx) node = ws.parent[node];
                 return new Point(node % w, node / w);
             }
 
-            int g = gScore[ci];
+            int g = ws.gScore[ci];
             for (int[] d : DIRS) {
                 int nx = cx + d[0], ny = cy + d[1];
-                if (!canEnter(level, mover, nx, ny)) continue;
+                if (!canEnter(level, mover, moverFlying, moverSize, nx, ny)) continue;
                 int ni = cell(nx, ny, w);
                 int ng = g + 1;
-                if (ng < gScore[ni]) {
-                    gScore[ni] = ng;
-                    parent[ni] = ci;
-                    open.add(new int[]{ni, ng + chebyshev(nx, ny, tx, ty)});
+                if (ng < ws.gScore[ni]) {
+                    ws.gScore[ni] = ng;
+                    ws.parent[ni] = ci;
+                    ws.heapAdd(ni, ng + chebyshev(nx, ny, tx, ty));
                 }
             }
         }
         return null;
     }
 
-    private static boolean canEnter(Level level, Mob mover, int x, int y) {
+    private static boolean canEnter(Level level, Mob mover, boolean moverFlying, int moverSize,
+                                    int x, int y) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
         if (level.tiles[x][y].blocksMovement()) return false;
-        if (level.tiles[x][y] == Tile.CHASM && !mover.effectiveStats().flying) return false;
+        if (level.tiles[x][y] == Tile.CHASM && !moverFlying) return false;
         // Player-only constraint: the player can only path into tiles they've
         // either explored OR that are 8-adjacent to an explored tile, so a
         // tap can step ONE tile into the fog (peeking around a corner) but
@@ -110,7 +108,7 @@ public class Pathfinder {
             // Non-player mover, occupant is a non-hostile mob - impassable unless the
             // mover is strictly larger, in which case swap-places kicks in (handled in
             // stepTowardTarget on arrival). Equal-size or smaller cannot push past.
-            if (mover.effectiveStats().size > m.effectiveStats().size) continue;
+            if (moverSize > m.effectiveStats().size) continue;
             return false;
         }
         return true;
@@ -136,4 +134,77 @@ public class Pathfinder {
     }
 
     private static int cell(int x, int y, int w) { return y * w + x; }
+
+    private static final ThreadLocal<Workspace> WORKSPACE =
+            ThreadLocal.withInitial(Workspace::new);
+
+    private static final class Workspace {
+        int[] gScore = new int[0];
+        int[] parent = new int[0];
+        boolean[] closed = new boolean[0];
+        int[] heapCell = new int[0];
+        int[] heapPriority = new int[0];
+        int heapSize;
+
+        void ensure(int size) {
+            if (gScore.length < size) {
+                gScore = new int[size];
+                parent = new int[size];
+                closed = new boolean[size];
+            }
+            if (heapCell.length < size) {
+                heapCell = new int[size];
+                heapPriority = new int[size];
+            }
+        }
+
+        void heapClear() {
+            heapSize = 0;
+        }
+
+        boolean heapEmpty() {
+            return heapSize == 0;
+        }
+
+        void heapAdd(int cell, int priority) {
+            if (heapSize >= heapCell.length) {
+                int newSize = Math.max(heapSize + 1, heapCell.length * 2 + 1);
+                heapCell = Arrays.copyOf(heapCell, newSize);
+                heapPriority = Arrays.copyOf(heapPriority, newSize);
+            }
+            int i = heapSize++;
+            while (i > 0) {
+                int p = (i - 1) >>> 1;
+                if (heapPriority[p] <= priority) break;
+                heapCell[i] = heapCell[p];
+                heapPriority[i] = heapPriority[p];
+                i = p;
+            }
+            heapCell[i] = cell;
+            heapPriority[i] = priority;
+        }
+
+        int heapPoll() {
+            int result = heapCell[0];
+            int cell = heapCell[--heapSize];
+            int priority = heapPriority[heapSize];
+            int i = 0;
+            while (true) {
+                int left = i * 2 + 1;
+                if (left >= heapSize) break;
+                int right = left + 1;
+                int child = right < heapSize && heapPriority[right] < heapPriority[left]
+                        ? right : left;
+                if (heapPriority[child] >= priority) break;
+                heapCell[i] = heapCell[child];
+                heapPriority[i] = heapPriority[child];
+                i = child;
+            }
+            if (heapSize > 0) {
+                heapCell[i] = cell;
+                heapPriority[i] = priority;
+            }
+            return result;
+        }
+    }
 }

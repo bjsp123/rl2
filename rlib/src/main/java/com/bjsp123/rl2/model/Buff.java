@@ -96,7 +96,10 @@ public class Buff {
          *  tapers as the duration counts down. Doesn't stack with itself
          *  (apply takes the max of level / duration via the standard
          *  {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
-        BLEEDING
+        BLEEDING,
+        /** Mob moves at 30% of normal action cost (+20 evasion). Ends instantly when
+         *  the mob takes or deals any damage. */
+        PHASE
     }
 
     public BuffType type;

@@ -4,6 +4,7 @@ import com.bjsp123.rl2.logic.EventLog;
 import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.Messages;
+import com.bjsp123.rl2.logic.MobQueries;
 import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.HallOfFameEntry;
@@ -137,7 +138,7 @@ final class PlayController {
         if (slotIndex < 0 || slotIndex >= actionBar.size()) return;
         Item bound = actionBar.get(slotIndex);
         if (bound == null) return;
-        if (animator.queue.freezeFrames > 0) return;
+        if (!com.bjsp123.rl2.ui.skin.Settings.instantActions() && animator.queue.freezeFrames > 0) return;
 
         if (targetingOverlay.isActive()) {
             if (targetingOverlay.sourceKey() == bound) {
@@ -155,7 +156,7 @@ final class PlayController {
             return;
         }
         switch (ub) {
-            case EAT, DRINK, GRANT_PERK -> {
+            case EAT, DRINK, GRANT_PERK, APPLYBUFF -> {
                 ItemSystem.useItem(level, player, bound);
                 afterMove(level);
             }
@@ -176,7 +177,7 @@ final class PlayController {
         Level level = world.currentLevel();
         if (!TurnSystem.isPlayerTurn(level)) return;
         switch (item.useBehavior) {
-            case EAT, DRINK, GRANT_PERK -> {
+            case EAT, DRINK, GRANT_PERK, APPLYBUFF -> {
                 ItemSystem.useItem(level, user, item);
                 afterMove(level);
             }
@@ -307,7 +308,7 @@ final class PlayController {
             for (int y = Math.max(0, py - radius); y <= Math.min(level.height - 1, py + radius); y++) {
                 if (Math.max(Math.abs(x - px), Math.abs(y - py)) > radius) continue;
                 if (level.tiles[x][y].blocksMovement()) continue;
-                if (MobSystem.mobAt(level, new Point(x, y)) != null) continue;
+                if (MobQueries.mobAt(level, new Point(x, y)) != null) continue;
                 grid[x][y] = true;
             }
         }
@@ -321,11 +322,13 @@ final class PlayController {
     HallOfFameEntry snapshotOf(Mob p) {
         List<String> equipment = new ArrayList<>();
         for (Item it : p.inventory.allEquipped()) {
-            String cat = it.inventoryCategory != null ? it.inventoryCategory.name() : "equipped";
+            String cat = it.inventoryCategory != null ? it.inventoryCategory.name()
+                    : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.equipped");
             equipment.add(cat + ": " + it.describe());
         }
         HallOfFameEntry entry = new HallOfFameEntry(
-                p.characterClass != null ? p.characterClass.displayName : "Adventurer",
+                p.characterClass != null ? p.characterClass.displayName()
+                        : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer"),
                 p.characterLevel,
                 p.score, world.currentLevel().depth, equipment, System.currentTimeMillis());
         entry.totalTurns  = world.turn;
@@ -351,15 +354,18 @@ final class PlayController {
         }
         if (player.hp < autoMoveLastHp) {
             EventLog.add(new LogEvent(
-                    "Path interrupted: you took damage.",
+                    com.bjsp123.rl2.logic.TextCatalog.get("eventlog.path.damage"),
                     LogEvent.EventPriority.HIGH, true));
             return true;
         }
         for (Mob m : visibleHostiles) {
             if (!autoMoveSnapshotHostiles.contains(m)) {
                 EventLog.add(new LogEvent(
-                        "Path interrupted: a " + (m.name == null ? "creature" : m.name)
-                                + " comes into view.",
+                        com.bjsp123.rl2.logic.TextCatalog.format("eventlog.path.hostileAppears",
+                                com.bjsp123.rl2.logic.TextCatalog.vars("mob",
+                                        m.name == null
+                                                ? com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.creature")
+                                                : m.name)),
                         LogEvent.EventPriority.HIGH, true));
                 return true;
             }
@@ -393,7 +399,7 @@ final class PlayController {
     void seedDefaultActionBar(Mob player, CharacterClass cls) {
         if (player == null || actionBar == null || cls == null) return;
         com.bjsp123.rl2.logic.MobDefinition def =
-                com.bjsp123.rl2.logic.MobRegistry.get("PLAYER_" + cls.name());
+                com.bjsp123.rl2.logic.Registries.mob("PLAYER_" + cls.name());
         if (def == null || def.actionBar == null || def.actionBar.isEmpty()) return;
         for (String entry : def.actionBar.split("\\|")) {
             String e = entry.trim();
@@ -508,7 +514,8 @@ final class PlayController {
         recenterCamera.run();
         levelRenderer.markDirty();
 
-        String playerName = player.name != null ? player.name : "Adventurer";
+        String playerName = player.name != null ? player.name
+                : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
         EventLog.add(Messages.enterLevel(playerName, next.depth, next.flags));
     }
 }

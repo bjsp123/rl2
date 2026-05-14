@@ -1,12 +1,10 @@
 package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.util.CsvTable;
 
-import java.io.IOException;
-import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.Properties;
 import java.util.Random;
 
 /**
@@ -18,7 +16,7 @@ import java.util.Random;
  * class is reserved for <i>gameplay</i> knobs so they can be scanned and adjusted together.
  *
  * <p>Tunables are {@code public static} (not {@code final}) so {@link #load(String)} can
- * override them at startup from {@code assets/data/gamebalance.properties}. Each Java field
+     * override them at startup from {@code assets/data/config.csv}. Each Java field
  * carries a baked-in baseline that takes effect if the properties file is missing or omits
  * a key. Grouping is by section header; keep new constants inside the right section.
  */
@@ -26,23 +24,19 @@ public final class GameBalance {
 
     private GameBalance() {}
 
-    /** Read a {@code key=value} properties file and override any matching {@code public
+    /** Read {@code assets/data/config.csv} rows with kind=gamebalance and override matching {@code public
      *  static} field on this class. Unknown keys are ignored; missing keys keep their
      *  Java-side baseline. Currently handles {@code int} and {@code double} fields - that
      *  covers every tunable we have today. Call once at startup, before gameplay code
      *  reads any of these fields. */
     public static void load(String text) {
         if (text == null || text.isEmpty()) return;
-        Properties props = new Properties();
-        try {
-            props.load(new StringReader(text));
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to parse gamebalance.properties", e);
-        }
-        for (String key : props.stringPropertyNames()) {
-            String raw = props.getProperty(key);
-            if (raw == null) continue;
-            String value = raw.trim();
+        CsvTable table = CsvTable.parse(text);
+        for (java.util.Map<String, String> row : table.rows) {
+            if (!"gamebalance".equals(CsvTable.str(row, "kind", ""))) continue;
+            String key = CsvTable.str(row, "key", "");
+            String value = CsvTable.str(row, "value", "").trim();
+            if (key.isEmpty() || value.isEmpty()) continue;
             try {
                 Field f = GameBalance.class.getDeclaredField(key);
                 int mods = f.getModifiers();

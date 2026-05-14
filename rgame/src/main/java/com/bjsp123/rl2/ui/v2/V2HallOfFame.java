@@ -3,8 +3,8 @@ package com.bjsp123.rl2.ui.v2;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 import com.bjsp123.rl2.save.Achievement;
 import com.bjsp123.rl2.world.render.IconSprites;
@@ -27,8 +27,7 @@ public final class V2HallOfFame extends V2Screen {
 
     private final Rl2Game game;
     private final Rect window = new Rect();
-    private final Rect[] tabRects = { new Rect(), new Rect() };
-    private final boolean[] tabPressed = new boolean[Tab.values().length];
+    private final TabStrip tabs = new TabStrip(Tab.values().length);
 
     private Tab currentTab = Tab.HEROES;
     private final ScrollBand heroesBand       = new ScrollBand();
@@ -60,12 +59,8 @@ public final class V2HallOfFame extends V2Screen {
         float tabGap = 6f;
         float headerBand = headerBandH();
         float tabsY = window.top() - pad - tabH - headerBand;
-        float innerW = winW - 2 * pad;
-        float tabW = (innerW - (tabRects.length - 1) * tabGap) / tabRects.length;
-        for (int i = 0; i < tabRects.length; i++) {
-            tabRects[i].set(window.x + pad + i * (tabW + tabGap),
-                    tabsY, tabW, tabH);
-        }
+        tabs.layout(window, pad, tabsY, tabH, tabGap);
+        tabs.setActive(currentTab.ordinal());
         configureBands();
 
         back   = new BackBtn(ctx, game::popScreen);
@@ -77,46 +72,26 @@ public final class V2HallOfFame extends V2Screen {
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
-        // Tabs - same chrome as the V2CharacterStats tabs.
-        ShapeRenderer s = ctx.shapes;
-        for (int i = 0; i < tabRects.length; i++) {
-            Rect r = tabRects[i];
-            boolean active  = Tab.values()[i] == currentTab;
-            boolean pressed = tabPressed[i];
-            if (active || pressed) {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
-                        UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
-            } else {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-            }
-            s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
-        }
+        tabs.drawShapes(ctx.shapes);
         activeBand().drawScrollbar(ctx.shapes,
                 currentTab == Tab.HEROES ? heroesContentH : achievementsContentH);
     }
 
     @Override
     protected void drawBodyText(UiCtx ctx) {
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "Hall of Fame",
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
+                TextCatalog.get("ui.hall.title"),
                 window.cx(), window.top() - ctx.headerLineH());
 
         // Tab icons - drawn in the text pass since icons are sprites.
         IconSprites.Icon[] icons = {
                 IconSprites.Icon.CHARACTER, IconSprites.Icon.MAP
         };
-        for (int i = 0; i < tabRects.length; i++) {
-            Rect r = tabRects[i];
-            TextureRegion region = IconSprites.regionFor(icons[i]);
-            if (region == null) continue;
-            boolean active = Tab.values()[i] == currentTab;
-            ctx.batch.setColor(active ? UIVars.ACCENT : UIVars.TEXT_BODY);
-            float sz = Math.min(r.w, r.h) * 0.6f;
-            ctx.batch.draw(region,
-                    r.cx() - sz * 0.5f, r.cy() - sz * 0.5f, sz, sz);
-            ctx.batch.setColor(1f, 1f, 1f, 1f);
+        TextureRegion[] regions = new TextureRegion[icons.length];
+        for (int i = 0; i < icons.length; i++) {
+            regions[i] = IconSprites.regionFor(icons[i]);
         }
+        tabs.drawIcons(ctx, regions);
 
         switch (currentTab) {
             case HEROES       -> drawHeroesTab(ctx);
@@ -124,7 +99,7 @@ public final class V2HallOfFame extends V2Screen {
         }
     }
 
-    private float bandTop() { return tabRects[0].y - 16f; }
+    private float bandTop() { return tabs.rects[0].y - 16f; }
     private float bandBottom() { return window.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET; }
 
     private void drawHeroesTab(UiCtx ctx) {
@@ -145,7 +120,7 @@ public final class V2HallOfFame extends V2Screen {
 
         if (entries.isEmpty()) {
             TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                    "No entries yet.",
+                    TextCatalog.get("ui.hall.empty"),
                     window.cx(), visibleTop - 24f);
             return;
         }
@@ -205,7 +180,9 @@ public final class V2HallOfFame extends V2Screen {
                         (i + 1) + "  " + e.charClass, textLeft, upperY,
                         Math.max(40f, bodyRight - textLeft - summaryW - 8f));
                 TextDraw.rightFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                        "Level:" + e.level + " Depth: " + e.depth, bodyRight, upperY,
+                        TextCatalog.format("ui.hall.summary",
+                                TextCatalog.vars("level", e.level, "depth", e.depth)),
+                        bodyRight, upperY,
                         summaryW);
 
                 // Stat chips - turns / beasts tamed / favourite perk.
@@ -218,7 +195,7 @@ public final class V2HallOfFame extends V2Screen {
 
                 // Death message - word-wrapped, max 2 lines.
                 String dm = e.deathMessage;
-                if (dm == null || dm.isEmpty()) dm = "Died of unknown causes.";
+                if (dm == null || dm.isEmpty()) dm = TextCatalog.get("ui.hall.unknownDeath");
                 TextDraw.TextBlock dmLines = TextDraw.block(ctx.fontRegular,
                         dm, maxDeathW, 2, lh);
                 float deathY = nextY - lh * 0.5f;
@@ -238,10 +215,12 @@ public final class V2HallOfFame extends V2Screen {
     private static String statChipLine(HallOfFameEntry e) {
         StringBuilder sb = new StringBuilder();
         if (e.totalTurns > 0)
-            sb.append("T:").append(e.totalTurns);
+            sb.append(TextCatalog.format("ui.hall.turns",
+                    TextCatalog.vars("turns", e.totalTurns)));
         if (e.beastsTamed > 0) {
             if (sb.length() > 0) sb.append("   ");
-            sb.append(e.beastsTamed).append(" tamed");
+            sb.append(TextCatalog.format("ui.hall.tamed",
+                    TextCatalog.vars("count", e.beastsTamed)));
         }
         if (e.favPerk != null && !e.favPerk.isEmpty()) {
             if (sb.length() > 0) sb.append("   ");
@@ -254,7 +233,7 @@ public final class V2HallOfFame extends V2Screen {
         if (name == null) return null;
         for (com.bjsp123.rl2.model.Mob.CharacterClass c :
                 com.bjsp123.rl2.model.Mob.CharacterClass.values()) {
-            if (c.displayName.equalsIgnoreCase(name) || c.name().equalsIgnoreCase(name))
+            if (c.displayName().equalsIgnoreCase(name) || c.name().equalsIgnoreCase(name))
                 return c;
         }
         return null;
@@ -283,17 +262,17 @@ public final class V2HallOfFame extends V2Screen {
                 // Hidden + locked entries render as a censored row so the
                 // player only sees the surprise once they've earned it.
                 boolean censored = a.hidden && !unlocked;
-                String name = censored ? "???" : a.displayName;
+                String name = censored ? TextCatalog.get("ui.hall.hiddenName") : a.displayName();
                 String desc = censored
-                        ? "Hidden achievement - keep playing."
-                        : a.description;
+                        ? com.bjsp123.rl2.logic.TextCatalog.get("achievement.hidden")
+                        : a.description();
                 com.badlogic.gdx.graphics.Color nameColor =
                         unlocked ? UIVars.TEXT_BODY : UIVars.TEXT_DIM;
                 TextDraw.leftFit(ctx, ctx.fontRegular, nameColor,
                         name, left, yTop, Math.max(40f, right - left - 58f));
                 if (unlocked) {
                     TextDraw.right(ctx, ctx.fontRegular, UIVars.ACCENT,
-                            "earned", right, yTop);
+                            com.bjsp123.rl2.logic.TextCatalog.get("achievement.earned"), right, yTop);
                 }
                 TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         desc, left, yTop - 16f, right - left);
@@ -303,12 +282,7 @@ public final class V2HallOfFame extends V2Screen {
 
     @Override
     protected boolean onTouchDownInBody(float vx, float vy) {
-        for (int i = 0; i < tabRects.length; i++) {
-            if (tabRects[i].contains(vx, vy)) {
-                tabPressed[i] = true;
-                return true;
-            }
-        }
+        if (tabs.touchDown(vx, vy) >= 0) return true;
         if (!window.contains(vx, vy)) return false;
         return activeBand().touchDown(vx, vy);
     }
@@ -343,15 +317,13 @@ public final class V2HallOfFame extends V2Screen {
         public boolean touchUp(int sx, int sy, int p, int b) {
             float vx = ctx.unprojectX(sx, sy);
             float vy = ctx.unprojectY(sx, sy);
-            for (int i = 0; i < tabRects.length; i++) {
-                if (tabPressed[i]) {
-                    tabPressed[i] = false;
-                    if (tabRects[i].contains(vx, vy)) {
-                        currentTab = Tab.values()[i];
-                        return true;
-                    }
+            if (tabs.hasPressed()) {
+                int idx = tabs.touchUp(vx, vy);
+                if (idx >= 0) {
+                    currentTab = Tab.values()[idx];
                     return true;
                 }
+                return true;
             }
             return false;
         }
