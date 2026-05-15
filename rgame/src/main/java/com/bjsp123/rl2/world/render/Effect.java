@@ -47,6 +47,8 @@ public class Effect {
         /** Knockback impact graphic - flash + fade on top of a unit that
          *  was knocked back. Same fade curve as {@link #ATTACK_FLASH}. */
         KNOCKBACK_FLASH(17),
+        /** Surprise-attack marker flashing and fading over the victim's head. */
+        SURPRISE_ICON(24),
         /** Dust kicked up at a mob's feet when it steps. Small ellipse
          *  that expands and rises, fading to nothing over ~400 ms (24
          *  frames at the default render cadence). Tinted to a lighter
@@ -264,6 +266,10 @@ public class Effect {
         Effect e = new Effect(at, EffectType.KNOCKBACK_FLASH);
         e.startDelay = Math.max(0, startDelay);
         return e;
+    }
+
+    public static Effect surpriseIcon(Point at) {
+        return new Effect(at, EffectType.SURPRISE_ICON);
     }
 
     /** Foot-dust cloud - anchored to the spawning mob's foot in world

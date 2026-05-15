@@ -38,7 +38,7 @@ public final class GameBalance {
             String value = CsvTable.str(row, "value", "").trim();
             if (key.isEmpty() || value.isEmpty()) continue;
             try {
-                Field f = GameBalance.class.getDeclaredField(key);
+                Field f = fieldForKey(key);
                 int mods = f.getModifiers();
                 if (!Modifier.isStatic(mods) || Modifier.isFinal(mods)) continue;
                 Class<?> t = f.getType();
@@ -50,6 +50,38 @@ public final class GameBalance {
                 // Unknown key, non-overridable field, or malformed value - keep the baseline.
             }
         }
+    }
+
+    private static Field fieldForKey(String key) throws NoSuchFieldException {
+        try {
+            return GameBalance.class.getDeclaredField(key);
+        } catch (NoSuchFieldException ex) {
+            return GameBalance.class.getDeclaredField(normalizedFieldName(key));
+        }
+    }
+
+    private static String normalizedFieldName(String key) {
+        StringBuilder out = new StringBuilder();
+        boolean prevWasUnderscore = true;
+        boolean prevWasLowerOrDigit = false;
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (Character.isUpperCase(c) && prevWasLowerOrDigit && !prevWasUnderscore) {
+                out.append('_');
+            }
+            if (Character.isLetterOrDigit(c)) {
+                out.append(Character.toUpperCase(c));
+                prevWasUnderscore = false;
+                prevWasLowerOrDigit = Character.isLowerCase(c) || Character.isDigit(c);
+            } else if (!prevWasUnderscore) {
+                out.append('_');
+                prevWasUnderscore = true;
+                prevWasLowerOrDigit = false;
+            }
+        }
+        int len = out.length();
+        if (len > 0 && out.charAt(len - 1) == '_') out.setLength(len - 1);
+        return out.toString();
     }
 
     // ------------------------- Combat simulation -----------------------------
@@ -122,6 +154,30 @@ public final class GameBalance {
         int res = resHi > resLo ? resLo + rng.nextInt(resHi - resLo + 1) : resLo;
         return Math.max(0, raw - res);
     }
+
+    // ------------------------- Surprise attacks -----------------------------
+    /** Damage multiplier applied after normal armour/resist rolls for a surprise hit. */
+    public static double RULES_SURPRISE_DAMAGE_MULT = 1.5;
+    /** If true, a currently obstructed target-to-attacker LOS can trigger surprise. */
+    public static boolean RULES_SURPRISE_SURPRISE_IF_NO_LOS_NOW = true;
+    /** If true, the target's turn-start visibility snapshot can trigger surprise. */
+    public static boolean RULES_SURPRISE_SURPRISE_IF_NO_LOS_LAST_TURN = true;
+    /** If true, physical single-target throws are eligible for surprise. */
+    public static boolean RULES_SURPRISE_ALLOW_THROW = true;
+    /** If true, every targeted attack type can surprise; otherwise only physical attacks can. */
+    public static boolean RULES_SURPRISE_ALLOW_ALL_TARGETED_ATTACK_TYPES = false;
+
+    // ------------------------- AI safety ------------------------------------
+    /** Delay charged when an AI turn returns without paying any action or move cost. */
+    public static int AI_GUARDRAIL_COST = 150;
+
+    // ------------------------- Profiling ------------------------------------
+    /** Emit one logcat line for slow PlayScreen render frames. */
+    public static boolean PROFILING_ENABLED = true;
+    /** Minimum total frame duration before the profiler logs a frame. */
+    public static double PROFILING_SLOW_FRAME_MS = 34.0;
+    /** Minimum time between profiler log lines, to keep logcat readable. */
+    public static long PROFILING_MIN_LOG_GAP_MS = 250;
 
     // ------------------------- Character progression -------------------------
     /** Hard cap - characters stop leveling at this level even if they accrue more XP. */
@@ -227,4 +283,10 @@ public final class GameBalance {
     public static int STARTING_SATIETY       = 10000;
     /** Once satiety is exhausted, the player loses 1 HP per this many ticks. */
     public static int STARVATION_TICKS_PER_HP = 100;
+
+    // ------------------------- Throw range -----------------------------------
+    /** Default Chebyshev throw range for the player targeting overlay. */
+    public static int DEFAULT_THROW_RANGE = 10;
+    /** Throw range bonus granted per level of the HURLER perk. */
+    public static int HURLER_RANGE_PER_LEVEL = 2;
 }

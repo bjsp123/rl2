@@ -25,6 +25,17 @@ gamebalance,BAG_FOOD_SIZE,20
 gamebalance,BAG_ITEMS_SIZE,20
 gamebalance,STARTING_SATIETY,10000
 gamebalance,STARVATION_TICKS_PER_HP,100
+gamebalance,DEFAULT_THROW_RANGE,10
+gamebalance,HURLER_RANGE_PER_LEVEL,2
+gamebalance,rules.surprise.damageMult,1.5
+gamebalance,rules.surprise.surpriseIfNoLOSNow,true
+gamebalance,rules.surprise.surpriseIfNoLOSLastTurn,true
+gamebalance,rules.surprise.allowThrow,true
+gamebalance,rules.surprise.allowAllTargetedAttackTypes,false
+gamebalance,AI_GUARDRAIL_COST,150
+gamebalance,PROFILING_ENABLED,true
+gamebalance,PROFILING_SLOW_FRAME_MS,34
+gamebalance,PROFILING_MIN_LOG_GAP_MS,250
 animation,animation.FIRE_PARTICLE_INTERVAL_MS,200
 animation,animation.FIRE_PARTICLE_MOB_INTERVAL_MS,100
 animation,animation.SLEEP_Z_MIN_MS,1200
@@ -101,4 +112,4 @@ ui,VIRTUAL_H,720
 ui,PAD_MODAL,24
 ui,PAD_CONTENT,18
 ui,FONT_REGULAR_PX,16
-ui,FONT_HEADER_PX,32
+ui,FONT_HEADER_PX,28

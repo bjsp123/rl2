@@ -308,6 +308,8 @@ public final class ItemSystem {
                 Mob victim = MobQueries.mobAt(level, target);
                 if (victim != null) {
                     int dmg = MobSystem.rollRange(ItemStats.effectiveDamageRange(wand, effectiveLevel));
+                    dmg = MobSystem.applySurpriseIfNeeded(level, caster, victim, dmg,
+                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
                     MobSystem.processAttack(level, caster, victim, dmg,
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
                 }
@@ -815,6 +817,14 @@ public final class ItemSystem {
                 return;
             }
         }
+        if (!MobVisibility.projectileLineReaches(level, caster.position, target, caster)) {
+            if (level.events != null)
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
+                        caster, caster.position, target, false));
+            if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+            TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
+            return;
+        }
         Point landing = pickGrappleLanding(level, caster.position, target);
         if (landing == null || landing.equals(target)) {
             // No valid landing (caster boxed in by walls, or the target is
@@ -878,6 +888,7 @@ public final class ItemSystem {
         com.bjsp123.rl2.model.Tile tile = level.tiles[target.tileX()][target.tileY()];
         if (tile.blocksMovement()) return;
         if (MobQueries.mobAt(level, target) != null) return;
+        if (!MobVisibility.jumpPathClear(level, jumper.position, target)) return;
         Point from = jumper.position;
         jumper.position = target;
         if (level.events != null) {

@@ -68,6 +68,9 @@ public class Buff {
         OILY,
         /** Soaked through. Takes double damage from lightning attacks. */
         WET,
+        /** Encased in ice after being chilled and wet at the same time. Cannot
+         *  move or act; taking damage chips two turns off the duration. */
+        FROZEN,
         /** Player has run out of food. Heal regen is suppressed while active; the buff
          *  drops as soon as satiety rises above 0 again (drink a potion, eat a pear).
          *  Player-only - NPCs sit at satiety 0 harmlessly. */
@@ -99,7 +102,10 @@ public class Buff {
         BLEEDING,
         /** Mob moves at 30% of normal action cost (+20 evasion). Ends instantly when
          *  the mob takes or deals any damage. */
-        PHASE
+        PHASE,
+        /** Complete immunity to all incoming damage. Duration counts down per
+         *  standard turn. Does not block self-inflicted healing or stat effects. */
+        SHIELDED
     }
 
     public BuffType type;

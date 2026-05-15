@@ -137,6 +137,8 @@ public class Mob {
     public enum Intent {
         /** No movement decided this turn - stationary. */
         IDLE,
+        /** Failed to find a valid action this turn; pauses before trying again. */
+        CONSIDERING,
         /** Pathing to a randomly chosen exploration tile. */
         WANDERING,
         /** Pathing to the live position of an enemy currently in sight. */
@@ -153,7 +155,13 @@ public class Mob {
          *  {@link com.bjsp123.rl2.model.Buff.BuffType#FRIGHTENED} buff. */
         FLEEING,
         /** Pathing toward {@link #owner}. */
-        FOLLOWING_LEADER
+        FOLLOWING_LEADER,
+        /** Using a species ability (heal, haste, etc.) this turn. */
+        USING_ABILITY,
+        /** Consuming an inventory item (potion, bomb, etc.) this turn. */
+        USING_ITEM,
+        /** Has a ranged attack but RANGED_COOLDOWN buff is active — waiting to fire again. */
+        RELOADING
     }
 
     /** Player class chosen at character creation. Drives starting kit and base stats. */
@@ -453,6 +461,9 @@ public class Mob {
 
     // -- Turn scheduling + counters ------------------------------------------
     public int ticksTillMove;
+    /** Mobs this mob could see at the beginning of its current/last action turn.
+     *  Transient because mob references are rebuilt only for the live level. */
+    public transient java.util.Set<Mob> visibleMobsAtTurnStart;
     // Cooldowns moved to the buff system: TELEPORT_COOLDOWN, RANGED_COOLDOWN, HIDING.
     // BuffSystem.tickPerTurn drains durations on the standard-turn cadence.
     /** Fullness counter. Ticks down on the standard-turn cadence. When it reaches 0 the

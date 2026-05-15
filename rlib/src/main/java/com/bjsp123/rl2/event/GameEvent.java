@@ -23,6 +23,7 @@ import com.bjsp123.rl2.model.Point;
 public sealed interface GameEvent permits
         GameEvent.MobMoved,
         GameEvent.MobMeleeAttacked,
+        GameEvent.SurpriseAttack,
         GameEvent.MobHitFlinched,
         GameEvent.MobKilled,
         GameEvent.MobTeleported,
@@ -65,6 +66,10 @@ public sealed interface GameEvent permits
     /** Mob swung a melee attack. {@code hit} == false signals a miss; {@code dealt} is
      *  raw damage applied (post-armour). */
     record MobMeleeAttacked(Mob attacker, Mob target, boolean hit, int dealt) implements GameEvent {}
+
+    /** A targeted attack caught the victim off-guard. The renderer shows a brief icon
+     *  over the victim while combat logic applies the guaranteed hit / damage bonus. */
+    record SurpriseAttack(Mob target) implements GameEvent {}
 
     /** Mob took a damaging hit and should flinch in the direction away from {@code hitSource}. */
     record MobHitFlinched(Mob victim, Mob hitSource) implements GameEvent {}

@@ -64,6 +64,27 @@ public final class Animator {
         return s;
     }
 
+    /** Display-only clock tick for the HUD. The engine tick advances after the
+     *  player animation gate clears, so an exactly-100-tick move would otherwise
+     *  leave the turn clock apparently motionless. While the player is visibly
+     *  stepping, interpolate through their pending move cost; gameplay timestamps
+     *  still use the real {@code baseTick}. */
+    public int visualClockTick(Level level, int baseTick) {
+        if (level == null || level.mobs == null) return baseTick;
+        Mob player = null;
+        for (Mob m : level.mobs) {
+            if (m != null && m.behavior == Mob.Behavior.PLAYER) {
+                player = m;
+                break;
+            }
+        }
+        if (player == null || player.ticksTillMove <= 0) return baseTick;
+        MobAnimState s = states.get(player);
+        if (s == null || s.stepTotal <= 0 || s.delayFrames > 0) return baseTick;
+        float t = Math.min(1f, Math.max(0f, s.stepFrame / (float) s.stepTotal));
+        return baseTick + Math.round(player.ticksTillMove * t);
+    }
+
     public List<Ghost> ghosts() { return ghosts; }
 
     /** Per-render-frame: advance per-mob anims, ghosts, the freeze queue, the effect
@@ -368,6 +389,13 @@ public final class Animator {
         } else if (!m.hit()) {
             stage.add(Effect.particleBurst(target.position, Effect.EffectTint.WHITE, 7, RNG));
         }
+    }
+
+    void onSurpriseAttack(Level level, GameEvent.SurpriseAttack m) {
+        Mob target = m.target();
+        if (target == null || target.position == null) return;
+        if (!MobSystem.isVisibleToPlayer(level, target)) return;
+        stage.add(Effect.surpriseIcon(target.position));
     }
 
     void onMobHitFlinched(Level level, GameEvent.MobHitFlinched m) {
@@ -685,6 +713,7 @@ public final class Animator {
             case BLAST, DAMAGE        -> Effect.EffectTint.WHITE;
             case APPLYBUFFS           -> Effect.EffectTint.YELLOW;
             case POISONCLOUD          -> Effect.EffectTint.GREEN;
+            case SMOKE                -> Effect.EffectTint.BROWN;
             case DETONATION,
                  BANISHMENT,
                  MISSILE             -> Effect.EffectTint.WHITE;
@@ -921,12 +950,30 @@ public final class Animator {
     private static void applyMissileImpact(Level level, Mob caster, Point target, int damage) {
         Mob victim = MobQueries.mobAt(level, target);
         if (victim == null) return;
+        // Adjacent ranged penalty: -50 accuracy for point-blank shots.
+        if (caster != null && caster.position != null) {
+            int cdx = Math.abs(caster.position.tileX() - target.tileX());
+            int cdy = Math.abs(caster.position.tileY() - target.tileY());
+            if (Math.max(cdx, cdy) == 1 && !MobSystem.rollRangedHit(caster, victim, -50)) {
+                String cn = caster.name != null ? caster.name
+                        : TextCatalog.get("eventlog.fallback.adventurer");
+                String vn = MobSystem.nameForLog(level, victim);
+                boolean attackerIsPlayer = caster.behavior == com.bjsp123.rl2.model.Mob.Behavior.PLAYER;
+                boolean victimIsPlayer   = victim.behavior  == com.bjsp123.rl2.model.Mob.Behavior.PLAYER;
+                com.bjsp123.rl2.logic.EventLog.add(attackerIsPlayer
+                        ? com.bjsp123.rl2.logic.Messages.playerMiss(cn, vn)
+                        : (victimIsPlayer
+                           ? com.bjsp123.rl2.logic.Messages.enemyMiss(cn, vn)
+                           : com.bjsp123.rl2.logic.Messages.mobMiss(cn, vn)));
+                return;
+            }
+        }
         boolean physical = caster != null
                 && caster.rangedDamageType == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL;
         MobSystem.DamageElement element = physical
                 ? MobSystem.DamageElement.PHYSICAL : MobSystem.DamageElement.MAGIC;
         MobSystem.AttackType attackType = physical
-                ? MobSystem.AttackType.MELEE : MobSystem.AttackType.MAGIC;
+                ? MobSystem.AttackType.RANGED : MobSystem.AttackType.MAGIC;
         int resist = physical
                 ? MobSystem.rollRange(MobSystem.resistRange(victim))
                 : MobSystem.rollRange(MobSystem.magicResistRange(victim));
@@ -936,6 +983,8 @@ public final class Animator {
                 new MobSystem.DamageBreakdown(element, damage)
                         .add(resistKey, Math.min(resist, damage));
         Mob speaker = caster != null ? caster : com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
+        afterResist = MobSystem.applySurpriseIfNeeded(level, speaker, victim,
+                afterResist, attackType, element);
         String casterName = speaker != null && speaker.name != null
                 ? speaker.name
                 : TextCatalog.get("eventlog.fallback.adventurer");

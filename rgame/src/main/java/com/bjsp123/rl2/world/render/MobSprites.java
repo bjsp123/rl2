@@ -103,6 +103,7 @@ public final class MobSprites {
         try {
             mobsTex = new Texture(Gdx.files.internal(MOBS_PATH));
             mobsTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            OutlineSprites.register(mobsTex, "sprites/mobs_simple_outline.png");
         } catch (Exception ignored) {
             return;
         }

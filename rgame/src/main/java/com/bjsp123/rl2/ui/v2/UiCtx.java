@@ -58,6 +58,7 @@ public final class UiCtx implements Disposable {
     public final com.bjsp123.rl2.ui.v2.stage.V2Stage v2Stage;
 
     private final Vector3 unprojBuf = new Vector3();
+    private AttractMode attract;
 
     public UiCtx() {
         FreeTypeFontGenerator gen = new FreeTypeFontGenerator(
@@ -150,6 +151,15 @@ public final class UiCtx implements Disposable {
     public void resize(int width, int height) {
         viewport.update(width, height, true);
         if (v2Stage != null) v2Stage.resize(width, height);
+        if (attract != null) attract.resize();
+    }
+
+    /** Draw the shared title/menu backdrop. It is owned by the UI context so
+     *  pushed V2 screens keep the same simulated dungeon running underneath
+     *  their chrome instead of restarting it per screen. */
+    public void renderAttract(float delta) {
+        if (attract == null) attract = new AttractMode(this);
+        attract.render(delta);
     }
 
     /** Clear the framebuffer to the dim-overlay-suitable black so popups dim
@@ -161,6 +171,7 @@ public final class UiCtx implements Disposable {
 
     @Override
     public void dispose() {
+        if (attract != null) attract.dispose();
         if (v2Stage != null) v2Stage.dispose();
         shapes.dispose();
         batch.dispose();

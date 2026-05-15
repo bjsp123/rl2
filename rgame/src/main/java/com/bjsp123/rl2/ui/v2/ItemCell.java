@@ -40,10 +40,7 @@ public final class ItemCell {
             ctx.batch.draw(region, x + PAD, y + PAD, w - 2 * PAD, h - 2 * PAD);
         }
 
-        if (item.brand != null) {
-            BrandFx.drawSparks(ctx.batch, ctx.whitePixel,
-                    x, y, w, h, item.brand, BrandFx.phaseFor(item));
-        }
+        BrandFx.drawItemSparks(ctx.batch, ctx.whitePixel, x, y, w, h, item);
 
         // Level badge - top-right; green when a buff/perk/gear is boosting above base
         int lvl     = ItemStats.effectiveLevel(item, holder);

@@ -75,6 +75,8 @@ buff.BLEEDING.description,Open wound - losing HP each turn until it clots.
 buff.BLEEDING.name,Bleeding
 buff.CHILLED.description,Acting slower than normal.
 buff.CHILLED.name,Chilled
+buff.FROZEN.description,Cannot move or act. Damage chips the ice away.
+buff.FROZEN.name,Frozen
 buff.ESP.description,"Can see mobs through walls, but not their HP bars or names."
 buff.ESP.name,ESP
 buff.FRIGHTENED.description,Too scared to act effectively.
@@ -111,6 +113,8 @@ buff.PROTECTION.description,Incoming physical damage is reduced.
 buff.PROTECTION.name,Protection
 buff.RANGED_COOLDOWN.description,Can't use ranged attacks until this wears off.
 buff.RANGED_COOLDOWN.name,Recharging
+buff.SHIELDED.description,Immune to all incoming damage until it wears off.
+buff.SHIELDED.name,Shielded
 buff.REGENERATION.description,Regenerating HP each turn.
 buff.REGENERATION.name,Regeneration
 buff.SORCERY.description,Your next spell or potion is empowered.
@@ -149,6 +153,7 @@ eventlog.combat.player.miss,{player} misses the {target}.
 eventlog.combat.roll.damage,{attacker} -> {target}: {element} {rolled}{mitigations} -> {dealt}
 eventlog.combat.roll.miss,{attacker} -> {target}: {element} miss
 eventlog.combat.roll.mitigations, [{mitigations}]
+eventlog.combat.surprise,{attacker} surprises {target}!
 eventlog.fallback.adventurer,Adventurer
 eventlog.fallback.creature,creature
 eventlog.fallback.equipped,equipped
@@ -252,8 +257,8 @@ item.FISH.name,delicious fish
 item.FOUL_MEAT.description,"A rotting, disgusting gob of mystery meat."
 item.FOUL_MEAT.description2,There are probably particularly vile creatures that would be glad to be given this.
 item.FOUL_MEAT.name,foul meat
-item.FREEZE_BOMB.description,A frosted vial that shatters into a freezing burst.
-item.FREEZE_BOMB.description2,"Chills enemies, extinguishes flames."
+item.FREEZE_BOMB.description,A frosted vial that shatters into a numbing burst.
+item.FREEZE_BOMB.description2,"Chills enemies for a long time, delays their next action, and extinguishes flames."
 item.FREEZE_BOMB.name,freeze bomb
 item.FROG.description,A very lifelike small enamel frog -- or is it a real frog staying very still?
 item.FROG.description2,Use it from a quickslot to jump rapidly away from or toward your foes.
@@ -276,6 +281,9 @@ item.HEAVY_MAIL.name,heavy plate mail
 item.IPWERGIS.description,Ipwergis-pudding is a magically delectable food with many powers.
 item.IPWERGIS.description2,Grants insights if eaten; magical creatures might be very pleased to be given it.
 item.IPWERGIS.name,ipwergis-pudding
+item.JADE_CRAB.description,"A jade crab carved in perfect detail, its claws raised in a warding gesture."
+item.JADE_CRAB.description2,Invoke to wrap yourself in a momentary shell of jade light.
+item.JADE_CRAB.name,jade crab
 item.JADE_FISH.description,"A peaceful green fish carved from jade, cool and smooth in the hand."
 item.JADE_FISH.description2,Hold the fish and you pass through the world like a blur.
 item.JADE_FISH.name,jade fish
@@ -337,6 +345,9 @@ item.SHIELD.name,round shield
 item.SHOCK_BOMB.description,A ball of tightly coiled wire that can release powerful current.
 item.SHOCK_BOMB.description2,"Lighting bolts arc from foe to foe, doing extra damage to wet targets."
 item.SHOCK_BOMB.name,shock bomb
+item.SMOKE_BOMB.description,A black glass bomb packed with smoldering chemicals.
+item.SMOKE_BOMB.description2,Shatters into a thick cloud of sight-blocking smoke.
+item.SMOKE_BOMB.name,smoke bomb
 item.SWORD.description,"A plain iron blade, friend of many an adventurer."
 item.SWORD.description2,"As well as decent damage, it's heavy enough to knock smaller enemies back a bit."
 item.SWORD.name,sword
@@ -354,6 +365,9 @@ item.VINE_HOOK.name,grapplevine
 item.VOID_BOMB.description,"A powerful bomb that draws in matter, creating a void."
 item.VOID_BOMB.description2,Destroys floors and pulls creatures toward it.
 item.VOID_BOMB.name,void bomb
+item.WATER_BOMB.description,A glass vial of magically compressed water.
+item.WATER_BOMB.description2,"Gushes water everywhere, washing smaller creatures back."
+item.WATER_BOMB.name,water bomb
 item.WAND_BANISHMENT.description,A wand bound in tarnished silver and tipped with flickering crystals.
 item.WAND_BANISHMENT.description2,This specialized wand can instantly banish creatures that are not really real.
 item.WAND_BANISHMENT.name,wand of banishment
@@ -395,7 +409,7 @@ item.effect.CAPTURE,capture or release a creature
 item.effect.DAMAGE,deal {damage}{perLevel} damage to the target
 item.effect.DETONATION,ignite a fireball at the target
 item.effect.FIRE,set the target area ablaze
-item.effect.FREEZE,freeze the target area
+item.effect.FREEZE,chill and delay the target area
 item.effect.FUNGUS,coax mushrooms up from the target
 item.effect.GRASS,grow vegetation at the target
 item.effect.LIGHTNING,shock the target and nearby creatures
@@ -403,6 +417,7 @@ item.effect.MISSILE,strike a single target for direct damage
 item.effect.OIL,spread a layer of oil across the target area
 item.effect.POISONCLOUD,release a poison cloud at the target
 item.effect.POLYMORPH,reshape the target area - rerolls floor tiles and transforms nearby creatures into similarly-sized kin
+item.effect.SMOKE,release a smoke cloud at the target
 item.effect.VOID,tear a void at the target - pulls nearby creatures in and crumbles the ground
 item.effect.WATER,create a pool of water at the target
 item.effect.power.HP_UP,restore HP ({percent}% of maximum)
@@ -457,6 +472,9 @@ item.useVerb.JUMP,jump
 item.useVerb.NONE,use
 item.useVerb.POWERUP,absorb
 item.useVerb.WAND,zap
+level.theme.CONCRETE,concrete
+level.theme.CRYSTAL,crystal
+level.theme.STRAIGHTFORWARD,stone
 lore.items.accuracy,Accuracy
 lore.items.apDamage,AP damage
 lore.items.area,Area
@@ -632,6 +650,8 @@ mob.stat.magicResist,Magic resistance: {range}
 mob.stat.maxHp,Max HP: {value}{perLevel}
 mob.unique,Unique foe
 perk.bombJack.description,+1 bomb effective level per perk level.
+perk.hurler.name,Hurler
+perk.hurler.description,+2 throw range and x0.75 throw action cost per level.
 perk.bombJack.name,Bomb Jack
 perk.jump.description,Move to any tile within 2 squares for one moveCost.
 perk.jump.name,Jump
@@ -643,6 +663,20 @@ perk.stealth.description,Enemy wake radius and vision halved against you.
 perk.stealth.name,Stealth
 perk.wandmaster.description,Wands gain +1 effective level.
 perk.wandmaster.name,Wandmaster
+tile.ALTAR,altar
+tile.CHASM,chasm
+tile.DOOR,door
+tile.DOOR_OPEN,open door
+tile.FLOOR,floor
+tile.FLOOR_SPECIAL,floor
+tile.FLOOR_WOOD,wooden floor
+tile.LAMP,lamp
+tile.STAIRS_DOWN,stairs down
+tile.STAIRS_UP,stairs up
+tile.STATUE_LARGE,large statue
+tile.STATUE_SMALL,small statue
+tile.THRONE,throne
+tile.WALL,wall
 ui.achievement.toast,Achievement: {achievement}
 ui.arena.abort,Abort
 ui.arena.backToSetup,Back to setup
@@ -756,7 +790,7 @@ ui.hud.menu.log,Log
 ui.hud.menu.main,Main Menu
 ui.hud.menu.map,Map
 ui.hud.menu.settings,Settings
-ui.hud.status,Lvl {depth}   Turn {turn}
+ui.hud.status,Lvl {depth}
 ui.inventory.equip,Equip
 ui.inventory.quickslot,Quickslot
 ui.inventory.throw,Throw
@@ -784,8 +818,15 @@ ui.look.attitude.attack,Hostile.
 ui.look.attitude.flee,Fearful.
 ui.look.attitude.nothing,Neutral.
 ui.look.bag,Bag:
+ui.look.cloud.POISON,poison cloud
+ui.look.cloud.SMOKE,smoke
+ui.look.cloud.STEAM,steam
 ui.look.damageArmor,Dmg {damage}   Arm {armor}
+ui.look.damageType.magic,magic
+ui.look.damageType.physical,physical
 ui.look.equipped,Equipped:
+ui.look.floorSummary,{terrain}.
+ui.look.floorSummaryWith,{terrain} with {features}.
 ui.look.hp,HP {hp} / {maxHp}
 ui.look.intent.chasingLastKnown, - chasing last seen
 ui.look.intent.fleeing, - fleeing
@@ -795,8 +836,19 @@ ui.look.intent.pursuing, - pursuing a foe
 ui.look.intent.shooting, - taking aim
 ui.look.intent.wandering, - wandering
 ui.look.loyalTo,Loyal to: {owner}
+ui.look.brandEffect.FIRE,sets foes on fire
+ui.look.brandEffect.FREEZE,chills foes
+ui.look.brandEffect.LIGHTNING,shocks foes
+ui.look.brandEffect.POISONCLOUD,poisons foes
+ui.look.brandEffect.generic,has a magical effect
+ui.look.itemArmor,armor {armor}
+ui.look.itemDamage,damage {damage}
+ui.look.mobHitRates,to hit {player}: {toHit}%   to be hit: {beHit}%
 ui.look.mobFallback,mob
 ui.look.mobLevel,{name} (lvl {level})
+ui.look.mobLevelPlain,{name} level {level}
+ui.look.mobMelee,melee damage {damage}
+ui.look.mobRanged,ranged {type} damage {damage}
 ui.look.noTile,(no tile)
 ui.look.owner.unknown,unknown
 ui.look.owner.you,you
@@ -807,6 +859,19 @@ ui.look.state.following,Following
 ui.look.state.hiding,Hiding
 ui.look.state.player,(this is you)
 ui.look.state.seekingHiding,Seeking cover
+ui.look.intent.idle,standing by
+ui.look.intent.considering,considering
+ui.look.intent.wandering,wandering
+ui.look.intent.pursuing,approaching
+ui.look.intent.chasing,searching
+ui.look.intent.shooting,attacking
+ui.look.intent.kiting,retreating
+ui.look.intent.fleeing,fleeing
+ui.look.intent.following,following
+ui.look.intent.usingAbility,casting
+ui.look.intent.usingItem,using an item
+ui.look.intent.reloading,reloading
+ui.look.mobEquipment,Carries: {items}
 ui.look.surface.blood,blood
 ui.look.surface.ice,ice
 ui.look.surface.oil,oil slick
@@ -816,10 +881,14 @@ ui.look.terrain.grass,grass
 ui.look.terrain.mushrooms,mushrooms
 ui.look.terrain.trees,trees
 ui.look.title,Look
+ui.list.finalSep,", and "
+ui.list.sep,", "
+ui.list.two,{a} and {b}
 ui.map.level,L{depth}
 ui.map.mobs,Mobs:  {mobs}
 ui.map.rooms,Rooms: {rooms}
 ui.map.title,Map
+ui.menu.credits,Credits
 ui.menu.levelInfo,Level Info
 ui.menu.log,Log
 ui.menu.main,Main Menu
@@ -857,8 +926,10 @@ ui.settings.title,Settings
 ui.settings.uiFontSize,UI Font Size
 ui.settings.uiScale,UI Scale
 ui.title.arena,Arena
+ui.title.continue,Continue
 ui.title.credits,Credits
 ui.title.hallOfFame,Hall of Fame
+ui.title.newGame,New Game
 ui.title.logo,rl2
 ui.title.quit,Quit
 ui.title.savedGames,Saved Games

@@ -15,6 +15,7 @@ import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.Level.Vegetation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
@@ -52,6 +53,8 @@ public class MobSystem {
     public enum AttackType {
         /** Hand-to-hand / weapon strike at adjacent range. */
         MELEE,
+        /** Innate single-target projectile attack. */
+        RANGED,
         /** Item hurled at a target tile. */
         THROWN,
         /** Ranged magical effect (e.g. magic missile). */
@@ -110,6 +113,11 @@ public class MobSystem {
      */
     public static void stepTowardTarget(Mob mob, Level level) {
         if (mob.targetPosition == null) return;
+        if (BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN)) {
+            mob.targetPosition = null;
+            TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+            return;
+        }
 
         int tx = mob.targetPosition.tileX(), ty = mob.targetPosition.tileY();
         int cx = mob.position.tileX(),       cy = mob.position.tileY();
@@ -562,12 +570,113 @@ public class MobSystem {
         return MobVisibility.nameForLog(level, mob);
     }
 
+    public static void snapshotVisibleMobsAtTurnStart(Level level, Mob viewer) {
+        if (level == null || viewer == null || level.mobs == null) return;
+        java.util.Set<Mob> seen = new java.util.HashSet<>();
+        if (viewer.position == null || viewer.stateOfMind == StateOfMind.ASLEEP) {
+            viewer.visibleMobsAtTurnStart = seen;
+            return;
+        }
+        int w = level.width, h = level.height;
+        int vx = viewer.position.tileX(), vy = viewer.position.tileY();
+        if (vx < 0 || vy < 0 || vx >= w || vy >= h) {
+            viewer.visibleMobsAtTurnStart = seen;
+            return;
+        }
+        int radius = (int) Math.ceil(viewer.effectiveStats().visionRadius);
+        boolean[] blocking = LevelSystem.buildBlocking(level, /*forLight=*/ false);
+        level.initVisibilityScratch();
+        boolean[] fov = level.visibilityTempScratch;
+        Arrays.fill(fov, 0, w * h, false);
+        ShadowCaster.castShadow(vx, vy, w, fov, blocking, radius);
+        for (Mob other : level.mobs) {
+            if (!canSeeForSurprisePrefilter(level, viewer, other, radius)) continue;
+            int ox = other.position.tileX(), oy = other.position.tileY();
+            if (fov[oy * w + ox]) seen.add(other);
+        }
+        viewer.visibleMobsAtTurnStart = seen;
+    }
+
+    private static boolean canSeeForSurprise(Level level, Mob viewer, Mob subject) {
+        if (level == null || viewer == null || subject == null) return false;
+        if (!canSeeForSurprisePrefilter(level, viewer, subject,
+                (int) Math.ceil(viewer.effectiveStats().visionRadius))) return false;
+        return LevelUtilities.getLineOfSight(level, viewer, subject.position);
+    }
+
+    private static boolean canSeeForSurprisePrefilter(Level level, Mob viewer, Mob subject,
+                                                      int radius) {
+        if (level == null || viewer == null || subject == null) return false;
+        if (viewer.position == null || subject.position == null) return false;
+        if (subject == viewer || subject.hp <= 0) return false;
+        if (viewer.stateOfMind == StateOfMind.ASLEEP) return false;
+        if (BuffSystem.hasBuff(subject, com.bjsp123.rl2.model.Buff.BuffType.INVISIBLE)) return false;
+        int vx = viewer.position.tileX(), vy = viewer.position.tileY();
+        int sx = subject.position.tileX(), sy = subject.position.tileY();
+        if (vx < 0 || vy < 0 || vx >= level.width || vy >= level.height) return false;
+        if (sx < 0 || sy < 0 || sx >= level.width || sy >= level.height) return false;
+        return Math.max(Math.abs(sx - vx), Math.abs(sy - vy)) <= radius;
+    }
+
+    public static boolean isSurpriseAttack(Level level, Mob attacker, Mob target,
+                                           AttackType type, DamageElement element) {
+        if (attacker == null || target == null || attacker == target) return false;
+        if (!surpriseEligible(type, element)) return false;
+        if (GameBalance.RULES_SURPRISE_SURPRISE_IF_NO_LOS_LAST_TURN) {
+            java.util.Set<Mob> seen = target.visibleMobsAtTurnStart;
+            boolean sawAtTurnStart = seen == null
+                    ? canSeeForSurprise(level, target, attacker)
+                    : seen.contains(attacker);
+            if (!sawAtTurnStart) return true;
+        }
+        if (GameBalance.RULES_SURPRISE_SURPRISE_IF_NO_LOS_NOW
+                && !canSeeForSurprise(level, target, attacker)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean surpriseEligible(AttackType type, DamageElement element) {
+        if (type == null || type == AttackType.ENVIRONMENTAL) return false;
+        if (GameBalance.RULES_SURPRISE_ALLOW_ALL_TARGETED_ATTACK_TYPES) return true;
+        if (element != DamageElement.PHYSICAL) return false;
+        return type == AttackType.MELEE
+                || type == AttackType.RANGED
+                || (type == AttackType.THROWN && GameBalance.RULES_SURPRISE_ALLOW_THROW);
+    }
+
+    public static int applySurpriseIfNeeded(Level level, Mob attacker, Mob target,
+                                            int damage, AttackType type, DamageElement element) {
+        if (!isSurpriseAttack(level, attacker, target, type, element)) return damage;
+        emitSurpriseAttack(level, attacker, target);
+        return (int) Math.round(damage * GameBalance.RULES_SURPRISE_DAMAGE_MULT);
+    }
+
+    private static void emitSurpriseAttack(Level level, Mob attacker, Mob target) {
+        boolean playerInvolved = (attacker != null && attacker.behavior == Behavior.PLAYER)
+                || (target != null && target.behavior == Behavior.PLAYER);
+        EventLog.add(Messages.surpriseAttack(nameForLog(level, attacker),
+                nameForLog(level, target), playerInvolved));
+        if (level != null && level.events != null && target != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.SurpriseAttack(target));
+        }
+    }
+
     /** Probability that {@code attacker} lands a hit on {@code target}. Reads the
      *  fully-rolled-up effective accuracy and evasion from each side's StatBlock - so
      *  HOPE / INVISIBLE / GHOSTLY buffs and any future accuracy-bonus items automatically
      *  flow through. */
     public static double hitChance(Mob attacker, Mob target) {
         return MobStats.hitChance(attacker, target);
+    }
+
+    /** Roll a ranged hit check with an accuracy modifier (negative = penalty).
+     *  Returns true if the shot lands. */
+    public static boolean rollRangedHit(Mob caster, Mob target, int accuracyMod) {
+        int atkAcc = Math.max(0, caster.effectiveStats().accuracy + accuracyMod);
+        int tgtEva = target.effectiveStats().evasion;
+        int hitDenom = atkAcc + tgtEva;
+        return hitDenom > 0 && RANDOM.nextInt(hitDenom) < atkAcc;
     }
 
     /** Min and max damage the attacker outputs before resistance - pulled directly from
@@ -632,16 +741,18 @@ public class MobSystem {
      *  when neither participant is in the player's current FOV - there's no point flickering
      *  damage numbers off-screen. */
     public static void attack(Level level, Mob attacker, Mob target) {
-        // Attacking ends INVISIBLE - cancel BEFORE hit-rolls so the +20 evasion drops
-        // for the hit being rolled now too. Per the user's spec: any attack, hit or
-        // miss, ends invisibility.
+        if (BuffSystem.hasBuff(attacker, com.bjsp123.rl2.model.Buff.BuffType.FROZEN)) return;
+        boolean surprise = isSurpriseAttack(level, attacker, target,
+                AttackType.MELEE, DamageElement.PHYSICAL);
+        // Attacking ends INVISIBLE. Surprise is checked first so a currently invisible
+        // attacker still gets the off-guard strike before the buff drops.
         BuffSystem.removeBuff(attacker, com.bjsp123.rl2.model.Buff.BuffType.INVISIBLE);
         // Combat memory is now seeded inside processAttack (gated on actual damage),
         // so a swing that misses leaves attitudes intact.
         int atkAcc = attacker.effectiveStats().accuracy;
         int tgtEva = target.effectiveStats().evasion;
         int hitDenom = atkAcc + tgtEva;
-        boolean hit  = hitDenom > 0 && RANDOM.nextInt(hitDenom) < atkAcc;
+        boolean hit  = surprise || (hitDenom > 0 && RANDOM.nextInt(hitDenom) < atkAcc);
 
         if (!hit) {
             if (level.events != null) {
@@ -666,6 +777,10 @@ public class MobSystem {
         int rawDealt = regular + ap;
         DamageBreakdown bk = new DamageBreakdown(DamageElement.PHYSICAL, rawAtk + ap);
         bk.add("armor", Math.min(armor, rawAtk));
+        if (surprise) {
+            emitSurpriseAttack(level, attacker, target);
+            rawDealt = (int) Math.round(rawDealt * GameBalance.RULES_SURPRISE_DAMAGE_MULT);
+        }
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobMeleeAttacked(
                     attacker, target, /*hit=*/true, rawDealt));
@@ -743,6 +858,7 @@ public class MobSystem {
                                         DamageBreakdown breakdown) {
         if (target == null) return false;
         if (rawDealt < 0) rawDealt = 0;
+        if (rawDealt > 0 && BuffSystem.hasBuff(target, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED)) return false;
         // Buff-based mitigation. PROTECTION blunts physical, ANTI_MAGIC blunts magic
         // and fire. Other elements (POISON, SHOCK, STARVATION) ignore both buffs.
         int dealt = switch (element) {
@@ -768,6 +884,7 @@ public class MobSystem {
         // PHASE ends the moment the mob takes or deals damage.
         if (dealt > 0) {
             BuffSystem.removeBuff(target,   com.bjsp123.rl2.model.Buff.BuffType.PHASE);
+            BuffSystem.shortenFrozenOnDamage(target);
             if (attacker != null)
                 BuffSystem.removeBuff(attacker, com.bjsp123.rl2.model.Buff.BuffType.PHASE);
         }
@@ -1239,6 +1356,11 @@ public class MobSystem {
 
     public static void processAiTurn(Mob mob, Level level) {
         if (mob.ticksTillMove > 0) return;
+        if (BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN)) {
+            mob.intent = Mob.Intent.IDLE;
+            TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+            return;
+        }
         // Player has no AI of its own - short-circuit so the wake gate below can't
         // accidentally bill the player's turn (which would freeze input).
         if (mob.behavior == Behavior.PLAYER) return;
@@ -1282,7 +1404,7 @@ public class MobSystem {
         // behaviour dispatch so any mob carrying an ability list casts before
         // defaulting to its normal AI step. Off-cooldown casts consume the turn.
         if (tryCastAbilities(mob, level)) {
-            mob.intent = Mob.Intent.IDLE;
+            mob.intent = Mob.Intent.USING_ABILITY;
             return;
         }
 
@@ -1292,7 +1414,7 @@ public class MobSystem {
         // and a rogue carrying bombs a steady chance to lob one. Skips
         // anything that would harm self or an ally.
         if (tryUseInventoryItem(mob, level)) {
-            mob.intent = Mob.Intent.IDLE;
+            mob.intent = Mob.Intent.USING_ITEM;
             return;
         }
 
@@ -1444,8 +1566,7 @@ public class MobSystem {
         for (com.bjsp123.rl2.model.Item item : snapshot) {
             if (!isUsableByAi(mob, item, level)) continue;
             if (!alwaysUse && RANDOM.nextDouble() >= AI_USE_ITEM_CHANCE) continue;
-            applyAiItemUse(mob, item, level);
-            return true;
+            if (applyAiItemUse(mob, item, level)) return true;
         }
         return false;
     }
@@ -1547,27 +1668,25 @@ public class MobSystem {
         return false;
     }
 
-    /** Apply the chosen AI item-use. Each branch mirrors the player path that
-     *  uses the same item, minus the targeting overlay / animation hook-up. */
-    private static void applyAiItemUse(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
-        if (isVisibleToPlayer(level, mob) && item.name != null) {
-            boolean inv = mob.behavior == Behavior.PLAYER;
-            EventLog.add(Messages.mobUsesItem(nameForLog(level, mob), item.name, inv));
-        }
+    /** Apply the chosen AI item-use. Returns true only if the use actually
+     *  charged time; depleted or invalid items fall through to later AI choices. */
+    private static boolean applyAiItemUse(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        int before = mob.ticksTillMove;
         if (item.inventoryCategory == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
             Mob target = nearestAttackTarget(mob, level);
             if (target != null) {
                 throwItem(level, mob, item, target.position);
             }
-            return;
+            return mob.ticksTillMove != before;
         }
         switch (item.useBehavior) {
             case DRINK, APPLYBUFF -> ItemSystem.useItem(level, mob, item);
-            case WAND    -> aiCastWand(mob, item, level);
-            case GRAPPLE -> aiCastGrapple(mob, item, level);
-            case JUMP    -> aiCastJump(mob, item, level);
+            case WAND    -> { if (!aiCastWand(mob, item, level)) return false; }
+            case GRAPPLE -> { if (!aiCastGrapple(mob, item, level)) return false; }
+            case JUMP    -> { if (!aiCastJump(mob, item, level)) return false; }
             default      -> { /* unreachable per the gate */ }
         }
+        return mob.ticksTillMove != before;
     }
 
     /** AI wand cast. Picks a target (no targeting UI) and delegates to the shared
@@ -1575,34 +1694,43 @@ public class MobSystem {
      *  emission, and move cost stay identical between player and AI. Summon
      *  wands ignore target. Tile-targeting element wands (water/oil/fire/etc.)
      *  are deferred until friendly-fire AOE checks land. */
-    private static void aiCastWand(Mob caster, com.bjsp123.rl2.model.Item wand, Level level) {
+    private static boolean aiCastWand(Mob caster, com.bjsp123.rl2.model.Item wand, Level level) {
+        int before = caster.ticksTillMove;
         if (wand.summonsWhenUsed != null) {
             ItemSystem.fireWand(level, caster, wand, null);
-            return;
+            return caster.ticksTillMove != before;
         }
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
             Mob target = nearestAttackTarget(caster, level);
-            if (target == null) return;
+            if (target == null) return false;
             ItemSystem.fireWand(level, caster, wand, target.position);
-            return;
+            return caster.ticksTillMove != before;
         }
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
             com.bjsp123.rl2.model.Point dest = pickTeleportDestination(caster, level);
             if (dest != null) ItemSystem.fireWand(level, caster, wand, dest);
         }
+        return caster.ticksTillMove != before;
     }
 
-    private static void aiCastGrapple(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+    private static boolean aiCastGrapple(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        int before = mob.ticksTillMove;
         Mob target = nearestAttackTarget(mob, level);
-        if (target == null || target.position == null) return;
+        if (target == null || target.position == null) return false;
+        // Grapple is only useful against the player or targets with a ranged attack.
+        if (target.behavior != Mob.Behavior.PLAYER
+                && target.effectiveStats().rangedDamage.max() <= 0) return false;
         ItemSystem.castGrapple(level, mob, item, target.position);
+        return mob.ticksTillMove != before;
     }
 
-    private static void aiCastJump(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+    private static boolean aiCastJump(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        int before = mob.ticksTillMove;
         Mob threat = nearestAttackTarget(mob, level);
-        if (threat == null) return;
+        if (threat == null) return false;
         com.bjsp123.rl2.model.Point dest = pickBestJumpTile(mob, item, level, threat);
         if (dest != null) ItemSystem.castJump(level, mob, item, dest);
+        return mob.ticksTillMove != before;
     }
 
     /** Find the tile in JUMP radius that maximises Chebyshev distance from {@code threat}.
@@ -1691,7 +1819,9 @@ public class MobSystem {
                 mob.intent = Mob.Intent.SHOOTING;
                 return;
             }
-            mob.intent = Mob.Intent.PURSUING;
+            mob.intent = (cheb > 1 && BuffSystem.hasBuff(mob,
+                    com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN))
+                    ? Mob.Intent.RELOADING : Mob.Intent.PURSUING;
             mob.targetPosition = attackTarget.position;
             stepOrIdle(mob, level);
             return;
@@ -1760,17 +1890,19 @@ public class MobSystem {
                 mob.intent = Mob.Intent.SHOOTING;
                 return;
             }
+            boolean onCooldown = BuffSystem.hasBuff(mob,
+                    com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN);
             if (cheb <= STANDOFF_BUBBLE_TILES) {
                 Point retreat = findRetreatTile(mob, attackTarget, level);
                 if (retreat != null) {
-                    mob.intent = Mob.Intent.KITING;
+                    mob.intent = onCooldown ? Mob.Intent.RELOADING : Mob.Intent.KITING;
                     mob.targetPosition = retreat;
                     stepOrIdle(mob, level);
                     return;
                 }
                 // Cornered - fall through to closing distance + melee.
             }
-            mob.intent = Mob.Intent.PURSUING;
+            mob.intent = onCooldown ? Mob.Intent.RELOADING : Mob.Intent.PURSUING;
             mob.targetPosition = attackTarget.position;
             stepOrIdle(mob, level);
             return;
@@ -1811,6 +1943,8 @@ public class MobSystem {
         if (BuffSystem.hasBuff(shooter, com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN)) {
             return false;
         }
+        // Prefer melee when adjacent — only ranged-only mobs fire point-blank.
+        if (cheb == 1 && ss.damage.max() > 0) return false;
         int dmg = rollRange(ss.rangedDamage);
         com.bjsp123.rl2.model.Mob.RangedDamageType rdt = shooter.rangedDamageType != null
                 ? shooter.rangedDamageType
@@ -2125,6 +2259,8 @@ public class MobSystem {
         for (Mob m : level.mobs) {
             if (m == mob) continue;
             if (getAttitudeToMob(mob, m) == Attitude.NOTHING) continue;
+            if (BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.INVISIBLE)
+                    || BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.PHASE)) continue;
             int d = Math.max(Math.abs(m.position.tileX() - mx),
                              Math.abs(m.position.tileY() - my));
             // STEALTH perk halves enemy wake / vision radius when checking against the
@@ -2149,6 +2285,8 @@ public class MobSystem {
         for (Mob m : level.mobs) {
             if (m == target) continue;
             if (getAttitudeToMob(m, target) != Attitude.ATTACK) continue;
+            if (BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.INVISIBLE)
+                    || BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.PHASE)) continue;
             int d = Math.max(Math.abs(m.position.tileX() - tx),
                              Math.abs(m.position.tileY() - ty));
             double effRadius = radius;
@@ -2345,7 +2483,12 @@ public class MobSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemThrown(
                     thrower, it, thrower.position, impact, trajectoryVisible));
         }
-        TurnSystem.applyActionCost(thrower, thrower.effectiveStats().attackCost);
+        int throwCost = thrower.effectiveStats().attackCost;
+        if (thrower.perks != null) {
+            int hurlerLvl = thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.HURLER, 0);
+            for (int i = 0; i < hurlerLvl; i++) throwCost = (int) Math.ceil(throwCost * 0.75);
+        }
+        TurnSystem.applyActionCost(thrower, throwCost);
     }
 
     /**
@@ -2412,6 +2555,8 @@ public class MobSystem {
                 // damage actually lands. Damage range comes from ItemSystem so the
                 // weapon's level increment lands on thrown impact too.
                 int dmg = rollRange(ItemStats.effectiveDamageRange(it));
+                dmg = applySurpriseIfNeeded(level, thrower, target, dmg,
+                        AttackType.THROWN, DamageElement.PHYSICAL);
                 processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL);
             }
         }
@@ -2457,6 +2602,29 @@ public class MobSystem {
                     if (dx * dx + dy * dy > r2) continue;
                     FireSystem.ignite(level, tx + dx, ty + dy);
                 }
+            }
+        } else if (te == ItemEffect.WATER && inBounds) {
+            // Water bomb: splashes a larger water disc than ordinary bombs.
+            // Affected mobs are soaked and pushed back by one square per effective level.
+            java.util.List<Mob> soaked = new ArrayList<>();
+            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
+                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
+                    if (dx * dx + dy * dy > r2) continue;
+                    int x = tx + dx, y = ty + dy;
+                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                    Point p = new Point(x, y);
+                    SurfaceSystem.addSurface(level, p, Surface.WATER);
+                    Mob m = MobQueries.mobAt(level, p);
+                    if (m != null && m != thrower) {
+                        BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.WET,
+                                Math.max(1, lvl), Math.max(1, WATER_STEP_BUFF_TURNS + lvl), thrower);
+                        soaked.add(m);
+                    }
+                }
+            }
+            int kb = Math.max(0, lvl * it.knockbackSquares);
+            if (kb > 0) {
+                for (Mob m : soaked) if (m.hp > 0) knockBack(level, m, kb, dst);
             }
         } else if (te == ItemEffect.OIL && inBounds) {
             // Oil bomb: deals no damage but lays down an oil disc using the bomb area.
@@ -2552,6 +2720,26 @@ public class MobSystem {
                     }
                 }
             }
+        } else if (te == ItemEffect.SMOKE && inBounds) {
+            // SMOKE - drop an opaque cloud over the disc. Smoke blocks sight and
+            // light but not projectiles; duration scales through the same
+            // abilityPower path used by poison-cloud items.
+            int dur = ItemStats.effectiveBuffDuration(it);
+            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
+                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
+                    if (dx * dx + dy * dy > r2) continue;
+                    int x = tx + dx, y = ty + dy;
+                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                    if (level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(
+                                new Point(x, y)));
+                    }
+                    if (dur > 0) {
+                        CloudSystem.addCloud(level, x, y,
+                                com.bjsp123.rl2.model.Level.Cloud.SMOKE, dur);
+                    }
+                }
+            }
         } else if (te == ItemEffect.FREEZE && inBounds) {
             // Freeze bomb: bomb damage to the target, CHILLED applied to every mob in
             // the freeze disc. Removes fire vegetation in the disc. Water-to-ice
@@ -2577,7 +2765,10 @@ public class MobSystem {
                 int dx = mx - tx, dy = my - ty;
                 if (dx * dx + dy * dy <= r2) {
                     BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.CHILLED,
-                            Math.max(1, lvl), Math.max(1, 3 + lvl), thrower);
+                            Math.max(1, lvl), Math.max(1, 6 + lvl), thrower);
+                    if (m != thrower) {
+                        m.ticksTillMove += TurnSystem.STANDARD_TURN_TICKS;
+                    }
                 }
             }
         } else if (te == ItemEffect.VOID && inBounds) {

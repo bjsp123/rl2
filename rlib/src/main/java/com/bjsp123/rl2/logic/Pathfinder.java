@@ -98,6 +98,8 @@ public class Pathfinder {
             // occupants follow the same rule (so anthills + other hostile
             // inanimates can be melee'd by stepping into them); otherwise
             // they remain impassable furniture.
+            // PERF: this attitude lookup happens inside A* neighbour expansion;
+            // an occupancy/attitude cache would remove a lot of repeated work.
             if (MobSystem.getAttitudeToMob(mover, m) == Attitude.ATTACK) continue;
             if (m.behavior == Behavior.INANIMATE) return false;
             // Player movers keep their old gate: the player can step onto a non-hostile

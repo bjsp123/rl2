@@ -407,6 +407,39 @@ public final class LevelFactoryPopulate {
         }
     }
 
+    /** Spawn one extra encounter for title-screen attract mode. Uses the same
+     *  power/theme gates and retainer path as normal population, with an occasional
+     *  unique draw when one is eligible. */
+    public static Mob spawnAttractMob(Level level, Random rng,
+                                      com.bjsp123.rl2.model.UniqueTracker unique) {
+        if (level == null || rng == null) return null;
+        String type = null;
+        List<String> uniques = eligibleUniqueMobs(level, unique);
+        if (!uniques.isEmpty() && rng.nextDouble() < 0.25) {
+            type = uniques.get(rng.nextInt(uniques.size()));
+        }
+        if (type == null) {
+            double[][] weightHolder = new double[1][];
+            List<String> pool = eligibleMobs(level, weightHolder);
+            type = pickWeighted(pool, weightHolder[0], rng);
+        }
+        if (type == null) return null;
+        for (int tries = 0; tries < 24; tries++) {
+            Point seed = LevelFactoryUtils.randomFloorTile(level, rng);
+            if (seed == null) return null;
+            if (mobAt(level, seed.tileX(), seed.tileY())) continue;
+            if (level.isReserved(seed.tileX(), seed.tileY())) continue;
+            Mob m = spawnMobAt(level, type, seed, 1 + level.depth, rng,
+                    /* withRetainers= */ true);
+            if (m != null && unique != null && m.unique) unique.mobs.add(type);
+            if (m != null && level.events != null) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(m, seed));
+            }
+            return m;
+        }
+        return null;
+    }
+
     /** Canonical spawn chain: build the mob, scale to {@code spawnLevel}, append to
      *  {@code level.mobs}, and (when {@code withRetainers} is true) generate the
      *  CSV-declared retainer entourage on adjacent floor tiles. Returns the spawned

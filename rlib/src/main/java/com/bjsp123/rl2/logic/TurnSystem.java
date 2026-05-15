@@ -29,6 +29,14 @@ public class TurnSystem {
      *  so a fast or slow player doesn't accelerate world-state churn. */
     public static final int STANDARD_TURN_TICKS = 100;
 
+    public static int standardTurnForTick(int tick) {
+        return Math.max(0, tick) / STANDARD_TURN_TICKS;
+    }
+
+    public static int tickWithinStandardTurn(int tick) {
+        return Math.floorMod(tick, STANDARD_TURN_TICKS);
+    }
+
     /**
      * Advance the world by exactly one game tick:
      * <ol>
@@ -42,11 +50,16 @@ public class TurnSystem {
      * Callers maintaining a monotonic world-tick counter add 1 when this returns true.
      */
     public static boolean tick(Level level) {
+        billFrozenReadyMobs(level);
         if (isPlayerTurn(level)) return false;
 
         for (Mob mob : level.mobs) {
             if (mob.behavior == Behavior.INANIMATE) continue;
+            int before = mob.ticksTillMove;
             if (mob.ticksTillMove > 0) mob.ticksTillMove--;
+            if (before > 0 && mob.ticksTillMove == 0) {
+                MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
+            }
         }
 
         MobAi.processAllAiTurns(level);
@@ -57,6 +70,15 @@ public class TurnSystem {
             tickStandardTurn(level);
         }
         return true;
+    }
+
+    private static void billFrozenReadyMobs(Level level) {
+        for (Mob mob : level.mobs) {
+            if (mob.behavior == Behavior.INANIMATE || mob.ticksTillMove != 0) continue;
+            if (!BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN)) continue;
+            MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
+            applyMoveCost(mob, mob.effectiveStats().moveCost);
+        }
     }
 
     /**
@@ -181,14 +203,16 @@ public class TurnSystem {
 
     public static boolean isPlayerTurn(Level level) {
         for (Mob mob : level.mobs) {
-            if (mob.behavior == Behavior.PLAYER && mob.ticksTillMove == 0) return true;
+            if (mob.behavior == Behavior.PLAYER && mob.ticksTillMove == 0
+                    && !BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN)) return true;
         }
         return false;
     }
 
     public static Mob getActivePlayer(Level level) {
         for (Mob mob : level.mobs) {
-            if (mob.behavior == Behavior.PLAYER && mob.ticksTillMove == 0) return mob;
+            if (mob.behavior == Behavior.PLAYER && mob.ticksTillMove == 0
+                    && !BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN)) return mob;
         }
         return null;
     }

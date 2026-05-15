@@ -684,14 +684,11 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         detailIconRect.x + 4, detailIconRect.y + 4,
                         detailIconRect.w - 8, detailIconRect.h - 8);
             }
-            if (selectedItem.brand != null) {
-                com.bjsp123.rl2.world.render.BrandFx.drawSparks(
-                        ctx.batch, ctx.whitePixel,
-                        detailIconRect.x, detailIconRect.y,
-                        detailIconRect.w, detailIconRect.h,
-                        selectedItem.brand,
-                        com.bjsp123.rl2.world.render.BrandFx.phaseFor(selectedItem));
-            }
+            com.bjsp123.rl2.world.render.BrandFx.drawItemSparks(
+                    ctx.batch, ctx.whitePixel,
+                    detailIconRect.x, detailIconRect.y,
+                    detailIconRect.w, detailIconRect.h,
+                    selectedItem);
             TextDraw.wrappedCentre(ctx, ctx.fontHeader, UIVars.ACCENT,
                     detailNameBlock, detailWindow.cx(), detailIconRect.y - 12f);
 

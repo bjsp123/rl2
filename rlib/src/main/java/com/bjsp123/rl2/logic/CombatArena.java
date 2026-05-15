@@ -143,7 +143,7 @@ public final class CombatArena {
         // required but keeps the side-effect symmetry with the dungeon path.
         if (world != null) {
             world.tick++;
-            level.currentTurn = world.turn;
+            level.currentTurn = TurnSystem.standardTurnForTick(world.tick);
         }
         TurnSystem.tick(level);
         FireSystem.tickRealTime(level, dtMs);

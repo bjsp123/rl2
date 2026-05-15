@@ -99,6 +99,7 @@ public class PlayScreen implements Screen {
      *  renderer reads. The single source of truth for the tick-gate freeze counter
      *  lives on {@link com.bjsp123.rl2.world.anim.AnimQueue}. */
     private final com.bjsp123.rl2.world.anim.Animator animator = new com.bjsp123.rl2.world.anim.Animator();
+    private final FrameProfiler frameProfiler = new FrameProfiler();
 
     private boolean initialized;
     private HallOfFameEntry lastSnapshot;
@@ -420,7 +421,7 @@ public class PlayScreen implements Screen {
         // closes over this::recenterCameraOnPlayer so it can recenter after stair
         // traversal without holding a back-reference to the screen.
         controller = new PlayController(world, animator, actionBar, targetingOverlay,
-                levelRenderer, this::recenterCameraOnPlayer);
+                levelRenderer, this::recenterCameraOnPlayer, frameProfiler);
         if (newRun) controller.seedDefaultActionBar(player, charClass);
         v2Inventory.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
@@ -500,17 +501,23 @@ public class PlayScreen implements Screen {
 
     @Override
     public void render(float delta) {
+        Level level  = world.currentLevel();
+        frameProfiler.begin(delta, level, animator.queue.freezeFrames);
+
+        long span = frameProfiler.start();
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        frameProfiler.add("clear", span);
 
-        Level level  = world.currentLevel();
+        span = frameProfiler.start();
         v2Look.setLevel(level);
         lookMode.setLevel(level);
         targetingOverlay.setLevel(level);
 
-        // Sync the turn counter into the level so stateless logic (MobSystem.killMob and
-        // friends) can time-stamp history entries without passing the World around.
-        level.currentTurn = world.turn;
+        // Sync the completed standard turn into the level so stateless logic
+        // (MobSystem.killMob and friends) can time-stamp history entries without
+        // passing the World around. The authoritative clock is world.tick.
+        level.currentTurn = TurnSystem.standardTurnForTick(world.tick);
 
         Mob player = TurnSystem.findPlayer(level);
         if (player != null) {
@@ -522,6 +529,7 @@ public class PlayScreen implements Screen {
         // Refresh look-popup level reference each frame (level can change on
         // stairs traversal).
         v2Look.setLevel(level);
+        frameProfiler.add("frameSetup", span);
 
         boolean overlayOpen = isAnyPopupOpen();
         // Drain one frame off the animation gate BEFORE the tick check. This lets a
@@ -529,7 +537,9 @@ public class PlayScreen implements Screen {
         // frame instead of leaving a one-frame stationary gap that reads as jerky.
         // The drain count matches the Animator's frames-per-render multiplier so the
         // freeze gate clears at the user-selected animation speed.
+        span = frameProfiler.start();
         animator.queue.tick(com.bjsp123.rl2.ui.skin.Settings.framesPerRender());
+        frameProfiler.add("queueTick", span);
         // Single gate: any visible game-action animation in progress (step interpolation,
         // attack lunge / flinch, projectile in flight, death flicker / fade) bumps
         // animator.queue.freezeFrames; we wait for it to drain before letting another tick
@@ -538,8 +548,7 @@ public class PlayScreen implements Screen {
                 && (com.bjsp123.rl2.ui.skin.Settings.instantActions() || animator.queue.freezeFrames == 0)
                 && controller.tick(level);
         if (ticked) {
-            world.turn++;
-            level.currentTurn = world.turn;
+            level.currentTurn = TurnSystem.standardTurnForTick(world.tick);
             // Per-standard-turn handlers (vegetation spread, fire spread, smoke emission,
             // ...) are dispatched from TurnSystem.tick on every 100th call, so they keep a
             // stable game-time cadence regardless of player speed. Ember emission lives
@@ -561,15 +570,24 @@ public class PlayScreen implements Screen {
         // owns per-mob anim state, the freeze gate, ghost flicker/fade, and the
         // periodic teleport / burning / sleep-Z particle cadences.
         animator.impactFiredThisTick = false;
+        span = frameProfiler.start();
         animator.consume(level);
+        frameProfiler.add("animConsume", span);
+        span = frameProfiler.start();
         animator.tick(level, dtMs);
+        frameProfiler.add("animTick", span);
         if (animator.impactFiredThisTick) {
+            span = frameProfiler.start();
             levelRenderer.markDirty();
             if (controller != null) controller.afterMove(level);
+            frameProfiler.add("impactAfterMove", span);
         }
+        span = frameProfiler.start();
         com.bjsp123.rl2.logic.FireSystem.tickRealTime(level, dtMs);
         com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
+        frameProfiler.add("realtimeFx", span);
 
+        span = frameProfiler.start();
         Mob playerAfter = TurnSystem.findPlayer(level);
         // Cross-run achievement poll - depth-threshold checks fire from
         // here so any path that changes the player's level (stairs,
@@ -592,39 +610,58 @@ public class PlayScreen implements Screen {
             // Game over is terminal - clear the back-stack so the user can't
             // pop back into a disposed PlayScreen.
             game.setRootScreen(new com.bjsp123.rl2.ui.v2.V2GameOver(game, lastSnapshot));
+            frameProfiler.add("deathHandling", span);
+            frameProfiler.finish(ticked, overlayOpen);
             return;
         }
+        frameProfiler.add("deathCheck", span);
 
+        span = frameProfiler.start();
         cameraController.followPlayer(playerAfter);
         camera.update();
+        frameProfiler.add("camera", span);
 
         // Audit action slots EVERY frame, not just inside afterMove. Any path that consumes
         // an item (throw, eat, ...) is supposed to call afterMove which already runs the
         // audit; this redundant call is a safety net for edge cases (e.g. an item that left
         // the inventory through a path I haven't anticipated) so a bound action button is
         // never showing a stale or empty reference for longer than one frame.
+        span = frameProfiler.start();
         controller.auditActionSlots(playerAfter);
+        frameProfiler.add("auditSlots", span);
 
         // Tell the renderer which mob (if any) the look cursor is over, so it can overlay
         // attitude markers on every visible mob and the looked-at mob's state of mind.
         // Cast is intentional - only DefaultLevelRenderer carries this annotation hook;
         // other LevelRenderer impls (test stubs) silently skip the overlay.
+        span = frameProfiler.start();
         if (levelRenderer instanceof DefaultLevelRenderer dlr) {
             dlr.setLookedAtMob(lookMode.isActive() ? lookMode.mobAtCursor() : null);
         }
         levelRenderer.render(level, camera);
+        frameProfiler.add("levelRender", span);
+        span = frameProfiler.start();
         targetingOverlay.render();
+        frameProfiler.add("targetingRender", span);
+        span = frameProfiler.start();
         lookMode.render();
+        frameProfiler.add("lookRender", span);
 
         // V2 HUD chrome - drawn between the world and the popups so popups
         // (inventory, look, etc.) overlay the HUD correctly. Switches
         // projection to V2's camera internally.
-        v2Hud.update(level.depth, world.turn, world.tick);
+        span = frameProfiler.start();
+        v2Hud.update(level.depth, animator.visualClockTick(level, world.tick));
+        frameProfiler.add("hudUpdate", span);
+        span = frameProfiler.start();
         v2Hud.render();
+        frameProfiler.add("hudRender", span);
 
         // Achievement toast - sits above the HUD strip and below modal
         // popups. Renders nothing when no unlock is active.
+        span = frameProfiler.start();
         if (achievementToast != null) achievementToast.render(dtMs);
+        frameProfiler.add("toast", span);
 
         // Popup layer - the V2 stage walks the registered popup actors
         // in z-order. Each {@link com.bjsp123.rl2.ui.v2.stage.V2PopupActor}
@@ -633,8 +670,13 @@ public class PlayScreen implements Screen {
         // sits on a higher z-layer so its scrim cleanly hides the
         // inventory's text behind it.
         float dtSec = Gdx.graphics.getDeltaTime();
+        span = frameProfiler.start();
         game.ui.v2Stage.act(dtSec);
+        frameProfiler.add("stageAct", span);
+        span = frameProfiler.start();
         game.ui.v2Stage.draw();
+        frameProfiler.add("stageDraw", span);
+        frameProfiler.finish(ticked, overlayOpen);
     }
 
     /** True iff any modal popup or input-claiming overlay is currently open.

@@ -117,6 +117,9 @@ final class FxRenderer {
         } else if (effect.type == EffectType.KNOCKBACK_FLASH) {
             if (!level.visible[ex][ey]) return;
             drawKnockbackFlash(effect);
+        } else if (effect.type == EffectType.SURPRISE_ICON) {
+            if (!level.visible[ex][ey]) return;
+            drawSurpriseIcon(effect);
         } else if (effect.type == EffectType.DUST_CLOUD) {
             if (!level.visible[ex][ey]) return;
             drawDustCloud(level, effect);
@@ -772,6 +775,25 @@ final class FxRenderer {
         float drawSize = CELL;
         float drawX = e.location.tileX() * CELL;
         float drawY = e.location.tileY() * CELL;
+        batch.setColor(1f, 1f, 1f, alpha);
+        batch.draw(region, drawX, drawY, drawSize, drawSize);
+        batch.setColor(Color.WHITE);
+    }
+
+    private void drawSurpriseIcon(Effect e) {
+        TextureRegion region = BuffIcons.surpriseRegion();
+        if (region == null) return;
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float t = Math.min(1f, e.frame / (float) total);
+        float flash = (e.frame <= 2 || (e.frame >= 5 && e.frame <= 7)) ? 1f : 0.75f;
+        float alpha = t < 0.45f ? flash : Math.max(0f, flash * (1f - (t - 0.45f) / 0.55f));
+        if (alpha <= 0f) return;
+        float rise = 10f * t;
+        float scale = t < 0.2f ? 1.25f : 1f;
+        float drawSize = CELL * scale;
+        float drawX = e.location.tileX() * CELL + CELL * 0.5f - drawSize * 0.5f;
+        float drawY = e.location.tileY() * CELL + CELL * 1.85f + rise;
         batch.setColor(1f, 1f, 1f, alpha);
         batch.draw(region, drawX, drawY, drawSize, drawSize);
         batch.setColor(Color.WHITE);

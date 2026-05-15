@@ -50,6 +50,7 @@ final class PlayController {
     private final TargetingOverlay targetingOverlay;
     private final LevelRenderer levelRenderer;
     private final Runnable recenterCamera;
+    private final FrameProfiler profiler;
 
     /** Auto-move interrupt - set of hostile mobs visible at the start of the current
      *  auto-path. While auto-pathing, any newly-visible hostile (not in this set) aborts
@@ -64,19 +65,27 @@ final class PlayController {
                    ActionBar actionBar,
                    TargetingOverlay targetingOverlay,
                    LevelRenderer levelRenderer,
-                   Runnable recenterCamera) {
+                   Runnable recenterCamera,
+                   FrameProfiler profiler) {
         this.world = world;
         this.animator = animator;
         this.actionBar = actionBar;
         this.targetingOverlay = targetingOverlay;
         this.levelRenderer = levelRenderer;
         this.recenterCamera = recenterCamera;
+        this.profiler = profiler;
     }
 
     boolean tick(Level level) {
+        long tickStart = profiler.start();
         if (TurnSystem.isPlayerTurn(level)) {
+            long playerTurnStart = profiler.start();
             Mob player = TurnSystem.getActivePlayer(level);
-            if (player == null || player.targetPosition == null) return false;
+            if (player == null) return false;
+            if (player.visibleMobsAtTurnStart == null) {
+                MobSystem.snapshotVisibleMobsAtTurnStart(level, player);
+            }
+            if (player.targetPosition == null) return false;
             if (shouldInterruptAutoMove(level, player)) {
                 player.targetPosition = null;
                 autoMoveSnapshotHostiles = null;
@@ -84,11 +93,13 @@ final class PlayController {
                 return false;
             }
             MobSystem.stepTowardTarget(player, level);
+            profiler.add("playerStep", playerTurnStart);
         }
         int safety = TurnSystem.STANDARD_TURN_TICKS * 4;
         // Drain any pre-existing sequential flag so the loop's break test
         // only reflects what THIS loop's ticks queue.
         animator.queue.consumeSequentialFlag();
+        long turnLoopStart = profiler.start();
         while (safety-- > 0 && !TurnSystem.isPlayerTurn(level)) {
             if (!TurnSystem.tick(level)) break;
             world.tick++;
@@ -105,19 +116,29 @@ final class PlayController {
             // jerky one-mob-per-render-frame autotravel cadence.
             if (animator.queue.consumeSequentialFlag()) break;
         }
+        profiler.add("turnLoop", turnLoopStart);
         afterMove(level);
         Mob player = TurnSystem.findPlayer(level);
         if (player != null && player.targetPosition == null) {
             autoMoveSnapshotHostiles = null;
             autoMoveLastHp = -1;
         }
+        profiler.add("controllerTick", tickStart);
         return true;
     }
 
     void afterMove(Level level) {
+        long start = profiler.start();
+        long lightingStart = profiler.start();
         LevelSystem.computeLighting(level);
+        profiler.add("computeLighting", lightingStart);
+        long visStart = profiler.start();
         LevelSystem.updateVisibility(level);
+        profiler.add("updateVisibility", visStart);
+        long auditStart = profiler.start();
         auditActionSlots(TurnSystem.findPlayer(level));
+        profiler.add("auditAfterMove", auditStart);
+        profiler.add("afterMove", start);
     }
 
     void auditActionSlots(Mob player) {
@@ -139,6 +160,7 @@ final class PlayController {
         Item bound = actionBar.get(slotIndex);
         if (bound == null) return;
         if (!com.bjsp123.rl2.ui.skin.Settings.instantActions() && animator.queue.freezeFrames > 0) return;
+        if (!TurnSystem.isPlayerTurn(level)) return;
 
         if (targetingOverlay.isActive()) {
             if (targetingOverlay.sourceKey() == bound) {
@@ -147,8 +169,6 @@ final class PlayController {
             }
             targetingOverlay.cancel();
         }
-
-        if (!TurnSystem.isPlayerTurn(level)) return;
 
         UseBehavior ub = bound.useBehavior == null ? UseBehavior.NONE : bound.useBehavior;
         if (ub == UseBehavior.NONE) {
@@ -265,7 +285,7 @@ final class PlayController {
         Level level = world.currentLevel();
         targetingOverlay.setPlayer(thrower);
         targetingOverlay.setLevel(level);
-        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
+        targetingOverlay.setValidTiles(throwGrid(level, thrower), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             MobSystem.throwItem(cur, thrower, item, target);
@@ -282,6 +302,24 @@ final class PlayController {
         for (int x = Math.max(0, px - radius); x <= Math.min(level.width - 1, px + radius); x++) {
             for (int y = Math.max(0, py - radius); y <= Math.min(level.height - 1, py + radius); y++) {
                 if (Math.max(Math.abs(x - px), Math.abs(y - py)) > radius) continue;
+                grid[x][y] = level.visible[x][y];
+            }
+        }
+        return grid;
+    }
+
+    /** Grid of valid throw targets: visible + within Chebyshev throw range (base + Hurler bonus). */
+    private static boolean[][] throwGrid(Level level, Mob thrower) {
+        boolean[][] grid = new boolean[level.width][level.height];
+        if (thrower.position == null || level.visible == null) return grid;
+        int range = com.bjsp123.rl2.logic.GameBalance.DEFAULT_THROW_RANGE;
+        if (thrower.perks != null)
+            range += thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.HURLER, 0)
+                     * com.bjsp123.rl2.logic.GameBalance.HURLER_RANGE_PER_LEVEL;
+        int px = thrower.position.tileX(), py = thrower.position.tileY();
+        for (int x = Math.max(0, px - range); x <= Math.min(level.width - 1, px + range); x++) {
+            for (int y = Math.max(0, py - range); y <= Math.min(level.height - 1, py + range); y++) {
+                if (Math.max(Math.abs(x - px), Math.abs(y - py)) > range) continue;
                 grid[x][y] = level.visible[x][y];
             }
         }
@@ -331,7 +369,7 @@ final class PlayController {
                         : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer"),
                 p.characterLevel,
                 p.score, world.currentLevel().depth, equipment, System.currentTimeMillis());
-        entry.totalTurns  = world.turn;
+        entry.totalTurns  = TurnSystem.standardTurnForTick(world.tick);
         entry.beastsTamed = p.beastsTamed;
         entry.favPerk     = favPerkOf(p);
         return entry;

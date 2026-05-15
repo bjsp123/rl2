@@ -61,6 +61,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static final float WATER_SCROLL_PX_PER_SEC = 1.2f;
 
     private static final int CELL = 16;
+    /** Extra off-camera tile margin so tall props, outlines, particles, and edge shadows
+     *  do not pop at the viewport boundary. */
+    private static final int VIEW_CULL_PAD_TILES = 3;
     /** Pixels above the cell's bottom edge where every drawable object's baseline sits -
      *  mobs, items, effects, and terrain props (lamps, statues, throne, altar) all rest
      *  on this line so figures read as standing on the floor rather than embedded in it. */
@@ -70,42 +73,19 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static final int MOB_VISIBLE_W = 16;
     private static final int MOB_VISIBLE_H = 20;
 
-    /** Minimum radial taps for the silhouette outline at small widths - 8 hits the
-     *  cardinals + diagonals every 45 degrees. At thicker widths we add taps proportional
-     *  to the perimeter so the outline's outer edge reads as a smooth curve instead
-     *  of a chunky 8-pointed star. {@link #ensureOutlineTaps} keeps the cached arrays
-     *  in sync with {@link com.bjsp123.rl2.ui.skin.MobOutline#width()}. */
-    private static final int OUTLINE_MIN_TAPS = 8;
-    private static int     outlineTaps     = OUTLINE_MIN_TAPS;
-    private static float[] outlineDx       = new float[OUTLINE_MIN_TAPS];
-    private static float[] outlineDy       = new float[OUTLINE_MIN_TAPS];
-    /** Last width the cached arrays were built for. {@code NaN} forces a rebuild on
-     *  the first call so {@link #outlineDx} / {@link #outlineDy} hold valid values. */
-    private static float   outlineCachedW  = Float.NaN;
+    /** Radial taps for outlines. We draw these directly with the source texture; no filter
+     *  swaps or generated GL textures, which keeps the path native-crash resistant. */
+    private static final int OUTLINE_TAPS = 8;
+    private static final float[] OUTLINE_DX = new float[OUTLINE_TAPS];
+    private static final float[] OUTLINE_DY = new float[OUTLINE_TAPS];
     static {
-        ensureOutlineTaps(0f); // populate the min-tap arrays
+        for (int i = 0; i < OUTLINE_TAPS; i++) {
+            double a = i * Math.PI * 2.0 / OUTLINE_TAPS;
+            OUTLINE_DX[i] = (float) Math.cos(a);
+            OUTLINE_DY[i] = (float) Math.sin(a);
+        }
     }
 
-    /** Refresh the cached unit-circle offset arrays for {@code outlineW} (in world
-     *  pixels). Tap count is {@code max(MIN, ceil(2pi * outlineW))} so adjacent taps
-     *  sit ~1 world pixel apart on the dilation circle - at width 0.6 we keep 8 taps
-     *  (the original 45 degrees spread); at width 2 we use 13; at width 3 we use 19. */
-    private static void ensureOutlineTaps(float outlineW) {
-        if (outlineW == outlineCachedW) return;
-        int taps = Math.max(OUTLINE_MIN_TAPS,
-                            (int) Math.ceil(2.0 * Math.PI * Math.max(0f, outlineW)));
-        if (taps != outlineTaps || outlineDx.length != taps) {
-            outlineTaps = taps;
-            outlineDx = new float[taps];
-            outlineDy = new float[taps];
-        }
-        for (int i = 0; i < taps; i++) {
-            double a = i * Math.PI * 2.0 / taps;
-            outlineDx[i] = (float) Math.cos(a);
-            outlineDy[i] = (float) Math.sin(a);
-        }
-        outlineCachedW = outlineW;
-    }
     /** Width of the thin shadow strip painted along the wall-facing edges of floor tiles. The
      *  strip uses a 4-pixel alpha gradient texture (opaque at the wall, fading into the floor). */
     private static final float FLOOR_SHADOW_PX    = 3f;
@@ -234,6 +214,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private float           stairLabelTime;
     private TextureRegion   whiteRegion;
     private final FogOverlay fog = new FogOverlay();
+
+    private record TileBounds(int minX, int maxX, int minY, int maxY) {}
 
     /** All effect/particle/fire/sleep-Z rendering lives here. Constructed lazily in
      *  {@link #create()} once the underlying batch + font + fire textures are loaded. */
@@ -452,6 +434,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     public void render(Level level, OrthographicCamera camera) {
         fog.createFor(level.width, level.height);
         fog.update(level);
+
         float dt = Gdx.graphics.getDeltaTime();
         waterTime      += dt;
         stairLabelTime += dt;
@@ -467,6 +450,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         currentStairsDown   = TileSprites.stairsDown(level.theme);
         currentAltar        = TileSprites.altar(level.theme);
         currentThrone       = TileSprites.throne(level.theme);
+        TileBounds view = visibleTileBounds(level, camera);
 
         // Bucket every item / mob / effect into the cell it will draw in. Items and mobs
         // only shift on ticks (pickup / drop / throw / step), so their indexes are cached
@@ -482,6 +466,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
         LevelRenderIndexes.CellBuckets<Item>   itemsByCell = cachedItemsByCell;
         LevelRenderIndexes.CellBuckets<Mob>    mobsByCell  = cachedMobsByCell;
+
         LevelRenderIndexes.CellBuckets<Effect> fxByCell    = LevelRenderIndexes.effectsByCell(level, animator.stage);
 
         batch.setProjectionMatrix(camera.combined);
@@ -504,18 +489,18 @@ public class DefaultLevelRenderer implements LevelRenderer {
         //            door overhangs, sideways-door overhangs - every "ceiling" tile painted
         //            on top of the already-laid scene.
         // Fog then runs once after pass 4.
-        for (int y = 0; y < level.height; y++) {
-            for (int x = 0; x < level.width; x++) {
+        for (int y = view.minY; y <= view.maxY; y++) {
+            for (int x = view.minX; x <= view.maxX; x++) {
                 if (!level.explored[x][y]) continue;
                 drawFloorAt(level, x, y);
                 drawChasmEdgeAt(level, x, y);
             }
         }
 
-        drawSurfacesPass(level);
+        drawSurfacesPass(level, view);
 
-        for (int y = level.height - 1; y >= 0; y--) {
-            for (int x = 0; x < level.width; x++) {
+        for (int y = view.maxY; y >= view.minY; y--) {
+            for (int x = view.minX; x <= view.maxX; x++) {
                 boolean explored = level.explored[x][y];
                 if (explored) {
                     drawFloorEdgeShadowAt(level, x, y);
@@ -554,8 +539,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // those flow through the normal effect pipeline, so there's no
         // dedicated cloud-tint pass here.
 
-        for (int y = level.height - 1; y >= 0; y--) {
-            for (int x = 0; x < level.width; x++) {
+        for (int y = view.maxY; y >= view.minY; y--) {
+            for (int x = view.minX; x <= view.maxX; x++) {
                 if (!level.explored[x][y]) continue;
                 drawWallOverlayAt(level, x, y);
             }
@@ -567,6 +552,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (lookedAtMob != null) drawLookAnnotations(level);
 
         fog.render(batch);
+
         batch.end();
     }
 
@@ -952,14 +938,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * once for the whole level instead of swapped on/off per cell, and the liquid texture
      * (TEXTURE1) is rebound only when the surface kind changes between cells.
      */
-    private void drawSurfacesPass(Level level) {
+    private void drawSurfacesPass(Level level, TileBounds view) {
         if (level.surface == null) return;
         // Cheap bail-out when the level has no surfaces at all - keeps the shader off the
         // GPU pipeline on dry levels.
         boolean any = false;
         outer:
-        for (int x = 0; x < level.width && !any; x++) {
-            for (int y = 0; y < level.height; y++) {
+        for (int x = view.minX; x <= view.maxX && !any; x++) {
+            for (int y = view.minY; y <= view.maxY; y++) {
                 if (level.explored[x][y] && level.surface[x][y] != null) { any = true; break outer; }
             }
         }
@@ -968,8 +954,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.setShader(surfaceMaskShader);
         surfaceMaskShader.setUniformi("u_surfaceTex", 1);
         Surface lastSurf = null;
-        for (int y = 0; y < level.height; y++) {
-            for (int x = 0; x < level.width; x++) {
+        for (int y = view.minY; y <= view.maxY; y++) {
+            for (int x = view.minX; x <= view.maxX; x++) {
                 if (!level.explored[x][y]) continue;
                 Surface s = level.surface[x][y];
                 if (s == null) continue;
@@ -1609,6 +1595,20 @@ public class DefaultLevelRenderer implements LevelRenderer {
         return x >= 0 && y >= 0 && x < level.width && y < level.height;
     }
 
+    private static TileBounds visibleTileBounds(Level level, OrthographicCamera camera) {
+        float halfW = camera.viewportWidth * camera.zoom * 0.5f;
+        float halfH = camera.viewportHeight * camera.zoom * 0.5f;
+        int minX = (int) Math.floor((camera.position.x - halfW) / CELL) - VIEW_CULL_PAD_TILES;
+        int maxX = (int) Math.ceil((camera.position.x + halfW) / CELL) + VIEW_CULL_PAD_TILES;
+        int minY = (int) Math.floor((camera.position.y - halfH) / CELL) - VIEW_CULL_PAD_TILES;
+        int maxY = (int) Math.ceil((camera.position.y + halfH) / CELL) + VIEW_CULL_PAD_TILES;
+        return new TileBounds(
+                Math.max(0, minX),
+                Math.min(level.width - 1, maxX),
+                Math.max(0, minY),
+                Math.min(level.height - 1, maxY));
+    }
+
     private void drawItemsAt(Level level, int x, int y, LevelRenderIndexes.CellBuckets<Item> itemsByCell) {
         List<Item> list = itemsByCell.at(x, y);
         if (list == null) return;
@@ -1726,7 +1726,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 } else {
                     drawRegionOutline(region, dx, dy, (float) CELL, (float) CELL);
                 }
-                drawBrandParticles(it, dx, dy);
+                BrandFx.drawWorldItemSparks(batch, whiteRegion,
+                        dx, dy, (float) CELL, (float) CELL, it, stairLabelTime);
             } else {
                 // Same silhouette outline mobs/statues/lamps get - items on the floor
                 // were the lone holdout. Helps loot pop visually against busy terrain.
@@ -1854,6 +1855,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (as.spawnTotalFrames > 0) {
             spawnScale = Math.min(1f, as.spawnFrame / (float) as.spawnTotalFrames);
         }
+        // INVISIBLE buff: alpha oscillates between 0.2 and 0.5.
+        if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.INVISIBLE)) {
+            float pulse = (float)(0.5 + 0.5 * Math.sin(stairLabelTime * 1.5));
+            alpha = 0.2f + 0.3f * pulse;
+        }
         Sprite s = spriteForMob(mob);
         if (s != null) {
             // Unique mobs continuously pulse their outline between black and white.
@@ -1865,7 +1871,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
             if (as.borderFlashFrames > 0) {
                 pulseR = 1f; pulseG = 1f; pulseB = 1f;
             }
-            drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale, pulseR, pulseG, pulseB);
+            boolean phaseActive = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+                    mob, com.bjsp123.rl2.model.Buff.BuffType.PHASE);
+            boolean frozenActive = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+                    mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN);
+            drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale,
+                    pulseR, pulseG, pulseB, phaseActive, frozenActive);
         } else {
             System.err.println("No sprite for mob " + mob.mobType + " at (" + mx + ", " + my + ")");
             //placeholder drawn here?
@@ -1961,7 +1972,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * shadow is drawn first, anchored at the baseline.
      */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY, float alpha) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f, false, false);
     }
 
     /** Spawn-scale variant: {@code spawnScale} 0..1 multiplies both x and y
@@ -1970,7 +1981,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  is the no-op default for normal rendering. */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f, false, false);
     }
 
     /**
@@ -1980,7 +1991,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
      */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale,
-                               float outlinePulseR, float outlinePulseG, float outlinePulseB) {
+                               float outlinePulseR, float outlinePulseG, float outlinePulseB,
+                               boolean phaseEffect) {
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale,
+                outlinePulseR, outlinePulseG, outlinePulseB, phaseEffect, false);
+    }
+
+    private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
+                               float alpha, float spawnScale,
+                               float outlinePulseR, float outlinePulseG, float outlinePulseB,
+                               boolean phaseEffect, boolean frozenEffect) {
         // "Natural" sprites (large blobs etc.) draw at source scale; everything else gets
         // normalised to MOB_VISIBLE_W x MOB_VISIBLE_H so silhouettes read consistently.
         float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * spawnScale;
@@ -2012,76 +2032,68 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float shadowW = s.visibleW * scaleX + SHADOW_EXTRA_W;
         batch.draw(shadowTex, tileCenterX - shadowW / 2f, baselineY - SHADOW_H / 2f,
                 shadowW, SHADOW_H);
-        // Black silhouette outline - 8 radial taps at user-configurable width and
-        // darkness (see MobOutline). World-pixel offsets are floats so the rim can
-        // be thinner than the game's integer pixel grid; at the default zoom
-        // (~0.35) one world pixel covers ~3 screen pixels, so a 0.6 wp outline
-        // reads as ~2 screen pixels regardless of source-texel snapping.
-        // SpriteBatch multiplies the sprite's RGB by the batch colour, so RGB=0
-        // zeroes out the original colour while preserving the alpha mask shape;
-        // where the original sprite is transparent, the offset draws are also
-        // transparent - so the rim only "shows" around the silhouette's edge.
-        // Death-fade alpha modulates it too.
+        // Radial-tap silhouette outline. This preserves unique/brand/hit outline colors
+        // without texture filter swaps or generated outline textures.
         float outlineW = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float outlineA = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness() * alpha;
-        if (outlineA > 0f && outlineW > 0f) {
-            ensureOutlineTaps(outlineW);
-            Texture mobTex = s.region.getTexture();
-            setOutlineFilter(mobTex, true);
+        if (!phaseEffect && outlineA > 0f && outlineW > 0f) {
             batch.setColor(outlinePulseR, outlinePulseG, outlinePulseB, outlineA);
-            for (int i = 0; i < outlineTaps; i++) {
+            for (int i = 0; i < OUTLINE_TAPS; i++) {
                 batch.draw(s.region,
-                        drawX + outlineDx[i] * outlineW,
-                        drawY + outlineDy[i] * outlineW,
+                        drawX + OUTLINE_DX[i] * outlineW,
+                        drawY + OUTLINE_DY[i] * outlineW,
                         dw, dh);
             }
-            setOutlineFilter(mobTex, false);
         }
         batch.setColor(1f, 1f, 1f, alpha);
-        batch.draw(s.region, drawX, drawY, dw, dh);
+        if (phaseEffect) {
+            drawPhaseStrips(s, drawX, drawY, dw, dh, alpha);
+        } else {
+            batch.draw(s.region, drawX, drawY, dw, dh);
+        }
+        if (frozenEffect) {
+            batch.setColor(0.82f, 0.88f, 0.92f, alpha * 0.40f);
+            batch.draw(s.region, drawX, drawY, dw, dh);
+        }
         batch.setColor(Color.WHITE);
     }
 
-    /** Swap a sprite-sheet texture's filter to Linear (smooth) or back to Nearest
-     *  (crisp), flushing the batch on either side so the change actually takes
-     *  effect for the outline pass without affecting the main sprite draw. Linear
-     *  filtering on the offset stamps gives the silhouette boundary a sub-texel
-     *  smoothing band - visually higher-res than the source pixel grid - which is
-     *  what makes thick outlines read as smooth curves instead of chunky pixel
-     *  staircases. The main sprite is drawn AFTER (on top), so the inside of the
-     *  silhouette stays at the crisp Nearest-filtered look.
-     *
-     *  <p>When the user has disabled outline smoothing
-     *  ({@link com.bjsp123.rl2.ui.skin.MobOutline#smooth()} == false), this is a
-     *  no-op - the outline taps draw with whatever filter the texture already had
-     *  (Nearest in normal use), keeping the original pixel-aligned look. */
-    private void setOutlineFilter(Texture tex, boolean enterOutlinePass) {
-        if (tex == null) return;
-        if (!com.bjsp123.rl2.ui.skin.Settings.mobOutlineSmooth()) return;
-        batch.flush();
-        Texture.TextureFilter f = enterOutlinePass ? Texture.TextureFilter.Linear
-                                                   : Texture.TextureFilter.Nearest;
-        tex.setFilter(f, f);
+    private void drawPhaseStrips(Sprite s, float drawX, float drawY, float dw, float dh, float alpha) {
+        final int STRIP_H = 2;
+        com.badlogic.gdx.graphics.Texture tex = s.region.getTexture();
+        int rx = s.region.getRegionX();
+        int ry = s.region.getRegionY();
+        int rw = s.region.getRegionWidth();
+        int rh = s.region.getRegionHeight();
+        if (rh <= 0) { batch.draw(s.region, drawX, drawY, dw, dh); return; }
+        float maxShift = CELL * 0.18f;
+        float sinVal = (float) Math.sin(stairLabelTime * 5.0);
+        batch.setColor(1f, 1f, 1f, alpha);
+        boolean fx = s.region.isFlipX(), fy = s.region.isFlipY();
+        for (int i = 0; i * STRIP_H < rh; i++) {
+            int srcH = Math.min(STRIP_H, rh - i * STRIP_H);
+            float destH = dh * srcH / (float) rh;
+            // Strip i from the top of the image maps to the top of the screen sprite.
+            // destY is the screen-bottom of this strip.
+            float destY = drawY + dh - (i * STRIP_H + srcH) * dh / (float) rh;
+            float xShift = (i % 2 == 0 ? 1f : -1f) * maxShift * sinVal;
+            batch.draw(tex, drawX + xShift, destY, dw, destH,
+                    rx, ry + i * STRIP_H, rw, srcH, fx, fy);
+        }
     }
 
     /** Generic radial-tap silhouette outline for any TextureRegion-based sprite
      *  (statues, the lamp ornament, items, etc). The destination rect should be
      *  the same one the actual draw uses - for flipped sprites the negative
-     *  width/height is preserved so the outline mirrors the silhouette. The
-     *  source texture's filter is briefly swapped to Linear so the outline edge
-     *  reads at sub-texel resolution; see {@link #setOutlineFilter}. */
+     *  width/height is preserved so the outline mirrors the silhouette. */
     private void drawRegionOutline(TextureRegion r, float x, float y, float w, float h) {
         float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || r == null) return;
-        ensureOutlineTaps(ow);
-        Texture tex = r.getTexture();
-        setOutlineFilter(tex, true);
         batch.setColor(0f, 0f, 0f, oa);
-        for (int i = 0; i < outlineTaps; i++) {
-            batch.draw(r, x + outlineDx[i] * ow, y + outlineDy[i] * ow, w, h);
+        for (int i = 0; i < OUTLINE_TAPS; i++) {
+            batch.draw(r, x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow, w, h);
         }
-        setOutlineFilter(tex, false);
         batch.setColor(Color.WHITE);
     }
 
@@ -2093,50 +2105,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || r == null) return;
-        ensureOutlineTaps(ow);
-        Texture tex = r.getTexture();
-        setOutlineFilter(tex, true);
         batch.setColor(pr * pulseStrength, pg * pulseStrength, pb * pulseStrength, oa);
-        for (int i = 0; i < outlineTaps; i++) {
-            batch.draw(r, x + outlineDx[i] * ow, y + outlineDy[i] * ow, w, h);
+        for (int i = 0; i < OUTLINE_TAPS; i++) {
+            batch.draw(r, x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow, w, h);
         }
-        setOutlineFilter(tex, false);
-        batch.setColor(Color.WHITE);
-    }
-
-    /** Small additive-blended particles that drift upward around a branded floor
-     *  item. Positions are deterministic per (item location + time) so particles
-     *  animate smoothly without any per-item state. */
-    private void drawBrandParticles(Item it, float dx, float dy) {
-        if (it.brand == null) return;
-        int hex = it.brand.colorHex;
-        float cr = ((hex >> 16) & 0xFF) / 255f;
-        float cg = ((hex >> 8)  & 0xFF) / 255f;
-        float cb = ( hex        & 0xFF) / 255f;
-        // Phase offset per tile so nearby branded items don't pulse in sync.
-        int tx = it.location.tileX(), ty = it.location.tileY();
-        float phase = (tx * 1.7f + ty * 2.3f);
-        float particleSize = CELL * 0.18f;
-        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
-        int count = 4;
-        for (int i = 0; i < count; i++) {
-            float slot = i / (float) count;
-            // Each particle cycles at a slightly different rate; speed chosen so
-            // the fastest takes ~2.5 s and the slowest ~3.5 s per cycle.
-            float speed = 0.8f + i * 0.15f;
-            float t = (stairLabelTime * speed + phase + slot * 7.3f) % 1.0f;
-            // Particles are only visible in the lower half of their cycle so
-            // they fade in and out rather than jumping back to the bottom.
-            if (t > 0.55f) continue;
-            float alpha = t < 0.15f ? t / 0.15f : (0.55f - t) / 0.40f;
-            alpha *= 0.7f;
-            // Spread horizontally based on slot; drift upward with t.
-            float px = dx + CELL * (0.2f + slot * 0.6f) - particleSize * 0.5f;
-            float py = dy + CELL * (0.1f + t * 1.4f);
-            batch.setColor(cr, cg, cb, alpha);
-            batch.draw(whiteRegion, px, py, particleSize, particleSize);
-        }
-        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         batch.setColor(Color.WHITE);
     }
 
@@ -2147,13 +2119,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || tex == null) return;
-        ensureOutlineTaps(ow);
-        setOutlineFilter(tex, true);
         batch.setColor(0f, 0f, 0f, oa);
-        for (int i = 0; i < outlineTaps; i++) {
-            batch.draw(tex, x + outlineDx[i] * ow, y + outlineDy[i] * ow, w, h);
+        for (int i = 0; i < OUTLINE_TAPS; i++) {
+            batch.draw(tex, x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow, w, h);
         }
-        setOutlineFilter(tex, false);
         batch.setColor(Color.WHITE);
     }
 
@@ -2164,15 +2133,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
         if (ow <= 0f || oa <= 0f || tex == null) return;
-        ensureOutlineTaps(ow);
-        setOutlineFilter(tex, true);
         batch.setColor(0f, 0f, 0f, oa);
-        for (int i = 0; i < outlineTaps; i++) {
+        for (int i = 0; i < OUTLINE_TAPS; i++) {
             batch.draw(tex,
-                    x + outlineDx[i] * ow, y + outlineDy[i] * ow,
+                    x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow,
                     w, h, srcX, srcY, srcW, srcH, false, false);
         }
-        setOutlineFilter(tex, false);
         batch.setColor(Color.WHITE);
     }
 

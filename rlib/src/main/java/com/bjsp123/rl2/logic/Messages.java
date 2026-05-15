@@ -107,6 +107,12 @@ public final class Messages {
                             EventPriority.LOW, true);
     }
 
+    public static LogEvent surpriseAttack(String attacker, String target, boolean playerInvolved) {
+        return new LogEvent(TextCatalog.format("eventlog.combat.surprise",
+                                    TextCatalog.vars("attacker", attacker, "target", target)),
+                            EventPriority.HIGH, playerInvolved);
+    }
+
     public static LogEvent playerKill(String playerName, String target) {
         return new LogEvent(TextCatalog.format("eventlog.combat.player.kill",
                                     TextCatalog.vars("player", playerName, "target", target)),

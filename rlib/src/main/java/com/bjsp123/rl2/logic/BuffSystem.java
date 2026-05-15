@@ -77,6 +77,10 @@ public final class BuffSystem {
             return null;
         }
         if (type == BuffType.ON_FIRE && target.effectiveStats().fireImmune) return null;
+        if (type == BuffType.ON_FIRE) {
+            removeBuff(target, BuffType.FROZEN);
+            removeBuff(target, BuffType.CHILLED);
+        }
 
         int newLevel    = Math.max(1, buffLevel);
         int newDuration = Math.max(1, durationTurns);
@@ -85,6 +89,7 @@ public final class BuffSystem {
             existing.level         = Math.max(existing.level,         newLevel);
             existing.durationTurns = Math.max(existing.durationTurns, newDuration);
             if (source != null) existing.source = source;
+            maybeFreeze(level, target, type, source);
             return existing;
         }
         Buff buff = new Buff(type, newLevel, newDuration, source);
@@ -94,7 +99,19 @@ public final class BuffSystem {
         if (type == BuffType.HOPE) {
             removeBuff(target, BuffType.FRIGHTENED);
         }
+        maybeFreeze(level, target, type, source);
         return buff;
+    }
+
+    private static void maybeFreeze(Level level, Mob target, BuffType applied, Mob source) {
+        if (applied != BuffType.CHILLED && applied != BuffType.WET) return;
+        Buff chilled = get(target, BuffType.CHILLED);
+        Buff wet = get(target, BuffType.WET);
+        if (chilled == null || wet == null) return;
+        int lvl = Math.max(chilled.level, wet.level);
+        int dur = Math.max(chilled.durationTurns, wet.durationTurns);
+        Mob src = source != null ? source : (chilled.source != null ? chilled.source : wet.source);
+        apply(level, target, BuffType.FROZEN, lvl, dur, src);
     }
 
     /** Strip a buff if present. No-op otherwise. Used by potion effects that should
@@ -107,6 +124,13 @@ public final class BuffSystem {
             if (it.next().type == type) { it.remove(); return true; }
         }
         return false;
+    }
+
+    public static void shortenFrozenOnDamage(Mob mob) {
+        Buff frozen = get(mob, BuffType.FROZEN);
+        if (frozen == null) return;
+        frozen.durationTurns -= 2;
+        if (frozen.durationTurns <= 0) removeBuff(mob, BuffType.FROZEN);
     }
 
     /** --- Per-turn driver --------------------------------------------------- */
@@ -271,10 +295,10 @@ public final class BuffSystem {
                     dst.accuracy += b.level;
                     dst.evasion  += b.level;
                 }
-                case INVISIBLE -> dst.evasion += 20;
+                case INVISIBLE -> dst.evasion += 40;
                 case GHOSTLY   -> dst.evasion += 20;
                 case PHASE -> {
-                    dst.evasion += 20;
+                    dst.evasion += 40;
                     moveMultiplier *= 0.3;
                 }
                 case HASTED -> moveMultiplier *= Math.pow(0.8, b.level);
@@ -282,7 +306,7 @@ public final class BuffSystem {
                     moveMultiplier *= 0.8;
                     actionMultiplier *= 0.8;
                 }
-                case CHILLED -> chilledPenalty = Math.max(chilledPenalty, 50 + b.level * 10);
+                case CHILLED -> chilledPenalty = Math.max(chilledPenalty, 80 + b.level * 15);
                 default -> { /* other buff types don't yet contribute to the stat block */ }
             }
         }

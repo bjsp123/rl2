@@ -12,6 +12,7 @@ import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.ui.hud.ActionBar;
 import com.bjsp123.rl2.logic.EventLog;
 import com.bjsp123.rl2.logic.TextCatalog;
+import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.ui.skin.Settings;
@@ -43,7 +44,7 @@ import java.util.function.Supplier;
  * <p>Render lifecycle each frame:
  * <ol>
  *   <li>{@code PlayScreen.render()} runs world-rendering passes</li>
- *   <li>{@code v2Hud.update(player, depth, turn, tick)} - fresh game state</li>
+ *   <li>{@code v2Hud.update(player, depth, tick)} - fresh game state</li>
  *   <li>{@code v2Hud.render()} - switches projection to V2 camera, runs
  *       a ShapeRenderer pass for backgrounds + bars, then a SpriteBatch
  *       pass for icons, status line, and burger glyph (drawn via shapes again
@@ -69,6 +70,7 @@ public final class V2Hud {
     private static final float ACTION_BTN   = 48f * 0.8f * HUD_SCALE;
     private static final float ACTION_GAP   = 4f;
     private static final float ICON_PAD     = 6f  * HUD_SCALE;
+    private static final float CLOCK_SIZE   = 18f;
 
     // -- State ----------------------------------------------------------------
     private final UiCtx ctx;
@@ -77,7 +79,7 @@ public final class V2Hud {
      *  doesn't leave the HUD bound to a stale Mob reference. */
     private Supplier<Mob> playerSupplier;
     private ActionBar actionBar;
-    private int depth, turn;
+    private int depth, tick;
 
     // Callbacks - same shape as the V1 HudRenderer.setOn* setters, so
     // PlayScreen's existing wiring carries over with minimal changes.
@@ -102,6 +104,7 @@ public final class V2Hud {
     private final Rect hpBarRect    = new Rect();
     private final Rect xpBarRect    = new Rect();
     private final Rect satBarRect   = new Rect();
+    private final Rect clockRect    = new Rect();
     private final Rect[] actionRects = new Rect[ActionBar.SLOTS];
     private final Rect invRect      = new Rect();
     private final Rect lookRect     = new Rect();
@@ -158,13 +161,11 @@ public final class V2Hud {
     public void setOnOpenMap(Runnable fn)           { this.onOpenMap = fn; }
     public void setOnOpenLog(Runnable fn)           { this.onOpenLog = fn; }
 
-    /** Frame state - depth / turn for the status line; player read via
-     *  {@link #playerSupplier}. The {@code tick} parameter is accepted for
-     *  parity with the legacy HUD's call signature but isn't surfaced in
-     *  the V2 status line. */
-    public void update(int depth, int turn, int tick) {
+    /** Frame state - depth and game tick for the status line / turn clock;
+     *  player read via {@link #playerSupplier}. */
+    public void update(int depth, int tick) {
         this.depth = depth;
-        this.turn  = turn;
+        this.tick  = tick;
     }
 
     /** True when the burger dropdown is showing - PlayScreen folds this
@@ -197,6 +198,7 @@ public final class V2Hud {
         xpBarRect.set(barX, by, BAR_W, BAR_H);
         by -= BAR_H + BAR_GAP;
         satBarRect.set(barX, by, BAR_W, BAR_H);
+        clockRect.set(MARGIN, satBarRect.y - CLOCK_SIZE - 8f, CLOCK_SIZE, CLOCK_SIZE);
 
         // Burger at top-right.
         burgerRect.set(w - MARGIN - ACTION_BTN, h - MARGIN - ACTION_BTN,
@@ -292,6 +294,7 @@ public final class V2Hud {
             drawBar(s, xpBarRect,  0f, UIVars.ACCENT);
             drawBar(s, satBarRect, 0f, UIVars.BORDER_OUTER);
         }
+        drawTurnClock(s);
 
         // Buttons - chrome only; icons land in the SpriteBatch pass.
         // Action quickslots + inventory button carry item / chest icons,
@@ -358,6 +361,27 @@ public final class V2Hud {
             s.setColor(fillColor);
             s.rect(r.x + 3, r.y + 3, fw, r.h - 6);
         }
+    }
+
+    private void drawTurnClock(ShapeRenderer s) {
+        float cx = clockRect.cx();
+        float cy = clockRect.cy();
+        float r = Math.min(clockRect.w, clockRect.h) * 0.5f;
+        s.setColor(UIVars.BORDER_OUTER);
+        s.circle(cx, cy, r, 24);
+        s.setColor(UIVars.HUD_BG);
+        s.circle(cx, cy, Math.max(1f, r - 2f), 24);
+        s.setColor(UIVars.TEXT_DIM);
+        s.rectLine(cx, cy + r - 3f, cx, cy + r - 1f, 1f);
+
+        float frac = TurnSystem.tickWithinStandardTurn(tick)
+                / (float) TurnSystem.STANDARD_TURN_TICKS;
+        float angle = (float) (Math.PI * 0.5 - frac * Math.PI * 2.0);
+        float hx = cx + (float) Math.cos(angle) * (r - 4f);
+        float hy = cy + (float) Math.sin(angle) * (r - 4f);
+        s.setColor(UIVars.ACCENT);
+        s.rectLine(cx, cy, hx, hy, 2f);
+        s.circle(cx, cy, 2f, 12);
     }
 
     /** Action-quickslot chrome - tri-line border + paler warm-grey fill so
@@ -452,10 +476,11 @@ public final class V2Hud {
                     lookRect.w - 2 * ICON_PAD, lookRect.h - 2 * ICON_PAD);
         }
 
-        // Status line - under the satiety bar.
+        // Status line + turn clock - under the satiety bar.
         TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth, "turn", turn)),
-                MARGIN, satBarRect.y - 6f, Math.max(40f, ctx.worldW() - 2f * MARGIN));
+                TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth)),
+                clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f + 5f,
+                Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
 
         // Player buff icons row - under the status line, anchored at the
         // top-left edge so it shares the bars cluster's anchor. Caps at

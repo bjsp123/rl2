@@ -11,6 +11,7 @@ final class AnimationEventDispatcher {
     static void dispatch(Animator animator, Level level, GameEvent ev) {
         if      (ev instanceof GameEvent.MobMoved m)              animator.onMobMoved(level, m);
         else if (ev instanceof GameEvent.MobMeleeAttacked m)      animator.onMobMeleeAttacked(level, m);
+        else if (ev instanceof GameEvent.SurpriseAttack m)        animator.onSurpriseAttack(level, m);
         else if (ev instanceof GameEvent.MobHitFlinched m)        animator.onMobHitFlinched(level, m);
         else if (ev instanceof GameEvent.MobKilled m)             animator.onMobKilled(m);
         else if (ev instanceof GameEvent.MobTeleported m)         animator.onMobTeleported(m);

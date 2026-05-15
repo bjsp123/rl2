@@ -80,6 +80,26 @@ def public_static_config_fields(path: str, class_name: str) -> set[str]:
     return fields
 
 
+def gamebalance_config_keys() -> set[str]:
+    keys = public_static_config_fields(
+        "rlib/src/main/java/com/bjsp123/rl2/logic/GameBalance.java", "GameBalance")
+    keys.update({
+        "rules.surprise.damageMult",
+        "rules.surprise.surpriseIfNoLOSNow",
+        "rules.surprise.surpriseIfNoLOSLastTurn",
+        "rules.surprise.allowThrow",
+        "rules.surprise.allowAllTargetedAttackTypes",
+    })
+    keys.difference_update({
+        "RULES_SURPRISE_DAMAGE_MULT",
+        "RULES_SURPRISE_SURPRISE_IF_NO_LOS_NOW",
+        "RULES_SURPRISE_SURPRISE_IF_NO_LOS_LAST_TURN",
+        "RULES_SURPRISE_ALLOW_THROW",
+        "RULES_SURPRISE_ALLOW_ALL_TARGETED_ATTACK_TYPES",
+    })
+    return keys
+
+
 def split_list(cell: str | None) -> list[str]:
     if not cell:
         return []
@@ -301,8 +321,7 @@ def main() -> int:
     for r in config_rows:
         by_kind.setdefault(r.get("kind", ""), set()).add(r.get("key", ""))
     expected_config = {
-        "gamebalance": public_static_config_fields(
-            "rlib/src/main/java/com/bjsp123/rl2/logic/GameBalance.java", "GameBalance"),
+        "gamebalance": gamebalance_config_keys(),
         "ui": public_static_config_fields(
             "rgame/src/main/java/com/bjsp123/rl2/ui/v2/UIVars.java", "UIVars"),
         "animation": {

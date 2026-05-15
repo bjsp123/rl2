@@ -127,12 +127,17 @@ public final class SurfaceSprites {
 
     private static void load() {
         Pixmap sheetPm = null;
+        Pixmap outlinePm = null;
         try {
             sheetPm = new Pixmap(Gdx.files.internal(SURFACES_PATH));
+            if (Gdx.files.internal("sprites/surfaces_outline.png").exists()) {
+                outlinePm = new Pixmap(Gdx.files.internal("sprites/surfaces_outline.png"));
+            }
             // Raw atlas Texture for UI regions - Nearest filter so the UI preview
             // stays crisp at native size.
             sheet = new Texture(sheetPm);
             sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            OutlineSprites.register(sheet, "sprites/surfaces_outline.png");
             int sw = sheetPm.getWidth(), sh = sheetPm.getHeight();
 
             liquidTextures = new EnumMap<>(Surface.class);
@@ -147,10 +152,10 @@ public final class SurfaceSprites {
 
             vegA = new EnumMap<>(Vegetation.class);
             vegB = new EnumMap<>(Vegetation.class);
-            putVegPair(sheetPm, Vegetation.GRASS,     4, 0, 1, sw, sh);
-            putVegPair(sheetPm, Vegetation.MUSHROOMS, 4, 1, 1, sw, sh);
+            putVegPair(sheetPm, outlinePm, Vegetation.GRASS,     4, 0, 1, sw, sh);
+            putVegPair(sheetPm, outlinePm, Vegetation.MUSHROOMS, 4, 1, 1, sw, sh);
             // Trees - 32x64 (col 6/7, rows 0..1).
-            putVegPair(sheetPm, Vegetation.TREES,     6, 0, 2, sw, sh);
+            putVegPair(sheetPm, outlinePm, Vegetation.TREES,     6, 0, 2, sw, sh);
 
             // Shore-mask tiles - row 3 of the 64-px grid, sliced into 16 32x32 variants.
             maskTextures = new Texture[MASK_VARIANTS];
@@ -188,6 +193,7 @@ public final class SurfaceSprites {
             // Atlas missing - fields stay null; accessors return null.
         } finally {
             if (sheetPm != null) sheetPm.dispose();
+            if (outlinePm != null) outlinePm.dispose();
         }
 
         // Fire sheets - separate files, both optional.
@@ -215,15 +221,17 @@ public final class SurfaceSprites {
         liquidTextures.put(s, t);
     }
 
-    private static void putVegPair(Pixmap sheet, Vegetation v, int col, int row,
+    private static void putVegPair(Pixmap sheet, Pixmap outlineSheet,
+                                   Vegetation v, int col, int row,
                                    int hCells, int sw, int sh) {
-        Texture a = extractVeg(sheet, col,     row, hCells, sw, sh);
-        Texture b = extractVeg(sheet, col + 1, row, hCells, sw, sh);
+        Texture a = extractVeg(sheet, outlineSheet, col,     row, hCells, sw, sh);
+        Texture b = extractVeg(sheet, outlineSheet, col + 1, row, hCells, sw, sh);
         if (a != null) vegA.put(v, a);
         if (b != null) vegB.put(v, b);
     }
 
-    private static Texture extractVeg(Pixmap sheet, int col, int row, int hCells,
+    private static Texture extractVeg(Pixmap sheet, Pixmap outlineSheet,
+                                      int col, int row, int hCells,
                                       int sw, int sh) {
         int x = col * VEG_CELL;
         int y = row * VEG_CELL;
@@ -232,6 +240,23 @@ public final class SurfaceSprites {
         Pixmap p = new Pixmap(VEG_CELL, h, sheet.getFormat());
         p.setBlending(Pixmap.Blending.None);
         p.drawPixmap(sheet, 0, 0, x, y, VEG_CELL, h);
+        Texture t = new Texture(p);
+        p.dispose();
+        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        Texture outline = extractOutlineVeg(outlineSheet, x, y, VEG_CELL, h);
+        if (outline != null) OutlineSprites.register(t, outline);
+        return t;
+    }
+
+    private static Texture extractOutlineVeg(Pixmap outlineSheet, int x, int y, int w, int h) {
+        if (outlineSheet == null
+                || x + w > outlineSheet.getWidth()
+                || y + h > outlineSheet.getHeight()) {
+            return null;
+        }
+        Pixmap p = new Pixmap(w, h, outlineSheet.getFormat());
+        p.setBlending(Pixmap.Blending.None);
+        p.drawPixmap(outlineSheet, 0, 0, x, y, w, h);
         Texture t = new Texture(p);
         p.dispose();
         t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);

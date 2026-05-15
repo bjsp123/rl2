@@ -43,6 +43,10 @@ public class Item {
          *  around the impact (Euclidean disc). Cloud lifetime in turns
          *  is taken from {@link Item#abilityPower}. */
         POISONCLOUD,
+        /** Drop a smoke cloud covering {@link Item#tilesAffected} tiles
+         *  around the impact (Euclidean disc). Cloud lifetime in turns
+         *  is taken from {@link Item#abilityPower}. */
+        SMOKE,
         /** Tear a void at the impact: pulls every mob within
          *  {@code (effectiveLevel / 2) + 1} tiles (Chebyshev) toward
          *  the centre, and converts floor-like tiles + small statues

@@ -220,6 +220,13 @@ public abstract class V2Screen extends ScreenAdapter {
         return ctx.headerLineH() + ctx.lineH();
     }
 
+    /** Optional full-screen backdrop hook. Called after clear/projection and before
+     *  normal UI shape/text passes, so screens can draw world or bitmap scenes under
+     *  their chrome. */
+    protected void drawBackground(float delta) {
+        ctx.renderAttract(delta);
+    }
+
     /** Hook for ESC / device back-button. Default: route through the back
      *  button's click action if one exists; otherwise no-op. */
     protected void onEscape() {
@@ -297,6 +304,9 @@ public abstract class V2Screen extends ScreenAdapter {
     protected final void addStandardBurgerItems(com.bjsp123.rl2.Rl2Game game) {
         addBurgerItem(TextCatalog.get("ui.menu.main"), () -> game.setRootScreen(new V2Title(game, ctx)));
         addBurgerItem(TextCatalog.get("ui.menu.settings"),  () -> game.pushScreen(new V2Settings(game, ctx)));
+        if (game.currentPlay == null) {
+            addBurgerItem(TextCatalog.get("ui.menu.credits"), () -> game.pushScreen(new V2Credits(game)));
+        }
         if (game.currentPlay != null) {
             addBurgerItem(TextCatalog.get("ui.menu.levelInfo"), () -> game.pushScreen(new V2LevelInfo(game, ctx,
                     game::popScreen,
@@ -340,6 +350,7 @@ public abstract class V2Screen extends ScreenAdapter {
         ctx.clear();
         ctx.applyProjection();
         layoutBurgerOverlay();
+        drawBackground(delta);
 
         // Pass 1 - body shapes.
         Gdx.gl.glEnable(GL20.GL_BLEND);

@@ -29,7 +29,10 @@ public enum Perk {
     KNOCKBACK,
     /** Each level adds +1 effective level to all bombs thrown by this player.
      *  Scales bomb damage and AoE. Rogue class starting perk. */
-    BOMB_JACK;
+    BOMB_JACK,
+    /** Each level adds {@link com.bjsp123.rl2.logic.GameBalance#HURLER_RANGE_PER_LEVEL} tiles of
+     *  throw range and multiplies the throw action cost by 0.75. Selectable. */
+    HURLER;
 
     public String displayName() {
         return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".name");
@@ -47,6 +50,7 @@ public enum Perk {
             case JUMP       -> "jump";
             case KNOCKBACK  -> "knockback";
             case BOMB_JACK  -> "bombJack";
+            case HURLER     -> "hurler";
         };
     }
 }

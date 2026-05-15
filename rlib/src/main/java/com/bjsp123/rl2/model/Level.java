@@ -98,10 +98,9 @@ public class Level {
     /** 1-based dungeon depth (1 = surface, higher = deeper). Set by the level factory; used
      *  by history records to time-stamp events with location. */
     public int depth = 1;
-    /** Monotonic game-turn counter copied in from {@code World.turn} each frame by the play
-     *  screen. Lets stateless {@code MobSystem} functions time-stamp events without having
-     *  to thread a turn parameter through every call site. Transient - restored from
-     *  {@code World.turn} on load. */
+    /** Completed standard turn copied in from the world's tick counter each frame.
+     *  Lets stateless {@code MobSystem} functions time-stamp events without having
+     *  to thread a turn parameter through every call site. */
     public transient int currentTurn;
     /** Tick counter for the standard-turn cadence (see
      *  {@link com.bjsp123.rl2.logic.TurnSystem#STANDARD_TURN_TICKS}). Each call to

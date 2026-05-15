@@ -25,8 +25,9 @@ public final class BrandDefinition {
     public String name;
     /** Relative weight for random selection. Higher = more common. */
     public double rarity = 1.0;
-    /** Item categories this brand may appear on. Parsed from a pipe-separated column. */
-    public EnumSet<Item.InventoryCategory> itemTypes =
+    /** Item categories this brand may appear on. Parsed from a pipe-separated column.
+     *  Transient: populated from CSV at startup, not part of saved game state. */
+    public transient EnumSet<Item.InventoryCategory> itemTypes =
             EnumSet.noneOf(Item.InventoryCategory.class);
     /** Flavor text shown in the item lore panel. */
     public String description = "";

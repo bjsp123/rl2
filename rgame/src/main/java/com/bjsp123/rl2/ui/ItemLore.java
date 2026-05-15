@@ -70,19 +70,21 @@ public final class ItemLore {
         StringBuilder sb = new StringBuilder();
 
         // -- Category / material ---------------------------------------------
+        //commented out for now as information is too obvious
         StringBuilder hdr = new StringBuilder();
+        /* 
         if (it.inventoryCategory != null) {
             if (it.inventoryCategory.isEquipment()) {
                 flag(hdr, TextCatalog.format("item.header.equippable",
                         TextCatalog.vars("category", it.inventoryCategory.name().toLowerCase())));
             }
-        }
+        }*/
         /* 
         if (it.material != null) {
             flag(hdr, TextCatalog.format("item.header.material",
                     TextCatalog.vars("material", it.material.name().toLowerCase())));
         }*/ 
-       
+
         // Enchantment level - display the EFFECTIVE level (intrinsic +
         // perk / gear bonuses), only shown above the design baseline of
         // 1. When the holder bumps the effective level above the
@@ -98,10 +100,12 @@ public final class ItemLore {
                         TextCatalog.vars("level", effLvl)));
             }
         }
+        /* 
         if (it.brand != null && it.brand.name != null && !it.brand.name.isEmpty()) {
             flag(hdr, TextCatalog.format("item.header.brand",
                     TextCatalog.vars("brand", it.brand.name)));
         }
+        */
         if (hdr.length() > 0) sb.append(hdr);
 
         // -- Combat ----------------------------------------------------------
@@ -247,7 +251,8 @@ public final class ItemLore {
                             TextCatalog.vars("buffs", buffList(it.appliesBuff),
                                     "duration", buffDurationSuffix(it))));
                 }
-                if (it.throwEffect == ItemEffect.POISONCLOUD) {
+                if (it.throwEffect == ItemEffect.POISONCLOUD
+                        || it.throwEffect == ItemEffect.SMOKE) {
                     if (it.tilesAffected > 0) {
                         line(thr, TextCatalog.get("lore.items.cloudArea"), it.tilesAffected + " tiles",
                                 it.tilesAffectedPerLevel > 0,

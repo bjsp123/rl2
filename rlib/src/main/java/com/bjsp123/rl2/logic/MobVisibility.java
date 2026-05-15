@@ -25,9 +25,7 @@ public final class MobVisibility {
                         return m.position;
                     }
                 }
-                if (x >= 0 && y >= 0 && x < level.width && y < level.height
-                        && level.tiles[x][y] != null
-                        && level.tiles[x][y].blocksMovement()) {
+                if (blocksProjectile(level, x, y)) {
                     return new Point(x, y);
                 }
             }
@@ -36,6 +34,42 @@ public final class MobVisibility {
             if (e2 > -dy) { err -= dy; x += sx; }
             if (e2 <  dx) { err += dx; y += sy; }
         }
+    }
+
+    public static boolean projectileLineReaches(Level level, Point from, Point to, Mob shooter) {
+        Point impact = firstMobBlocking(level, from, to, shooter);
+        return impact != null && to != null
+                && impact.tileX() == to.tileX()
+                && impact.tileY() == to.tileY();
+    }
+
+    /** Returns true if no wall or closed door lies strictly between {@code from}
+     *  and {@code to}. Mobs, lamps, statues, altars, and thrones are ignored —
+     *  a jump arcs over furniture and creatures but cannot pass through solid
+     *  terrain or closed doors. */
+    public static boolean jumpPathClear(Level level, Point from, Point to) {
+        if (level == null || from == null || to == null) return true;
+        int x0 = from.tileX(), y0 = from.tileY();
+        int x1 = to.tileX(),   y1 = to.tileY();
+        int dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy;
+        int x = x0, y = y0;
+        while (true) {
+            if (!(x == x0 && y == y0) && blocksJump(level, x, y)) return false;
+            if (x == x1 && y == y1) return true;
+            int e2 = err << 1;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 <  dx) { err += dx; y += sy; }
+        }
+    }
+
+    private static boolean blocksJump(Level level, int x, int y) {
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return true;
+        com.bjsp123.rl2.model.Tile t = level.tiles[x][y];
+        return t == null || t == com.bjsp123.rl2.model.Tile.WALL
+                         || t == com.bjsp123.rl2.model.Tile.DOOR;
     }
 
     public static boolean trajectoryTouchesVisible(Level level, Point from, Point to) {
@@ -79,5 +113,12 @@ public final class MobVisibility {
     private static boolean tileVisible(Level level, int x, int y) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
         return level.visible[x][y];
+    }
+
+    private static boolean blocksProjectile(Level level, int x, int y) {
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return true;
+        if (level.tiles[x][y] == null) return true;
+        return level.tiles[x][y] == com.bjsp123.rl2.model.Tile.DOOR
+                || level.tiles[x][y].blocksMovement();
     }
 }

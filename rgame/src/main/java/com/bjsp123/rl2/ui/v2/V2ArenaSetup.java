@@ -53,6 +53,8 @@ public final class V2ArenaSetup extends V2Screen {
 
     private final Rl2Game game;
     private final Rect window = new Rect();
+    private float teamBtnH = 28f;
+    private float bottomBtnH = 42f;
     private static List<TeamType> types;
 
     public V2ArenaSetup(Rl2Game game) {
@@ -86,7 +88,7 @@ public final class V2ArenaSetup extends V2Screen {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float winW = Math.min(380f, vw - UIVars.PAD_MODAL);
-        float winH = Math.min(640f, vh - 100f);
+        float winH = Math.min(640f, vh - 48f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         // Layout: header + team A row + vs + team B row + bottom buttons.
@@ -94,12 +96,15 @@ public final class V2ArenaSetup extends V2Screen {
         // the next so the user reads them top-to-bottom rather than as
         // side-by-side columns.
         float pad = 14f;
-        float bottomBtnH = 48f;
-        float bottomReserved = 16f + 2 * bottomBtnH + 8f;  // matches btnY chain below
-        float vsBandH = 30f;
+        bottomBtnH = Math.max(34f, Math.min(42f, winH * 0.07f));
+        float bottomGap = 6f;
+        float bottomPad = 12f;
+        float bottomReserved = bottomPad + 2 * bottomBtnH + bottomGap;
+        float vsBandH = Math.max(18f, Math.min(24f, ctx.lineH()));
         float headerReserved = headerBandH();
         float remaining = winH - bottomReserved - headerReserved - vsBandH;
         float teamH = remaining * 0.5f;
+        teamBtnH = Math.max(22f, Math.min(28f, (teamH - ctx.lineH() * 3.5f - 18f) / 3f));
 
         float teamATop = window.top() - headerReserved;
         float teamBTop = teamATop - teamH - vsBandH;
@@ -110,7 +115,7 @@ public final class V2ArenaSetup extends V2Screen {
         // Bottom row: Start Fight + Hall of Fame stacked vertically.
         float btnW = winW - 2 * pad;
         float btnX = window.x + pad;
-        float btnY = window.y + 16f + bottomBtnH + 8f;
+        float btnY = window.y + bottomPad + bottomBtnH + bottomGap;
         buttons.add(new Btn(TextCatalog.get("ui.arena.startFight"), btnX, btnY, btnW, bottomBtnH,
                 () -> {
                     TeamSpec a = new TeamSpec(
@@ -119,7 +124,7 @@ public final class V2ArenaSetup extends V2Screen {
                             types().get(teamBIdx), teamBLevel, teamBCount);
                     game.pushScreen(new V2Arena(game, a, b));
                 }).header());
-        btnY -= bottomBtnH + 8f;
+        btnY -= bottomBtnH + bottomGap;
         buttons.add(new Btn(TextCatalog.get("ui.arena.hallOfFame"), btnX, btnY, btnW, bottomBtnH,
                 () -> game.pushScreen(new V2ArenaHallOfFame(game))).header());
 
@@ -145,35 +150,36 @@ public final class V2ArenaSetup extends V2Screen {
      */
     private float[] teamLayout(float y, float h) {
         float lh   = ctx.lineH();
-        float btnH = 32f;
+        float btnH = teamBtnH;
         float[] p  = new float[7];
 
         float c = y + h;          // start at band top
-        c -= lh * 0.5f;           // top padding
+        float gap = Math.max(2f, Math.min(6f, (h - 3f * btnH - 3f * lh) / 5f));
+        c -= gap;                 // top padding
         p[0] = c;                 // [0] title baseline
-        c -= lh + lh * 0.5f;     // title height + gap below
+        c -= lh + gap;            // title height + gap below
 
         p[1] = c - btnH;          // [1] type-nav button bottom
         p[2] = p[1] + btnH * 0.5f + lh * 0.25f; // [2] type label: above centre of button
         c    = p[1];              // advance past buttons
 
-        c -= lh * 0.6f;           // gap below type row
+        c -= gap;                 // gap below type row
         p[3] = c;                 // [3] "Level" caption baseline
-        c -= lh + 4f;             // caption height + small gap before buttons
+        c -= lh + gap;            // caption height + small gap before buttons
         p[4] = c - btnH;          // [4] level-button bottom
         c    = p[4];
 
-        c -= lh * 0.6f;           // gap below level buttons
+        c -= gap;                 // gap below level buttons
         p[5] = c;                 // [5] "Count" caption baseline
-        c -= lh + 4f;
+        c -= lh + gap;
         p[6] = c - btnH;          // [6] count-button bottom
         return p;
     }
 
     private void buildTeamRow(boolean isA, float x, float y, float w, float h) {
         float[] p      = teamLayout(y, h);
-        float btnH     = 32f;
-        float typeBtnW = 28f;
+        float btnH     = teamBtnH;
+        float typeBtnW = btnH;
         float chooseW  = (w - 9f) / 4f;
 
         buttons.add(new Btn("<", x, p[1], typeBtnW, btnH,
@@ -219,9 +225,10 @@ public final class V2ArenaSetup extends V2Screen {
                 window.cx(), window.top() - ctx.headerLineH());
 
         float pad = 14f;
-        float bottomBtnH = 48f;
-        float bottomReserved = 16f + 2 * bottomBtnH + 8f;
-        float vsBandH = 30f;
+        float bottomGap = 6f;
+        float bottomPad = 12f;
+        float bottomReserved = bottomPad + 2 * bottomBtnH + bottomGap;
+        float vsBandH = Math.max(18f, Math.min(24f, ctx.lineH()));
         float headerReserved = headerBandH();
         float remaining = window.h - bottomReserved - headerReserved - vsBandH;
         float teamH = remaining * 0.5f;
@@ -237,7 +244,7 @@ public final class V2ArenaSetup extends V2Screen {
         // "vs" sits in the band between the two teams.
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_WARN,
                 TextCatalog.get("ui.arena.vs"),
-                window.cx(), teamBTop + vsBandH * 0.5f + 8f);
+                window.cx(), teamBTop + vsBandH * 0.5f + 6f);
     }
 
     private void drawTeamLabels(UiCtx ctx, boolean isA,

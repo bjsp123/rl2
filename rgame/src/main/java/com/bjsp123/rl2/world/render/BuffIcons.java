@@ -78,6 +78,11 @@ public final class BuffIcons {
        return attackFlashRegion(5);
     }
 
+    /** Surprise-attack marker (col 6 of the 32x32 slash band). */
+    public static TextureRegion surpriseRegion() {
+        return attackFlashRegion(6);
+    }
+
     /** Number of icon columns per row in the buff-icon band. */
     private static final int COLS_PER_ROW = 20;
 
@@ -109,7 +114,7 @@ public final class BuffIcons {
      * sorcerous, levitating, regenerating, poisoned, blessed, ghostly,
      * hasted, protection, anti-magic, ESP, chilled, starving, recharging
      * (cooldown), killer, wet, bleeding.
-     * <p>Row 1: phase (col 0).
+     * <p>Row 1: phase (col 0), frozen (col 1).
      */
     private static int iconIndex(BuffType type) {
         return switch (type) {
@@ -136,6 +141,8 @@ public final class BuffIcons {
             case BLEEDING     -> 19;
             // Row 1
             case PHASE        -> 20;
+            case FROZEN       -> 21;
+            case SHIELDED     -> 22;
             default           -> 6;     // regeneration as fallback
         };
     }
