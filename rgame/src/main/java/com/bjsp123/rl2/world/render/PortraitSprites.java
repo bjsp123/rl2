@@ -24,11 +24,10 @@ import java.util.Map;
  */
 public final class PortraitSprites {
 
-    // Source column per class on row 0 - mobs_simple.png ships a single shared
-    // player sprite at column 0, so all classes pull their head from there.
+    // Source column per class on row 0 - matches MobSprites: rogue=0, warrior=3, mage=4.
     private static final int COL_ROGUE   = 0;
-    private static final int COL_MAGE    = 0;
-    private static final int COL_WARRIOR = 0;
+    private static final int COL_MAGE    = 4;
+    private static final int COL_WARRIOR = 3;
 
     private static Map<CharacterClass, TextureRegion> regions;
 
@@ -57,7 +56,7 @@ public final class PortraitSprites {
      *  silhouette starts a few pixels down inside its cell - the top 8 rows are
      *  blank padding above the head, and rows 8-40 frame the head + chest cleanly
      *  for a HUD avatar. */
-    private static final int PORTRAIT_Y0     = 8;
+    private static final int PORTRAIT_Y0     = 10;
     private static final int PORTRAIT_HEIGHT = 32;
 
     private static TextureRegion head(Texture mobsTex, int cell, int col) {

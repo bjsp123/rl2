@@ -73,19 +73,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static final int MOB_VISIBLE_W = 16;
     private static final int MOB_VISIBLE_H = 20;
 
-    /** Radial taps for outlines. We draw these directly with the source texture; no filter
-     *  swaps or generated GL textures, which keeps the path native-crash resistant. */
-    private static final int OUTLINE_TAPS = 8;
-    private static final float[] OUTLINE_DX = new float[OUTLINE_TAPS];
-    private static final float[] OUTLINE_DY = new float[OUTLINE_TAPS];
-    static {
-        for (int i = 0; i < OUTLINE_TAPS; i++) {
-            double a = i * Math.PI * 2.0 / OUTLINE_TAPS;
-            OUTLINE_DX[i] = (float) Math.cos(a);
-            OUTLINE_DY[i] = (float) Math.sin(a);
-        }
-    }
-
     /** Width of the thin shadow strip painted along the wall-facing edges of floor tiles. The
      *  strip uses a 4-pixel alpha gradient texture (opaque at the wall, fading into the floor). */
     private static final float FLOOR_SHADOW_PX    = 3f;
@@ -171,9 +158,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  {@value #VEG_SPRITE_PX} px). The A/B pick per cell is hash-driven by
      *  {@link #vegRearVariantBit} so adjacent grass tiles read as a mix instead of a stamped
      *  uniform. Same scheme for mushrooms (rows 1) and trees (rows 2). */
-    private Texture         grassTexA, grassTexB;
-    private Texture         mushroomTexA, mushroomTexB;
-    private Texture         treeTexA, treeTexB;
+    private TextureRegion   grassTexA, grassTexB;
+    private TextureRegion   mushroomTexA, mushroomTexB;
+    private TextureRegion   treeTexA, treeTexB;
     /** Two painted 8-frame fire animation sheets - each 256x48 (8 frames of 32x48). Held
      *  here only for {@link #dispose()}; the per-frame draw machinery lives in
      *  {@link FxRenderer}, which receives both as constructor args. Optional: a missing
@@ -209,6 +196,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
     /** In-world animator providing per-mob {@link com.bjsp123.rl2.world.anim.MobAnimState}.
      *  Set via {@link #setAnimator} during PlayScreen init; required for all mob draws. */
     private com.bjsp123.rl2.world.anim.Animator animator;
+    /** Runtime outline service. Owns the generated atlas and radial fallback policy. */
+    private final OutlineRenderer outlines = new OutlineRenderer();
     /** Real-time accumulator for the stair-label fade animation, in seconds. Bumped each
      *  frame from {@link com.badlogic.gdx.Gdx#graphics}. */
     private float           stairLabelTime;
@@ -348,22 +337,74 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 com.bjsp123.rl2.model.Level.Surface.OIL);
         iceTex   = com.bjsp123.rl2.world.render.SurfaceSprites.liquidTexture(
                 com.bjsp123.rl2.model.Level.Surface.ICE);
-        grassTexA    = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationTextureA(
+        grassTexA    = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationRegionA(
                 com.bjsp123.rl2.model.Level.Vegetation.GRASS);
-        grassTexB    = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationTextureB(
+        grassTexB    = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationRegionB(
                 com.bjsp123.rl2.model.Level.Vegetation.GRASS);
-        mushroomTexA = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationTextureA(
+        mushroomTexA = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationRegionA(
                 com.bjsp123.rl2.model.Level.Vegetation.MUSHROOMS);
-        mushroomTexB = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationTextureB(
+        mushroomTexB = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationRegionB(
                 com.bjsp123.rl2.model.Level.Vegetation.MUSHROOMS);
-        treeTexA = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationTextureA(
+        treeTexA = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationRegionA(
                 com.bjsp123.rl2.model.Level.Vegetation.TREES);
-        treeTexB = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationTextureB(
+        treeTexB = com.bjsp123.rl2.world.render.SurfaceSprites.vegetationRegionB(
                 com.bjsp123.rl2.model.Level.Vegetation.TREES);
         fire1Tex = com.bjsp123.rl2.world.render.SurfaceSprites.fire1Texture();
         fire2Tex = com.bjsp123.rl2.world.render.SurfaceSprites.fire2Texture();
 
         fxRenderer = new FxRenderer(batch, font, whiteRegion, fire1Tex, fire2Tex);
+
+        registerOutlineFrames();
+        outlines.rebuild();
+    }
+
+    private void registerOutlineFrames() {
+        registerOutlineSprites(warriorFacing);
+        registerOutlineSprites(mageFacing);
+        registerOutlineSprites(rogueFacing);
+        for (Sprite[] pair : speciesFacing.values()) registerOutlineSprites(pair);
+
+        for (String type : com.bjsp123.rl2.logic.Registries.itemTypes()) {
+            outlines.register(ItemSprites.regionFor(type));
+        }
+
+        for (Level.VisualTheme theme : Level.VisualTheme.values()) {
+            TextureRegion[] themeTiles = TileSprites.regionsFor(theme);
+            if (themeTiles != null) {
+                for (TextureRegion region : themeTiles) outlines.register(region);
+            }
+            outlines.register(TileSprites.smallStatue(theme));
+            outlines.register(TileSprites.largeStatue(theme));
+            outlines.register(TileSprites.lampOrnament(theme));
+            outlines.register(TileSprites.altar(theme));
+            outlines.register(TileSprites.throne(theme));
+        }
+
+        outlines.register(grassTexA);
+        outlines.register(grassTexB);
+        outlines.register(mushroomTexA);
+        outlines.register(mushroomTexB);
+        outlines.register(treeTexA);
+        outlines.register(treeTexB);
+        registerTreeHalfOutline(treeTexA, 0);
+        registerTreeHalfOutline(treeTexA, 1);
+        registerTreeHalfOutline(treeTexB, 0);
+        registerTreeHalfOutline(treeTexB, 1);
+    }
+
+    private void registerOutlineSprites(Sprite[] sprites) {
+        if (sprites == null) return;
+        for (Sprite sprite : sprites) {
+            if (sprite != null) outlines.register(sprite.region);
+        }
+    }
+
+    private void registerTreeHalfOutline(TextureRegion tree, int halfIndex) {
+        if (tree == null || tree.getRegionHeight() <= 1) return;
+        int half = tree.getRegionHeight() / 2;
+        int srcY = tree.getRegionY() + halfIndex * half;
+        int srcH = (halfIndex == 0) ? half : tree.getRegionHeight() - half;
+        outlines.register(tree.getTexture(), tree.getRegionX(), srcY, tree.getRegionWidth(), srcH);
     }
 
 
@@ -451,6 +492,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         currentAltar        = TileSprites.altar(level.theme);
         currentThrone       = TileSprites.throne(level.theme);
         TileBounds view = visibleTileBounds(level, camera);
+        outlines.ensureCurrent();
 
         // Bucket every item / mob / effect into the cell it will draw in. Items and mobs
         // only shift on ticks (pickup / drop / throw / step), so their indexes are cached
@@ -1027,8 +1069,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
             return;
         }
 
-        Texture tex = rearVegTexture(v, x, y);
-        if (tex == null) return;
+        TextureRegion region = rearVegTexture(v, x, y);
+        if (region == null) return;
         int jx = vegJitterX(x, y);
         int lift = vegRearLiftPx(x, y);
         // Rear vegetation rides 3-6 px above the tile floor so the front sprite (drawn at
@@ -1036,9 +1078,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // poking up behind it.
         float dx = x * (float) CELL + jx;
         float dy = y * (float) CELL + lift;
-        drawTextureOutline(tex, dx, dy, CELL, CELL);
+        outlines.drawRegion(batch, region, dx, dy, CELL, CELL);
         batch.setColor(Color.WHITE);
-        batch.draw(tex, dx, dy, CELL, CELL);
+        batch.draw(region, dx, dy, CELL, CELL);
     }
 
     /** Paint the upper (canopy) half of the tree-at-({@code treeX}, {@code treeY}) sprite
@@ -1047,42 +1089,42 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  same vertical lift used for normal rear vegetation is applied so the trunk + canopy
      *  read as a single shifted sprite. */
     private void drawTreeCanopy(int treeX, int treeY) {
-        Texture tex = rearVegTexture(Vegetation.TREES, treeX, treeY);
-        if (tex == null) return;
+        TextureRegion region = rearVegTexture(Vegetation.TREES, treeX, treeY);
+        if (region == null) return;
         int jx = vegJitterX(treeX, treeY);
         int lift = vegRearLiftPx(treeX, treeY);
-        int half = tex.getHeight() / 2;
+        int half = region.getRegionHeight() / 2;
         float dx = treeX * (float) CELL + jx;
         float dy = (treeY + 1) * (float) CELL + lift;
-        drawTextureOutlineSrc(tex, dx, dy, CELL, CELL,
-                0, 0, tex.getWidth(), half);
+        outlines.drawRegionSrc(batch, region, dx, dy, CELL, CELL,
+                0, 0, region.getRegionWidth(), half);
         batch.setColor(Color.WHITE);
-        batch.draw(tex,
+        batch.draw(region.getTexture(),
                 dx, dy,
                 CELL, CELL,
-                0, 0,                           // src origin: top of texture = canopy
-                tex.getWidth(), half,
+                region.getRegionX(), region.getRegionY(), // src origin: top of texture = canopy
+                region.getRegionWidth(), half,
                 false, false);
     }
 
     /** Paint the lower (trunk) half of the tree sprite at world (x, y), lifted by the
      *  shared 3-6 px rear-veg offset. */
     private void drawTreeTrunk(int x, int y) {
-        Texture tex = rearVegTexture(Vegetation.TREES, x, y);
-        if (tex == null) return;
+        TextureRegion region = rearVegTexture(Vegetation.TREES, x, y);
+        if (region == null) return;
         int jx = vegJitterX(x, y);
         int lift = vegRearLiftPx(x, y);
-        int half = tex.getHeight() / 2;
+        int half = region.getRegionHeight() / 2;
         float dx = x * (float) CELL + jx;
         float dy = y * (float) CELL + lift;
-        drawTextureOutlineSrc(tex, dx, dy, CELL, CELL,
-                0, half, tex.getWidth(), half);
+        outlines.drawRegionSrc(batch, region, dx, dy, CELL, CELL,
+                0, half, region.getRegionWidth(), half);
         batch.setColor(Color.WHITE);
-        batch.draw(tex,
+        batch.draw(region.getTexture(),
                 dx, dy,
                 CELL, CELL,
-                0, half,                        // src origin: middle of texture = top of trunk
-                tex.getWidth(), half,
+                region.getRegionX(), region.getRegionY() + half,
+                region.getRegionWidth(), half,
                 false, false);
     }
 
@@ -1107,8 +1149,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Fire is drawn whole in the rear pass - no front overlay (the flame shouldn't
         // tuck back over the mob's feet the way grass does).
         if (v == Vegetation.FIRE) return;
-        Texture tex = frontVegTexture(v, x, y);
-        if (tex == null) return;
+        TextureRegion region = frontVegTexture(v, x, y);
+        if (region == null) return;
         // Front vegetation always sits at the tile's base (no Y lift, unlike the rear
         // pass) and renders the full sprite. The art for the front variants is authored
         // with mostly-transparent upper rows + foreground blades near the bottom, so a
@@ -1118,15 +1160,15 @@ public class DefaultLevelRenderer implements LevelRenderer {
         int jx = vegJitterX(x, y);
         float dx = x * (float) CELL + jx;
         float dy = y * (float) CELL;
-        drawTextureOutline(tex, dx, dy, CELL, CELL);
+        outlines.drawRegion(batch, region, dx, dy, CELL, CELL);
         batch.setColor(Color.WHITE);
-        batch.draw(tex, dx, dy, CELL, CELL);
+        batch.draw(region, dx, dy, CELL, CELL);
     }
 
     /** Rear-pass texture pick: each veg type has two source variants in surfaces.png; the
      *  per-tile {@link #vegRearVariantBit} hash picks which one renders so adjacent tiles
      *  break up the grid. The chosen sprite goes behind any mob standing on the tile. */
-    private Texture rearVegTexture(Vegetation v, int x, int y) {
+    private TextureRegion rearVegTexture(Vegetation v, int x, int y) {
         boolean b = vegRearVariantBit(x, y);
         switch (v) {
             case GRASS:     return b ? grassTexB    : grassTexA;
@@ -1140,7 +1182,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  and tree tiles) or one of the two mushroom variants (for fungus tiles), randomised
      *  by an independent hash from the rear pick so a tile can mix variants between its
      *  two layers. Fire has no front overlay. */
-    private Texture frontVegTexture(Vegetation v, int x, int y) {
+    private TextureRegion frontVegTexture(Vegetation v, int x, int y) {
         boolean b = vegFrontVariantBit(x, y);
         switch (v) {
             case GRASS:     return b ? grassTexB    : grassTexA;
@@ -1198,7 +1240,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // to the shared baseline so the lamp's foot sits on the same line as mobs/items.
         float dx = x * (float) CELL;
         float dy = y * (float) CELL + ENTITY_Y_OFFSET;
-        drawRegionOutline(currentLampOrnament, dx, dy, CELL, 2f * CELL);
+        outlines.drawRegion(batch, currentLampOrnament, dx, dy, CELL, 2f * CELL);
         batch.setColor(Color.WHITE);
         batch.draw(currentLampOrnament, dx, dy, CELL, 2f * CELL);
     }
@@ -1312,7 +1354,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float dy = y * (float) CELL + ENTITY_Y_OFFSET;
         float dw = 3f * CELL;
         float dh = CELL;
-        drawRegionOutline(currentAltar, dx, dy, dw, dh);
+        outlines.drawRegion(batch, currentAltar, dx, dy, dw, dh);
         batch.setColor(Color.WHITE);
         batch.draw(currentAltar, dx, dy, dw, dh);
     }
@@ -1337,11 +1379,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float dw = CELL;
         float dh = 2f * CELL;
         if (flip) {
-            drawRegionOutline(currentThrone, dx + dw, dy, -dw, dh);
+            outlines.drawRegion(batch, currentThrone, dx + dw, dy, -dw, dh);
             batch.setColor(Color.WHITE);
             batch.draw(currentThrone, dx + dw, dy, -dw, dh);
         } else {
-            drawRegionOutline(currentThrone, dx, dy, dw, dh);
+            outlines.drawRegion(batch, currentThrone, dx, dy, dw, dh);
             batch.setColor(Color.WHITE);
             batch.draw(currentThrone, dx, dy, dw, dh);
         }
@@ -1372,11 +1414,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float dw = CELL;
         float dh = small ? CELL : 2f * CELL;
         if (flip) {
-            drawRegionOutline(r, dx + dw, dy, -dw, dh);
+            outlines.drawRegion(batch, r, dx + dw, dy, -dw, dh);
             batch.setColor(Color.WHITE);
             batch.draw(r, dx + dw, dy, -dw, dh);
         } else {
-            drawRegionOutline(r, dx, dy, dw, dh);
+            outlines.drawRegion(batch, r, dx, dy, dw, dh);
             batch.setColor(Color.WHITE);
             batch.draw(r, dx, dy, dw, dh);
         }
@@ -1721,17 +1763,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
                     float br = ((hex >> 16) & 0xFF) / 255f;
                     float bg = ((hex >> 8)  & 0xFF) / 255f;
                     float bb = ( hex        & 0xFF) / 255f;
-                    drawRegionOutlineTinted(region, dx, dy, (float) CELL, (float) CELL,
+                    outlines.drawRegionTinted(batch, region, dx, dy, (float) CELL, (float) CELL,
                             br, bg, bb, pulse);
                 } else {
-                    drawRegionOutline(region, dx, dy, (float) CELL, (float) CELL);
+                    outlines.drawRegion(batch, region, dx, dy, (float) CELL, (float) CELL);
                 }
                 BrandFx.drawWorldItemSparks(batch, whiteRegion,
                         dx, dy, (float) CELL, (float) CELL, it, stairLabelTime);
             } else {
                 // Same silhouette outline mobs/statues/lamps get - items on the floor
                 // were the lone holdout. Helps loot pop visually against busy terrain.
-                drawRegionOutline(region, dx, dy, (float) CELL, (float) CELL);
+                outlines.drawRegion(batch, region, dx, dy, (float) CELL, (float) CELL);
             }
             batch.setColor(Color.WHITE);
             // Source art is 32x32, world cell is 16x16 - libGDX scales 2:1 down with
@@ -1871,12 +1913,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
             if (as.borderFlashFrames > 0) {
                 pulseR = 1f; pulseG = 1f; pulseB = 1f;
             }
-            boolean phaseActive = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+            boolean phaseActive    = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
                     mob, com.bjsp123.rl2.model.Buff.BuffType.PHASE);
-            boolean frozenActive = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+            boolean frozenActive   = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
                     mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN);
+            boolean shieldedActive = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+                    mob, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED);
             drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale,
-                    pulseR, pulseG, pulseB, phaseActive, frozenActive);
+                    pulseR, pulseG, pulseB, phaseActive, frozenActive, shieldedActive);
         } else {
             System.err.println("No sprite for mob " + mob.mobType + " at (" + mx + ", " + my + ")");
             //placeholder drawn here?
@@ -1972,7 +2016,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * shadow is drawn first, anchored at the baseline.
      */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY, float alpha) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f, false, false);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f, false, false, false);
     }
 
     /** Spawn-scale variant: {@code spawnScale} 0..1 multiplies both x and y
@@ -1981,7 +2025,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  is the no-op default for normal rendering. */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f, false, false);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f, false, false, false);
     }
 
     /**
@@ -1994,13 +2038,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
                                float outlinePulseR, float outlinePulseG, float outlinePulseB,
                                boolean phaseEffect) {
         drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale,
-                outlinePulseR, outlinePulseG, outlinePulseB, phaseEffect, false);
+                outlinePulseR, outlinePulseG, outlinePulseB, phaseEffect, false, false);
     }
 
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale,
                                float outlinePulseR, float outlinePulseG, float outlinePulseB,
-                               boolean phaseEffect, boolean frozenEffect) {
+                               boolean phaseEffect, boolean frozenEffect, boolean shieldedEffect) {
         // "Natural" sprites (large blobs etc.) draw at source scale; everything else gets
         // normalised to MOB_VISIBLE_W x MOB_VISIBLE_H so silhouettes read consistently.
         float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * spawnScale;
@@ -2032,18 +2076,19 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float shadowW = s.visibleW * scaleX + SHADOW_EXTRA_W;
         batch.draw(shadowTex, tileCenterX - shadowW / 2f, baselineY - SHADOW_H / 2f,
                 shadowW, SHADOW_H);
-        // Radial-tap silhouette outline. This preserves unique/brand/hit outline colors
-        // without texture filter swaps or generated outline textures.
+        // SHIELDED shell: draw the mob's silhouette slightly enlarged in cyan before
+        // the mob itself so the glow sits behind it and reads as a surrounding barrier.
+        if (shieldedEffect) {
+            float pad = 3f;
+            float shellAlpha = alpha * (0.30f + 0.22f * (float)(0.5 + 0.5 * Math.sin(stairLabelTime * 7.0)));
+            batch.setColor(0.35f, 0.82f, 1.0f, shellAlpha);
+            batch.draw(s.region, drawX - pad, drawY - pad, dw + pad * 2f, dh + pad * 2f);
+        }
         float outlineW = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float outlineA = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness() * alpha;
         if (!phaseEffect && outlineA > 0f && outlineW > 0f) {
-            batch.setColor(outlinePulseR, outlinePulseG, outlinePulseB, outlineA);
-            for (int i = 0; i < OUTLINE_TAPS; i++) {
-                batch.draw(s.region,
-                        drawX + OUTLINE_DX[i] * outlineW,
-                        drawY + OUTLINE_DY[i] * outlineW,
-                        dw, dh);
-            }
+            outlines.drawMob(batch, s.region, drawX, drawY, dw, dh,
+                    outlinePulseR, outlinePulseG, outlinePulseB, outlineA);
         }
         batch.setColor(1f, 1f, 1f, alpha);
         if (phaseEffect) {
@@ -2080,66 +2125,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
             batch.draw(tex, drawX + xShift, destY, dw, destH,
                     rx, ry + i * STRIP_H, rw, srcH, fx, fy);
         }
-    }
-
-    /** Generic radial-tap silhouette outline for any TextureRegion-based sprite
-     *  (statues, the lamp ornament, items, etc). The destination rect should be
-     *  the same one the actual draw uses - for flipped sprites the negative
-     *  width/height is preserved so the outline mirrors the silhouette. */
-    private void drawRegionOutline(TextureRegion r, float x, float y, float w, float h) {
-        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
-        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
-        if (ow <= 0f || oa <= 0f || r == null) return;
-        batch.setColor(0f, 0f, 0f, oa);
-        for (int i = 0; i < OUTLINE_TAPS; i++) {
-            batch.draw(r, x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow, w, h);
-        }
-        batch.setColor(Color.WHITE);
-    }
-
-    /** Like {@link #drawRegionOutline} but with a custom RGB outline color for
-     *  brand/unique pulse effects. When {@code pulseStrength} is 0, falls back
-     *  to the normal black outline. */
-    private void drawRegionOutlineTinted(TextureRegion r, float x, float y, float w, float h,
-                                         float pr, float pg, float pb, float pulseStrength) {
-        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
-        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
-        if (ow <= 0f || oa <= 0f || r == null) return;
-        batch.setColor(pr * pulseStrength, pg * pulseStrength, pb * pulseStrength, oa);
-        for (int i = 0; i < OUTLINE_TAPS; i++) {
-            batch.draw(r, x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow, w, h);
-        }
-        batch.setColor(Color.WHITE);
-    }
-
-    /** Texture-based variant of {@link #drawRegionOutline} - used for the
-     *  vegetation extracted Textures (grass / mushroom / fire-skipped) which the
-     *  draw loop hands out as raw {@link Texture} not {@link TextureRegion}. */
-    private void drawTextureOutline(Texture tex, float x, float y, float w, float h) {
-        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
-        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
-        if (ow <= 0f || oa <= 0f || tex == null) return;
-        batch.setColor(0f, 0f, 0f, oa);
-        for (int i = 0; i < OUTLINE_TAPS; i++) {
-            batch.draw(tex, x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow, w, h);
-        }
-        batch.setColor(Color.WHITE);
-    }
-
-    /** Texture-with-source-rect variant - used by the tree canopy / trunk halves
-     *  which slice the 32x64 tree texture into upper and lower 32x32 sub-rects. */
-    private void drawTextureOutlineSrc(Texture tex, float x, float y, float w, float h,
-                                       int srcX, int srcY, int srcW, int srcH) {
-        float ow = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
-        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
-        if (ow <= 0f || oa <= 0f || tex == null) return;
-        batch.setColor(0f, 0f, 0f, oa);
-        for (int i = 0; i < OUTLINE_TAPS; i++) {
-            batch.draw(tex,
-                    x + OUTLINE_DX[i] * ow, y + OUTLINE_DY[i] * ow,
-                    w, h, srcX, srcY, srcW, srcH, false, false);
-        }
-        batch.setColor(Color.WHITE);
     }
 
     /**
@@ -2209,6 +2194,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (floorShadowVertTex != null) floorShadowVertTex.dispose();
         if (floorShadowHorzTex != null) floorShadowHorzTex.dispose();
         if (surfaceMaskShader != null) surfaceMaskShader.dispose();
+        outlines.dispose();
         fog.dispose();
     }
 }

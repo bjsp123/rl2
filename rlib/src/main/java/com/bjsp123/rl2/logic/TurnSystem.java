@@ -72,6 +72,60 @@ public class TurnSystem {
         return true;
     }
 
+    /**
+     * Advance over idle game ticks in one pass, stopping at the next actor-ready tick or
+     * standard-turn heartbeat. Returns the number of game ticks advanced, or 0 if the
+     * player is already ready and the caller should wait for input.
+     */
+    public static int advanceToNextEvent(Level level) {
+        return advanceToNextEvent(level, 0L);
+    }
+
+    /**
+     * Budgeted form of {@link #advanceToNextEvent(Level)}. A return value of -1 means
+     * ready AI made progress without advancing the world clock, usually because a prior
+     * bulk advance left more same-tick AI work to finish on the next render frame.
+     */
+    public static int advanceToNextEvent(Level level, long deadlineNs) {
+        billFrozenReadyMobs(level);
+        if (isPlayerTurn(level)) return 0;
+
+        boolean aiAlreadyReady = false;
+        int delta = STANDARD_TURN_TICKS - level.standardTurnTickAcc;
+        if (delta <= 0) delta = STANDARD_TURN_TICKS;
+
+        for (Mob mob : level.mobs) {
+            if (mob.behavior == Behavior.INANIMATE) continue;
+            if (mob.ticksTillMove == 0) {
+                if (mob.behavior != Behavior.PLAYER) aiAlreadyReady = true;
+                continue;
+            }
+            delta = Math.min(delta, mob.ticksTillMove);
+        }
+        if (aiAlreadyReady) {
+            MobAi.processAllAiTurns(level, deadlineNs);
+            return -1;
+        }
+        if (delta <= 0) delta = 1;
+
+        for (Mob mob : level.mobs) {
+            if (mob.behavior == Behavior.INANIMATE) continue;
+            int before = mob.ticksTillMove;
+            if (mob.ticksTillMove > 0) mob.ticksTillMove = Math.max(0, mob.ticksTillMove - delta);
+            if (before > 0 && mob.ticksTillMove == 0) {
+                MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
+            }
+        }
+
+        level.standardTurnTickAcc += delta;
+        while (level.standardTurnTickAcc >= STANDARD_TURN_TICKS) {
+            level.standardTurnTickAcc -= STANDARD_TURN_TICKS;
+            tickStandardTurn(level);
+        }
+        MobAi.processAllAiTurns(level, deadlineNs);
+        return delta;
+    }
+
     private static void billFrozenReadyMobs(Level level) {
         for (Mob mob : level.mobs) {
             if (mob.behavior == Behavior.INANIMATE || mob.ticksTillMove != 0) continue;

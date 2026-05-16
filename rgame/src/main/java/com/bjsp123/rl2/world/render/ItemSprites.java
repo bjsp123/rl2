@@ -52,7 +52,6 @@ public final class ItemSprites {
         regions = new HashMap<>();
         saiItemsTex = nearest("sprites/items.png");
         if (saiItemsTex == null) return;
-        OutlineSprites.register(saiItemsTex, "sprites/items_outline.png");
         // Pull (col, row) for every catalogued item type from ItemRegistry. New
         // items added to items.csv pick up sprites here without any code change.
         for (String type : Registries.itemTypes()) {

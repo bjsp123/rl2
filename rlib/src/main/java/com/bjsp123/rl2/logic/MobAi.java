@@ -8,6 +8,15 @@ public final class MobAi {
     private MobAi() {}
 
     public static void processAllAiTurns(Level level) {
+        processAllAiTurns(level, 0L);
+    }
+
+    /**
+     * Process ready AI mobs. If {@code deadlineNs} is positive, yields after at least one
+     * AI action once that wall-clock deadline has passed. Returns true when all currently
+     * ready AI mobs have been handled.
+     */
+    public static boolean processAllAiTurns(Level level, long deadlineNs) {
         int limit = level.mobs.size();
         for (int i = 0; i < limit; i++) {
             if (i >= level.mobs.size()) break;
@@ -26,6 +35,8 @@ public final class MobAi {
                         GameBalance.AI_GUARDRAIL_COST);
                 TurnSystem.applyMoveCost(mob, guardrailCost);
             }
+            if (deadlineNs > 0L && System.nanoTime() >= deadlineNs) return false;
         }
+        return true;
     }
 }

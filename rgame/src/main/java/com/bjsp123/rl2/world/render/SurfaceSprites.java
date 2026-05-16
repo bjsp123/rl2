@@ -21,11 +21,10 @@ import java.util.Map;
  *       return single-tile {@link TextureRegion}s for UI panels (look popup, encyclopaedia).
  *       The encyclopaedia-only ICE / FIRE entries are backed by procedural / first-frame
  *       fallbacks respectively.</li>
- *   <li><b>In-world liquid + vegetation Textures</b> - {@link #liquidTexture(Surface)},
- *       {@link #vegetationTextureA(Vegetation)} / {@link #vegetationTextureB(Vegetation)}
- *       return per-tile {@link Texture} instances with the right filter/wrap settings the
- *       in-world renderer needs (Linear+Repeat for liquids' scrolling shader; Nearest for
- *       crisp vegetation pixels).</li>
+ *   <li><b>In-world liquid textures + vegetation regions</b> - {@link #liquidTexture(Surface)}
+ *       returns per-liquid {@link Texture} instances with Linear+Repeat for the scrolling
+ *       shader; {@link #vegetationRegionA(Vegetation)} / {@link #vegetationRegionB(Vegetation)}
+ *       return direct regions from {@code surfaces.png}, like other sprite atlases.</li>
  *   <li><b>Shore-mask tiles</b> - {@link #maskTexture(int)} returns one of 16 alpha
  *       masks indexed by the 4-bit N/E/S/W neighbour bitfield.</li>
  *   <li><b>Fire frames</b> - {@link #fire1Texture()} / {@link #fire2Texture()} return
@@ -54,13 +53,13 @@ public final class SurfaceSprites {
     private static final int FIRE_FRAME_W = 32;
     private static final int FIRE_FRAME_H = 48;
 
-    // Raw atlas sheet - kept for UI region access.
+    // Raw atlas sheet - kept for UI regions and in-world vegetation regions.
     private static Texture sheet;
     // In-world per-liquid textures (Linear+Repeat for the scroll shader).
     private static Map<Surface, Texture> liquidTextures;
-    // In-world vegetation variant textures (Nearest filter).
-    private static Map<Vegetation, Texture> vegA;
-    private static Map<Vegetation, Texture> vegB;
+    // In-world vegetation variants, direct regions on surfaces.png.
+    private static Map<Vegetation, TextureRegion> vegA;
+    private static Map<Vegetation, TextureRegion> vegB;
     // Shore-mask variants 0..15.
     private static Texture[] maskTextures;
     // Procedural placeholder for ICE - atlas doesn't ship one.
@@ -94,12 +93,12 @@ public final class SurfaceSprites {
         return liquidTextures == null ? null : liquidTextures.get(s);
     }
 
-    public static Texture vegetationTextureA(Vegetation v) {
+    public static TextureRegion vegetationRegionA(Vegetation v) {
         if (vegA == null) load();
         return vegA == null ? null : vegA.get(v);
     }
 
-    public static Texture vegetationTextureB(Vegetation v) {
+    public static TextureRegion vegetationRegionB(Vegetation v) {
         if (vegB == null) load();
         return vegB == null ? null : vegB.get(v);
     }
@@ -127,17 +126,12 @@ public final class SurfaceSprites {
 
     private static void load() {
         Pixmap sheetPm = null;
-        Pixmap outlinePm = null;
         try {
             sheetPm = new Pixmap(Gdx.files.internal(SURFACES_PATH));
-            if (Gdx.files.internal("sprites/surfaces_outline.png").exists()) {
-                outlinePm = new Pixmap(Gdx.files.internal("sprites/surfaces_outline.png"));
-            }
             // Raw atlas Texture for UI regions - Nearest filter so the UI preview
             // stays crisp at native size.
-            sheet = new Texture(sheetPm);
+            sheet = new Texture(Gdx.files.internal(SURFACES_PATH));
             sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            OutlineSprites.register(sheet, "sprites/surfaces_outline.png");
             int sw = sheetPm.getWidth(), sh = sheetPm.getHeight();
 
             liquidTextures = new EnumMap<>(Surface.class);
@@ -152,10 +146,10 @@ public final class SurfaceSprites {
 
             vegA = new EnumMap<>(Vegetation.class);
             vegB = new EnumMap<>(Vegetation.class);
-            putVegPair(sheetPm, outlinePm, Vegetation.GRASS,     4, 0, 1, sw, sh);
-            putVegPair(sheetPm, outlinePm, Vegetation.MUSHROOMS, 4, 1, 1, sw, sh);
+            putVegPair(Vegetation.GRASS,     4, 0, 1, sw, sh);
+            putVegPair(Vegetation.MUSHROOMS, 4, 1, 1, sw, sh);
             // Trees - 32x64 (col 6/7, rows 0..1).
-            putVegPair(sheetPm, outlinePm, Vegetation.TREES,     6, 0, 2, sw, sh);
+            putVegPair(Vegetation.TREES,     6, 0, 2, sw, sh);
 
             // Shore-mask tiles - row 3 of the 64-px grid, sliced into 16 32x32 variants.
             maskTextures = new Texture[MASK_VARIANTS];
@@ -193,7 +187,6 @@ public final class SurfaceSprites {
             // Atlas missing - fields stay null; accessors return null.
         } finally {
             if (sheetPm != null) sheetPm.dispose();
-            if (outlinePm != null) outlinePm.dispose();
         }
 
         // Fire sheets - separate files, both optional.
@@ -221,46 +214,20 @@ public final class SurfaceSprites {
         liquidTextures.put(s, t);
     }
 
-    private static void putVegPair(Pixmap sheet, Pixmap outlineSheet,
-                                   Vegetation v, int col, int row,
+    private static void putVegPair(Vegetation v, int col, int row,
                                    int hCells, int sw, int sh) {
-        Texture a = extractVeg(sheet, outlineSheet, col,     row, hCells, sw, sh);
-        Texture b = extractVeg(sheet, outlineSheet, col + 1, row, hCells, sw, sh);
+        TextureRegion a = vegRegion(col,     row, hCells, sw, sh);
+        TextureRegion b = vegRegion(col + 1, row, hCells, sw, sh);
         if (a != null) vegA.put(v, a);
         if (b != null) vegB.put(v, b);
     }
 
-    private static Texture extractVeg(Pixmap sheet, Pixmap outlineSheet,
-                                      int col, int row, int hCells,
-                                      int sw, int sh) {
+    private static TextureRegion vegRegion(int col, int row, int hCells, int sw, int sh) {
         int x = col * VEG_CELL;
         int y = row * VEG_CELL;
         int h = hCells * VEG_CELL;
         if (x + VEG_CELL > sw || y + h > sh) return null;
-        Pixmap p = new Pixmap(VEG_CELL, h, sheet.getFormat());
-        p.setBlending(Pixmap.Blending.None);
-        p.drawPixmap(sheet, 0, 0, x, y, VEG_CELL, h);
-        Texture t = new Texture(p);
-        p.dispose();
-        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        Texture outline = extractOutlineVeg(outlineSheet, x, y, VEG_CELL, h);
-        if (outline != null) OutlineSprites.register(t, outline);
-        return t;
-    }
-
-    private static Texture extractOutlineVeg(Pixmap outlineSheet, int x, int y, int w, int h) {
-        if (outlineSheet == null
-                || x + w > outlineSheet.getWidth()
-                || y + h > outlineSheet.getHeight()) {
-            return null;
-        }
-        Pixmap p = new Pixmap(w, h, outlineSheet.getFormat());
-        p.setBlending(Pixmap.Blending.None);
-        p.drawPixmap(outlineSheet, 0, 0, x, y, w, h);
-        Texture t = new Texture(p);
-        p.dispose();
-        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        return t;
+        return new TextureRegion(sheet, x, y, VEG_CELL, h);
     }
 
     private static <K> void putRegion(Map<K, TextureRegion> into, K key,
@@ -322,8 +289,8 @@ public final class SurfaceSprites {
         if (fire1Tex != null) { fire1Tex.dispose(); fire1Tex = null; }
         if (fire2Tex != null) { fire2Tex.dispose(); fire2Tex = null; }
         disposeAll(liquidTextures); liquidTextures = null;
-        disposeAll(vegA);            vegA = null;
-        disposeAll(vegB);            vegB = null;
+        vegA = null;
+        vegB = null;
         if (maskTextures != null) {
             for (Texture t : maskTextures) if (t != null) t.dispose();
             maskTextures = null;

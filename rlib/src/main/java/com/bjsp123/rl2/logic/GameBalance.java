@@ -170,6 +170,8 @@ public final class GameBalance {
     // ------------------------- AI safety ------------------------------------
     /** Delay charged when an AI turn returns without paying any action or move cost. */
     public static int AI_GUARDRAIL_COST = 150;
+    /** Maximum game-clock catch-up work to do in one render frame before yielding. */
+    public static double TURN_LOOP_FRAME_BUDGET_MS = 8.0;
 
     // ------------------------- Profiling ------------------------------------
     /** Emit one logcat line for slow PlayScreen render frames. */

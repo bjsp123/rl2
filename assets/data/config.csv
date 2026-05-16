@@ -33,6 +33,7 @@ gamebalance,rules.surprise.surpriseIfNoLOSLastTurn,true
 gamebalance,rules.surprise.allowThrow,true
 gamebalance,rules.surprise.allowAllTargetedAttackTypes,false
 gamebalance,AI_GUARDRAIL_COST,150
+gamebalance,TURN_LOOP_FRAME_BUDGET_MS,8
 gamebalance,PROFILING_ENABLED,true
 gamebalance,PROFILING_SLOW_FRAME_MS,34
 gamebalance,PROFILING_MIN_LOG_GAP_MS,250

@@ -432,9 +432,8 @@ public final class TileSprites {
                 // the renderer's Texture.
                 com.badlogic.gdx.graphics.Pixmap pm =
                         new com.badlogic.gdx.graphics.Pixmap(Gdx.files.internal(e.getValue()));
-                Texture tex = new Texture(pm);
+                Texture tex = new Texture(Gdx.files.internal(e.getValue()));
                 tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-                OutlineSprites.register(tex, outlinePath(e.getValue()));
                 textures.put(e.getKey(), tex);
                 int srcCell = Math.max(1, pm.getWidth() / TERRAIN_COLS);
                 cellSizes.put(e.getKey(), srcCell);
@@ -446,11 +445,6 @@ public final class TileSprites {
                 // Skip missing/broken atlases - accessors return null for that theme.
             }
         }
-    }
-
-    private static String outlinePath(String path) {
-        int dot = path.lastIndexOf('.');
-        return dot < 0 ? path + "_outline" : path.substring(0, dot) + "_outline" + path.substring(dot);
     }
 
     /** Average opaque-pixel colour over {@code cols} x {@code rows} cells starting

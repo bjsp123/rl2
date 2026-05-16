@@ -1123,7 +1123,7 @@ public final class Animator {
     private static Effect buildWandMissile(Point from, Point to, Item.ItemEffect element) {
         Effect.EffectTint head;
         Effect.EffectTint[] palette;
-        float gravity;
+        float gravity = 0f;
         float size;
         boolean bright = true;
         float baseSize = 1.0f;
@@ -1131,42 +1131,42 @@ public final class Animator {
             case WATER -> {
                 head    = Effect.EffectTint.BLUE;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.BLUE };
-                gravity = 0.45f; size = baseSize;
+                size = baseSize;
             }
             case OIL -> {
                 head    = Effect.EffectTint.YELLOW;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.YELLOW, Effect.EffectTint.BROWN };
-                gravity = 0.35f; size = baseSize;
+                size = baseSize;
             }
             case GRASS -> {
                 head    = Effect.EffectTint.GREEN;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.GREEN, Effect.EffectTint.YELLOW };
-                gravity = 0.25f; size = baseSize;
+                size = baseSize;
             }
             case FUNGUS -> {
                 head    = Effect.EffectTint.RED;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.RED, Effect.EffectTint.BROWN };
-                gravity = 0.20f; size = baseSize;
+                size = baseSize;
             }
             case FIRE -> {
                 head    = Effect.EffectTint.YELLOW;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.RED, Effect.EffectTint.YELLOW, Effect.EffectTint.ORANGE };
-                gravity = 0f; size = baseSize + 0.5f;
+                size = baseSize + 0.5f;
             }
             case DETONATION -> {
                 head    = Effect.EffectTint.YELLOW;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.RED, Effect.EffectTint.YELLOW };
-                gravity = 0f; size = baseSize + 0.4f;
+                size = baseSize + 0.4f;
             }
             case MISSILE -> {
                 head    = Effect.EffectTint.WHITE;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.WHITE };
-                gravity = 0.30f; size = baseSize;
+                size = baseSize;
             }
             default -> {
                 head    = Effect.EffectTint.WHITE;
                 palette = new Effect.EffectTint[] { Effect.EffectTint.WHITE };
-                gravity = 0.30f; size = baseSize;
+                size = baseSize;
             }
         }
         return Effect.magicMissileColored(from, to, palette, head, gravity, size, bright, RNG);
