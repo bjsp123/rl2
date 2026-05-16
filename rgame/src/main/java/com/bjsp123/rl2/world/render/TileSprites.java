@@ -425,19 +425,19 @@ public final class TileSprites {
         throneByTheme      = new EnumMap<>(VisualTheme.class);
         floorTintByTheme   = new EnumMap<>(VisualTheme.class);
         wallTintByTheme    = new EnumMap<>(VisualTheme.class);
+        SpriteAtlas.load();
         for (Map.Entry<VisualTheme, String> e : PATHS.entrySet()) {
             try {
-                // Read the atlas as a Pixmap first so we can sample floor/wall
-                // pixel averages for the world-map theme tint, then upload it as
-                // the renderer's Texture.
+                // Pixmap only — tint sampling and dimension detection. Texture is
+                // the shared SpriteAtlas so terrain tiles batch with mobs and items.
                 com.badlogic.gdx.graphics.Pixmap pm =
                         new com.badlogic.gdx.graphics.Pixmap(Gdx.files.internal(e.getValue()));
-                Texture tex = new Texture(Gdx.files.internal(e.getValue()));
-                tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+                Texture tex = SpriteAtlas.texture();
                 textures.put(e.getKey(), tex);
                 int srcCell = Math.max(1, pm.getWidth() / TERRAIN_COLS);
                 cellSizes.put(e.getKey(), srcCell);
-                buildRegions(e.getKey(), tex, srcCell);
+                buildRegions(e.getKey(), tex, srcCell,
+                        SpriteAtlas.terrainY(e.getKey()), pm.getWidth(), pm.getHeight());
                 floorTintByTheme.put(e.getKey(), sampleAverage(pm, srcCell, 1, 6, 2));
                 wallTintByTheme .put(e.getKey(), sampleAverage(pm, srcCell, 4, 6, 1));
                 pm.dispose();
@@ -477,73 +477,72 @@ public final class TileSprites {
     }
 
     /** Slice {@code tex} into per-cell regions and pull out the 1x2 / 2x2 ornaments
-     *  the renderer accesses by name. Out-of-bounds rows (older atlases without an
-     *  ornament slot) just leave the corresponding map entry empty. */
-    private static void buildRegions(VisualTheme theme, Texture tex, int srcCell) {
-        int rows = tex.getHeight() / srcCell;
+     *  the renderer accesses by name. {@code yOffset} is the Y position of this
+     *  terrain section inside the shared SpriteAtlas. {@code sheetW}/{@code sheetH}
+     *  are the original terrain PNG dimensions, used for bounds checks and row count. */
+    private static void buildRegions(VisualTheme theme, Texture tex, int srcCell,
+                                     int yOffset, int sheetW, int sheetH) {
+        int rows = sheetH / srcCell;
         TextureRegion[] arr = new TextureRegion[rows * TERRAIN_COLS];
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < TERRAIN_COLS; c++) {
                 arr[r * TERRAIN_COLS + c] =
-                        new TextureRegion(tex, c * srcCell, r * srcCell, srcCell, srcCell);
+                        new TextureRegion(tex, c * srcCell, yOffset + r * srcCell, srcCell, srcCell);
             }
         }
         regionsByTheme.put(theme, arr);
 
         int statueX = STATUE_SMALL_COL * srcCell;
         int statueY = STATUE_SMALL_ROW * srcCell;
-        if (statueX + srcCell <= tex.getWidth() && statueY + srcCell <= tex.getHeight()) {
+        if (statueX + srcCell <= sheetW && statueY + srcCell <= sheetH) {
             smallStatueByTheme.put(theme,
-                    new TextureRegion(tex, statueX, statueY, srcCell, srcCell));
+                    new TextureRegion(tex, statueX, yOffset + statueY, srcCell, srcCell));
         }
         int lampX = LAMP_COL * srcCell;
         int lampY = LAMP_ROW * srcCell;
-        if (lampX + srcCell <= tex.getWidth() && lampY + 2 * srcCell <= tex.getHeight()) {
+        if (lampX + srcCell <= sheetW && lampY + 2 * srcCell <= sheetH) {
             lampByTheme.put(theme,
-                    new TextureRegion(tex, lampX, lampY, srcCell, 2 * srcCell));
+                    new TextureRegion(tex, lampX, yOffset + lampY, srcCell, 2 * srcCell));
         }
         int largeX = STATUE_LARGE_COL * srcCell;
         int largeY = STATUE_LARGE_ROW * srcCell;
-        if (largeX + srcCell <= tex.getWidth() && largeY + 2 * srcCell <= tex.getHeight()) {
+        if (largeX + srcCell <= sheetW && largeY + 2 * srcCell <= sheetH) {
             largeStatueByTheme.put(theme,
-                    new TextureRegion(tex, largeX, largeY, srcCell, 2 * srcCell));
+                    new TextureRegion(tex, largeX, yOffset + largeY, srcCell, 2 * srcCell));
         }
         int stairsWPx = STAIRS_W_CELLS * srcCell;
         int stairsHPx = STAIRS_H_CELLS * srcCell;
         int stairsUpX = STAIRS_UP_COL * srcCell;
         int stairsUpY = STAIRS_UP_ROW * srcCell;
-        if (stairsUpX + stairsWPx <= tex.getWidth()
-                && stairsUpY + stairsHPx <= tex.getHeight()) {
+        if (stairsUpX + stairsWPx <= sheetW && stairsUpY + stairsHPx <= sheetH) {
             stairsUpByTheme.put(theme,
-                    new TextureRegion(tex, stairsUpX, stairsUpY, stairsWPx, stairsHPx));
+                    new TextureRegion(tex, stairsUpX, yOffset + stairsUpY, stairsWPx, stairsHPx));
         }
         int stairsDownX = STAIRS_DOWN_COL * srcCell;
         int stairsDownY = STAIRS_DOWN_ROW * srcCell;
-        if (stairsDownX + stairsWPx <= tex.getWidth()
-                && stairsDownY + stairsHPx <= tex.getHeight()) {
+        if (stairsDownX + stairsWPx <= sheetW && stairsDownY + stairsHPx <= sheetH) {
             stairsDownByTheme.put(theme,
-                    new TextureRegion(tex, stairsDownX, stairsDownY, stairsWPx, stairsHPx));
+                    new TextureRegion(tex, stairsDownX, yOffset + stairsDownY, stairsWPx, stairsHPx));
         }
         int altarX = ALTAR_COL * srcCell;
         int altarY = ALTAR_ROW * srcCell;
         int altarWPx = ALTAR_W_CELLS * srcCell;
-        if (altarX + altarWPx <= tex.getWidth() && altarY + srcCell <= tex.getHeight()) {
-            altarByTheme.put(theme, new TextureRegion(tex, altarX, altarY, altarWPx, srcCell));
+        if (altarX + altarWPx <= sheetW && altarY + srcCell <= sheetH) {
+            altarByTheme.put(theme,
+                    new TextureRegion(tex, altarX, yOffset + altarY, altarWPx, srcCell));
         }
         int throneX = THRONE_COL * srcCell;
         int throneY = THRONE_ROW * srcCell;
         int throneHPx = THRONE_H_CELLS * srcCell;
-        if (throneX + srcCell <= tex.getWidth() && throneY + throneHPx <= tex.getHeight()) {
-            throneByTheme.put(theme, new TextureRegion(tex, throneX, throneY, srcCell, throneHPx));
+        if (throneX + srcCell <= sheetW && throneY + throneHPx <= sheetH) {
+            throneByTheme.put(theme,
+                    new TextureRegion(tex, throneX, yOffset + throneY, srcCell, throneHPx));
         }
     }
 
     /** Release the cached terrain atlases. Subsequent accessors reload. */
     public static void disposeShared() {
-        if (textures != null) {
-            for (Texture t : textures.values()) if (t != null) t.dispose();
-            textures = null;
-        }
+        textures = null; // texture owned by SpriteAtlas
         cellSizes          = null;
         regionsByTheme     = null;
         smallStatueByTheme = null;

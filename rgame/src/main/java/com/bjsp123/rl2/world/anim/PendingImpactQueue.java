@@ -28,7 +28,8 @@ final class PendingImpactQueue {
         boolean fired = false;
         for (Iterator<PendingImpact> it = pending.iterator(); it.hasNext(); ) {
             PendingImpact pi = it.next();
-            if (pi.effect.frame + 1 < pi.effect.totalFrames()) continue;
+            int trigger = pi.effect.impactFrame > 0 ? pi.effect.impactFrame : pi.effect.totalFrames() - 1;
+            if (pi.effect.frame < trigger) continue;
             try {
                 pi.onComplete.run();
                 fired = true;

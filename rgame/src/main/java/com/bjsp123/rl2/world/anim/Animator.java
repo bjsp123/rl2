@@ -466,8 +466,10 @@ public final class Animator {
         Item.ItemEffect element = m.element();
         Item wand = m.wand();
         int effLvl = m.effectiveLevel();
-        pendingImpacts.add(missile,
-                () -> com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wand, effLvl));
+        pendingImpacts.add(missile, () -> {
+            com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wand, effLvl);
+            stage.add(com.bjsp123.rl2.world.render.Effect.wandImpactBurst(target, element, RNG));
+        });
     }
 
     void onWandRayFired(Level level, GameEvent.WandRayFired m) {
@@ -1126,7 +1128,7 @@ public final class Animator {
         float gravity = 0f;
         float size;
         boolean bright = true;
-        float baseSize = 1.0f;
+        float baseSize = 2.0f;
         switch (element) {
             case WATER -> {
                 head    = Effect.EffectTint.BLUE;

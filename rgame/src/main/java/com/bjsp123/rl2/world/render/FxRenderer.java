@@ -571,8 +571,10 @@ final class FxRenderer {
 
         Color headColor = tintToColor(e.headTint, Color.WHITE);
         if (e.frame <= flightEnd) {
+            batch.setColor(headColor.r, headColor.g, headColor.b, 0.35f);
+            batch.draw(whiteRegion, hx - 5f, hy - 5f, 10f, 10f);
             batch.setColor(headColor.r, headColor.g, headColor.b, 1f);
-            batch.draw(whiteRegion, hx - 1.5f, hy - 1.5f, 3f, 3f);
+            batch.draw(whiteRegion, hx - 2.5f, hy - 2.5f, 5f, 5f);
         }
 
         int trailLife = 14;

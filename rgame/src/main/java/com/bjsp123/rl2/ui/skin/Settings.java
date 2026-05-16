@@ -21,6 +21,8 @@ public final class Settings {
     private static final String KEY_LOG_NON_PLAYER = "rl2-log-non-player";
     private static final String KEY_LOG_EXPANDED = "rl2-log-expanded";
     private static final String KEY_INSTANT_ACTIONS = "rl2-instant-actions";
+    private static final String KEY_LOW_RES_RENDER  = "rl2-low-res-render";
+    private static final String KEY_PERF_OVERLAY    = "rl2-perf-overlay";
 
     public static final float UI_SCALE_DEFAULT = 1.0f;
     public static final float[] UI_SCALE_CHOICES = { 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 3.5f };
@@ -43,8 +45,8 @@ public final class Settings {
     public static final float MOB_OUTLINE_DARKNESS_DEFAULT = 0.55f;
     public static final boolean MOB_OUTLINE_SMOOTH_DEFAULT = true;
     public static final float MOB_OUTLINE_MAX_WIDTH = 2.0f;
-    public static final float[] MOB_OUTLINE_WIDTH_CHOICES = { 0.0f, 0.3f, 0.6f, 1.0f, 1.5f, 2.0f };
-    public static final float[] MOB_OUTLINE_DARKNESS_CHOICES = { 0.3f, 0.55f, 0.75f, 1.0f };
+    public static final float[] MOB_OUTLINE_WIDTH_CHOICES = { 0.2f, 0.3f, 0.5f, 0.8f, 1.0f, 1.5f };
+    public static final float[] MOB_OUTLINE_DARKNESS_CHOICES = { 0.6f, 0.8f, 0.9f, 0.95f, 0.98f, 1.0f };
 
     public static final float LOG_FONT_SCALE_DEFAULT = 1.5f;
     public static final float[] LOG_FONT_SCALE_CHOICES = { 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f };
@@ -67,7 +69,9 @@ public final class Settings {
     private static volatile boolean showLowPriority;
     private static volatile boolean showNonPlayer;
     private static volatile boolean logExpanded;
-    private static boolean instantActions = false;
+    private static boolean instantActions;
+    private static boolean lowResRender;
+    private static boolean showPerfOverlay;
 
     private Settings() {}
 
@@ -89,6 +93,8 @@ public final class Settings {
         showNonPlayer = loadBoolean(KEY_LOG_NON_PLAYER, false);
         logExpanded = loadBoolean(KEY_LOG_EXPANDED, false);
         instantActions = loadBoolean(KEY_INSTANT_ACTIONS, false);
+        lowResRender   = loadBoolean(KEY_LOW_RES_RENDER, false);
+        showPerfOverlay = loadBoolean(KEY_PERF_OVERLAY, false);
     }
 
     public static float uiScale() { return uiScale; }
@@ -107,6 +113,8 @@ public final class Settings {
     public static boolean showNonPlayer() { return showNonPlayer; }
     public static boolean logExpanded() { return logExpanded; }
     public static boolean instantActions() { return instantActions; }
+    public static boolean lowResRender()    { return lowResRender; }
+    public static boolean showPerfOverlay() { return showPerfOverlay; }
 
     public static void setUiScale(float v) { uiScale = v; save(KEY_UI_SCALE, v); }
     public static void setUiPixelScale(int v) { uiPixelScale = Math.max(1, v); save(KEY_UI_PIXEL_SCALE, uiPixelScale); }
@@ -125,6 +133,8 @@ public final class Settings {
     public static void setShowNonPlayer(boolean v) { showNonPlayer = v; save(KEY_LOG_NON_PLAYER, v); }
     public static void setLogExpanded(boolean v) { logExpanded = v; save(KEY_LOG_EXPANDED, v); }
     public static void setInstantActions(boolean v) { instantActions = v; save(KEY_INSTANT_ACTIONS, v); }
+    public static void setLowResRender(boolean v)    { lowResRender = v;    save(KEY_LOW_RES_RENDER, v); }
+    public static void setShowPerfOverlay(boolean v) { showPerfOverlay = v; save(KEY_PERF_OVERLAY, v); }
 
     private static float detectUiScaleDefault() {
         if (Gdx.graphics == null) return UI_SCALE_DEFAULT;

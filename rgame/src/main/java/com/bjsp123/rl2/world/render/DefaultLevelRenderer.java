@@ -73,6 +73,15 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private static final int MOB_VISIBLE_W = 16;
     private static final int MOB_VISIBLE_H = 20;
 
+    // Set to false to suppress floor-edge and wall-base gradient shadows (profiling / A-B testing).
+    static boolean DRAW_EDGE_SHADOWS = true;
+    // Set to false to suppress fog overlay (profiling / A-B testing).
+    static boolean DRAW_FOG = true;
+    // Set to false to suppress floor and chasm tile draws (profiling / A-B testing).
+    static boolean DRAW_FLOORS = true;
+    // Set to false to suppress wall body and wall-top draws (profiling / A-B testing).
+    static boolean DRAW_WALLS = true;
+
     /** Width of the thin shadow strip painted along the wall-facing edges of floor tiles. The
      *  strip uses a 4-pixel alpha gradient texture (opaque at the wall, fading into the floor). */
     private static final float FLOOR_SHADOW_PX    = 3f;
@@ -173,18 +182,20 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  {@link #create()} from every row in {@link com.bjsp123.rl2.logic.MobRegistry}.
      *  Replaces the legacy 25 hand-named per-species fields. */
     private final java.util.Map<String, Sprite[]> speciesFacing = new java.util.HashMap<>();
-    private Texture         whiteTex;
-    private Texture         shadowTex;
-    /** Dedicated soft-oval shadow for lamp tiles - bigger and darker than the mob shadow. */
-    private Texture         lampShadowTex;
-    private Texture         wallBaseShadowTex;
-    /** 1x4 gradient: alpha 0 at image-top, 255 at image-bottom. Used for N/S floor shadows. */
-    private Texture         floorShadowVertTex;
-    /** 4x1 gradient: alpha 255 at image-left, 0 at image-right. Used for E/W floor shadows. */
-    private Texture         floorShadowHorzTex;
+    /** Single 128×16 atlas packing all baked shadow and utility regions.  Nearest filter so
+     *  packed 1-px-wide gradient strips don't bleed into transparent neighbours when sampled at
+     *  the edges of a stretched quad. All pixels are stored WHITE (1,1,1,alpha) so the batch
+     *  color is free to tint them - use BLACK batch for opaque-black oval shadows, and use
+     *  {@link #getShadowColor} for theme-tinted gradient shadows. */
+    private Texture         utilityAtlas;
+    private TextureRegion   shadowRegion;
+    private TextureRegion   lampShadowRegion;
+    private TextureRegion   wallBaseShadowRegion;
+    private TextureRegion   floorShadowVertRegion;
+    private TextureRegion   floorShadowHorzRegion;
     /** 16-way alpha mask tiles lifted from the bottom strip of surfaces.png. Index 0 is a
      *  synthesized solid-white tile (the art leaves variant 0 fully transparent). */
-    private Texture[]       surfaceMaskTex;
+    private TextureRegion[] surfaceMaskTex;
     /** Custom shader that draws a scrolling surface modulated by a per-cell alpha mask. */
     private ShaderProgram   surfaceMaskShader;
     private float           waterTime;
@@ -198,6 +209,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private com.bjsp123.rl2.world.anim.Animator animator;
     /** Runtime outline service. Owns the generated atlas and radial fallback policy. */
     private final OutlineRenderer outlines = new OutlineRenderer();
+    private final GameFbo gameFbo = new GameFbo();
     /** Real-time accumulator for the stair-label fade animation, in seconds. Bumped each
      *  frame from {@link com.badlogic.gdx.Gdx#graphics}. */
     private float           stairLabelTime;
@@ -260,6 +272,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
     }
 
+    /** Per-render pass timing and flush-count breakdown, populated every frame.
+     *  Read by PlayScreen after {@link #render} returns to add granular metrics to
+     *  the frame profiler. {@code flushXxx} counts SpriteBatch flushes (GL draw calls)
+     *  within that pass; {@code nsXxx} is wall-clock nanoseconds. */
+    public static final class RenderStats {
+        public int flushPass1, flushSurface, flushPass3, flushPass4, flushFog, totalFlushes;
+        public long nsPass1, nsSurface, nsPass3, nsPass4, nsFog;
+    }
+    private final RenderStats _stats = new RenderStats();
+    public RenderStats lastRenderStats() { return _stats; }
+
     /** Extra pixels a flying mob hovers above the shared ground baseline. */
     private static final int FLYING_HOVER_PX = 4;
 
@@ -306,24 +329,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
             speciesFacing.put(type, pair);
         }
 
-        Pixmap wp = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        wp.setColor(Color.WHITE);
-        wp.fill();
-        whiteTex = new Texture(wp);
-        wp.dispose();
-        whiteRegion = new TextureRegion(whiteTex);
-
-        shadowTex     = makeShadowTexture(32, 8, SHADOW_MAX_ALPHA);
-        lampShadowTex = makeShadowTexture(40, 10, LAMP_SHADOW_MAX_ALPHA);
-        wallBaseShadowTex = makeWallBaseShadowTexture();
-        floorShadowVertTex = makeAlphaGradient(1, 4, /*horizontal*/ false);
-        floorShadowHorzTex = makeAlphaGradient(4, 1, /*horizontal*/ true);
+        buildUtilityAtlas();
 
         // Surface / vegetation / mask / fire textures all come from SurfaceSprites
         // - the single owner of surfaces.png and the two fire sheets across the whole
         // game. We borrow Texture references; SurfaceSprites.disposeShared() releases
         // them, never this dispose().
-        surfaceMaskTex = new Texture[com.bjsp123.rl2.world.render.SurfaceSprites.MASK_VARIANTS];
+        surfaceMaskTex = new TextureRegion[com.bjsp123.rl2.world.render.SurfaceSprites.MASK_VARIANTS];
         for (int i = 0; i < surfaceMaskTex.length; i++) {
             surfaceMaskTex[i] = com.bjsp123.rl2.world.render.SurfaceSprites.maskTexture(i);
         }
@@ -511,8 +523,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         LevelRenderIndexes.CellBuckets<Effect> fxByCell    = LevelRenderIndexes.effectsByCell(level, animator.stage);
 
-        batch.setProjectionMatrix(camera.combined);
-        batch.begin();
+        gameFbo.beginWorldPass(batch, camera);
         batch.setColor(Color.WHITE);
 
         // FOUR PASSES over the level:
@@ -531,7 +542,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         //            door overhangs, sideways-door overhangs - every "ceiling" tile painted
         //            on top of the already-laid scene.
         // Fog then runs once after pass 4.
-        for (int y = view.minY; y <= view.maxY; y++) {
+        long _t0 = System.nanoTime();
+        if (DRAW_FLOORS) for (int y = view.minY; y <= view.maxY; y++) {
             for (int x = view.minX; x <= view.maxX; x++) {
                 if (!level.explored[x][y]) continue;
                 drawFloorAt(level, x, y);
@@ -539,15 +551,51 @@ public class DefaultLevelRenderer implements LevelRenderer {
             }
         }
 
+        long _t1 = System.nanoTime(); int _f1 = batch.renderCalls;
         drawSurfacesPass(level, view);
 
+        long _t2 = System.nanoTime(); int _f2 = batch.renderCalls;
+        // Pass 3 is split into four sub-loops so each uses a single texture family,
+        // eliminating the tile-atlas↔utility-atlas texture thrash that caused 80-260
+        // flushes per frame:
+        //   3A - shadow pre-pass  (utility atlas only): floor-edge gradients +
+        //        static oval contact shadows (lamp / statue / throne)
+        //   3B - wall bodies      (tile atlas only)
+        //   3C - wall-base shadow (utility atlas only): drawn after all wall bodies so it
+        //        darkens the bottom of each wall sprite; drawn before the content loop so
+        //        mobs standing south of a wall still appear in front of the shadow
+        //   3D - content          (tile atlas + mob/item atlases): everything else
+
+        // 3A — shadow pre-pass (utility atlas)
+        for (int y = view.maxY; y >= view.minY; y--) {
+            for (int x = view.minX; x <= view.maxX; x++) {
+                if (!level.explored[x][y]) continue;
+                drawFloorEdgeShadowAt(level, x, y);
+                drawContactShadowAt(level, x, y);
+            }
+        }
+
+        // 3B — wall bodies (tile atlas)
+        if (DRAW_WALLS) for (int y = view.maxY; y >= view.minY; y--) {
+            for (int x = view.minX; x <= view.maxX; x++) {
+                if (!level.explored[x][y]) continue;
+                drawWallAt(level, x, y);
+            }
+        }
+
+        // 3C — wall-base shadow (utility atlas)
+        for (int y = view.maxY; y >= view.minY; y--) {
+            for (int x = view.minX; x <= view.maxX; x++) {
+                if (!level.explored[x][y]) continue;
+                drawWallBaseShadowAt(level, x, y);
+            }
+        }
+
+        // 3D — content (tile atlas + mob/item atlases)
         for (int y = view.maxY; y >= view.minY; y--) {
             for (int x = view.minX; x <= view.maxX; x++) {
                 boolean explored = level.explored[x][y];
                 if (explored) {
-                    drawFloorEdgeShadowAt(level, x, y);
-                    drawWallAt(level, x, y);
-                    drawWallBaseShadowAt(level, x, y);
                     drawRearVegetationAt(level, x, y);
                     drawLampAt(level, x, y);
                     drawStairsAt(level, x, y);
@@ -581,7 +629,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // those flow through the normal effect pipeline, so there's no
         // dedicated cloud-tint pass here.
 
-        for (int y = view.maxY; y >= view.minY; y--) {
+        long _t3 = System.nanoTime(); int _f3 = batch.renderCalls;
+        if (DRAW_WALLS) for (int y = view.maxY; y >= view.minY; y--) {
             for (int x = view.minX; x <= view.maxX; x++) {
                 if (!level.explored[x][y]) continue;
                 drawWallOverlayAt(level, x, y);
@@ -593,9 +642,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // a mob; otherwise it's a no-op.
         if (lookedAtMob != null) drawLookAnnotations(level);
 
-        fog.render(batch);
+        long _t4 = System.nanoTime(); int _f4 = batch.renderCalls;
+        if (DRAW_FOG) fog.render(batch);
+        gameFbo.endWorldPass(batch);
+        long _t5 = System.nanoTime();
 
-        batch.end();
+        _stats.nsPass1      = _t1 - _t0; _stats.flushPass1    = _f1;
+        _stats.nsSurface    = _t2 - _t1; _stats.flushSurface  = _f2 - _f1;
+        _stats.nsPass3      = _t3 - _t2; _stats.flushPass3    = _f3 - _f2;
+        _stats.nsPass4      = _t4 - _t3; _stats.flushPass4    = _f4 - _f3;
+        _stats.nsFog        = _t5 - _t4; _stats.flushFog      = batch.renderCalls - _f4;
+        _stats.totalFlushes = batch.renderCalls;
     }
 
     /**
@@ -797,6 +854,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * (matching the real-world order: wall casts shadow onto liquid).
      */
     private void drawFloorEdgeShadowAt(Level level, int x, int y) {
+        if (!DRAW_EDGE_SHADOWS) return;
         if (!level.tiles[x][y].isFloorLike()) return;
         batch.setColor(getShadowColor(level));
         float px = x * (float) CELL;
@@ -804,54 +862,137 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (isWallCell(level, x, y + 1)) {
             // Wall to north: strip at top of cell, opaque at top - flip vertical
             // gradient by drawing with negative height anchored at the cell's top.
-            batch.draw(floorShadowVertTex, px, py + CELL,
+            batch.draw(floorShadowVertRegion, px, py + CELL,
                        CELL, -FLOOR_SHADOW_PX);
         }
         if (isWallCell(level, x, y - 1)) {
             // Wall to south: strip at bottom of cell, opaque at bottom - natural orientation.
-            batch.draw(floorShadowVertTex, px, py, CELL, FLOOR_SHADOW_PX);
+            batch.draw(floorShadowVertRegion, px, py, CELL, FLOOR_SHADOW_PX);
         }
         if (isWallCell(level, x - 1, y)) {
             // Wall to west: strip on left, opaque at left - natural orientation.
-            batch.draw(floorShadowHorzTex, px, py, FLOOR_SHADOW_PX, CELL);
+            batch.draw(floorShadowHorzRegion, px, py, FLOOR_SHADOW_PX, CELL);
         }
         if (isWallCell(level, x + 1, y)) {
             // Wall to east: strip on right, opaque at right - flip horizontally.
-            batch.draw(floorShadowHorzTex, px + CELL, py,
+            batch.draw(floorShadowHorzRegion, px + CELL, py,
                        -FLOOR_SHADOW_PX, CELL);
         }
         batch.setColor(Color.WHITE);
     }
 
     /**
-     * Build a 1-D alpha-only gradient as an RGBA texture. Pixels are pure white; alpha ramps
-     * from 0 at one end to 255 at the other along the major axis.
-     * <ul>
-     *   <li>{@code horizontal=false} (vertical strip): alpha 0 at image-top row 0, 255 at
-     *       image-bottom row {@code h-1}. SpriteBatch maps image-top to high screen-y, so the
-     *       drawn rect is opaque at its bottom edge.</li>
-     *   <li>{@code horizontal=true}: alpha 255 at image-left column 0, 0 at image-right
-     *       column {@code w-1}. Drawn rect is opaque at its left edge.</li>
-     * </ul>
-     * Linear filtering smooths the ramp at any render size.
+     * Builds the 128×16 utility atlas that packs all baked shadow and white-fill regions.
+     * Nearest filtering prevents 1-px-wide gradient strips from bleeding into transparent
+     * neighbours when the strip is stretched across a full cell width.
+     *
+     * <pre>
+     * Atlas layout (all pixels WHITE 0xFFFFFF with varying alpha):
+     *  ( 0, 0, 32, 8)  mob contact-shadow oval   – batch color BLACK for opaque black shadow
+     *  (34, 0, 40,10)  lamp contact-shadow oval   – same
+     *  (76, 0,  1, 8)  wall-base vertical gradient (opaque at Pixmap bottom = screen bottom)
+     *  (79, 0,  1, 4)  floor-edge N/S gradient    (opaque at Pixmap bottom = screen bottom)
+     *  (82, 0,  4, 1)  floor-edge E/W gradient    (opaque at Pixmap left  = screen left)
+     *  (88, 0,  1, 1)  solid white pixel           – batch color drives final tint
+     * </pre>
      */
-    private static Texture makeAlphaGradient(int w, int h, boolean horizontal) {
-        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+    // Gradient strips are baked at 32× their logical pixel count so Linear filter
+    // can interpolate smoothly across the 3–8 display-pixel shadow widths.
+    private static final int GRAD_SCALE = 32;
+
+    private void buildUtilityAtlas() {
+        // Atlas layout (256×512, RGBA8888):
+        //   (  0,  0) Mob oval shadow      32×8   — unchanged, Nearest-friendly edge fade
+        //   ( 34,  0) Lamp oval shadow     40×10  — unchanged
+        //   ( 76,  1) Wall gradient        1×(8*GRAD_SCALE)=1×256  content; padded cols 75,77 + rows 0,258
+        //   ( 79,  1) Floor N/S gradient   1×(4*GRAD_SCALE)=1×128  content; padded cols 78,80 + rows 0,130
+        //   ( 83,  1) Floor E/W gradient   (4*GRAD_SCALE)×1=128×1  content; padded rows 0,2 + cols 82,211
+        //   (213,  0) White pixel          1×1
+        final int WALL_GH = 8 * GRAD_SCALE;   // 256
+        final int FNS_GH  = 4 * GRAD_SCALE;   // 128
+        final int FEW_GW  = 4 * GRAD_SCALE;   // 128
+
+        Pixmap p = new Pixmap(256, 512, Pixmap.Format.RGBA8888);
         p.setBlending(Pixmap.Blending.None);
+        p.setColor(0, 0, 0, 0);
+        p.fill();
+
+        // Ovals are in SpriteAtlas (shadowOvalRegion / lampShadowOvalRegion).
+
+        // White pixel (clear of gradient area)
+        p.drawPixel(213, 0, white(255));
+
+        // Wall-base gradient: 1×WALL_GH, content at (76, 1)
+        for (int y = 0; y < WALL_GH; y++) {
+            p.drawPixel(76, 1 + y, white(Math.round((float) y / (WALL_GH - 1) * 255f)));
+        }
+        for (int y = 0; y < WALL_GH; y++) {          // left/right padding columns
+            int rgba = p.getPixel(76, 1 + y);
+            p.drawPixel(75, 1 + y, rgba);
+            p.drawPixel(77, 1 + y, rgba);
+        }
+        for (int x = 75; x <= 77; x++) {             // top/bottom padding rows
+            p.drawPixel(x, 0,            p.getPixel(76, 1));
+            p.drawPixel(x, 1 + WALL_GH, p.getPixel(76, WALL_GH));
+        }
+
+        // Floor N/S gradient: 1×FNS_GH, content at (79, 1)
+        for (int y = 0; y < FNS_GH; y++) {
+            p.drawPixel(79, 1 + y, white(Math.round((float) y / (FNS_GH - 1) * 255f)));
+        }
+        for (int y = 0; y < FNS_GH; y++) {
+            int rgba = p.getPixel(79, 1 + y);
+            p.drawPixel(78, 1 + y, rgba);
+            p.drawPixel(80, 1 + y, rgba);
+        }
+        for (int x = 78; x <= 80; x++) {
+            p.drawPixel(x, 0,           p.getPixel(79, 1));
+            p.drawPixel(x, 1 + FNS_GH, p.getPixel(79, FNS_GH));
+        }
+
+        // Floor E/W gradient: FEW_GW×1, content at (83, 1); 255 at left, 0 at right
+        for (int x = 0; x < FEW_GW; x++) {
+            p.drawPixel(83 + x, 1, white(Math.round((1f - (float) x / (FEW_GW - 1)) * 255f)));
+        }
+        for (int x = 0; x < FEW_GW; x++) {           // top/bottom padding rows
+            int rgba = p.getPixel(83 + x, 1);
+            p.drawPixel(83 + x, 0, rgba);
+            p.drawPixel(83 + x, 2, rgba);
+        }
+        int fewRight = 83 + FEW_GW - 1;
+        for (int y = 0; y <= 2; y++) {                // left/right padding columns
+            p.drawPixel(82,          y, p.getPixel(83,       1));
+            p.drawPixel(fewRight + 1, y, p.getPixel(fewRight, 1));
+        }
+
+        utilityAtlas = new Texture(p);
+        utilityAtlas.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        p.dispose();
+
+        SpriteAtlas.load();
+        shadowRegion          = SpriteAtlas.shadowOvalRegion();
+        lampShadowRegion      = SpriteAtlas.lampShadowOvalRegion();
+        wallBaseShadowRegion  = new TextureRegion(utilityAtlas,  76,  1,       1, WALL_GH);
+        floorShadowVertRegion = new TextureRegion(utilityAtlas,  79,  1,       1,  FNS_GH);
+        floorShadowHorzRegion = new TextureRegion(utilityAtlas,  83,  1, FEW_GW,       1);
+        whiteRegion           = new TextureRegion(utilityAtlas, 213,  0,       1,       1);
+    }
+
+    private static void drawOvalIntoPixmap(Pixmap p, int dstX, int dstY, int w, int h, float peakAlpha) {
+        float cx = (w - 1) / 2f, cy = (h - 1) / 2f;
+        float rx = w / 2f,       ry = h / 2f;
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                float t = horizontal
-                        ? 1f - (w == 1 ? 0f : x / (float) (w - 1)) // 1 at left, 0 at right
-                        :       (h == 1 ? 1f : y / (float) (h - 1)); // 0 at top,  1 at bottom
-                int a = Math.round(t * 255f);
-                int rgba = (255 << 24) | (255 << 16) | (255 << 8) | a; // RGBA8888 white + alpha
-                p.drawPixel(x, y, rgba);
+                float dx = (x - cx) / rx, dy = (y - cy) / ry;
+                int a = Math.round(Math.max(0f, 1f - dx * dx - dy * dy) * peakAlpha * 255f);
+                if (a > 0) p.drawPixel(dstX + x, dstY + y, white(a));
             }
         }
-        Texture t = new Texture(p);
-        p.dispose();
-        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        return t;
+    }
+
+    /** Pack a WHITE pixel with the given alpha (0-255) into an RGBA8888 int. */
+    private static int white(int alpha) {
+        return 0xFFFFFF00 | (alpha & 0xFF);
     }
 
     /** A wall or a door - both read as solid wall sections for shadow purposes, regardless
@@ -873,13 +1014,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * south is explicitly excluded - a wall at the edge of a pit has nothing to shadow onto.
      */
     private void drawWallBaseShadowAt(Level level, int x, int y) {
+        if (!DRAW_EDGE_SHADOWS) return;
         if (!isWallCell(level, x, y)) return;
         Tile south = tileAt(level, x, y - 1);
         if (south == null || south == Tile.CHASM || isWallCell(level, x, y - 1)) return;
         batch.setColor(getShadowColor(level));
         float px = x * (float) CELL;
         float py = y * (float) CELL;
-        batch.draw(wallBaseShadowTex, px, py, CELL, WALL_BASE_SHADOW_PX);
+        batch.draw(wallBaseShadowRegion, px, py, CELL, WALL_BASE_SHADOW_PX);
 
         // Rear corner shadows - thin vertical bands along the wall's left/right edge
         // when the floor at the south has a perpendicular wall stub at the opposite
@@ -892,12 +1034,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 // Wall is northeast of the SW wall stub -> shadow on this wall's LEFT edge.
                 // Only the lower 11 px of the 16-px cell - keeps the top 5 px of the wall
                 // clean so the cap doesn't read as fully darkened.
-                batch.draw(floorShadowHorzTex, px, py,
+                batch.draw(floorShadowHorzRegion, px, py,
                            WALL_REAR_CORNER_SHADOW_PX, WALL_REAR_CORNER_SHADOW_H);
             }
             if (se == Tile.WALL) {
                 // Wall is northwest of the SE wall stub -> shadow on this wall's RIGHT edge.
-                batch.draw(floorShadowHorzTex, px + CELL, py,
+                batch.draw(floorShadowHorzRegion, px + CELL, py,
                            -WALL_REAR_CORNER_SHADOW_PX, WALL_REAR_CORNER_SHADOW_H);
             }
         }
@@ -949,28 +1091,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         return sp;
     }
 
-    /**
-     * Build a 1x8 vertical gradient texture with alpha 0 at the top row and alpha 255 at the
-     * bottom row. Linear filtering smooths the ramp at whatever render size we ask for.
-     * Stored as black so the batch color becomes the final tint.
-     */
-    private static Texture makeWallBaseShadowTexture() {
-        int w = 1, h = 8;
-        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
-        p.setBlending(Pixmap.Blending.None);
-        for (int y = 0; y < h; y++) {
-            // y=0 is the image's top row, which libGDX renders at the HIGHEST screen y of
-            // the drawn rect. We want that end transparent and the image-bottom opaque so the
-            // shadow sits at the cell floor and fades upward on screen.
-            float t = y / (float) (h - 1);
-            int alpha = Math.round(t * 255f);
-            p.drawPixel(0, y, alpha); // RGBA8888: R=G=B=0, A=alpha
-        }
-        Texture t = new Texture(p);
-        p.dispose();
-        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        return t;
-    }
 
     /**
      * Surface pass - draws every water/blood/oil cell on the level using the surface-mask
@@ -1234,7 +1354,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (level.tiles[x][y] != Tile.LAMP) return;
         if (currentLampOrnament == null) return;
         batch.setColor(Color.WHITE);
-        drawLampShadow(x, y);
         // 1 cell wide x 2 cells tall, anchored at the floor cell so the upper half
         // overhangs into the cell above (matching the source 32x64 art). Y is lifted
         // to the shared baseline so the lamp's foot sits on the same line as mobs/items.
@@ -1371,8 +1490,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (t != Tile.THRONE_L && t != Tile.THRONE_R) return;
         if (currentThrone == null) return;
         boolean flip = (t == Tile.THRONE_R);
-        // Reuse the statue contact shadow (small variant: only one cell of shadow).
-        drawStatueShadow(x, y, /* large= */ false);
         batch.setColor(Color.WHITE);
         float dx = x * (float) CELL;
         float dy = y * (float) CELL + ENTITY_Y_OFFSET;
@@ -1405,8 +1522,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         TextureRegion r = small ? currentSmallStatue : currentLargeStatue;
         if (r == null) return;
         boolean flip = (t == Tile.STATUE_SMALL_R || t == Tile.STATUE_LARGE_R);
-        // Contact shadow first, beneath the sprite.
-        drawStatueShadow(x, y, large);
         batch.setColor(Color.WHITE);
         float dx = x * (float) CELL;
         float dy = y * (float) CELL + ENTITY_Y_OFFSET;
@@ -1428,25 +1543,45 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  mob shadow texture (lighter than the lamp shadow) so the figure reads as standing
      *  on the floor without looking as heavy as a planted lamp. */
     private void drawStatueShadow(int gx, int gy, boolean large) {
-        if (shadowTex == null) return;
         float cx = gx * CELL + CELL / 2f;
         float by = gy * CELL + ENTITY_Y_OFFSET;
         int shadowW = large ? STATUE_LARGE_SHADOW_W : STATUE_SMALL_SHADOW_W;
+        batch.setColor(Color.BLACK);
+        batch.draw(shadowRegion, cx - shadowW / 2f, by - SHADOW_H / 2f, shadowW, SHADOW_H);
         batch.setColor(Color.WHITE);
-        batch.draw(shadowTex, cx - shadowW / 2f, by - SHADOW_H / 2f, shadowW, SHADOW_H);
     }
 
     /**
      * Soft elliptical shadow cast under a lamp at the base of its tile. Uses the dedicated
-     * {@link #lampShadowTex} (wider, taller, darker than the mob shadow) so the lamp reads
+     * {@link #lampShadowRegion} (wider, taller, darker than the mob shadow) so the lamp reads
      * as firmly planted on the floor rather than floating above it.
      */
     private void drawLampShadow(int gx, int gy) {
         float cx = gx * CELL + CELL / 2f;
         float by = gy * CELL + ENTITY_Y_OFFSET;
-        batch.setColor(Color.WHITE);
-        batch.draw(lampShadowTex, cx - LAMP_SHADOW_W / 2f, by - LAMP_SHADOW_H / 2f,
+        batch.setColor(Color.BLACK);
+        batch.draw(lampShadowRegion, cx - LAMP_SHADOW_W / 2f, by - LAMP_SHADOW_H / 2f,
                 LAMP_SHADOW_W, LAMP_SHADOW_H);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Draws the static oval contact shadow for LAMP, STATUE, or THRONE tiles. Called from
+     *  the shadow pre-pass so all contact shadows are batched with the utility atlas before
+     *  the tile-atlas content loop starts. */
+    private void drawContactShadowAt(Level level, int x, int y) {
+        switch (level.tiles[x][y]) {
+            case LAMP -> { if (currentLampOrnament != null) drawLampShadow(x, y); }
+            case STATUE_SMALL_L, STATUE_SMALL_R -> {
+                if (currentSmallStatue != null) drawStatueShadow(x, y, false);
+            }
+            case STATUE_LARGE_L, STATUE_LARGE_R -> {
+                if (currentLargeStatue != null) drawStatueShadow(x, y, true);
+            }
+            case THRONE_L, THRONE_R -> {
+                if (currentThrone != null) drawStatueShadow(x, y, false);
+            }
+            default -> {}
+        }
     }
 
     private static Surface surfaceAt(Level level, int x, int y) {
@@ -1824,7 +1959,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (it.wandEffect == null) return new float[]{1f, 0.9f, 0.4f};
         return switch (it.wandEffect) {
             case LEVEL_UP -> new float[]{1f, 0.85f, 0.2f};
-            case HP_UP    -> new float[]{0.9f, 0.15f, 0.15f};
+            case HP_UP    -> new float[]{0.3f, 0.85f, 0.15f};
             case MANA_UP  -> new float[]{0.25f, 0.5f,  1f};
             default       -> new float[]{1f, 0.9f, 0.4f};
         };
@@ -1917,10 +2052,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
                     mob, com.bjsp123.rl2.model.Buff.BuffType.PHASE);
             boolean frozenActive   = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
                     mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN);
-            boolean shieldedActive = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+            boolean shieldedActive    = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
                     mob, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED);
+            boolean levitatingActive  = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+                    mob, com.bjsp123.rl2.model.Buff.BuffType.LEVITATING);
             drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale,
-                    pulseR, pulseG, pulseB, phaseActive, frozenActive, shieldedActive);
+                    pulseR, pulseG, pulseB, phaseActive, frozenActive, shieldedActive, levitatingActive);
         } else {
             System.err.println("No sprite for mob " + mob.mobType + " at (" + mx + ", " + my + ")");
             //placeholder drawn here?
@@ -2016,7 +2153,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * shadow is drawn first, anchored at the baseline.
      */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY, float alpha) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f, false, false, false);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f, false, false, false, false);
     }
 
     /** Spawn-scale variant: {@code spawnScale} 0..1 multiplies both x and y
@@ -2025,7 +2162,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  is the no-op default for normal rendering. */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f, false, false, false);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f, false, false, false, false);
     }
 
     /**
@@ -2038,13 +2175,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
                                float outlinePulseR, float outlinePulseG, float outlinePulseB,
                                boolean phaseEffect) {
         drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale,
-                outlinePulseR, outlinePulseG, outlinePulseB, phaseEffect, false, false);
+                outlinePulseR, outlinePulseG, outlinePulseB, phaseEffect, false, false, false);
     }
 
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale,
                                float outlinePulseR, float outlinePulseG, float outlinePulseB,
-                               boolean phaseEffect, boolean frozenEffect, boolean shieldedEffect) {
+                               boolean phaseEffect, boolean frozenEffect, boolean shieldedEffect,
+                               boolean levitatingEffect) {
         // "Natural" sprites (large blobs etc.) draw at source scale; everything else gets
         // normalised to MOB_VISIBLE_W x MOB_VISIBLE_H so silhouettes read consistently.
         float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * spawnScale;
@@ -2062,27 +2200,28 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // the frame's draw origin (left edge) therefore sits tileCenterX - that amount.
         float silhouetteCenterScaled = (s.visibleLeft + s.visibleW / 2f) * scaleX;
         float drawX = tileCenterX - silhouetteCenterScaled;
+        float levitateLift = levitatingEffect ? FLYING_HOVER_PX * scaleY : 0f;
         float bob = 0f;
-        if (s.yAdjust > 0) {
+        if (s.yAdjust > 0 || levitatingEffect) {
             float phase = (gx * 7 + gy * 13) * 0.7f;
             bob = (float) Math.sin(bobTime * (Math.PI * 2.0 / 2.5) + phase) * 2f * scaleY;
         }
-        float drawY = baselineY + yAdj + bob;
+        float drawY = baselineY + yAdj + levitateLift + bob;
 
-        // Mob and its shadow share an alpha so the death flicker / fade dims both together.
-        batch.setColor(1f, 1f, 1f, alpha);
-        // Shadow width tracks the silhouette plus a small margin so wide mobs (blobs) get a
-        // wide shadow and narrow mobs don't look pinpointed at the feet.
+        // Shadow shares the same alpha as the mob so death-fade dims both together.
         float shadowW = s.visibleW * scaleX + SHADOW_EXTRA_W;
-        batch.draw(shadowTex, tileCenterX - shadowW / 2f, baselineY - SHADOW_H / 2f,
+        batch.setColor(0f, 0f, 0f, alpha);
+        batch.draw(shadowRegion, tileCenterX - shadowW / 2f, baselineY - SHADOW_H / 2f,
                 shadowW, SHADOW_H);
+        batch.setColor(1f, 1f, 1f, alpha);
         // SHIELDED shell: draw the mob's silhouette slightly enlarged in cyan before
         // the mob itself so the glow sits behind it and reads as a surrounding barrier.
         if (shieldedEffect) {
-            float pad = 3f;
-            float shellAlpha = alpha * (0.30f + 0.22f * (float)(0.5 + 0.5 * Math.sin(stairLabelTime * 7.0)));
-            batch.setColor(0.35f, 0.82f, 1.0f, shellAlpha);
-            batch.draw(s.region, drawX - pad, drawY - pad, dw + pad * 2f, dh + pad * 2f);
+            float pulse = (float)(0.5 + 0.5 * Math.sin(stairLabelTime * 5.0));
+            batch.setColor(0.5f, 0.9f, 1.0f, alpha * (0.18f + 0.12f * pulse));
+            batch.draw(s.region, drawX - 8f, drawY - 8f, dw + 16f, dh + 16f);
+            batch.setColor(0.5f, 0.9f, 1.0f, alpha * (0.55f + 0.35f * pulse));
+            batch.draw(s.region, drawX - 4f, drawY - 4f, dw + 8f, dh + 8f);
         }
         float outlineW = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float outlineA = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness() * alpha;
@@ -2134,29 +2273,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * at the center of the ellipse - mob shadows use a light value; lamp shadows use a
      * heavier one to sell the lamp as physically planted on the floor.
      */
-    private static Texture makeShadowTexture(int w, int h, float peakAlpha) {
-        Pixmap p = new Pixmap(w, h, Pixmap.Format.RGBA8888);
-        p.setBlending(Pixmap.Blending.None);
-        p.setColor(0, 0, 0, 0);
-        p.fill();
-        float cx = (w - 1) / 2f;
-        float cy = (h - 1) / 2f;
-        float rx = w / 2f;
-        float ry = h / 2f;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                float dx = (x - cx) / rx;
-                float dy = (y - cy) / ry;
-                float falloff = Math.max(0f, 1f - (dx * dx + dy * dy));
-                int alpha = Math.round(falloff * peakAlpha * 255f);
-                if (alpha > 0) p.drawPixel(x, y, alpha); // RGBA8888: R=G=B=0, A=alpha
-            }
-        }
-        Texture t = new Texture(p);
-        p.dispose();
-        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        return t;
-    }
 
     /**
      * Pick the right frame for a mob, dispatching purely on {@link Mob#mobType}. Every
@@ -2187,14 +2303,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Atlas-derived textures are owned by their respective sprite-source helpers
         // (MobSprites, TileSprites, SurfaceSprites). They live for the JVM lifetime
         // and aren't disposed by an individual renderer instance.
-        if (whiteTex     != null) whiteTex.dispose();
-        if (shadowTex    != null) shadowTex.dispose();
-        if (lampShadowTex != null) lampShadowTex.dispose();
-        if (wallBaseShadowTex != null) wallBaseShadowTex.dispose();
-        if (floorShadowVertTex != null) floorShadowVertTex.dispose();
-        if (floorShadowHorzTex != null) floorShadowHorzTex.dispose();
+        if (utilityAtlas != null) utilityAtlas.dispose();
         if (surfaceMaskShader != null) surfaceMaskShader.dispose();
         outlines.dispose();
         fog.dispose();
+        gameFbo.dispose();
     }
 }

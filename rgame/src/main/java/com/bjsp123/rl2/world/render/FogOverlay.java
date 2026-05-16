@@ -22,6 +22,11 @@ import com.bjsp123.rl2.model.Tile;
  *
  *  We use a 4th fog level between LIT and EXPLORED so the
  * soft gradient also smooths the lit/visible-but-unlit transition.
+ *
+ * <p>Fog darkening and lamplight glow are combined into a single premultiplied-RGBA8888 texture
+ * drawn with {@code glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)}. This achieves:
+ * {@code dst = lampRGB·lampAlpha + world·(1−fogAlpha)}, which is identical to the sequential
+ * darken-then-glow of the old two-pass system but in one full-screen fragment pass instead of two.
  */
 public class FogOverlay {
 
@@ -45,10 +50,7 @@ public class FogOverlay {
             0xFF000000, // UNSEEN:   fully opaque black
     };
 
-    // Warm lamplight glow, additively blended on top. Lit cells in current view get the full
-    // glow; lit cells the player has seen before but can't currently see still emit a faint
-    // remembered glow so the floor plan doesn't look eerily dark where a lamp clearly is. The
-    // dim value is low enough that it never outshines a currently-visible lit cell next to it.
+    // Warm lamplight glow, combined additively in the single pass.
     private static final int LIGHT_NONE_ARGB = 0x00000000;
     private static final int LIGHT_DIM_ARGB  = 0x08FFE69A; // ~3% alpha
     private static final int LIGHT_FULL_ARGB = 0x24FFE69A; // ~14% alpha
@@ -58,15 +60,34 @@ public class FogOverlay {
     private static final int LIGHT_DIM  = 1;
     private static final int LIGHT_FULL = 2;
 
+    // Precomputed premultiplied RGBA8888 values: [fogState 0..3][lightLevel 0..2].
+    // Each entry encodes the combined fog+light pixel as (lampR·a, lampG·a, lampB·a, fogAlpha)
+    // ready for GL_ONE / GL_ONE_MINUS_SRC_ALPHA blending.
+    private static final int[][] COMBINED_RGBA = new int[4][3];
+    static {
+        int[] fogAlphas = { 0x00, 0x30, 0xA0, 0xFF };
+        int[] lampARGBs = { LIGHT_NONE_ARGB, LIGHT_DIM_ARGB, LIGHT_FULL_ARGB };
+        for (int f = 0; f < 4; f++) {
+            for (int l = 0; l < 3; l++) {
+                int fogA = fogAlphas[f];
+                int la   = (lampARGBs[l] >>> 24) & 0xFF;
+                int lr   = (lampARGBs[l] >>> 16) & 0xFF;
+                int lg   = (lampARGBs[l] >>>  8) & 0xFF;
+                int lb   =  lampARGBs[l]          & 0xFF;
+                int pr   = Math.round(lr * la / 255f);
+                int pg   = Math.round(lg * la / 255f);
+                int pb   = Math.round(lb * la / 255f);
+                COMBINED_RGBA[f][l] = (pr << 24) | (pg << 16) | (pb << 8) | fogA;
+            }
+        }
+    }
+
     private int mapW, mapH, pxW, pxH;
-    private Pixmap        fogPixmap;
-    private Texture       fogTexture;
-    private TextureRegion fogRegion;
-    private Pixmap        lightPixmap;
-    private Texture       lightTexture;
-    private TextureRegion lightRegion;
+    private Pixmap        combinedPixmap;
+    private Texture       combinedTexture;
+    private TextureRegion combinedRegion;
     private boolean       created;
-    /** Tracks whether the fog/light pixmaps are stale vs the level's visibility+lit state.
+    /** Tracks whether the combined pixmap is stale vs the level's visibility+lit state.
      *  Set by {@link #markDirty}, cleared by a successful {@link #update}. Between ticks
      *  neither array changes, so the work + texture upload in {@code update} only needs
      *  to run when the caller announces a change. */
@@ -80,31 +101,24 @@ public class FogOverlay {
         this.pxW  = mapW * PIX_PER_TILE;
         this.pxH  = mapH * PIX_PER_TILE;
 
-        fogPixmap = newPixmap(FOG_ARGB[UNSEEN]);
-        fogTexture = newLinearTexture(fogPixmap);
-        fogRegion = new TextureRegion(fogTexture);
-        fogRegion.flip(false, true);
-
-        lightPixmap = newPixmap(LIGHT_NONE_ARGB);
-        lightTexture = newLinearTexture(lightPixmap);
-        lightRegion = new TextureRegion(lightTexture);
-        lightRegion.flip(false, true);
+        combinedPixmap  = newPixmap(COMBINED_RGBA[UNSEEN][LIGHT_NONE]);
+        combinedTexture = newLinearTexture(combinedPixmap);
+        combinedRegion  = new TextureRegion(combinedTexture);
+        combinedRegion.flip(false, true);
 
         created = true;
-        // Fresh pixmaps - need a full population on the next update(), regardless of the
-        // caller's dirty tracking.
         dirty = true;
     }
 
-    /** Flag the fog + light pixmaps as stale vs the level. The caller (PlayScreen) is
+    /** Flag the combined pixmap as stale vs the level. The caller (PlayScreen) is
      *  responsible for calling this whenever visibility or lighting could have changed -
      *  primarily after a game tick, an amulet pickup/drop, or a level transition. */
     public void markDirty() { this.dirty = true; }
 
-    private Pixmap newPixmap(int argb) {
+    private Pixmap newPixmap(int rgba8888) {
         Pixmap p = new Pixmap(pxW, pxH, Pixmap.Format.RGBA8888);
         p.setBlending(Pixmap.Blending.None);
-        p.setColor(argbToRgba8888(argb));
+        p.setColor(rgba8888);
         p.fill();
         return p;
     }
@@ -122,35 +136,28 @@ public class FogOverlay {
                 fillForCell(level, x, y);
             }
         }
-        fogTexture.draw(fogPixmap, 0, 0);
-        lightTexture.draw(lightPixmap, 0, 0);
+        combinedTexture.draw(combinedPixmap, 0, 0);
         dirty = false;
     }
 
     /**
-     * Two-pass render:
-     *   1) fog darkens by alpha blending (default blend)
-     *   2) lamplight brightens LIT cells by additive blending
-     * Both use linear filtering, so both the visibility and the light/dark transitions have the
-     * same soft gradient look.
+     * Single-pass render: premultiplied alpha blend combines fog darkening and lamplight
+     * glow in one full-screen fragment pass.
+     * {@code glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)} produces:
+     * {@code dst = src.rgb + dst.rgb * (1 − src.a) = lampRGB·lampAlpha + world·(1−fogAlpha)}.
      */
     public void render(SpriteBatch batch) {
         if (!created) return;
         batch.setColor(1f, 1f, 1f, 1f);
-        batch.draw(fogRegion, 0, 0, mapW * TILE_SIZE, mapH * TILE_SIZE);
-
-        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
-        batch.draw(lightRegion, 0, 0, mapW * TILE_SIZE, mapH * TILE_SIZE);
+        batch.setBlendFunction(GL20.GL_ONE, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        batch.draw(combinedRegion, 0, 0, mapW * TILE_SIZE, mapH * TILE_SIZE);
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     public void dispose() {
-        if (fogTexture   != null) fogTexture.dispose();
-        if (fogPixmap    != null) fogPixmap.dispose();
-        if (lightTexture != null) lightTexture.dispose();
-        if (lightPixmap  != null) lightPixmap.dispose();
-        fogTexture = null; fogPixmap = null; fogRegion = null;
-        lightTexture = null; lightPixmap = null; lightRegion = null;
+        if (combinedTexture != null) combinedTexture.dispose();
+        if (combinedPixmap  != null) combinedPixmap.dispose();
+        combinedTexture = null; combinedPixmap = null; combinedRegion = null;
         created = false;
     }
 
@@ -166,19 +173,11 @@ public class FogOverlay {
     private void fillForCell(Level level, int x, int y) {
         int pxX = x * PIX_PER_TILE;
         int pxY = y * PIX_PER_TILE;
-        int halfX = PIX_PER_TILE / 2;
-        int halfY = PIX_PER_TILE / 2;
 
         if (level.tiles[x][y] == Tile.WALL) {
-            // Fog uniform (see earlier note about keeping the wall sprite's cap visible).
+            // Fog uniform for the whole wall cell; light corner-sampled but excluding the
+            // wall's own lit state (walls stop light - see class javadoc for the far-side rule).
             int fog = cellFog(level, x, y);
-            fillFog(pxX, pxY, PIX_PER_TILE, PIX_PER_TILE, fog);
-
-            // Light corner-sampled, but EXCLUDING the wall's own lit state. Walls stop light, so
-            // a wall shouldn't propagate its own "lit" status. Each pixmap corner only picks up
-            // light from the 3 non-self cells sharing it - meaning the south corners light up
-            // when a lit floor is south of the wall, but the north corners stay dark and no
-            // light bleeds through to unseen cells beyond.
             for (int iy = 0; iy < 2; iy++) {
                 int dy = (iy == 0) ? -1 : +1;
                 for (int ix = 0; ix < 2; ix++) {
@@ -187,18 +186,15 @@ public class FogOverlay {
                                 cellLightLevel(level, x + dx, y),
                                 cellLightLevel(level, x,      y + dy)),
                                 cellLightLevel(level, x + dx, y + dy));
-                    fillLight(pxX + ix * halfX, pxY + iy * halfY, halfX, halfY, lit);
+                    combinedPixmap.drawPixel(pxX + ix, pxY + iy, COMBINED_RGBA[fog][lit]);
                 }
             }
             return;
         }
 
-        // Non-wall: corner sampling so explored/unseen edges saturate inside an explored cell,
-        // giving the blurry visibility boundary we want for floors/chasms/water.
-        // Exception: when the center tile is currently visible (including ESP-revealed mob
-        // tiles), neighbouring unexplored cells must not dominate the max and make the
-        // corner fully opaque - that would bury the mob behind a solid black overlay.
-        int selfFog = cellFog(level, x, y);
+        // Non-wall: fog is corner-sampled; light is uniform for the whole cell.
+        int cellLight = cellLightLevel(level, x, y);
+        int selfFog   = cellFog(level, x, y);
         for (int iy = 0; iy < 2; iy++) {
             int dy = (iy == 0) ? -1 : +1;
             for (int ix = 0; ix < 2; ix++) {
@@ -209,13 +205,9 @@ public class FogOverlay {
                         cellFog(level, x,      y + dy),
                         cellFog(level, x + dx, y + dy));
                 if (level.visible[x][y]) fog = Math.min(fog, selfFog);
-                fillFog(pxX + ix * halfX, pxY + iy * halfY, halfX, halfY, fog);
+                combinedPixmap.drawPixel(pxX + ix, pxY + iy, COMBINED_RGBA[fog][cellLight]);
             }
         }
-
-        // Light: strictly this cell's state. Walls stop light, so the warm glow must not bleed
-        // onto wall caps, onto chasm/unseen blackness, or into any cell that isn't itself lit.
-        fillLight(pxX, pxY, PIX_PER_TILE, PIX_PER_TILE, cellLightLevel(level, x, y));
     }
 
     private int cellFog(Level level, int x, int y) {
@@ -242,22 +234,4 @@ public class FogOverlay {
         return Math.max(Math.max(a, b), Math.max(c, d));
     }
 
-    private void fillFog(int x, int y, int w, int h, int state) {
-        fogPixmap.setColor(argbToRgba8888(FOG_ARGB[state]));
-        fogPixmap.fillRectangle(x, y, w, h);
-    }
-
-    private void fillLight(int x, int y, int w, int h, int level) {
-        int argb = switch (level) {
-            case LIGHT_FULL -> LIGHT_FULL_ARGB;
-            case LIGHT_DIM  -> LIGHT_DIM_ARGB;
-            default         -> LIGHT_NONE_ARGB;
-        };
-        lightPixmap.setColor(argbToRgba8888(argb));
-        lightPixmap.fillRectangle(x, y, w, h);
-    }
-
-    private static int argbToRgba8888(int argb) {
-        return (argb << 8) | (argb >>> 24);
-    }
 }

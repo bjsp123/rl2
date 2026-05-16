@@ -119,6 +119,8 @@ public class Effect {
      *  once. Counts down once per render frame; while {@code > 0} the effect is
      *  parked at frame 0 and renderers skip drawing it. */
     public int startDelay;
+    /** Frame at which a pending impact callback fires. 0 means use the last frame (default). */
+    public int impactFrame;
     public String text;
     public EffectTint tint;
     public Item thrownItem;
@@ -325,6 +327,7 @@ public class Effect {
         int flightFrames = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
         int flightEnd    = flightFrames;
         e.frameCount     = Math.max(1, Math.round(flightFrames / MAGIC_MISSILE_FLIGHT_FRACTION));
+        e.impactFrame    = flightEnd;
         int count = 24;
         e.particleX0 = new float[count];
         e.particleY0 = new float[count];
@@ -355,6 +358,7 @@ public class Effect {
         int flightFrames = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
         int flightEnd    = flightFrames;
         e.frameCount     = Math.max(1, Math.round(flightFrames / MAGIC_MISSILE_FLIGHT_FRACTION));
+        e.impactFrame    = flightEnd;
         int count = 36;
         e.particleX0         = new float[count];
         e.particleY0         = new float[count];
@@ -366,11 +370,45 @@ public class Effect {
             e.particleX0[i] = (rng.nextFloat() - 0.5f) * 4f;
             e.particleY0[i] = (rng.nextFloat() - 0.5f) * 4f;
             e.particleVX[i] = (rng.nextFloat() - 0.5f) * 0.8f;
-            e.particleVY[i] = gravity > 0
-                    ? 0.2f * (rng.nextFloat() - 0.5f)
-                    : 0.6f + rng.nextFloat() * 0.7f;
+            e.particleVY[i] = (rng.nextFloat() - 0.5f) * 0.8f;
         }
         return e;
+    }
+
+    /** Radial particle burst spawned when a wand missile visually arrives.
+     *  Particles fire outward from the tile centre, coloured to match the element. */
+    public static Effect wandImpactBurst(Point location, Item.ItemEffect element, Random rng) {
+        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
+        e.ignoresFov = true;
+        e.tint = wandElementTint(element);
+        int count = 20;
+        e.particleX0 = new float[count];
+        e.particleY0 = new float[count];
+        e.particleVX = new float[count];
+        e.particleVY = new float[count];
+        e.particleSpawnFrame = new int[count]; // all spawn at frame 0
+        float cx = TILE_PX * 0.5f;
+        float cy = TILE_PX * 0.5f;
+        for (int i = 0; i < count; i++) {
+            float angle = (float)(i * Math.PI * 2.0 / count) + rng.nextFloat() * 0.3f;
+            float speed = 1.5f + rng.nextFloat() * 1.5f;
+            e.particleX0[i] = cx;
+            e.particleY0[i] = cy;
+            e.particleVX[i] = (float) Math.cos(angle) * speed;
+            e.particleVY[i] = (float) Math.sin(angle) * speed;
+        }
+        return e;
+    }
+
+    private static EffectTint wandElementTint(Item.ItemEffect element) {
+        if (element == null) return EffectTint.WHITE;
+        return switch (element) {
+            case WATER     -> EffectTint.BLUE;
+            case OIL, GRASS-> EffectTint.YELLOW;
+            case FUNGUS    -> EffectTint.RED;
+            case FIRE, DETONATION -> EffectTint.ORANGE;
+            default        -> EffectTint.WHITE;
+        };
     }
 
     public static Effect sleepZ(Point location, Random rng) {

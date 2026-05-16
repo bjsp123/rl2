@@ -83,6 +83,10 @@ final class PlayController {
             Mob player = TurnSystem.getActivePlayer(level);
             if (player == null) return false;
             if (player.visibleMobsAtTurnStart == null) {
+                // First player turn on this level — prime the effectiveStats cache for
+                // every mob so the imminent afterMove/computeLighting/buildBlocking pass
+                // doesn't pay N recomputes for sleeping mobs that skipped the AI path.
+                for (Mob mob : level.mobs) mob.effectiveStats();
                 MobSystem.snapshotVisibleMobsAtTurnStart(level, player);
             }
             if (player.targetPosition == null) return false;
@@ -95,25 +99,24 @@ final class PlayController {
             MobSystem.stepTowardTarget(player, level);
             profiler.add("playerStep", playerTurnStart);
         }
-        int safety = TurnSystem.STANDARD_TURN_TICKS * 4;
+        // Safety bound: expressed as event-count (advanceToNextEvent calls), not raw
+        // ticks. Each call either advances the clock to the next actor/standard-turn
+        // event, or flushes already-ready AI — both terminate quickly, so 200 calls
+        // comfortably covers any realistic mob count × turn window.
+        int safety = 200;
         // Drain any pre-existing sequential flag so the loop's break test
         // only reflects what THIS loop's ticks queue.
         animator.queue.consumeSequentialFlag();
         long turnLoopStart = profiler.start();
         while (safety-- > 0 && !TurnSystem.isPlayerTurn(level)) {
-            if (!TurnSystem.tick(level)) break;
-            world.tick++;
-            // Drain events into the animator after every game tick so
-            // the sequential flag reflects animations queued by THIS
-            // tick - not just whatever was in flight at the start of
-            // the render frame.
+            int delta = TurnSystem.advanceToNextEvent(level);
+            if (delta == 0) break;           // player is ready
+            if (delta > 0) world.tick += delta; // delta == -1 means AI ran, no clock advance
+            // Drain events into the animator after every event so the sequential flag
+            // reflects animations queued by THIS advance — not just pre-existing state.
             animator.consume(level);
-            // Only a SEQUENTIAL animation (lunge, knockback slide,
-            // chained death-fade) breaks the loop - a pile of concurrent
-            // mob slides should NOT, since they're meant to play
-            // simultaneously with the player's slide. This lets many
-            // mobs move on a single render frame and eliminates the
-            // jerky one-mob-per-render-frame autotravel cadence.
+            // Only a SEQUENTIAL animation (lunge, knockback slide, chained death-fade)
+            // breaks the loop — concurrent mob slides play together on one render frame.
             if (animator.queue.consumeSequentialFlag()) break;
         }
         profiler.add("turnLoop", turnLoopStart);
@@ -548,6 +551,9 @@ final class PlayController {
         next.visited = true;
 
         TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+        // Prime effectiveStats for all mobs on the new level before afterMove so
+        // buildBlocking doesn't trigger cold recomputes for sleeping mobs.
+        for (Mob mob : next.mobs) mob.effectiveStats();
         afterMove(next);
         recenterCamera.run();
         levelRenderer.markDirty();

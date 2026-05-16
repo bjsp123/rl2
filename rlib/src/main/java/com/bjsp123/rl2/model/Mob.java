@@ -353,16 +353,13 @@ public class Mob {
      *  level-up, intrinsic field change. {@link #effectiveStats()} consumes + clears it. */
     public transient boolean statsDirty = true;
 
-    /** Recomputes {@link #effective} on every call and returns it. The returned block is
-     *  the same object every call - callers must not mutate.
-     *
-     *  <p>The {@link #statsDirty} flag is currently unused; lazy refresh based on it is a
-     *  planned optimization but requires wiring every stat-input mutator (Inventory
-     *  equip/unequip, BuffSystem apply/remove, direct field tweaks like level-up HP
-     *  bumps) to flip the flag. Until those triggers are in place, recomputing each
-     *  call is correct and cheap (writeEffectiveStats is a small fixed amount of work). */
+    /** Returns the cached effective stat block, recomputing it when {@link #statsDirty}
+     *  is set. The returned block is the same object every call — callers must not mutate. */
     public StatBlock effectiveStats() {
-        com.bjsp123.rl2.logic.MobSystem.writeEffectiveStats(this, effective);
+        if (statsDirty) {
+            com.bjsp123.rl2.logic.MobSystem.writeEffectiveStats(this, effective);
+            statsDirty = false;
+        }
         return effective;
     }
 
@@ -402,6 +399,11 @@ public class Mob {
     // ========================================================================
 
     public DoorClosingBehavior doorClosing = DoorClosingBehavior.NEVER;
+    /** When {@code true} (default), {@code nearestAttackTarget} only returns mobs that
+     *  appear in {@link #visibleMobsAtTurnStart} - the mob must have line of sight to
+     *  pick a target.  Set to {@code false} for mobs that "sense" through walls (e.g. a
+     *  blind tracker that navigates by smell). */
+    public boolean targetRequiresSight = true;
 
     // ========================================================================
     // 4. CURRENT STATE - what the mob is doing right now

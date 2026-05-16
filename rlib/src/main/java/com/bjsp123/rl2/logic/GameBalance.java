@@ -192,6 +192,8 @@ public final class GameBalance {
 
     public static int XP_PER_POWER_ORB = 10;
 
+    public static int MANA_PER_PILL = 2;
+
     /** Maximum bag slots for equipment items (WEAPON, OFFHAND, ARMOR, AMULET) not
      *  yet placed in an equipment slot. Each item occupies exactly one slot (equipment
      *  never stacks). */

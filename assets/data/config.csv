@@ -4,6 +4,7 @@ gamebalance,MAX_CHARACTER_LEVEL,32
 gamebalance,XP_PER_LEVEL_STEP,10
 gamebalance,PERK_POINTS_PER_LEVEL,1
 gamebalance,XP_PER_POWER_ORB,10
+gamebalance,MANA_PER_PILL,2
 gamebalance,BASIC_FOOD_VALUE,10000
 gamebalance,LEVEL_BASE_W,48
 gamebalance,LEVEL_BASE_H,48
@@ -35,8 +36,8 @@ gamebalance,rules.surprise.allowAllTargetedAttackTypes,false
 gamebalance,AI_GUARDRAIL_COST,150
 gamebalance,TURN_LOOP_FRAME_BUDGET_MS,8
 gamebalance,PROFILING_ENABLED,true
-gamebalance,PROFILING_SLOW_FRAME_MS,34
-gamebalance,PROFILING_MIN_LOG_GAP_MS,250
+gamebalance,PROFILING_SLOW_FRAME_MS,20
+gamebalance,PROFILING_MIN_LOG_GAP_MS,100
 animation,animation.FIRE_PARTICLE_INTERVAL_MS,200
 animation,animation.FIRE_PARTICLE_MOB_INTERVAL_MS,100
 animation,animation.SLEEP_Z_MIN_MS,1200

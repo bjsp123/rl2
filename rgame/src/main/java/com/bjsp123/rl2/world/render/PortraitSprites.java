@@ -60,7 +60,7 @@ public final class PortraitSprites {
     private static final int PORTRAIT_HEIGHT = 32;
 
     private static TextureRegion head(Texture mobsTex, int cell, int col) {
-        return new TextureRegion(mobsTex, col * cell, PORTRAIT_Y0, cell, PORTRAIT_HEIGHT);
+        return new TextureRegion(mobsTex, col * cell, SpriteAtlas.mobsY() + PORTRAIT_Y0, cell, PORTRAIT_HEIGHT);
     }
 
     /** No-op tear-down - the underlying texture is owned by {@link MobSprites};

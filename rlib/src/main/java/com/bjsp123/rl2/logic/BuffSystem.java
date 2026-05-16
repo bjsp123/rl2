@@ -89,11 +89,13 @@ public final class BuffSystem {
             existing.level         = Math.max(existing.level,         newLevel);
             existing.durationTurns = Math.max(existing.durationTurns, newDuration);
             if (source != null) existing.source = source;
+            target.statsDirty = true;
             maybeFreeze(level, target, type, source);
             return existing;
         }
         Buff buff = new Buff(type, newLevel, newDuration, source);
         target.buffs.add(buff);
+        target.statsDirty = true;
         spawnApplyVfx(level, target, type);
         // Hope wipes any active fear - adding hope after a fright should free the mob.
         if (type == BuffType.HOPE) {
@@ -121,7 +123,7 @@ public final class BuffSystem {
         if (mob == null || mob.buffs == null) return false;
         Iterator<Buff> it = mob.buffs.iterator();
         while (it.hasNext()) {
-            if (it.next().type == type) { it.remove(); return true; }
+            if (it.next().type == type) { it.remove(); mob.statsDirty = true; return true; }
         }
         return false;
     }

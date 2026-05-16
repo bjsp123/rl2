@@ -76,8 +76,14 @@ public final class ItemSystem {
         if (eff == null) return;
         switch (eff) {
             case LEVEL_UP -> {
-                com.bjsp123.rl2.logic.MobProgression.awardXp(level, picker,
+                if(item.abilityPower >0){
+                    com.bjsp123.rl2.logic.MobProgression.awardXp(level, picker,
+                        (int) (item.abilityPower * GameBalance.XP_PER_POWER_ORB));
+                } else {
+                    com.bjsp123.rl2.logic.MobProgression.awardXp(level, picker,
                         GameBalance.XP_PER_POWER_ORB);
+                }
+                
             }
             case HP_UP -> {
                 double maxHp = picker.effectiveStats().maxHp;
@@ -95,12 +101,12 @@ public final class ItemSystem {
                 for (Item bagItem : picker.inventory.bag) {
                     if (bagItem == null || bagItem.baseChargeMax <= 0) continue;
                     bagItem.charge = Math.min(ItemStats.effectiveMaxCharge(bagItem, picker),
-                            bagItem.charge + bagItem.chargeGain);
+                            bagItem.charge + (bagItem.chargeGain*GameBalance.MANA_PER_PILL));
                 }
                 for (Item eq : picker.inventory.allEquipped()) {
                     if (eq == null || eq.baseChargeMax <= 0) continue;
                     eq.charge = Math.min(ItemStats.effectiveMaxCharge(eq, picker),
-                            eq.charge + eq.chargeGain);
+                            eq.charge + (eq.chargeGain*GameBalance.MANA_PER_PILL));
                 }
             }
             default -> { /* not a POWERUP effect - ignore */ }

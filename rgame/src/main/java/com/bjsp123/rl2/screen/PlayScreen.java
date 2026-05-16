@@ -485,6 +485,7 @@ public class PlayScreen implements Screen {
                 player.inventory.bag.add(it);
                 if (it.isEquippable()) {
                     com.bjsp123.rl2.logic.InventorySystem.equip(player.inventory, it);
+                    player.statsDirty = true;
                 }
             } catch (RuntimeException ignored) {
                 // Defensive: skip any registry entry the factory refuses.
@@ -640,6 +641,15 @@ public class PlayScreen implements Screen {
         }
         levelRenderer.render(level, camera);
         frameProfiler.add("levelRender", span);
+        if (levelRenderer instanceof DefaultLevelRenderer dlr) {
+            com.bjsp123.rl2.world.render.DefaultLevelRenderer.RenderStats rs = dlr.lastRenderStats();
+            frameProfiler.addMetric("lr.fl", String.valueOf(rs.totalFlushes));
+            frameProfiler.addMetric("lr.p1", fmtPass(rs.nsPass1, rs.flushPass1));
+            frameProfiler.addMetric("lr.s",  fmtPass(rs.nsSurface, rs.flushSurface));
+            frameProfiler.addMetric("lr.p3", fmtPass(rs.nsPass3, rs.flushPass3));
+            frameProfiler.addMetric("lr.p4", fmtPass(rs.nsPass4, rs.flushPass4));
+            frameProfiler.addMetric("lr.fog",fmtPass(rs.nsFog, rs.flushFog));
+        }
         span = frameProfiler.start();
         targetingOverlay.render();
         frameProfiler.add("targetingRender", span);
@@ -676,6 +686,7 @@ public class PlayScreen implements Screen {
         span = frameProfiler.start();
         game.ui.v2Stage.draw();
         frameProfiler.add("stageDraw", span);
+        if (com.bjsp123.rl2.ui.skin.Settings.showPerfOverlay()) renderPerfOverlay();
         frameProfiler.finish(ticked, overlayOpen);
     }
 
@@ -694,6 +705,26 @@ public class PlayScreen implements Screen {
         if (v2BuffInfo != null && v2BuffInfo.isOpen()) return true;
         if (v2Log != null && v2Log.isOpen()) return true;
         return false;
+    }
+
+    private void renderPerfOverlay() {
+        game.ui.applyProjection();
+        com.badlogic.gdx.graphics.g2d.SpriteBatch b = game.ui.batch;
+        com.badlogic.gdx.graphics.g2d.BitmapFont  f = game.ui.fontRegular;
+        float x = 6f;
+        float y = game.ui.worldH() - 6f;
+        b.begin();
+        f.setColor(1f, 1f, 0.2f, 1f);
+        f.draw(b, String.format(java.util.Locale.ROOT,
+                "FPS:%.0f  CLR:%.1fms  REN:%.1fms  LGC:%.1fms",
+                frameProfiler.snapFps(), frameProfiler.snapClearMs(),
+                frameProfiler.snapRenderMs(), frameProfiler.snapLogicMs()), x, y);
+        f.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+        b.end();
+    }
+
+    private static String fmtPass(long ns, int flushes) {
+        return String.format(java.util.Locale.ROOT, "%.1fms/%d", ns / 1_000_000.0, flushes);
     }
 
     private void recenterCameraOnPlayer() {

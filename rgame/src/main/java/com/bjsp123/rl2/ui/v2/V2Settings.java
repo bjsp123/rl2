@@ -117,6 +117,8 @@ public final class V2Settings extends V2Screen {
                 yCursor = addOutlineWidthRow(winX + WIN_PAD, yCursor);
                 yCursor = addOutlineDarknessRow(winX + WIN_PAD, yCursor);
                 yCursor = addOutlineSmoothRow(winX + WIN_PAD, yCursor);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.lowResRender"),
+                        Settings::lowResRender, Settings::setLowResRender);
             }
             case GAMEPLAY -> {
                 yCursor = addAnimationSpeedRow(winX + WIN_PAD, yCursor);
@@ -125,6 +127,8 @@ public final class V2Settings extends V2Screen {
                 yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
                         Settings::queueAccelEnabled, Settings::setQueueAccelEnabled);
                 yCursor = addQuickslotCountRow(winX + WIN_PAD, yCursor);
+                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.perfOverlay"),
+                        Settings::showPerfOverlay, Settings::setShowPerfOverlay);
                 yCursor = addButtonRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.clearHall"));
             }
             case LOG -> {

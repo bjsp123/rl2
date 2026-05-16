@@ -43,9 +43,6 @@ public final class SurfaceSprites {
     public static final int VEG_CELL    = 32;
     /** Shore-mask tile pitch. */
     public static final int MASK_TILE   = 32;
-    /** y-offset of the mask strip - row 3 of the 64-px liquid grid. */
-    private static final int MASK_STRIP_Y = 3 * LIQUID_TILE;
-
     /** Number of mask variants - 4-bit N/E/S/W bitfield. */
     public static final int MASK_VARIANTS = 16;
 
@@ -60,8 +57,7 @@ public final class SurfaceSprites {
     // In-world vegetation variants, direct regions on surfaces.png.
     private static Map<Vegetation, TextureRegion> vegA;
     private static Map<Vegetation, TextureRegion> vegB;
-    // Shore-mask variants 0..15.
-    private static Texture[] maskTextures;
+    // Shore-mask variants 0..15 — TextureRegions into SpriteAtlas (no separate Textures).
     // Procedural placeholder for ICE - atlas doesn't ship one.
     private static Texture iceTex;
     // Fire animation sheets.
@@ -103,13 +99,11 @@ public final class SurfaceSprites {
         return vegB == null ? null : vegB.get(v);
     }
 
-    /** Shore-mask tile for a 4-bit N/E/S/W neighbour bitfield (0..15). Variant 0
-     *  is synthesised as fully transparent regardless of what's in the atlas at
-     *  that cell. */
-    public static Texture maskTexture(int variant) {
-        if (maskTextures == null) load();
-        if (maskTextures == null || variant < 0 || variant >= maskTextures.length) return null;
-        return maskTextures[variant];
+    /** Shore-mask region for a 4-bit N/E/S/W neighbour bitfield (0..15). Backed by
+     *  SpriteAtlas — variant 0 is the intentionally-transparent column in surfaces.png. */
+    public static TextureRegion maskTexture(int variant) {
+        if (variant < 0 || variant >= MASK_VARIANTS) return null;
+        return SpriteAtlas.maskRegion(variant);
     }
 
     public static Texture fire1Texture() {
@@ -128,10 +122,8 @@ public final class SurfaceSprites {
         Pixmap sheetPm = null;
         try {
             sheetPm = new Pixmap(Gdx.files.internal(SURFACES_PATH));
-            // Raw atlas Texture for UI regions - Nearest filter so the UI preview
-            // stays crisp at native size.
-            sheet = new Texture(Gdx.files.internal(SURFACES_PATH));
-            sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            SpriteAtlas.load();
+            sheet = SpriteAtlas.texture();
             int sw = sheetPm.getWidth(), sh = sheetPm.getHeight();
 
             liquidTextures = new EnumMap<>(Surface.class);
@@ -150,24 +142,6 @@ public final class SurfaceSprites {
             putVegPair(Vegetation.MUSHROOMS, 4, 1, 1, sw, sh);
             // Trees - 32x64 (col 6/7, rows 0..1).
             putVegPair(Vegetation.TREES,     6, 0, 2, sw, sh);
-
-            // Shore-mask tiles - row 3 of the 64-px grid, sliced into 16 32x32 variants.
-            maskTextures = new Texture[MASK_VARIANTS];
-            maskTextures[0] = buildAllWaterMask();
-            for (int i = 1; i < MASK_VARIANTS; i++) {
-                int x = i * MASK_TILE;
-                if (x + MASK_TILE > sw || MASK_STRIP_Y + MASK_TILE > sh) {
-                    maskTextures[i] = buildAllWaterMask();
-                } else {
-                    Pixmap m = new Pixmap(MASK_TILE, MASK_TILE, Pixmap.Format.RGBA8888);
-                    m.setBlending(Pixmap.Blending.None);
-                    m.drawPixmap(sheetPm, 0, 0, x, MASK_STRIP_Y, MASK_TILE, MASK_TILE);
-                    Texture t = new Texture(m);
-                    t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-                    m.dispose();
-                    maskTextures[i] = t;
-                }
-            }
 
             // UI regions - surface previews are 64x64 single-tile samples; vegetation
             // previews use the 32-px cell pitch.
@@ -227,13 +201,13 @@ public final class SurfaceSprites {
         int y = row * VEG_CELL;
         int h = hCells * VEG_CELL;
         if (x + VEG_CELL > sw || y + h > sh) return null;
-        return new TextureRegion(sheet, x, y, VEG_CELL, h);
+        return new TextureRegion(sheet, x, SpriteAtlas.surfacesY() + y, VEG_CELL, h);
     }
 
     private static <K> void putRegion(Map<K, TextureRegion> into, K key,
                                       int x, int y, int w, int h, int sw, int sh) {
         if (sheet == null || x + w > sw || y + h > sh) return;
-        into.put(key, new TextureRegion(sheet, x, y, w, h));
+        into.put(key, new TextureRegion(sheet, x, SpriteAtlas.surfacesY() + y, w, h));
     }
 
     /** Procedural ice tile - soft cyan with a brighter centre highlight. 32x32 to
@@ -258,19 +232,6 @@ public final class SurfaceSprites {
         return t;
     }
 
-    /** Fully-transparent mask - under the inverted-alpha convention this means
-     *  "every pixel is water", used as variant 0 (no shores). */
-    private static Texture buildAllWaterMask() {
-        Pixmap p = new Pixmap(MASK_TILE, MASK_TILE, Pixmap.Format.RGBA8888);
-        p.setBlending(Pixmap.Blending.None);
-        p.setColor(0, 0, 0, 0);
-        p.fill();
-        Texture t = new Texture(p);
-        p.dispose();
-        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        return t;
-    }
-
     private static Texture loadIfPresent(String path) {
         if (!Gdx.files.internal(path).exists()) return null;
         try {
@@ -284,17 +245,13 @@ public final class SurfaceSprites {
 
     /** Release every cached Texture. Subsequent accessors reload on demand. */
     public static void disposeShared() {
-        if (sheet != null) { sheet.dispose(); sheet = null; }
+        sheet = null; // owned by SpriteAtlas
         if (iceTex != null) { iceTex.dispose(); iceTex = null; }
         if (fire1Tex != null) { fire1Tex.dispose(); fire1Tex = null; }
         if (fire2Tex != null) { fire2Tex.dispose(); fire2Tex = null; }
         disposeAll(liquidTextures); liquidTextures = null;
         vegA = null;
         vegB = null;
-        if (maskTextures != null) {
-            for (Texture t : maskTextures) if (t != null) t.dispose();
-            maskTextures = null;
-        }
         surfaceRegions = null;
         vegRegions = null;
     }

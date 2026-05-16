@@ -572,7 +572,10 @@ public class MobSystem {
 
     public static void snapshotVisibleMobsAtTurnStart(Level level, Mob viewer) {
         if (level == null || viewer == null || level.mobs == null) return;
-        java.util.Set<Mob> seen = new java.util.HashSet<>();
+        // Reuse existing set to avoid per-turn allocation
+        java.util.Set<Mob> seen = viewer.visibleMobsAtTurnStart;
+        if (seen == null) seen = new java.util.HashSet<>();
+        else seen.clear();
         if (viewer.position == null || viewer.stateOfMind == StateOfMind.ASLEEP) {
             viewer.visibleMobsAtTurnStart = seen;
             return;
@@ -584,7 +587,25 @@ public class MobSystem {
             return;
         }
         int radius = (int) Math.ceil(viewer.effectiveStats().visionRadius);
-        boolean[] blocking = LevelSystem.buildBlocking(level, /*forLight=*/ false);
+        // Pre-check: skip the expensive FOV if no mob in the radius box is a
+        // mutual threat (viewer attacks/flees other, OR other attacks viewer).
+        // Checks both directions so non-attacking targets (e.g. a mouse) still
+        // get a snapshot when a predator is nearby.
+        boolean needsFov = false;
+        for (Mob other : level.mobs) {
+            if (other == viewer || other.hp <= 0 || other.position == null) continue;
+            int ox = other.position.tileX(), oy = other.position.tileY();
+            if (Math.max(Math.abs(ox - vx), Math.abs(oy - vy)) > radius) continue;
+            Attitude fwd = getAttitudeToMob(viewer, other);
+            if (fwd == Attitude.ATTACK || fwd == Attitude.FLEE) { needsFov = true; break; }
+            if (getAttitudeToMob(other, viewer) == Attitude.ATTACK) { needsFov = true; break; }
+        }
+        if (!needsFov) {
+            viewer.visibleMobsAtTurnStart = seen;
+            return;
+        }
+        // Use bounded variant: O(r²+M) instead of O(W×H+M)
+        boolean[] blocking = LevelSystem.buildBlockingLocal(level, vx, vy, radius);
         level.initVisibilityScratch();
         boolean[] fov = level.visibilityTempScratch;
         Arrays.fill(fov, 0, w * h, false);
@@ -2299,18 +2320,37 @@ public class MobSystem {
         return false;
     }
 
-    /** Nearest mob this one wants to ATTACK within its vision radius (Chebyshev), or null. */
+    /** Nearest mob this one wants to ATTACK that is within vision radius (Chebyshev) and,
+     *  when {@link Mob#targetRequiresSight} is true, was visible at the start of the turn. */
     private static Mob nearestAttackTarget(Mob self, Level level) {
         int sx = self.position.tileX(), sy = self.position.tileY();
         Mob best = null;
         int bestD = Integer.MAX_VALUE;
         double baseVision = self.effectiveStats().visionRadius;
+
+        boolean useLos = self.targetRequiresSight && self.visibleMobsAtTurnStart != null;
+        if (useLos) {
+            // Fast path: only examine mobs already known to be in LOS
+            for (Mob m : self.visibleMobsAtTurnStart) {
+                if (m == self || m.hp <= 0) continue;
+                if (getAttitudeToMob(self, m) != Attitude.ATTACK) continue;
+                int d = Math.max(Math.abs(m.position.tileX() - sx),
+                                 Math.abs(m.position.tileY() - sy));
+                double vision = (m.perks != null
+                        && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0)
+                        ? baseVision / 2.0 : baseVision;
+                if (d > vision) continue;
+                if (d < bestD) { bestD = d; best = m; }
+            }
+            return best;
+        }
+
+        // Fallback: Chebyshev-only scan (targetRequiresSight=false or no snapshot yet)
         for (Mob m : level.mobs) {
             if (m == self) continue;
             if (getAttitudeToMob(self, m) != Attitude.ATTACK) continue;
             int d = Math.max(Math.abs(m.position.tileX() - sx),
                              Math.abs(m.position.tileY() - sy));
-            // STEALTH perk on the candidate halves the looker's vision range.
             double vision = (m.perks != null
                     && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0)
                     ? baseVision / 2.0 : baseVision;

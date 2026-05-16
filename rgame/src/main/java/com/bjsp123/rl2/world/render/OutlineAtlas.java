@@ -86,7 +86,10 @@ final class OutlineAtlas {
 
     void register(TextureRegion region) {
         if (region == null || region.getTexture() == null) return;
-        register(region.getTexture(), region.getRegionX(), region.getRegionY(),
+        int srcX = region.isFlipX()
+                ? region.getRegionX() - region.getRegionWidth()
+                : region.getRegionX();
+        register(region.getTexture(), srcX, region.getRegionY(),
                 region.getRegionWidth(), region.getRegionHeight());
     }
 
@@ -106,7 +109,10 @@ final class OutlineAtlas {
 
     Frame frame(TextureRegion region) {
         if (region == null) return null;
-        return frame(region.getTexture(), region.getRegionX(), region.getRegionY(),
+        int srcX = region.isFlipX()
+                ? region.getRegionX() - region.getRegionWidth()
+                : region.getRegionX();
+        return frame(region.getTexture(), srcX, region.getRegionY(),
                 region.getRegionWidth(), region.getRegionHeight());
     }
 
@@ -131,6 +137,8 @@ final class OutlineAtlas {
         rebuild();
     }
 
+    private static final int BAKE_SCALE = 4;
+
     void rebuild() {
         disposeAtlas();
         generatedWidth = Settings.mobOutlineWidth();
@@ -138,7 +146,9 @@ final class OutlineAtlas {
         clearFramesOnly();
         if (generatedWidth <= 0f || requests.isEmpty()) return;
 
-        int radius = Math.max(1, (int) Math.ceil(generatedWidth * 2f));
+        float width       = Math.max(1f, generatedWidth);
+        int   radius      = (int) Math.ceil(width);
+        int   radiusBake  = radius * BAKE_SCALE;
         int cursorX = 0;
         int cursorY = 0;
         int rowH = 0;
@@ -147,8 +157,8 @@ final class OutlineAtlas {
 
         List<Placement> generated = new ArrayList<>(requests.size());
         for (Request req : requests) {
-            int frameW = req.key.w + radius * 2;
-            int frameH = req.key.h + radius * 2;
+            int frameW = req.key.w * BAKE_SCALE + radiusBake * 2;
+            int frameH = req.key.h * BAKE_SCALE + radiusBake * 2;
             if (cursorX > 0 && cursorX + frameW > MAX_ATLAS_W) {
                 cursorX = 0;
                 cursorY += rowH;
@@ -174,7 +184,7 @@ final class OutlineAtlas {
             SourcePixmap src = sourcePixmaps.computeIfAbsent(req.texture, OutlineAtlas::readTexturePixmap);
             if (src == null || src.pixmap == null) continue;
             drawOutline(atlasPm, src.pixmap, req.key,
-                    placement.x(), placement.y(), radius);
+                    placement.x(), placement.y(), radius, width, BAKE_SCALE);
             built[i] = true;
         }
 
@@ -189,6 +199,7 @@ final class OutlineAtlas {
             Placement placement = generated.get(i);
             TextureRegion region = new TextureRegion(atlas,
                     placement.x(), placement.y(), placement.w(), placement.h());
+            // Frame stores LOGICAL (non-bake) dimensions so drawAtlasFrame math is unchanged.
             frames.get(req.texture).put(req.key,
                     new Frame(region, req.key.w, req.key.h, radius, radius));
         }
@@ -230,39 +241,74 @@ final class OutlineAtlas {
         }
     }
 
-    private static void drawOutline(Pixmap dst, Pixmap src, Key key, int dstX, int dstY, int radius) {
-        int[] alpha = new int[key.w * key.h];
-        for (int y = 0; y < key.h; y++) {
-            int sy = key.y + y;
+    private static void drawOutline(Pixmap dst, Pixmap src, Key key, int dstX, int dstY,
+                                    int radius, float width, int bakeScale) {
+        int bakeW = key.w * bakeScale;
+        int bakeH = key.h * bakeScale;
+
+        // Nearest-neighbour upscale — used only to test whether a bake pixel is inside the sprite.
+        int[] alpha = new int[bakeW * bakeH];
+        for (int by = 0; by < bakeH; by++) {
+            int sy = key.y + by / bakeScale;
             if (sy < 0 || sy >= src.getHeight()) continue;
-            for (int x = 0; x < key.w; x++) {
-                int sx = key.x + x;
+            for (int bx = 0; bx < bakeW; bx++) {
+                int sx = key.x + bx / bakeScale;
                 if (sx < 0 || sx >= src.getWidth()) continue;
-                alpha[y * key.w + x] = src.getPixel(sx, sy) & 0xff;
+                alpha[by * bakeW + bx] = src.getPixel(sx, sy) & 0xff;
             }
         }
 
-        int outW = key.w + radius * 2;
-        int outH = key.h + radius * 2;
+        // Bilinear upscale — used for glow-source lookups. Interpolating across source-pixel
+        // boundaries creates smooth sub-pixel transitions, so the glow follows a softened edge
+        // rather than the hard staircase of the pixel-art silhouette.
+        int[] smoothAlpha = new int[bakeW * bakeH];
+        for (int by = 0; by < bakeH; by++) {
+            float sy = (by + 0.5f) / bakeScale - 0.5f + key.y;
+            int   iy = (int) Math.floor(sy);
+            float fy = sy - iy;
+            for (int bx = 0; bx < bakeW; bx++) {
+                float sx = (bx + 0.5f) / bakeScale - 0.5f + key.x;
+                int   ix = (int) Math.floor(sx);
+                float fx = sx - ix;
+                float a  = srcAlpha(src, ix,   iy  ) * (1-fx)*(1-fy)
+                         + srcAlpha(src, ix+1, iy  ) * fx    *(1-fy)
+                         + srcAlpha(src, ix,   iy+1) * (1-fx)*fy
+                         + srcAlpha(src, ix+1, iy+1) * fx    *fy;
+                smoothAlpha[by * bakeW + bx] = Math.round(a);
+            }
+        }
+
+        int radiusBake = radius * bakeScale;
+        int outW = bakeW + radiusBake * 2;
+        int outH = bakeH + radiusBake * 2;
         for (int y = 0; y < outH; y++) {
             for (int x = 0; x < outW; x++) {
-                int sx = x - radius;
-                int sy = y - radius;
-                int original = alphaAt(alpha, key.w, key.h, sx, sy);
-                if (original > 0) continue;
+                int sx = x - radiusBake;
+                int sy = y - radiusBake;
+                if (alphaAt(alpha, bakeW, bakeH, sx, sy) > 0) continue;
 
-                int max = 0;
-                for (int oy = -radius; oy <= radius; oy++) {
-                    for (int ox = -radius; ox <= radius; ox++) {
-                        if (ox * ox + oy * oy > radius * radius) continue;
-                        max = Math.max(max, alphaAt(alpha, key.w, key.h, sx + ox, sy + oy));
+                float maxContrib = 0f;
+                for (int oy = -radiusBake; oy <= radiusBake; oy++) {
+                    for (int ox = -radiusBake; ox <= radiusBake; ox++) {
+                        float dist = (float) Math.sqrt(ox * ox + oy * oy) / bakeScale;
+                        if (dist > radius) continue;
+                        int a = alphaAt(smoothAlpha, bakeW, bakeH, sx + ox, sy + oy);
+                        if (a <= 0) continue;
+                        float scale = Math.min(1f, width / Math.max(dist, 0.001f));
+                        maxContrib = Math.max(maxContrib, a * scale / 255f);
                     }
                 }
-                if (max > 0) {
-                    dst.drawPixel(dstX + x, dstY + y, 0xffffff00 | max);
+                int outAlpha = Math.round(maxContrib * 255f);
+                if (outAlpha > 0) {
+                    dst.drawPixel(dstX + x, dstY + y, 0xffffff00 | outAlpha);
                 }
             }
         }
+    }
+
+    private static int srcAlpha(Pixmap src, int x, int y) {
+        if (x < 0 || y < 0 || x >= src.getWidth() || y >= src.getHeight()) return 0;
+        return src.getPixel(x, y) & 0xff;
     }
 
     private static int alphaAt(int[] alpha, int w, int h, int x, int y) {

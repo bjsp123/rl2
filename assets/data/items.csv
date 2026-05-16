@@ -63,7 +63,8 @@ FROG,CONCRETE,0.6_1.0,,TOOL,,,,,,,,,,,,,,,,,JUMP,jump,,,2,,,5,5,,,,7,8
 FROG2,CONCRETE,0.8_1.0,,TOOL,,,,,,,,,,,,,,,,,JUMP,jump,,,4,,,2,3,,,,8,8
 BLINKSTONE,CONCRETE,0_1.0,,TOOL,,,,,,,,,,,,,,,,,WAND,blink,,,6,TELEPORT,,0.5,2,,,,9,8
 CATCHERBALL,CONCRETE,0.4_1.0,,TOOL,,,,,,,,,,,,,,,CAPTURE,,NONE,,,,,,,,,,,,10,8
-JADE_FISH,CONCRETE,0.4_1.0,,TOOL,,,,,,,,,,,,,,,,,APPLYBUFF,invoke,,PHASE,8,,,0.25,3,,,,11,8
-JADE_CRAB,CONCRETE,0.4_1.0,,TOOL,,,,,,,,,,,,,,,,,APPLYBUFF,invoke,,SHIELDED,2,,,0.25,3,,,,13,8
+JADE_FISH,CONCRETE,0.4_1.0,,TOOL,,,,,,,,,,,,,,,,,APPLYBUFF,invoke,,PHASE,8,,,0.5,3,,,,11,8
+JADE_CRAB,CONCRETE,0.4_1.0,,TOOL,,,,,,,,,,,,,,,,,APPLYBUFF,invoke,,SHIELDED,4,,,0.5,3,,,,13,8
 HEALTHPILL,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,0.2,HP_UP,,,,,,TRUE,1,8
-CHARGEPILL,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,2,MANA_UP,,,,,,TRUE,2,8
+CHARGEPILL,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,1,MANA_UP,,,,,,TRUE,2,8
+XPPILL,,0_1.0,,FOOD,10,,,,,,,,,,,,,,,,POWERUP,absorb,,,0.1,LEVEL_UP,,,,,,TRUE,3,8

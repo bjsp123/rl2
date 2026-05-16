@@ -237,6 +237,9 @@ item.CATCHERBALL.name,catcherball
 item.CHAIN_MAIL.description,Mail made of rings.
 item.CHAIN_MAIL.description2,It protects you somewhat against physical attacks.
 item.CHAIN_MAIL.name,chain mail
+item.XPPILL.description,A fragment of intrinsic power to add to yourself.
+item.XPPILL.description2,Absorbed instantly on touching.
+item.XPPILL.name,xppill
 item.CHARGEPILL.description,A scrap of magical energy for your items.
 item.CHARGEPILL.description2,Absorbed instantly on touching.
 item.CHARGEPILL.name,chargepill
@@ -421,7 +424,7 @@ item.effect.SMOKE,release a smoke cloud at the target
 item.effect.VOID,tear a void at the target - pulls nearby creatures in and crumbles the ground
 item.effect.WATER,create a pool of water at the target
 item.effect.power.HP_UP,restore HP ({percent}% of maximum)
-item.effect.power.LEVEL_UP,gain a character level
+item.effect.power.LEVEL_UP,gain intrinsic power
 item.effect.power.MANA_UP,recharge every wand in your bag
 item.effect.power.default,absorb its power
 item.flag.glows,Glows on the floor with an attention-catching twinkle.
@@ -908,7 +911,9 @@ ui.settings.expandedLog,Expanded Log
 ui.settings.instantActions,Instant Actions
 ui.settings.logFontSize,Log Font Size
 ui.settings.lowPriorityLines,Low-Priority Lines
+ui.settings.lowResRender,Low-Res Render
 ui.settings.mobVsMobLines,Mob-vs-Mob Lines
+ui.settings.perfOverlay,Perf Overlay
 ui.settings.off,Off
 ui.settings.on,On
 ui.settings.outlineDarkness,Mob Outline Darkness

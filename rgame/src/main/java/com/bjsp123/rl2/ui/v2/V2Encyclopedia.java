@@ -573,28 +573,10 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         return ScissorStack.pushScissors(scissorOut);
     }
 
-    /** 8-tap unit circle for the silhouette outline - same {@code (cos, sin)}
-     *  pattern the world mob renderer uses, just at a fixed 8 hits since
-     *  encyclopaedia icons render at a known modest size and don't need
-     *  the world's variable-tap-count smoothing. */
-    private static final float[] OUTLINE_DX = {
-            1f, 0.7071f, 0f, -0.7071f, -1f, -0.7071f, 0f, 0.7071f
-    };
-    private static final float[] OUTLINE_DY = {
-            0f, 0.7071f, 1f, 0.7071f, 0f, -0.7071f, -1f, -0.7071f
-    };
-    /** Outline thickness in V2 virtual pixels - picked to read as a clear
-     *  rim at the 32-px list-row icon and the 2x detail sprite. */
-    private static final float OUTLINE_W = 1.5f;
-
     /** Draw {@code region} centred inside the {@code (x, y, w, h)} box,
-     *  preserving its native aspect ratio. The sprite is scaled by
-     *  {@code min(w/srcW, h/srcH)} so the larger source dimension fills
-     *  the box and the smaller one is letterboxed. A black silhouette
-     *  outline is drawn first (same 8-radial-tap technique the world mob
-     *  renderer uses) so encyclopaedia mobs / items read with the same
-     *  rim they have in-world. Caller is in a
-     *  {@link com.badlogic.gdx.graphics.g2d.SpriteBatch} pass. */
+     *  preserving its native aspect ratio. Outline uses the shared
+     *  {@link com.bjsp123.rl2.world.render.OutlineRenderer#drawTaps} so width,
+     *  darkness, and tap-alpha correction match the world renderer exactly. */
     private void drawAspectFit(TextureRegion region,
                                float x, float y, float w, float h) {
         int srcW = region.getRegionWidth();
@@ -605,21 +587,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         float drawH = srcH * scale;
         float drawX = x + (w - drawW) * 0.5f;
         float drawY = y + (h - drawH) * 0.5f;
-        // Black outline - 8 radial offset draws at OUTLINE_W. SpriteBatch
-        // multiplies sprite RGB by the batch colour, so RGB=0 paints a
-        // black silhouette of the same alpha mask; the offset draws fill
-        // the rim, the main draw on top covers the interior.
-        float oa = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness();
-        if (oa > 0f) {
-            ctx.batch.setColor(0f, 0f, 0f, oa);
-            for (int i = 0; i < OUTLINE_DX.length; i++) {
-                ctx.batch.draw(region,
-                        drawX + OUTLINE_DX[i] * OUTLINE_W,
-                        drawY + OUTLINE_DY[i] * OUTLINE_W,
-                        drawW, drawH);
-            }
-            ctx.batch.setColor(1f, 1f, 1f, 1f);
-        }
+        com.bjsp123.rl2.world.render.OutlineRenderer.drawTaps(ctx.batch, region, drawX, drawY, drawW, drawH);
         ctx.batch.draw(region, drawX, drawY, drawW, drawH);
     }
 

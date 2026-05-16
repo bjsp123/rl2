@@ -1,5 +1,4 @@
 package com.bjsp123.rl2.world.render;
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.logic.ItemDefinition;
@@ -50,10 +49,9 @@ public final class ItemSprites {
 
     private static void load() {
         regions = new HashMap<>();
-        saiItemsTex = nearest("sprites/items.png");
+        SpriteAtlas.load();
+        saiItemsTex = SpriteAtlas.texture();
         if (saiItemsTex == null) return;
-        // Pull (col, row) for every catalogued item type from ItemRegistry. New
-        // items added to items.csv pick up sprites here without any code change.
         for (String type : Registries.itemTypes()) {
             ItemDefinition def = Registries.item(type);
             if (def == null) continue;
@@ -61,25 +59,14 @@ public final class ItemSprites {
         }
     }
 
-    /** 32x32 cell at {@code (col, row)} on {@code sprites/items.png}. */
     private static TextureRegion sai(int col, int row) {
         return saiItemsTex == null ? null
-                : new TextureRegion(saiItemsTex, col * CELL, row * CELL, CELL, CELL);
+                : new TextureRegion(saiItemsTex, col * CELL, SpriteAtlas.itemsY() + row * CELL, CELL, CELL);
     }
 
-    private static Texture nearest(String path) {
-        try {
-            Texture t = new Texture(Gdx.files.internal(path));
-            t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            return t;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    /** Release the shared texture. Subsequent {@link #regionFor} calls will reload. */
+    /** Release cached regions. Texture is owned by {@link SpriteAtlas}. */
     public static void disposeShared() {
-        if (saiItemsTex != null) { saiItemsTex.dispose(); saiItemsTex = null; }
+        saiItemsTex = null;
         regions = null;
     }
 }

@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.logic;
 
-import com.bjsp123.rl2.logic.MobSystem.Attitude;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.Behavior;
@@ -44,6 +43,18 @@ public class Pathfinder {
         boolean moverFlying = moverStats.flying;
         int moverSize = moverStats.size;
 
+        // Precompute mob occupancy once (O(M)) so canEnter is O(1) per cell
+        Arrays.fill(ws.occupied, 0, size, false);
+        Arrays.fill(ws.mobSize,  0, size, (byte) 0);
+        for (Mob m : level.mobs) {
+            if (m == mover) continue;
+            int mx = m.position.tileX(), my = m.position.tileY();
+            if (mx < 0 || my < 0 || mx >= w || my >= level.height) continue;
+            int mi = cell(mx, my, w);
+            ws.occupied[mi] = true;
+            ws.mobSize[mi]  = (byte) Math.min(127, m.effectiveStats().size);
+        }
+
         while (!ws.heapEmpty()) {
             int ci = ws.heapPoll();
             if (ws.closed[ci]) continue;
@@ -60,7 +71,7 @@ public class Pathfinder {
             int g = ws.gScore[ci];
             for (int[] d : DIRS) {
                 int nx = cx + d[0], ny = cy + d[1];
-                if (!canEnter(level, mover, moverFlying, moverSize, nx, ny)) continue;
+                if (!canEnter(level, mover, moverFlying, moverSize, nx, ny, tx, ty, ws)) continue;
                 int ni = cell(nx, ny, w);
                 int ng = g + 1;
                 if (ng < ws.gScore[ni]) {
@@ -74,46 +85,25 @@ public class Pathfinder {
     }
 
     private static boolean canEnter(Level level, Mob mover, boolean moverFlying, int moverSize,
-                                    int x, int y) {
+                                    int x, int y, int tx, int ty, Workspace ws) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
         if (level.tiles[x][y].blocksMovement()) return false;
         if (level.tiles[x][y] == Tile.CHASM && !moverFlying) return false;
-        // Player-only constraint: the player can only path into tiles they've
-        // either explored OR that are 8-adjacent to an explored tile, so a
-        // tap can step ONE tile into the fog (peeking around a corner) but
-        // can't auto-walk a full corridor through territory they've never
-        // seen. AI mobs ignore this check - they're omniscient about the
-        // geometry.
         if (mover.behavior == Behavior.PLAYER
                 && level.explored != null
                 && !level.explored[x][y]
                 && !hasExploredNeighbour(level, x, y)) {
             return false;
         }
-        for (Mob m : level.mobs) {
-            if (m.position.tileX() != x || m.position.tileY() != y) continue;
-            if (m == mover) continue;
-            // Hostile target - pathing through the tile is fine; the movement system
-            // resolves arrival as an attack via stepTowardTarget. Inanimate
-            // occupants follow the same rule (so anthills + other hostile
-            // inanimates can be melee'd by stepping into them); otherwise
-            // they remain impassable furniture.
-            // PERF: this attitude lookup happens inside A* neighbour expansion;
-            // an occupancy/attitude cache would remove a lot of repeated work.
-            if (MobSystem.getAttitudeToMob(mover, m) == Attitude.ATTACK) continue;
-            if (m.behavior == Behavior.INANIMATE) return false;
-            // Player movers keep their old gate: the player can step onto a non-hostile
-            // mob's tile (for things like wand-of-dog summon adjacency) - swap-places is
-            // a non-player AI behaviour. We only special-case the player->player case
-            // here as a no-op since mover != m guarantees it's a different mob.
-            if (mover.behavior == Behavior.PLAYER) continue;
-            // Non-player mover, occupant is a non-hostile mob - impassable unless the
-            // mover is strictly larger, in which case swap-places kicks in (handled in
-            // stepTowardTarget on arrival). Equal-size or smaller cannot push past.
-            if (moverSize > m.effectiveStats().size) continue;
-            return false;
-        }
-        return true;
+        // Target tile is always traversable; movement system resolves attack/interact on arrival
+        if (x == tx && y == ty) return true;
+        // O(1) occupancy check from precomputed map
+        int idx = cell(x, y, level.width);
+        if (!ws.occupied[idx]) return true;
+        // Player can always step onto a mob's tile
+        if (mover.behavior == Behavior.PLAYER) return true;
+        // Non-player: can push past only a strictly smaller mob (swap-places on arrival)
+        return moverSize > (ws.mobSize[idx] & 0xFF);
     }
 
     /** True when any of the 8 neighbours of {@code (x, y)} is in-bounds and
@@ -144,18 +134,22 @@ public class Pathfinder {
         int[] gScore = new int[0];
         int[] parent = new int[0];
         boolean[] closed = new boolean[0];
+        boolean[] occupied = new boolean[0];
+        byte[]    mobSize  = new byte[0];
         int[] heapCell = new int[0];
         int[] heapPriority = new int[0];
         int heapSize;
 
         void ensure(int size) {
             if (gScore.length < size) {
-                gScore = new int[size];
-                parent = new int[size];
-                closed = new boolean[size];
+                gScore    = new int[size];
+                parent    = new int[size];
+                closed    = new boolean[size];
+                occupied  = new boolean[size];
+                mobSize   = new byte[size];
             }
             if (heapCell.length < size) {
-                heapCell = new int[size];
+                heapCell     = new int[size];
                 heapPriority = new int[size];
             }
         }

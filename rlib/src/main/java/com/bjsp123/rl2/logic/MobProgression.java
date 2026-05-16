@@ -124,5 +124,6 @@ public final class MobProgression {
         mob.intrinsic.rangedDamage   = mob.intrinsic.rangedDamage.plus(mob.rangedDamagePerLevel);
         mob.intrinsic.rangedDistance += mob.rangedDistancePerLevel;
         mob.intrinsic.armor          = mob.intrinsic.armor       .plus(mob.armorPerLevel);
+        mob.statsDirty = true;
     }
 }

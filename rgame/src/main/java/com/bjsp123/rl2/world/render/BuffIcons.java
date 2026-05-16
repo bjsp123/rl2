@@ -1,5 +1,4 @@
 package com.bjsp123.rl2.world.render;
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.model.Buff.BuffType;
@@ -57,8 +56,9 @@ public final class BuffIcons {
         if (cache == null) load();
         if (sheet == null) return null;
         int sw = sheet.getWidth(), sh = sheet.getHeight();
-        if (sh < SLASH_Y + SLASH_CELL || sw < (col + 1) * SLASH_CELL) return null;
-        return new TextureRegion(sheet, col * SLASH_CELL, SLASH_Y, SLASH_CELL, SLASH_CELL);
+        int slashY = SpriteAtlas.buffsY() + SLASH_Y;
+        if (sh < slashY + SLASH_CELL || sw < (col + 1) * SLASH_CELL) return null;
+        return new TextureRegion(sheet, col * SLASH_CELL, slashY, SLASH_CELL, SLASH_CELL);
     }
 
     /** Knockback graphic from the slash band - col 2, just to the right of
@@ -88,19 +88,15 @@ public final class BuffIcons {
 
     private static void load() {
         cache = new EnumMap<>(BuffType.class);
-        try {
-            sheet = new Texture(Gdx.files.internal("sprites/buffs16.png"));
-            sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            for (BuffType t : BuffType.values()) {
-                int idx = iconIndex(t);
-                if (idx < 0) continue;
-                int sx = (idx % COLS_PER_ROW) * BUFF_CELL;
-                int sy = (idx / COLS_PER_ROW) * BUFF_CELL;
-                cache.put(t, new TextureRegion(sheet, sx, sy, BUFF_CELL, BUFF_CELL));
-            }
-        } catch (Exception ignored) {
-            sheet = null;
-            cache = new EnumMap<>(BuffType.class);
+        SpriteAtlas.load();
+        sheet = SpriteAtlas.texture();
+        if (sheet == null) return;
+        for (BuffType t : BuffType.values()) {
+            int idx = iconIndex(t);
+            if (idx < 0) continue;
+            int sx = (idx % COLS_PER_ROW) * BUFF_CELL;
+            int sy = SpriteAtlas.buffsY() + (idx / COLS_PER_ROW) * BUFF_CELL;
+            cache.put(t, new TextureRegion(sheet, sx, sy, BUFF_CELL, BUFF_CELL));
         }
     }
 
@@ -147,10 +143,9 @@ public final class BuffIcons {
         };
     }
 
-    /** Release the shared texture. Safe to call repeatedly; subsequent
-     *  {@link #regionFor} calls will reload on demand. */
+    /** Release cached regions. Texture is owned by {@link SpriteAtlas}. */
     public static void disposeShared() {
-        if (sheet != null) { sheet.dispose(); sheet = null; }
+        sheet = null;
         cache = null;
     }
 }

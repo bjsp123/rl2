@@ -49,7 +49,8 @@ public final class GemSprites {
         };
        
         if (gemRegions[(int)sq.x()][(int)sq.y()] == null && gemTex != null) {
-            gemRegions[(int)sq.x()][(int)sq.y()] = new TextureRegion(gemTex, (int)sq.x() * CELL, (int)sq.y() * CELL, CELL, CELL);
+            gemRegions[(int)sq.x()][(int)sq.y()] = new TextureRegion(gemTex,
+                    (int)sq.x() * CELL, SpriteAtlas.gemsY() + (int)sq.y() * CELL, CELL, CELL);
         }
 
         return gemRegions[(int)sq.x()][(int)sq.y()];
@@ -58,22 +59,14 @@ public final class GemSprites {
 
     private static void loadGemTexture() {
         if (gemTex == null) {
-            try {
-                gemTex = new Texture(com.badlogic.gdx.Gdx.files.internal("sprites/gems.png"));
-                gemTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            } catch (Exception ignored) {
-                gemTex = null;
-            }
+            SpriteAtlas.load();
+            gemTex = SpriteAtlas.texture();
         }
     }
 
-    /** Release the gem sheet. Call on shutdown if you care about clean tear-down; the
-     *  next {@link #regionFor} reloads it. */
+    /** Release cached regions. Texture is owned by {@link SpriteAtlas}. */
     public static void disposeShared() {
-        if (gemTex != null) {
-            gemTex.dispose();
-            gemTex = null;
-        }
+        gemTex = null;
         for (int i = 0; i < gemRegions.length; ++i)
             for (int j = 0; j < gemRegions[i].length; ++j)
                 gemRegions[i][j] = null;

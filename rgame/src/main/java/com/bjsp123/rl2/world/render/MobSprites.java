@@ -1,6 +1,5 @@
  package com.bjsp123.rl2.world.render;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.model.Mob;
@@ -24,7 +23,6 @@ import java.util.Map;
  */
 public final class MobSprites {
 
-    private static final String MOBS_PATH = "sprites/mobs_simple.png";
     private static final int CELL = 32;
 
     private static Texture mobsTex;
@@ -100,15 +98,9 @@ public final class MobSprites {
 
     private static void ensureLoaded() {
         if (mobsTex != null) return;
-        try {
-            mobsTex = new Texture(Gdx.files.internal(MOBS_PATH));
-            mobsTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        } catch (Exception ignored) {
-            return;
-        }
-        // Player class poses live in the same atlas. Same triple share the
-        // single double-height (1x2) sprite - the simple-style atlas doesn't
-        // ship per-class art today.
+        SpriteAtlas.load();
+        mobsTex = SpriteAtlas.texture();
+        if (mobsTex == null) return;
         playerRegions = new EnumMap<>(CharacterClass.class);
         playerRegions.put(CharacterClass.WARRIOR, mobRegion(3, 0, 1, 2));
         playerRegions.put(CharacterClass.MAGE,    mobRegion(4, 0, 1, 2));
@@ -116,12 +108,13 @@ public final class MobSprites {
     }
 
     private static TextureRegion mobRegion(int col, int row, int w, int h) {
-        return new TextureRegion(mobsTex, col * CELL, row * CELL, w * CELL, h * CELL);
+        return new TextureRegion(mobsTex, col * CELL, SpriteAtlas.mobsY() + row * CELL, w * CELL, h * CELL);
     }
 
-    /** Release the shared texture. Subsequent {@link #regionFor} calls will reload. */
+    /** Release cached regions. Texture is owned by {@link SpriteAtlas}; call
+     *  {@link SpriteAtlas#dispose()} to release it. */
     public static void disposeShared() {
-        if (mobsTex != null) { mobsTex.dispose(); mobsTex = null; }
+        mobsTex = null;
         regions.clear();
         playerRegions = null;
     }

@@ -246,6 +246,69 @@ public class LevelSystem {
         return blocking;
     }
 
+    /**
+     * Bounding-box variant of {@link #buildBlocking} for sight queries.  Only fills the
+     * {@code [vx-r .. vx+r] × [vy-r .. vy+r]} rectangle inside {@link Level#sightBlockingScratch},
+     * leaving the rest stale (the shadow caster never reads past the radius anyway).  Cost
+     * is O(r² + M) instead of O(W×H + M) — a ~3× win for vision radius ≈ 12 on a 40×50 level.
+     *
+     * <p>Uses {@link Level#visibilityAccumScratch} (hasMob) and
+     * {@link Level#visibilityTempScratch} (hasLargeMob) as scratch; the caller must
+     * clear/reuse {@code visibilityTempScratch} for its FOV array before calling the
+     * shadow caster (which {@link MobSystem#snapshotVisibleMobsAtTurnStart} already does).
+     */
+    static boolean[] buildBlockingLocal(Level level, int vx, int vy, int radius) {
+        int w = level.width, h = level.height;
+        int xMin = Math.max(0, vx - radius), xMax = Math.min(w - 1, vx + radius);
+        int yMin = Math.max(0, vy - radius), yMax = Math.min(h - 1, vy + radius);
+
+        level.initVisibilityScratch();
+        boolean[] blocking    = level.sightBlockingScratch;
+        boolean[] hasMob      = level.visibilityAccumScratch;
+        boolean[] hasLargeMob = level.visibilityTempScratch;
+
+        // Clear only the rows the shadow caster will visit
+        for (int y = yMin; y <= yMax; y++) {
+            int base = y * w;
+            Arrays.fill(blocking,    base + xMin, base + xMax + 1, false);
+            Arrays.fill(hasMob,      base + xMin, base + xMax + 1, false);
+            Arrays.fill(hasLargeMob, base + xMin, base + xMax + 1, false);
+        }
+
+        // Paint only mobs inside the bounding box
+        for (Mob m : level.mobs) {
+            int mx = m.position.tileX(), my = m.position.tileY();
+            if (mx < xMin || my < yMin || mx > xMax || my > yMax) continue;
+            int idx = my * w + mx;
+            hasMob[idx] = true;
+            if (m.effectiveStats().size >= Mob.BIG_ENOUGH_TO_BLOCK_SIGHT) hasLargeMob[idx] = true;
+        }
+
+        // Fill blocking for cells in the box (mirrors buildBlocking, forLight=false path)
+        for (int y = yMin; y <= yMax; y++) {
+            boolean yBorder = (y == 0 || y == h - 1);
+            for (int x = xMin; x <= xMax; x++) {
+                int idx = y * w + x;
+                if (yBorder || x == 0 || x == w - 1) {
+                    blocking[idx] = true;
+                    continue;
+                }
+                Tile t = level.tiles[x][y];
+                boolean blocks = t.blocksSight();
+                if (hasLargeMob[idx]) {
+                    blocks = true;
+                } else if (blocks && t == Tile.DOOR && hasMob[idx]) {
+                    blocks = false;
+                }
+                if (!blocks && CloudSystem.smokeAt(level, x, y)) {
+                    blocks = true;
+                }
+                blocking[idx] = blocks;
+            }
+        }
+        return blocking;
+    }
+
     private static void writeBack(Level level, boolean[][] out, boolean[] src) {
         int w = level.width, h = level.height;
         for (int y = 0; y < h; y++)

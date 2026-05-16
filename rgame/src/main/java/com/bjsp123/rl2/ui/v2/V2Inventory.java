@@ -955,6 +955,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             com.bjsp123.rl2.logic.InventorySystem
                                     .equip(player.inventory, it);
                         }
+                        player.statsDirty = true;
                         selectedItem = null;
                         close();
                     }
