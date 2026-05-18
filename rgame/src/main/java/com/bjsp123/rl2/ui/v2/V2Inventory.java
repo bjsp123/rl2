@@ -133,6 +133,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
      *  pre-selected to the chosen item. */
     private V2Encyclopedia encyclopedia;
 
+    private com.bjsp123.rl2.audio.SoundManager sounds;
+
     public V2Inventory(UiCtx ctx) {
         this.ctx = ctx;
         for (int i = 0; i < equipRects.length;  i++) equipRects[i]  = new Rect();
@@ -147,6 +149,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     public void setOnUse(BiConsumer<Mob, Item> fn)        { this.onUse = fn; }
     public void setOnThrow(BiConsumer<Mob, Item> fn)      { this.onThrow = fn; }
     public void setOnCombine(BiConsumer<Mob, Item> fn)    { this.onCombine = fn; }
+    public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
     public void setEncyclopedia(V2Encyclopedia enc)       { this.encyclopedia = enc; }
 
     public boolean isOpen() { return open; }
@@ -156,7 +159,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         open = false;
         selectedItem = null;
     }
-    private void openInv() { open = true; }
+    private void openInv() {
+        open = true;
+        if (sounds != null) sounds.play("sfx.ui.popup.inventory");
+    }
 
     /** {@link V2Popup#renderSelf} - renders the inventory body only.
      *  The item-detail sub-popup is a SEPARATE popup actor placed on the
@@ -954,6 +960,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         } else {
                             com.bjsp123.rl2.logic.InventorySystem
                                     .equip(player.inventory, it);
+                            if (sounds != null)
+                                sounds.play("sfx.player.equip." + (it.inventoryCategory != null ? it.inventoryCategory.name().toLowerCase() : ""));
                         }
                         player.statsDirty = true;
                         selectedItem = null;

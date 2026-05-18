@@ -41,7 +41,7 @@ import java.util.Map;
  *   (col 10, row 1) - FLOOR_SPECIAL corner overlay, diagonal-SW is special.
  *   (col 9, row  2) - FLOOR_SPECIAL corner overlay, diagonal-NE is special.
  *   (col 10, row 2) - FLOOR_SPECIAL corner overlay, diagonal-NW is special.
- *   (cols 12..14, row 4) - ALTAR (3x1 sprite); the centre cell is the anchor and
+ *   (cols 12..14, row 1) - ALTAR (3x1 sprite); the centre cell is the anchor and
  *                     the sprite extends one cell west and one cell east of it.
  *   (col 15, rows 0..1) - THRONE (1x2 sprite, west-facing source); same overhang
  *                     anchoring as the lamp / large statue. {@code _R} variant
@@ -185,7 +185,7 @@ public final class TileSprites {
             {10, 2},  // NW
     };
     private static final int ALTAR_COL  = 12;   // leftmost cell - sprite spans cols 12..14
-    private static final int ALTAR_ROW  = 4;
+    private static final int ALTAR_ROW  = 1;
     private static final int ALTAR_W_CELLS = 3;
     private static final int THRONE_COL = 15;
     private static final int THRONE_ROW = 0;

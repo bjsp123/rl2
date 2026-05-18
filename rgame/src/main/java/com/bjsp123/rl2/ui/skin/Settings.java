@@ -23,6 +23,10 @@ public final class Settings {
     private static final String KEY_INSTANT_ACTIONS = "rl2-instant-actions";
     private static final String KEY_LOW_RES_RENDER  = "rl2-low-res-render";
     private static final String KEY_PERF_OVERLAY    = "rl2-perf-overlay";
+    private static final String KEY_SFX_ENABLED     = "rl2-sfx-enabled";
+    private static final String KEY_SFX_VOLUME      = "rl2-sfx-volume";
+    private static final String KEY_MUSIC_ENABLED   = "rl2-music-enabled";
+    private static final String KEY_MUSIC_VOLUME    = "rl2-music-volume";
 
     public static final float UI_SCALE_DEFAULT = 1.0f;
     public static final float[] UI_SCALE_CHOICES = { 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 3.5f };
@@ -51,6 +55,10 @@ public final class Settings {
     public static final float LOG_FONT_SCALE_DEFAULT = 1.5f;
     public static final float[] LOG_FONT_SCALE_CHOICES = { 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f };
 
+    public static final float   SFX_VOLUME_DEFAULT   = 1.0f;
+    public static final float   MUSIC_VOLUME_DEFAULT = 0.75f;
+    public static final float[] VOLUME_CHOICES       = { 0f, 0.25f, 0.5f, 0.75f, 1.0f };
+
     private static Persistence persistence;
 
     private static float uiScale = UI_SCALE_DEFAULT;
@@ -72,6 +80,10 @@ public final class Settings {
     private static boolean instantActions;
     private static boolean lowResRender;
     private static boolean showPerfOverlay;
+    private static boolean sfxEnabled    = true;
+    private static float   sfxVolume     = SFX_VOLUME_DEFAULT;
+    private static boolean musicEnabled  = true;
+    private static float   musicVolume   = MUSIC_VOLUME_DEFAULT;
 
     private Settings() {}
 
@@ -95,6 +107,10 @@ public final class Settings {
         instantActions = loadBoolean(KEY_INSTANT_ACTIONS, false);
         lowResRender   = loadBoolean(KEY_LOW_RES_RENDER, false);
         showPerfOverlay = loadBoolean(KEY_PERF_OVERLAY, false);
+        sfxEnabled    = loadBoolean(KEY_SFX_ENABLED, true);
+        sfxVolume     = loadChoiceFloat(KEY_SFX_VOLUME, SFX_VOLUME_DEFAULT, VOLUME_CHOICES);
+        musicEnabled  = loadBoolean(KEY_MUSIC_ENABLED, true);
+        musicVolume   = loadChoiceFloat(KEY_MUSIC_VOLUME, MUSIC_VOLUME_DEFAULT, VOLUME_CHOICES);
     }
 
     public static float uiScale() { return uiScale; }
@@ -115,6 +131,10 @@ public final class Settings {
     public static boolean instantActions() { return instantActions; }
     public static boolean lowResRender()    { return lowResRender; }
     public static boolean showPerfOverlay() { return showPerfOverlay; }
+    public static boolean sfxEnabled()     { return sfxEnabled; }
+    public static float   sfxVolume()      { return sfxVolume; }
+    public static boolean musicEnabled()   { return musicEnabled; }
+    public static float   musicVolume()    { return musicVolume; }
 
     public static void setUiScale(float v) { uiScale = v; save(KEY_UI_SCALE, v); }
     public static void setUiPixelScale(int v) { uiPixelScale = Math.max(1, v); save(KEY_UI_PIXEL_SCALE, uiPixelScale); }
@@ -135,6 +155,10 @@ public final class Settings {
     public static void setInstantActions(boolean v) { instantActions = v; save(KEY_INSTANT_ACTIONS, v); }
     public static void setLowResRender(boolean v)    { lowResRender = v;    save(KEY_LOW_RES_RENDER, v); }
     public static void setShowPerfOverlay(boolean v) { showPerfOverlay = v; save(KEY_PERF_OVERLAY, v); }
+    public static void setSfxEnabled(boolean v)    { sfxEnabled = v;    save(KEY_SFX_ENABLED, v); }
+    public static void setSfxVolume(float v)       { sfxVolume = v;     save(KEY_SFX_VOLUME, v); }
+    public static void setMusicEnabled(boolean v)  { musicEnabled = v;  save(KEY_MUSIC_ENABLED, v); }
+    public static void setMusicVolume(float v)     { musicVolume = v;   save(KEY_MUSIC_VOLUME, v); }
 
     private static float detectUiScaleDefault() {
         if (Gdx.graphics == null) return UI_SCALE_DEFAULT;

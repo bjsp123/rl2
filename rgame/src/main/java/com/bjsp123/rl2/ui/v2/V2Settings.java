@@ -22,7 +22,7 @@ import java.util.List;
  */
 public final class V2Settings extends V2Screen {
 
-    private enum Tab { GAMEPLAY, GRAPHICS, LOG }
+    private enum Tab { GAMEPLAY, GRAPHICS, LOG, AUDIO }
     private static Tab currentTab = Tab.GRAPHICS;
 
     private final Rl2Game game;
@@ -87,7 +87,7 @@ public final class V2Settings extends V2Screen {
         // n*tabW + (n-1)*TAB_GAP = innerW; solve for tabW.
         float tabsY = winY + winH - WIN_PAD - TAB_H;
         float tabsX = winX + WIN_PAD;
-        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG };
+        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.AUDIO };
         float innerW = winW - 2 * WIN_PAD;
         float tabW   = (innerW - (tabs.length - 1) * TAB_GAP) / tabs.length;
         for (int i = 0; i < tabs.length; i++) {
@@ -141,6 +141,10 @@ public final class V2Settings extends V2Screen {
                 yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.expandedLog"),
                         Settings::logExpanded, Settings::setLogExpanded);
                 yCursor = addLogFontScaleRow(winX + WIN_PAD, yCursor);
+            }
+            case AUDIO -> {
+                yCursor = addSfxVolumeRow(winX + WIN_PAD, yCursor);
+                yCursor = addMusicVolumeRow(winX + WIN_PAD, yCursor);
             }
         }
 
@@ -267,6 +271,32 @@ public final class V2Settings extends V2Screen {
         return addRow(TextCatalog.get("ui.settings.quickslots"), x, yTop, choices);
     }
 
+    private float addSfxVolumeRow(float x, float yTop) {
+        List<ChoiceSpec> choices = new ArrayList<>();
+        for (float v : Settings.VOLUME_CHOICES) {
+            final float chosen = v;
+            choices.add(new ChoiceSpec(formatNumber(v * 100f) + "%", 52f,
+                    Math.abs(Settings.sfxVolume() - v) < 0.001f,
+                    () -> { Settings.setSfxVolume(chosen); show(); }));
+        }
+        return addRow(TextCatalog.get("ui.settings.sfxVolume"), x, yTop, choices);
+    }
+
+    private float addMusicVolumeRow(float x, float yTop) {
+        List<ChoiceSpec> choices = new ArrayList<>();
+        for (float v : Settings.VOLUME_CHOICES) {
+            final float chosen = v;
+            choices.add(new ChoiceSpec(formatNumber(v * 100f) + "%", 52f,
+                    Math.abs(Settings.musicVolume() - v) < 0.001f,
+                    () -> {
+                        Settings.setMusicVolume(chosen);
+                        if (game.music != null) game.music.applyVolume();
+                        show();
+                    }));
+        }
+        return addRow(TextCatalog.get("ui.settings.musicVolume"), x, yTop, choices);
+    }
+
     private float addLogFontScaleRow(float x, float yTop) {
         List<ChoiceSpec> choices = new ArrayList<>();
         for (float f : Settings.LOG_FONT_SCALE_CHOICES) {
@@ -341,6 +371,7 @@ public final class V2Settings extends V2Screen {
             case GAMEPLAY -> TextCatalog.get("ui.settings.tab.play");
             case GRAPHICS -> TextCatalog.get("ui.settings.tab.graphics");
             case LOG      -> TextCatalog.get("ui.settings.tab.log");
+            case AUDIO    -> TextCatalog.get("ui.settings.tab.audio");
         };
     }
 
@@ -350,6 +381,7 @@ public final class V2Settings extends V2Screen {
             case GAMEPLAY -> IconSprites.Icon.GAME;
             case GRAPHICS -> IconSprites.Icon.VIDEO;
             case LOG      -> IconSprites.Icon.BOOK;
+            case AUDIO    -> IconSprites.Icon.SOUND;
         };
     }
 

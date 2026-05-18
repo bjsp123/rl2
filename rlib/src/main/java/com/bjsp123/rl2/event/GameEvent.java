@@ -58,7 +58,9 @@ public sealed interface GameEvent permits
         GameEvent.MobFellThroughChasm,
         GameEvent.GrappleFired,
         GameEvent.MobJumped,
-        GameEvent.MobAbilityUsed {
+        GameEvent.MobAbilityUsed,
+        GameEvent.DoorOpened,
+        GameEvent.DoorClosed {
 
     /** Mob took a single tile step. The animator translates this into a step interpolation. */
     record MobMoved(Mob mob, int fromX, int fromY, int toX, int toY) implements GameEvent {}
@@ -238,4 +240,7 @@ public sealed interface GameEvent permits
      *  event. */
     record MobAbilityUsed(Mob caster, Mob target,
                           Point from, Point to) implements GameEvent {}
+
+    record DoorOpened(Point pos) implements GameEvent {}
+    record DoorClosed(Point pos) implements GameEvent {}
 }

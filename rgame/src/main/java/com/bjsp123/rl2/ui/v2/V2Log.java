@@ -57,6 +57,8 @@ public final class V2Log extends BasePopup {
     }
 
     // -- V2Popup / public API --------------------------------------------------
+    @Override protected String popupId() { return "log"; }
+
     @Override
     protected void onOpened() {
         scrollToBottom();

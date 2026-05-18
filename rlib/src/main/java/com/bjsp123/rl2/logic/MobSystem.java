@@ -252,6 +252,8 @@ public class MobSystem {
                 || (mob.doorClosing == Mob.DoorClosingBehavior.ONLY_IF_WAS_CLOSED
                     && mob.lastDoorWasClosed)) {
             level.tiles[oldX][oldY] = Tile.DOOR;
+            if (level.events != null) level.events.add(
+                    new com.bjsp123.rl2.event.GameEvent.DoorClosed(new com.bjsp123.rl2.model.Point(oldX, oldY)));
         }
     }
 
@@ -308,6 +310,8 @@ public class MobSystem {
         if (t == Tile.DOOR) {
             mob.lastDoorWasClosed = true;
             level.tiles[nx][ny] = Tile.DOOR_OPEN;
+            if (level.events != null) level.events.add(
+                    new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(nx, ny)));
         } else if (t == Tile.DOOR_OPEN) {
             mob.lastDoorWasClosed = false;
         }
@@ -2550,6 +2554,8 @@ public class MobSystem {
         // A thrown item that lands on a closed door pops it open - works for any throw kind.
         if (inBounds && level.tiles[tx][ty] == Tile.DOOR) {
             level.tiles[tx][ty] = Tile.DOOR_OPEN;
+            if (level.events != null) level.events.add(
+                    new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(tx, ty)));
         }
 
         if (te == ItemEffect.CAPTURE && inBounds) {
@@ -2618,6 +2624,7 @@ public class MobSystem {
                 if (level.events != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.MobTamed(target));
                 }
+                EventLog.add(Messages.mobTamed(nameForLog(level, thrower), nameForLog(level, target)));
                 consumedByTame = true;
             }
         }

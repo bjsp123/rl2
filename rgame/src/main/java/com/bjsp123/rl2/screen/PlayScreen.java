@@ -218,6 +218,7 @@ public class PlayScreen implements Screen {
         game.ui.v2Stage.addToSubPopup(popupActors[6]);
         game.ui.v2Stage.addToSubPopup(popupActors[7]);
         game.currentPlay = this;
+        if (game.music != null) game.music.play(com.bjsp123.rl2.audio.MusicPlayer.Track.GAMEPLAY);
     }
 
     @Override
@@ -307,6 +308,7 @@ public class PlayScreen implements Screen {
             animator.setEventObserver(game.achievementSystem::observeEvent);
             game.achievementSystem.setListener(this::onAchievementUnlocked);
         }
+        if (game.sounds != null) animator.setSounds(game.sounds);
 
         // V2 HUD - primitive ShapeRenderer + SpriteBatch chrome, drawn directly
         // by this Screen. Game.ui is the shared V2 rendering context (one per
@@ -338,6 +340,7 @@ public class PlayScreen implements Screen {
         v2Inventory = new V2Inventory(game.ui);
         v2Inventory.setPlayer(player);
         v2Inventory.setActionBar(actionBar);
+        v2Inventory.setSounds(game.sounds);
         v2Crafting = new com.bjsp123.rl2.ui.v2.V2Crafting(game.ui);
         v2Crafting.setPlayer(player);
         if (game.achievementSystem != null) {
@@ -387,6 +390,7 @@ public class PlayScreen implements Screen {
         v2BuffInfo = new com.bjsp123.rl2.ui.v2.V2BuffInfo(game.ui);
         v2Hud.setOnBuffTap(buff -> { if (buff != null) v2BuffInfo.open(buff); });
         v2Log = new com.bjsp123.rl2.ui.v2.V2Log(game.ui);
+        v2Log.setSounds(game.sounds);
         v2Hud.setOnOpenLog(() -> v2Log.toggle());
         v2CharacterStats.setBuffInfo(v2BuffInfo);
         v2Look.setBuffInfo(v2BuffInfo);
@@ -421,7 +425,7 @@ public class PlayScreen implements Screen {
         // closes over this::recenterCameraOnPlayer so it can recenter after stair
         // traversal without holding a back-reference to the screen.
         controller = new PlayController(world, animator, actionBar, targetingOverlay,
-                levelRenderer, this::recenterCameraOnPlayer, frameProfiler);
+                levelRenderer, this::recenterCameraOnPlayer, frameProfiler, game.sounds);
         if (newRun) controller.seedDefaultActionBar(player, charClass);
         v2Inventory.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));

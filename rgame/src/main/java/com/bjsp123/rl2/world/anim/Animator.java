@@ -1,4 +1,5 @@
 package com.bjsp123.rl2.world.anim;
+import com.bjsp123.rl2.audio.SoundManager;
 import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.logic.MobQueries;
 import com.bjsp123.rl2.logic.MobSystem;
@@ -41,6 +42,10 @@ public final class Animator {
     }
     private EventObserver eventObserver;
     public void setEventObserver(EventObserver obs) { this.eventObserver = obs; }
+
+    private SoundManager sounds;
+    public void setSounds(SoundManager s) { this.sounds = s; }
+    private int footstepStep = 1;
 
     private final IdentityHashMap<Mob, MobAnimState> states = new IdentityHashMap<>();
     private final List<Ghost> ghosts = new ArrayList<>();
@@ -316,6 +321,7 @@ public final class Animator {
      *  per-mob anim state and pushing visual effects into the stage. */
     public void consume(Level level) {
         if (level.events == null || level.events.isEmpty()) return;
+        if (sounds != null) sounds.beginFrame();
         // Reset sequential counter so scaleFrames() reads a fresh depth for this batch.
         queue.resetSequentialCount();
         // Cache the player once for this drain pass so the achievement
@@ -353,6 +359,26 @@ public final class Animator {
         s.stepFrame  = 0;
         s.stepTotal  = frames;
         s.delayFrames = queue.concurrent(frames);
+        if (sounds != null && m.mob() != null && m.mob().behavior == Mob.Behavior.PLAYER) {
+            String step = "." + footstepStep;
+            footstepStep = footstepStep == 1 ? 2 : 1;
+            Level.Vegetation veg = (level.vegetation != null) ? level.vegetation[m.toX()][m.toY()] : null;
+            Level.Surface    sur = (level.surface   != null) ? level.surface  [m.toX()][m.toY()] : null;
+            if (veg != null && sounds.play("sfx.player.move." + veg.name().toLowerCase() + step, 0.5f)) {}
+            else if (sur != null && sounds.play("sfx.player.move." + sur.name().toLowerCase() + step, 0.5f)) {}
+            else if (level.theme != null && sounds.play("sfx.player.move." + level.theme.name().toLowerCase() + step, 0.5f)) {}
+            else sounds.play("sfx.player.move" + step, 0.5f);
+        }
+        Level.Surface splashSur = (level.surface != null) ? level.surface[m.toX()][m.toY()] : null;
+        if (splashSur != null) {
+            Effect.EffectTint tint = switch (splashSur) {
+                case WATER -> Effect.EffectTint.BLUE;
+                case BLOOD -> Effect.EffectTint.RED;
+                case OIL   -> Effect.EffectTint.YELLOW;
+                case ICE   -> Effect.EffectTint.WHITE;
+            };
+            stage.add(Effect.footSplash(new Point(m.toX(), m.toY()), tint, RNG));
+        }
     }
 
     void onMobMeleeAttacked(Level level, GameEvent.MobMeleeAttacked m) {
@@ -381,6 +407,10 @@ public final class Animator {
         float flashDelay = (n > 0f) ? stateOf(attacker).delayFrames : 0;
         stage.add(Effect.attackFlash(attacker.position, isPlayer,
                 attacker.facingEast, flashDelay));
+        if (sounds != null) {
+            if (isPlayer) sounds.playAt("sfx.player.attack.melee", level, attacker.position);
+            else sounds.playAt("sfx.mob.attack.melee" + (attacker.mobType != null ? "." + attacker.mobType.toLowerCase() : ""), level, attacker.position);
+        }
         // Per-hit visuals (burst on hit, "miss" feedback on miss). The DamageDealt event
         // (emitted later in the tick from processAttack) drives the floating "-N" /
         // "miss" / "blunt" text, so we only handle the bursts here.
@@ -418,8 +448,13 @@ public final class Animator {
                 /*concurrent=*/true);
     }
 
-    void onMobKilled(GameEvent.MobKilled m) {
+    void onMobKilled(Level level, GameEvent.MobKilled m) {
         if (!m.visibleAtKill()) return;
+        if (sounds != null) {
+            boolean playerDied = m.mob() != null && m.mob().behavior == Mob.Behavior.PLAYER;
+            sounds.playAt(playerDied ? "sfx.player.combat.die" : "sfx.mob.combat.die",
+                    level, new Point(m.x(), m.y()));
+        }
         boolean facingEast = m.mob() != null && m.mob().facingEast;
         ghosts.add(new Ghost(m.mob(), m.x(), m.y(), facingEast));
         // If the dying mob has a queued knockback slide, chain the death
@@ -449,18 +484,29 @@ public final class Animator {
                 ? Effect.physicalMissile(m.from(), m.to())
                 : Effect.magicMissile(m.from(), m.to(), RNG);
         stage.add(missile);
-        if (m.trajectoryVisible()) queue.concurrent(missile.totalFrames());
+        if (m.trajectoryVisible()) {
+            queue.sequential(missile.totalFrames());
+            if (sounds != null) sounds.playAt("sfx.item.use.ranged." + (physical ? "physical" : "magic"), level, m.from());
+        }
         Mob caster = m.caster();
         int damage = m.damage();
         Point target = m.to();
-        pendingImpacts.add(missile,
-                () -> applyMissileImpact(level, caster, target, damage));
+        pendingImpacts.add(missile, () -> {
+            applyMissileImpact(level, caster, target, damage);
+            if (sounds != null) sounds.playAt("sfx.item.impact.ranged." + (physical ? "physical" : "magic"), level, target);
+            Effect burst = Effect.wandImpactBurst(target, null, RNG);
+            stage.add(burst);
+            if (visibleAt(level, target)) queue.concurrent(burst.totalFrames());
+        });
     }
 
     void onWandMissileFired(Level level, GameEvent.WandMissileFired m) {
         Effect missile = buildWandMissile(m.from(), m.to(), m.element());
         stage.add(missile);
-        if (m.trajectoryVisible()) queue.concurrent(missile.totalFrames());
+        if (m.trajectoryVisible()) {
+            queue.sequential(missile.totalFrames());
+            if (sounds != null) sounds.playAt(itemUseKey(m.wand()), level, m.from());
+        }
         Mob caster = m.caster();
         Point target = m.to();
         Item.ItemEffect element = m.element();
@@ -475,7 +521,10 @@ public final class Animator {
     void onWandRayFired(Level level, GameEvent.WandRayFired m) {
         Effect ray = Effect.ray(m.from(), m.to(), Effect.EffectTint.WHITE);
         stage.add(ray);
-        if (m.trajectoryVisible()) queue.concurrent(ray.totalFrames());
+        if (m.trajectoryVisible()) {
+            queue.sequential(ray.totalFrames());
+            if (sounds != null) sounds.playAt(itemUseKey(m.wand()), level, m.from());
+        }
         Mob caster = m.caster();
         Point target = m.to();
         Item.ItemEffect element = m.element();
@@ -495,6 +544,7 @@ public final class Animator {
         if (from == null || to == null) return;
         boolean anyVisible = visibleAt(level, from) || visibleAt(level, to);
         if (!anyVisible) return;
+        if (sounds != null) sounds.playAt("sfx.mob.action.ability", level, from);
         Effect ray = Effect.ray(from, to, Effect.EffectTint.GREEN);
         stage.add(ray);
         Effect sparksFrom = Effect.particleBurst(from, Effect.EffectTint.GREEN, 14, RNG);
@@ -506,13 +556,26 @@ public final class Animator {
         queue.concurrent(ray.totalFrames());
     }
 
+    void onDoorOpened(Level level, GameEvent.DoorOpened m) {
+        if (sounds != null) sounds.playAt("sfx.world.door.open", level, m.pos());
+    }
+
+    void onDoorClosed(Level level, GameEvent.DoorClosed m) {
+        if (sounds != null) sounds.playAt("sfx.world.door.close", level, m.pos());
+    }
+
     void onItemThrown(Level level, GameEvent.ItemThrown m) {
         Item it = m.item();
         Mob thrower = m.thrower();
         Point dst = m.to();
         Effect thrown = Effect.thrownItem(m.from(), m.to(), it);
         stage.add(thrown);
-        if (m.trajectoryVisible()) queue.concurrent(thrown.totalFrames());
+        if (m.trajectoryVisible()) {
+            queue.sequential(thrown.totalFrames());
+            if (sounds != null && it != null && it.inventoryCategory == Item.InventoryCategory.BOMB) {
+                sounds.playAt(itemUseKey(it), level, m.from());
+            }
+        }
         // Defer the engine mutation (damage, knockback, terrain ignite,
         // surface paint, item drop) to the moment the projectile arrives.
         // {@link MobSystem#throwItem} already removed the item from the
@@ -534,9 +597,20 @@ public final class Animator {
     /** Item picked up by a mob - arc the item off its tile toward the bottom-
      *  right of the screen so it reads as flying into the inventory.
      *  Non-blocking. Skipped when the picker isn't visible. */
-    void onItemPickedUp(GameEvent.ItemPickedUp m) {
+    void onItemPickedUp(Level level, GameEvent.ItemPickedUp m) {
         if (m.item() == null || m.from() == null) return;
         stage.add(Effect.pickupToss(m.from(), m.item()));
+        if (sounds != null && m.picker() != null) {
+            if (m.picker().behavior == Mob.Behavior.PLAYER) {
+                Item it = m.item();
+                String pickupKey = (it != null && it.inventoryCategory == Item.InventoryCategory.GEM) ? "sfx.player.pickup.gem"
+                        : (it != null && it.type != null) ? "sfx.player.pickup." + it.type.toLowerCase()
+                        : "sfx.player.pickup";
+                sounds.playAt(pickupKey, level, m.from());
+            } else {
+                sounds.playAt("sfx.mob.action.pickup", level, m.from());
+            }
+        }
     }
 
     /** Mob was knocked back - slide the sprite from {@code start} to {@code end},
@@ -588,6 +662,7 @@ public final class Animator {
         boolean visible = MobSystem.isVisibleToPlayer(level, mob)
                 || visibleAt(level, from) || visibleAt(level, to);
         if (!visible) return;
+        if (sounds != null && mob.behavior == Mob.Behavior.PLAYER) sounds.playAt("sfx.item.use.frog", level, from);
         int ddx = from.tileX() - to.tileX();
         int ddy = from.tileY() - to.tileY();
         int dist = Math.max(Math.abs(ddx), Math.abs(ddy));
@@ -620,6 +695,7 @@ public final class Animator {
         if (from == null || to == null) return;
         boolean visible = visibleAt(level, from) || visibleAt(level, to);
         if (!visible) return;
+        if (sounds != null) sounds.playAt("sfx.item.use.grapple", level, from);
         int extendFrames  = scaleFrames(AnimationVars.GRAPPLE_EXTEND_FRAMES);
         int tailFrames    = scaleFrames(m.success()
                 ? AnimationVars.GRAPPLE_RETRACT_FRAMES
@@ -659,11 +735,21 @@ public final class Animator {
         if (target == null || target.position == null) return;
         if (!MobSystem.isVisibleToPlayer(level, target)) return;
         switch (m.message()) {
-            case HIT   -> stage.add(Effect.floatingText(target.position, "-" + m.amount(), Effect.EffectTint.RED));
-            case MISS  -> stage.add(Effect.floatingText(target.position,
-                    TextCatalog.get("effect.combat.miss"), Effect.EffectTint.YELLOW));
-            case BLUNT -> stage.add(Effect.floatingText(target.position,
-                    TextCatalog.get("effect.combat.blunt"), Effect.EffectTint.WHITE));
+            case HIT   -> {
+                stage.add(Effect.floatingText(target.position, "-" + m.amount(), Effect.EffectTint.RED));
+                if (sounds != null) sounds.playAt(target.behavior == Mob.Behavior.PLAYER
+                        ? "sfx.player.combat.hit" : "sfx.combat.result.hit", level, target.position);
+            }
+            case MISS  -> {
+                stage.add(Effect.floatingText(target.position,
+                        TextCatalog.get("effect.combat.miss"), Effect.EffectTint.YELLOW));
+                if (sounds != null) sounds.playAt("sfx.combat.result.miss", level, target.position);
+            }
+            case BLUNT -> {
+                stage.add(Effect.floatingText(target.position,
+                        TextCatalog.get("effect.combat.blunt"), Effect.EffectTint.WHITE));
+                if (sounds != null) sounds.playAt("sfx.combat.result.block", level, target.position);
+            }
             case ENVIRONMENTAL ->
                     stage.add(Effect.floatingText(target.position, "-" + m.amount(), Effect.EffectTint.RED));
         }
@@ -682,6 +768,7 @@ public final class Animator {
         if (!MobSystem.isVisibleToPlayer(level, mob)) return;
         stage.add(Effect.floatingText(mob.position,
                 TextCatalog.get("effect.mob.tamed"), Effect.EffectTint.GREEN));
+        if (sounds != null) sounds.playAt("sfx.mob.action.tame", level, mob.position);
     }
 
     void onBuffApplied(Level level, GameEvent.BuffApplied m) {
@@ -701,10 +788,17 @@ public final class Animator {
         // the standard 18-spark burst.
         switch (m.element()) {
             case LEVEL_UP -> { spawnLevelUpVisual(level, m.pos()); return; }
-            case HP_UP    -> { spawnHpUpVisual(level, m.pos());    return; }
-            case MANA_UP  -> { spawnManaUpVisual(level, m.pos());  return; }
+            case HP_UP    -> {
+                if (sounds != null) sounds.playAt("sfx.player.pickup.healthpill", level, m.pos());
+                spawnHpUpVisual(level, m.pos()); return;
+            }
+            case MANA_UP  -> {
+                if (sounds != null) sounds.playAt("sfx.player.pickup.chargepill", level, m.pos());
+                spawnManaUpVisual(level, m.pos()); return;
+            }
             default -> { /* fall through to the generic-burst path */ }
         }
+        if (sounds != null) sounds.playAt("sfx.effect." + elementKey(m.element()), level, m.pos());
         Effect.EffectTint tint = switch (m.element()) {
             case WATER                -> Effect.EffectTint.BLUE;
             case OIL                  -> Effect.EffectTint.YELLOW;
@@ -780,7 +874,10 @@ public final class Animator {
     void onBlastEffect(Level level, GameEvent.BlastEffect m) {
         Effect blast = Effect.blast(m.pos());
         stage.add(blast);
-        if (visibleAt(level, m.pos())) queue.concurrent(blast.totalFrames());
+        if (visibleAt(level, m.pos())) {
+            queue.concurrent(blast.totalFrames());
+            if (sounds != null) sounds.playAt("sfx.effect.blast", level, m.pos());
+        }
     }
 
     /** Radial fire-ball burst (on-death explosion, detonation wand). Blocks while
@@ -788,7 +885,10 @@ public final class Animator {
     void onExplosionEffect(Level level, GameEvent.ExplosionEffect m) {
         Effect boom = Effect.explosion(m.pos(), m.radiusTiles(), RNG);
         stage.add(boom);
-        if (visibleAt(level, m.pos())) queue.concurrent(boom.totalFrames());
+        if (visibleAt(level, m.pos())) {
+            queue.concurrent(boom.totalFrames());
+            if (sounds != null) sounds.playAt("sfx.effect.blast", level, m.pos());
+        }
     }
 
     /** Swirling rising particles in the potion's colour. Triggered when a
@@ -800,6 +900,7 @@ public final class Animator {
     void onPotionBurst(Level level, GameEvent.PotionBurst m) {
         Item item = m.item();
         if (item == null) return;
+        if (sounds != null) sounds.playAt(itemUseKey(item), level, m.pos());
         Effect.EffectTint tint = potionTint(item);
         Effect burst = Effect.particleBurst(m.pos(), tint, 18, RNG);
         stage.add(burst);
@@ -828,6 +929,7 @@ public final class Animator {
             s.spawnFrame = s.spawnTotalFrames;
             return;
         }
+        if (sounds != null) sounds.playAt("sfx.mob.spawn.generic", level, at);
         stage.add(Effect.particleBurst(at, Effect.EffectTint.WHITE, 14, RNG));
         if (queue.freezeFrames < AnimationVars.SPAWN_GROW_FRAMES) {
             queue.freezeFrames = AnimationVars.SPAWN_GROW_FRAMES;
@@ -885,6 +987,7 @@ public final class Animator {
 
     void onXPGainBurst(Level level, GameEvent.XPGainBurst m) {
         if (m.pos() == null || !visibleAt(level, m.pos())) return;
+        if (sounds != null) sounds.playAt("sfx.player.pickup.xppill", level, m.pos());
         spawnPowerupPickupVisual(level, m.pos(), EffectTint.ORANGE);
         spawnPowerupPickupVisual(level, m.pos(), EffectTint.YELLOW);
         spawnPowerupPickupVisual(level, m.pos(), EffectTint.WHITE);
@@ -1172,6 +1275,29 @@ public final class Animator {
             }
         }
         return Effect.magicMissileColored(from, to, palette, head, gravity, size, bright, RNG);
+    }
+
+    // -- Sound key helpers ----------------------------------------------------------
+
+    /** Returns the most-specific {@code sfx.item.use.*} key for the given item.
+     *  WAND/BOMB/POTION/FOOD get a category segment; ITEM-category items go
+     *  straight to their type. SoundManager's fallback strips the last segment
+     *  until a CSV entry is found. */
+    private static String itemUseKey(Item item) {
+        if (item == null) return "sfx.item.use";
+        String type = item.type != null ? "." + item.type.toLowerCase() : "";
+        return switch (item.inventoryCategory != null ? item.inventoryCategory : Item.InventoryCategory.ITEM) {
+            case WAND   -> "sfx.item.use.wand"   + type;
+            case BOMB   -> "sfx.item.use.bomb"   + type;
+            case POTION -> "sfx.item.use.potion" + type;
+            case FOOD   -> "sfx.item.use.food"   + type;
+            default     -> "sfx.item.use"        + type;
+        };
+    }
+
+    /** Lowercases an ItemEffect name for use as an {@code sfx.effect.*} segment. */
+    private static String elementKey(Item.ItemEffect e) {
+        return e != null ? e.name().toLowerCase() : "missile";
     }
 
     // -- Anim / step tuning (mirrors MobSystem constants) ---------------------------

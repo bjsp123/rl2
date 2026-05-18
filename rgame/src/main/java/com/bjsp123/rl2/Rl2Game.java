@@ -12,6 +12,8 @@ import com.bjsp123.rl2.save.HallOfFame;
 import com.bjsp123.rl2.save.HallOfFameStore;
 import com.bjsp123.rl2.save.SaveSystem;
 import com.bjsp123.rl2.persistence.Persistence;
+import com.bjsp123.rl2.audio.MusicPlayer;
+import com.bjsp123.rl2.audio.SoundManager;
 import com.bjsp123.rl2.screen.PlayScreen;
 import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.ui.v2.UiCtx;
@@ -38,12 +40,21 @@ public class Rl2Game extends Game {
     /** Shared V2 UI rendering context - fonts, ShapeRenderer, SpriteBatch.
      *  Held by {@link Rl2Game} so every V2 screen reuses the same instance. */
     public UiCtx       ui;
+    public SoundManager sounds;
+    public MusicPlayer  music;
 
     /** The currently in-progress run, if any. Null means "no game to resume". */
     public PlayScreen currentPlay;
 
     private long lastResizePersistMs;
     private int  lastPersistedW, lastPersistedH;
+
+    @Override
+    public void setScreen(com.badlogic.gdx.Screen screen) {
+        if (screen instanceof com.bjsp123.rl2.ui.v2.V2Screen vs && sounds != null)
+            vs.setSounds(sounds);
+        super.setScreen(screen);
+    }
 
     /** Navigate forward - push a "restore previous screen" entry onto the
      *  shared {@link com.bjsp123.rl2.ui.v2.WindowStack} (in {@link #ui})
@@ -98,6 +109,8 @@ public class Rl2Game extends Game {
         loadTipsConfig();
         loadHelpConfig();
         Settings.init(persistence);
+        loadSoundsConfig();
+        music = new MusicPlayer();
         // Plug the rgame-side icon-pref toggle into the in-world Animator so its
         // BuffApplied event handler renders an icon when the user wants icons and a
         // text float otherwise.
@@ -199,6 +212,13 @@ public class Rl2Game extends Game {
         TipsRegistry.load(fh.readString());
     }
 
+    private void loadSoundsConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/sounds.csv");
+        if (!fh.exists()) return;
+        sounds = new SoundManager(com.bjsp123.rl2.util.CsvTable.parse(fh.readString()));
+    }
+
     private void loadHelpConfig() {
         com.badlogic.gdx.files.FileHandle fh =
                 com.badlogic.gdx.Gdx.files.internal("data/help.csv");
@@ -239,6 +259,8 @@ public class Rl2Game extends Game {
                   + com.badlogic.gdx.Gdx.graphics.getHeight());
         }
         super.dispose();
+        if (sounds != null) sounds.dispose();
+        if (music  != null) music.dispose();
         if (ui != null) ui.dispose();
     }
 }

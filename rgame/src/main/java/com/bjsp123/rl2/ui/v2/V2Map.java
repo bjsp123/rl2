@@ -95,6 +95,8 @@ public final class V2Map extends V2Screen {
     @Override
     protected Rect modalWindow() { return window; }
 
+    @Override protected String screenId() { return "map"; }
+
     @Override
     protected void buildLayout() {
         float vw = ctx.worldW();

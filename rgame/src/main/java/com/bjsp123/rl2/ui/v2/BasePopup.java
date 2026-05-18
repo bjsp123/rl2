@@ -22,12 +22,20 @@ public abstract class BasePopup implements V2Popup {
 
     private boolean open;
 
+    protected com.bjsp123.rl2.audio.SoundManager sounds;
+    public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
+    protected String popupId() { return null; }
+
     protected BasePopup(UiCtx ctx) {
         this.ctx = ctx;
     }
 
     public void open() {
         open = true;
+        if (sounds != null) {
+            String id = popupId();
+            sounds.play(id != null ? "sfx.ui.popup." + id : "sfx.ui.popup");
+        }
         onOpened();
     }
 

@@ -251,6 +251,13 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
+    /** "{player} tames the {mob}!" - HIGH-priority; taming is a meaningful player action. */
+    public static LogEvent mobTamed(String playerName, String mobName) {
+        return new LogEvent(TextCatalog.format("eventlog.mob.tamed",
+                                    TextCatalog.vars("player", playerName, "mob", mobName)),
+                            EventPriority.HIGH, true);
+    }
+
     private static String reason(String reason) {
         return reason != null && !reason.isEmpty()
                 ? TextCatalog.format("eventlog.reason.parenthesized",

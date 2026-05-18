@@ -177,6 +177,7 @@ eventlog.mobaction.eatsVegetation,The {mob} eats the {vegetation}.
 eventlog.mobaction.hostileToPlayer,The {mob} becomes hostile{reason}!
 eventlog.mobaction.pickup,The {mob} picks up the {item}.
 eventlog.mobaction.spawn,A {mob} appears.
+eventlog.mob.tamed,{player} tames the {mob}!
 eventlog.mobaction.turnsOnMob,The {mob} turns on the {target}{reason}.
 eventlog.mobaction.usesAbility,The {mob} uses {ability} on {target}.
 eventlog.mobaction.usesAbility.nonplayerTarget,the {target}
@@ -924,9 +925,12 @@ ui.settings.queueAcceleration,Queue Acceleration
 ui.settings.quickslots,Quickslots
 ui.settings.showEventLog,Show Event Log
 ui.settings.smooth,Smooth
+ui.settings.tab.audio,Audio
 ui.settings.tab.graphics,Graphics
 ui.settings.tab.log,Log
 ui.settings.tab.play,Play
+ui.settings.sfxVolume,SFX Volume
+ui.settings.musicVolume,Music Volume
 ui.settings.title,Settings
 ui.settings.uiFontSize,UI Font Size
 ui.settings.uiScale,UI Scale

@@ -20,6 +20,7 @@ import com.bjsp123.rl2.model.World;
 import com.bjsp123.rl2.model.WorldTopology;
 import com.bjsp123.rl2.ui.hud.ActionBar;
 import com.bjsp123.rl2.ui.overlay.TargetingOverlay;
+import com.bjsp123.rl2.audio.SoundManager;
 import com.bjsp123.rl2.world.anim.Animator;
 import com.bjsp123.rl2.world.render.LevelRenderer;
 
@@ -51,6 +52,7 @@ final class PlayController {
     private final LevelRenderer levelRenderer;
     private final Runnable recenterCamera;
     private final FrameProfiler profiler;
+    private final SoundManager sounds;
 
     /** Auto-move interrupt - set of hostile mobs visible at the start of the current
      *  auto-path. While auto-pathing, any newly-visible hostile (not in this set) aborts
@@ -66,7 +68,8 @@ final class PlayController {
                    TargetingOverlay targetingOverlay,
                    LevelRenderer levelRenderer,
                    Runnable recenterCamera,
-                   FrameProfiler profiler) {
+                   FrameProfiler profiler,
+                   SoundManager sounds) {
         this.world = world;
         this.animator = animator;
         this.actionBar = actionBar;
@@ -74,6 +77,7 @@ final class PlayController {
         this.levelRenderer = levelRenderer;
         this.recenterCamera = recenterCamera;
         this.profiler = profiler;
+        this.sounds = sounds;
     }
 
     boolean tick(Level level) {
@@ -97,6 +101,14 @@ final class PlayController {
                 return false;
             }
             MobSystem.stepTowardTarget(player, level);
+            if (player.targetPosition == null && player.ticksTillMove == 0
+                    && currentlyVisibleHostiles(level, player).isEmpty()) {
+                int bagBefore = player.inventory.bag.size();
+                if (MobSystem.pickupAtFeet(level, player) > 0) {
+                    autoAssignNewPickups(player, bagBefore);
+                    TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+                }
+            }
             profiler.add("playerStep", playerTurnStart);
         }
         // Safety bound: expressed as event-count (advanceToNextEvent calls), not raw
@@ -202,6 +214,8 @@ final class PlayController {
         switch (item.useBehavior) {
             case EAT, DRINK, GRANT_PERK, APPLYBUFF -> {
                 ItemSystem.useItem(level, user, item);
+                if (item.useBehavior == Item.UseBehavior.EAT && sounds != null)
+                    sounds.play("sfx.player.action.eat");
                 afterMove(level);
             }
             case WAND    -> beginWand(level, user, item);
@@ -292,6 +306,7 @@ final class PlayController {
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             MobSystem.throwItem(cur, thrower, item, target);
+            animator.consume(cur);
             afterMove(cur);
         }, item);
     }
@@ -558,6 +573,7 @@ final class PlayController {
         recenterCamera.run();
         levelRenderer.markDirty();
 
+        if (sounds != null) sounds.play("sfx.world.action.enter_level");
         String playerName = player.name != null ? player.name
                 : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
         EventLog.add(Messages.enterLevel(playerName, next.depth, next.flags));

@@ -13,7 +13,7 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.MobMeleeAttacked m)      animator.onMobMeleeAttacked(level, m);
         else if (ev instanceof GameEvent.SurpriseAttack m)        animator.onSurpriseAttack(level, m);
         else if (ev instanceof GameEvent.MobHitFlinched m)        animator.onMobHitFlinched(level, m);
-        else if (ev instanceof GameEvent.MobKilled m)             animator.onMobKilled(m);
+        else if (ev instanceof GameEvent.MobKilled m)             animator.onMobKilled(level, m);
         else if (ev instanceof GameEvent.MobTeleported m)         animator.onMobTeleported(m);
         else if (ev instanceof GameEvent.MagicMissileFired m)     animator.onMagicMissileFired(level, m);
         else if (ev instanceof GameEvent.WandMissileFired m)      animator.onWandMissileFired(level, m);
@@ -36,12 +36,14 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.XPGainBurst m)           animator.onXPGainBurst(level, m);
         else if (ev instanceof GameEvent.PeriodicBuffDamage m)    animator.onPeriodicBuffDamage(level, m);
         else if (ev instanceof GameEvent.LootDropped m)           animator.onLootDropped(m);
-        else if (ev instanceof GameEvent.ItemPickedUp m)          animator.onItemPickedUp(m);
+        else if (ev instanceof GameEvent.ItemPickedUp m)          animator.onItemPickedUp(level, m);
         else if (ev instanceof GameEvent.MobKnockedBack m)        animator.onMobKnockedBack(level, m);
         else if (ev instanceof GameEvent.MobJumped m)             animator.onMobJumped(level, m);
         else if (ev instanceof GameEvent.ItemFallingIntoChasm m)  animator.onItemFallingIntoChasm(m);
         else if (ev instanceof GameEvent.MobFellThroughChasm m)   animator.onMobFellThroughChasm(m);
         else if (ev instanceof GameEvent.GrappleFired m)          animator.onGrappleFired(level, m);
         else if (ev instanceof GameEvent.MobAbilityUsed m)        animator.onMobAbilityUsed(level, m);
+        else if (ev instanceof GameEvent.DoorOpened m)            animator.onDoorOpened(level, m);
+        else if (ev instanceof GameEvent.DoorClosed m)            animator.onDoorClosed(level, m);
     }
 }

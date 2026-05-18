@@ -59,6 +59,13 @@ public abstract class V2Screen extends ScreenAdapter {
     private final com.bjsp123.rl2.ui.v2.stage.V2PopupActor burgerOverlayActor =
             new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(burgerOverlay);
 
+    protected com.bjsp123.rl2.audio.SoundManager sounds;
+    public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
+
+    /** Override to return the screen's identifier for popup-sound lookup,
+     *  e.g. {@code "map"} → {@code sfx.ui.popup.map}. Default: null (uses root). */
+    protected String screenId() { return null; }
+
     private final InputAdapter input = new InputAdapter() {
         @Override
         public boolean touchDown(int sx, int sy, int pointer, int button) {
@@ -134,13 +141,19 @@ public abstract class V2Screen extends ScreenAdapter {
             }
             if (back != null && back.pressed) {
                 back.pressed = false;
-                if (back.hit(vx, vy)) back.click();
+                if (back.hit(vx, vy)) {
+                    if (sounds != null) sounds.play("sfx.ui.cancel");
+                    back.click();
+                }
                 return true;
             }
             for (Btn b : buttons) {
                 if (b.pressed) {
                     b.pressed = false;
-                    if (b.hit(vx, vy) && b.onClick != null) b.onClick.run();
+                    if (b.hit(vx, vy) && b.onClick != null) {
+                        if (sounds != null) sounds.play("sfx.ui.click");
+                        b.onClick.run();
+                    }
                     return true;
                 }
             }
@@ -237,6 +250,10 @@ public abstract class V2Screen extends ScreenAdapter {
     public void show() {
         Gdx.input.setInputProcessor(input);
         rebuildLayout();
+        if (sounds != null) {
+            String id = screenId();
+            sounds.play(id != null ? "sfx.ui.popup." + id : "sfx.ui.popup");
+        }
         // Park the burger overlay actor on the stage's burger layer so it
         // renders on top of every popup. Multiple V2Screen instances
         // share ctx.v2Stage; remove() in hide() prevents stale actors

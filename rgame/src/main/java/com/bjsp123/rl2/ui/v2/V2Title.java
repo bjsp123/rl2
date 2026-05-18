@@ -86,6 +86,7 @@ public final class V2Title extends V2Screen {
                 : () -> game.pushScreen(new V2Saves(game, ctx));
         addBtn(topLabel, btnX, y, btnW, topAction);
 
+        if (game.music != null) game.music.play(com.bjsp123.rl2.audio.MusicPlayer.Track.TITLE);
         // Burger at top-right; no back button (root screen).
         burger = makeBurger();
         addBurgerItem(TextCatalog.get("ui.menu.settings"), () -> game.pushScreen(new V2Settings(game, ctx)));

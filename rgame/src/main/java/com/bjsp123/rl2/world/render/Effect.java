@@ -533,6 +533,32 @@ public class Effect {
         return e;
     }
 
+    /** Small liquid splash at a character's feet when stepping onto a surface tile.
+     *  Particles arc up then fall back under gravity; tint fades from the surface
+     *  colour toward white over each particle's lifetime for a washed-out splash look. */
+    public static Effect footSplash(Point location, EffectTint tint, Random rng) {
+        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
+        e.tint = tint;
+        e.ignoresFov = true;
+        e.particleFadeToWhite = true;
+        int count = 4 + rng.nextInt(3);
+        e.particleX0 = new float[count];
+        e.particleY0 = new float[count];
+        e.particleVX = new float[count];
+        e.particleVY = new float[count];
+        e.particleSpawnFrame = new int[count];
+        float cx = TILE_PX * 0.5f;
+        float cy = TILE_PX * 0.35f;
+        for (int i = 0; i < count; i++) {
+            e.particleX0[i] = cx + (rng.nextFloat() - 0.5f) * 7f;
+            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 3f;
+            e.particleVX[i] = (rng.nextFloat() - 0.5f) * 0.5f;
+            e.particleVY[i] = 1.5f + rng.nextFloat() * 1.0f;
+            e.particleSpawnFrame[i] = rng.nextInt(3);
+        }
+        return e;
+    }
+
     /** Item falling into a chasm - revolves, shrinks, and fades at {@code location}.
      *  Non-blocking (excluded from the Animator's freeze-frames tally). */
     public static Effect fallingItem(Point location, Item item) {

@@ -810,17 +810,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (t != Tile.WALL && t != Tile.DOOR && t != Tile.DOOR_OPEN) return;
         int visual = terrainVisual(level, x, y);
         if (visual < 0) return;
-        // Sideways open door (walls both north and south) - the door body art reads as
-        // anchored against the wall above, so we shift the sprite one cell north and let
-        // the floor underlay show through where the door body used to sit. The wall at
-        // (x, y+1) still renders in its own pass; the door body overlays it. Closed
-        // sideways doors keep the in-cell draw so the doorway fills the gap.
-        if (t == Tile.DOOR_OPEN
-                && isWallish(level, x, y - 1)
-                && isWallish(level, x, y + 1)) {
-            drawTile(visual, x, y + 1);
-            return;
-        }
         drawTile(visual, x, y);
     }
 
@@ -1607,6 +1596,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * </ul>
      */
     private void drawWallOverlayAt(Level level, int x, int y) {
+
         Tile t = level.tiles[x][y];
 
         if (t == Tile.WALL) {
@@ -1619,19 +1609,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 int result = TileSprites.internalWallVariant(TileSprites.variantHash(x, y), bits);
                 drawTile(result, x, y);
             } else if (level.tiles[x][y - 1] == Tile.DOOR) {
-                // Wall-over-sideways-door cutout: only painted when the door is CLOSED. When
-                // the sideways door opens, the cutout sprite is dropped - the wall above
-                // renders normally without a special "door top" overlay.
                 drawTile(TileSprites.DOOR_SIDEWAYS, x, y);
             }
             return;
         }
 
-        if (t == Tile.DOOR && isWallish(level, x, y - 1)) {
-            int result = TileSprites.DOOR_SIDEWAYS_OVERHANG_CLOSED;
-            if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
-            if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
-            drawTile(result, x, y);
+        if ((t == Tile.DOOR || t == Tile.DOOR_OPEN) && isWallish(level, x, y - 1)) {
+                int result = TileSprites.DOOR_SIDEWAYS_OVERHANG_CLOSED;
+                if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
+                if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
+                drawTile(result, x, y);
             return;
         }
 
@@ -1645,7 +1632,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Door top paints at the cell NORTH of the door (y+1 = north in y-up) - same cell
         // as wall overhangs use. The SPD convention: the door body occupies its own cell and
         // the arched top visually sits in the tile above on screen.
-        if (isDoorAt(level, x, y - 1)) {
+        if (level.tiles[x][y - 1] == Tile.DOOR || level.tiles[x][y - 1] == Tile.DOOR_OPEN) {
             drawTile(TileSprites.DOOR_OVERHANG, x, y);
         }
     }
@@ -1724,6 +1711,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
     private int raisedDoor(Level level, int x, int y) {
         Tile t = level.tiles[x][y];
+
+        
         // Sideways door (wall-flanked along the N/S axis): same body sprite for open and
         // closed; the difference shows in the dropped overlays handled by drawWallOverlayAt.
         // Front-facing door swaps the body sprite for the row-9 "open" variant when open.
@@ -1750,11 +1739,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         return false;
     }
 
-    private static boolean isDoorAt(Level level, int x, int y) {
-        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
-        Tile t = level.tiles[x][y];
-        return t == Tile.DOOR || t == Tile.DOOR_OPEN;
-    }
 
     private static Tile tileAt(Level level, int x, int y) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return null;
