@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.Item;
+import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Inventory;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.MinMax;
@@ -247,13 +248,24 @@ public class MobSystem {
     private static void onMobLeftTile(Level level, Mob mob, int oldX, int oldY) {
         if (oldX < 0 || oldY < 0 || oldX >= level.width || oldY >= level.height) return;
         Tile t = level.tiles[oldX][oldY];
-        if (t != Tile.DOOR_OPEN) return;
-        if (mob.doorClosing == Mob.DoorClosingBehavior.ALWAYS
-                || (mob.doorClosing == Mob.DoorClosingBehavior.ONLY_IF_WAS_CLOSED
-                    && mob.lastDoorWasClosed)) {
-            level.tiles[oldX][oldY] = Tile.DOOR;
-            if (level.events != null) level.events.add(
-                    new com.bjsp123.rl2.event.GameEvent.DoorClosed(new com.bjsp123.rl2.model.Point(oldX, oldY)));
+        if (t == Tile.DOOR_OPEN){
+            if (mob.doorClosing == Mob.DoorClosingBehavior.ALWAYS
+                    || (mob.doorClosing == Mob.DoorClosingBehavior.ONLY_IF_WAS_CLOSED
+                        && mob.lastDoorWasClosed)) {
+                level.tiles[oldX][oldY] = Tile.DOOR;
+                if (level.events != null) level.events.add(
+                        new com.bjsp123.rl2.event.GameEvent.DoorClosed(new com.bjsp123.rl2.model.Point(oldX, oldY)));
+            }
+        }
+
+        if (t == Tile.CRYSTAL_DOOR_OPEN){
+            if (mob.doorClosing == Mob.DoorClosingBehavior.ALWAYS
+                    || (mob.doorClosing == Mob.DoorClosingBehavior.ONLY_IF_WAS_CLOSED
+                        && mob.lastDoorWasClosed)) {
+                level.tiles[oldX][oldY] = Tile.CRYSTAL_DOOR;
+                if (level.events != null) level.events.add(
+                        new com.bjsp123.rl2.event.GameEvent.DoorClosed(new com.bjsp123.rl2.model.Point(oldX, oldY)));
+            }
         }
     }
 
@@ -314,6 +326,17 @@ public class MobSystem {
                     new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(nx, ny)));
         } else if (t == Tile.DOOR_OPEN) {
             mob.lastDoorWasClosed = false;
+        } else if (t == Tile.CRYSTAL_DOOR) {
+            mob.lastDoorWasClosed = true;
+            level.tiles[nx][ny] = Tile.CRYSTAL_DOOR_OPEN;
+            if (level.events != null) level.events.add(
+                    new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(nx, ny)));
+        } else if (t == Tile.CRYSTAL_DOOR_OPEN) {
+            mob.lastDoorWasClosed = false;
+        } else if (t == Tile.ONETIME_DOOR) {
+            level.tiles[nx][ny] = Tile.FLOOR;
+            if (level.events != null) level.events.add(
+                    new com.bjsp123.rl2.event.GameEvent.OnetimeDoorBroken(new com.bjsp123.rl2.model.Point(nx, ny)));
         }
         // Oil pickup: stepping onto an OIL surface applies the OILY buff for
         // OIL_STEP_BUFF_TURNS turns. Re-applies refresh the buff (max-merge) so wading

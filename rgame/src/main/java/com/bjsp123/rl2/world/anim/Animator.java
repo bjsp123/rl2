@@ -564,6 +564,10 @@ public final class Animator {
         if (sounds != null) sounds.playAt("sfx.world.door.close", level, m.pos());
     }
 
+    void onOnetimeDoorBroken(Level level, GameEvent.OnetimeDoorBroken m) {
+        stage.add(Effect.doorBreakBurst(m.pos(), RNG));
+    }
+
     void onItemThrown(Level level, GameEvent.ItemThrown m) {
         Item it = m.item();
         Mob thrower = m.thrower();

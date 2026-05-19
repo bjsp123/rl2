@@ -46,6 +46,7 @@ final class FxRenderer {
     private static final Color TINT_BLUE   = new Color(0.4f, 0.6f, 1f, 1f);
     private static final Color TINT_BROWN  = new Color(0.55f, 0.34f, 0.16f, 1f);
     private static final Color TINT_ORANGE = new Color(1f, 0.55f, 0.1f, 1f);
+    private static final Color TINT_PINK   = new Color(1f, 0.35f, 0.65f, 1f);
     /** POWERUP_FLASH cycle: dim grey -> bright white -> warm gold. */
     private static final Color TINT_GREY   = new Color(0.55f, 0.55f, 0.55f, 1f);
     private static final Color TINT_GOLD   = new Color(1.0f, 0.85f, 0.25f, 1f);
@@ -546,12 +547,13 @@ final class FxRenderer {
             cb = cb + (1f - cb) * whiteFrac;
         }
         batch.setColor(cr, cg, cb, alpha);
+        float size = e.particleSize > 0 ? e.particleSize : AnimationVars.PARTICLE_SIZE;
         for (int i = 0; i < e.particleX0.length; i++) {
             float dx = e.particleVX[i] * t;
             float dy = e.particleVY[i] * t - 0.5f * AnimationVars.PARTICLE_GRAVITY * t * t;
             float px = baseX + e.particleX0[i] + dx;
             float py = baseY + e.particleY0[i] + dy;
-            batch.draw(whiteRegion, px, py, AnimationVars.PARTICLE_SIZE, AnimationVars.PARTICLE_SIZE);
+            batch.draw(whiteRegion, px, py, size, size);
         }
         batch.setColor(Color.WHITE);
     }
@@ -987,6 +989,8 @@ final class FxRenderer {
             case BROWN  -> TINT_BROWN;
             case ORANGE -> TINT_ORANGE;
             case CYAN  -> Color.CYAN;
+            case PINK  -> TINT_PINK;
+            default    -> fallback;
         };
     }
 }

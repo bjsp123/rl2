@@ -74,6 +74,9 @@ import java.util.Map;
  *                     dropped when the door is open so the wall above renders normally).
  *   (col 0, row  9) - RAISED_DOOR_OPEN (N/S-facing door body when open - one row
  *                     below the closed body sprite).
+ *   (col 1, row  9) - CRYSTAL_DOOR_FRONT (N/S-facing crystal/onetime door body).
+ *   (col 8, row  8) - CRYSTAL_DOOR_SIDEWAYS (E/W crystal/onetime door body, south part).
+ *   (col 9, row  8) - CRYSTAL_DOOR_SIDEWAYS_TOP (E/W crystal/onetime door body, north part).
  *   (col 17, row 1) - STATUE_SMALL (small statue, 1 cell, west-facing source -
  *                     east-facing variant produced by horizontal flip at draw time).
  *   (col 18, rows 0..1) - LAMP ornament (1x2 cells); drawn anchored at the floor
@@ -103,13 +106,19 @@ public final class TileSprites {
     public static final int WALLS_OVERHANG                =  3 * TERRAIN_COLS + 0; // +1 r-s, +2 l-s
     public static final int RAISED_WALL                   =  4 * TERRAIN_COLS + 0; // +1 r,   +2 l
     public static final int WALLS_INTERNAL                =  6 * TERRAIN_COLS + 0; // +1 r, +2 r-s, +4 l-s, +8 l
-    public static final int RAISED_DOOR                   =  8 * TERRAIN_COLS + 0;
+    public static final int DOOR_CLOSED                   =  8 * TERRAIN_COLS + 0;
     public static final int DOOR_OVERHANG                 =  8 * TERRAIN_COLS + 1;
-    public static final int RAISED_DOOR_SIDEWAYS          =  8 * TERRAIN_COLS + 2;
+    public static final int DOOR_SIDE_CLOSED_LOWER         =  8 * TERRAIN_COLS + 2;
     public static final int DOOR_SIDEWAYS_OVERHANG_CLOSED =  8 * TERRAIN_COLS + 3; // +1 r-s, +2 l-s
-    public static final int DOOR_SIDEWAYS                 =  8 * TERRAIN_COLS + 7; // wall-over-sideways-door cutout
-    /** Open-door body for the front-facing variant - one row below {@link #RAISED_DOOR}. */
-    public static final int RAISED_DOOR_OPEN              =  9 * TERRAIN_COLS + 0;
+    public static final int DOOR_SIDEWAYS_CLOSED_UPPER    =  8 * TERRAIN_COLS + 7; // wall-over-sideways-door cutout
+    /** Open-door body for the front-facing variant - one row below {@link #DOOR_CLOSED}. */
+    public static final int DOOR_OPEN                       =  9 * TERRAIN_COLS + 0;
+    /** N/S-facing crystal/onetime door body. */
+    public static final int CRYSTAL_DOOR_CLOSED            =  9 * TERRAIN_COLS + 1;
+    /** E/W crystal/onetime door body — south part, drawn at the door cell. */
+    public static final int CRYSTAL_DOOR_SIDEWAYS_CLOSED_LOWER =  8 * TERRAIN_COLS + 8;
+    /** E/W crystal/onetime door body — north part overlay, drawn at the door cell. */
+    public static final int CRYSTAL_DOOR_SIDEWAYS_CLOSED_UPPER =  8 * TERRAIN_COLS + 9;
     public static final int CHASM_FLOOR                   = 12 * TERRAIN_COLS + 0;
     public static final int CHASM_WALL                    = 12 * TERRAIN_COLS + 1;
     public static final int CHASM_WATER                   = 12 * TERRAIN_COLS + 2;
@@ -357,7 +366,8 @@ public final class TileSprites {
             case FLOOR_SPECIAL -> new int[]{SPECIAL_FLOOR_COL, SPECIAL_FLOOR_ROW, 1, 1};
             case WALL          -> new int[]{0, 4, 1, 1};
             case DOOR          -> new int[]{0, 8, 1, 1};
-            case DOOR_OPEN     -> new int[]{0, 9, 1, 1};
+            case DOOR_OPEN, CRYSTAL_DOOR_OPEN     -> new int[]{0, 9, 1, 1};
+            case CRYSTAL_DOOR, ONETIME_DOOR -> new int[]{1, 9, 1, 1};
             case CHASM         -> new int[]{0, 12, 1, 1};
             case LAMP          -> new int[]{LAMP_COL, LAMP_ROW, 1, 2};
             case STAIRS_UP     -> new int[]{STAIRS_UP_COL,   STAIRS_UP_ROW,   STAIRS_W_CELLS, STAIRS_H_CELLS};

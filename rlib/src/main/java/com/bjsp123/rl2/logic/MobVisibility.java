@@ -68,8 +68,7 @@ public final class MobVisibility {
     private static boolean blocksJump(Level level, int x, int y) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return true;
         com.bjsp123.rl2.model.Tile t = level.tiles[x][y];
-        return t == null || t == com.bjsp123.rl2.model.Tile.WALL
-                         || t == com.bjsp123.rl2.model.Tile.DOOR;
+        return t == null || t == com.bjsp123.rl2.model.Tile.WALL || t.isClosedDoor();
     }
 
     public static boolean trajectoryTouchesVisible(Level level, Point from, Point to) {
@@ -116,9 +115,6 @@ public final class MobVisibility {
     }
 
     private static boolean blocksProjectile(Level level, int x, int y) {
-        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return true;
-        if (level.tiles[x][y] == null) return true;
-        return level.tiles[x][y] == com.bjsp123.rl2.model.Tile.DOOR
-                || level.tiles[x][y].blocksMovement();
+        return com.bjsp123.rl2.model.TileQuery.blocksProjectileAt(level, x, y);
     }
 }

@@ -4,7 +4,7 @@ import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.Behavior;
 import com.bjsp123.rl2.model.Point;
-import com.bjsp123.rl2.model.Tile;
+import com.bjsp123.rl2.model.TileQuery;
 
 import java.util.Arrays;
 
@@ -87,8 +87,7 @@ public class Pathfinder {
     private static boolean canEnter(Level level, Mob mover, boolean moverFlying, int moverSize,
                                     int x, int y, int tx, int ty, Workspace ws) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
-        if (level.tiles[x][y].blocksMovement()) return false;
-        if (level.tiles[x][y] == Tile.CHASM && !moverFlying) return false;
+        if (TileQuery.blocksMovementAt(level, x, y, mover)) return false;
         if (mover.behavior == Behavior.PLAYER
                 && level.explored != null
                 && !level.explored[x][y]

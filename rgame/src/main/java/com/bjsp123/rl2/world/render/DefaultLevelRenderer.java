@@ -20,6 +20,7 @@ import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.Behavior;
 import com.bjsp123.rl2.model.Level.Surface;
 import com.bjsp123.rl2.model.Tile;
+import com.bjsp123.rl2.model.TileQuery;
 import com.bjsp123.rl2.model.Level.Vegetation;
 
 import java.util.List;
@@ -637,6 +638,24 @@ public class DefaultLevelRenderer implements LevelRenderer {
             }
         }
 
+        // Pulsing danger-symbol overlay on one-time doors. Sideways (E/W-facing)
+        // doors render their sprite body 1 cell up from the door tile, so the
+        // danger symbol shifts up by CELL to track with the visible door.
+        TextureRegion dangerSym = SurfaceSprites.dangerSymbol();
+        if (DRAW_WALLS && dangerSym != null) {
+            float alpha = 0.45f + 0.45f * (float) Math.sin(System.currentTimeMillis() * Math.PI / 900.0);
+            for (int y = view.maxY; y >= view.minY; y--) {
+                for (int x = view.minX; x <= view.maxX; x++) {
+                    if (!level.explored[x][y]) continue;
+                    if (level.tiles[x][y] != Tile.ONETIME_DOOR) continue;
+                    float dy = TileQuery.isSidewaysDoor(level, x, y) ? CELL : 0f;
+                    batch.setColor(1f, 1f, 1f, alpha);
+                    batch.draw(dangerSym, x * (float) CELL, y * (float) CELL + dy, CELL, CELL);
+                }
+            }
+            batch.setColor(1f, 1f, 1f, 1f);
+        }
+
         // Look-mode annotations layer - drawn above the world but under the fog overlay
         // so unseen tiles still darken normally. Only fires when the player is looking at
         // a mob; otherwise it's a no-op.
@@ -739,12 +758,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // neighbour to the W, failing that the default stone-floor variant. Matching the
         // neighbour's variant keeps wood-floored corridors reading as wood right up to
         // (and under) the door.
-        if (t == Tile.DOOR || t == Tile.DOOR_OPEN) {
+        if (TileQuery.isDoorAt(level, x, y)) {
             int variant = floorVisualAt(level, x, y + 1);   // N (y-up)
             if (variant < 0) variant = floorVisualAt(level, x - 1, y);
             if (variant < 0) variant = TileSprites.floorVariant(TileSprites.variantHash(x, y));
             drawTile(variant, x, y);
-            return;
+            //return;
         }
         // Stairs sit on top of a regular floor tile - the stair glyphs only carve out the
         // step geometry, not a full cell, so without the floor under them the surrounding
@@ -807,7 +826,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      */
     private void drawWallAt(Level level, int x, int y) {
         Tile t = level.tiles[x][y];
-        if (t != Tile.WALL && t != Tile.DOOR && t != Tile.DOOR_OPEN) return;
+        if (t != Tile.WALL && !t.isDoor()) return;
         int visual = terrainVisual(level, x, y);
         if (visual < 0) return;
         drawTile(visual, x, y);
@@ -1608,13 +1627,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 if (!stitchBarrier(level, x - 1, y    )) bits += 8;
                 int result = TileSprites.internalWallVariant(TileSprites.variantHash(x, y), bits);
                 drawTile(result, x, y);
-            } else if (level.tiles[x][y - 1] == Tile.DOOR) {
-                drawTile(TileSprites.DOOR_SIDEWAYS, x, y);
+            } else if (TileQuery.isSidewaysDoor(level, x, y-1) && TileQuery.isClosedDoorAt(level, x, y-1)) {
+                if(TileQuery.isCrystalDoor(level, x, y-1)) {
+                    drawTile(TileSprites.CRYSTAL_DOOR_SIDEWAYS_CLOSED_UPPER, x, y);
+                } else {
+                    drawTile(TileSprites.DOOR_SIDEWAYS_CLOSED_UPPER, x, y);
+                }
             }
             return;
         }
 
-        if ((t == Tile.DOOR || t == Tile.DOOR_OPEN) && isWallish(level, x, y - 1)) {
+        if(TileQuery.isSidewaysDoor(level, x, y)) {
                 int result = TileSprites.DOOR_SIDEWAYS_OVERHANG_CLOSED;
                 if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
                 if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
@@ -1622,7 +1645,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
             return;
         }
 
-        if (isWallish(level, x, y - 1)) {
+
+        if (TileQuery.isWallAt(level, x, y - 1)) {
             int result = TileSprites.WALLS_OVERHANG;
             if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
             if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
@@ -1632,7 +1656,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Door top paints at the cell NORTH of the door (y+1 = north in y-up) - same cell
         // as wall overhangs use. The SPD convention: the door body occupies its own cell and
         // the arched top visually sits in the tile above on screen.
-        if (level.tiles[x][y - 1] == Tile.DOOR || level.tiles[x][y - 1] == Tile.DOOR_OPEN) {
+        if (TileQuery.isDoorAt(level, x, y - 1)) {
             drawTile(TileSprites.DOOR_OVERHANG, x, y);
         }
     }
@@ -1651,7 +1675,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
             case STAIRS_UP, STAIRS_DOWN -> -1;
             case CHASM       -> -1; // handled inline
             case WALL        -> raisedWall(level, x, y);
-            case DOOR, DOOR_OPEN -> raisedDoor(level, x, y);
+            case DOOR, DOOR_OPEN, CRYSTAL_DOOR_OPEN -> raisedDoor(level, x, y);
+            case CRYSTAL_DOOR, ONETIME_DOOR ->  crystalDoor(level, x, y);
             // Statues / altar / throne all sit on a regular floor base; the ornament
             // sprite itself is layered on top in the per-cell content pass (drawStatueAt /
             // drawAltarAt / drawThroneAt) so any L/R facing flip can be applied at draw.
@@ -1710,14 +1735,18 @@ public class DefaultLevelRenderer implements LevelRenderer {
     }
 
     private int raisedDoor(Level level, int x, int y) {
-        Tile t = level.tiles[x][y];
+        if (TileQuery.isSidewaysDoor(level, x, y))
+            if(TileQuery.isClosedDoorAt(level, x, y)) 
+                return TileSprites.DOOR_SIDE_CLOSED_LOWER;
+            else
+                return -1;
+            
+        return TileQuery.isClosedDoorAt(level, x, y) ? TileSprites.DOOR_CLOSED : TileSprites.DOOR_OPEN;
+    }
 
-        
-        // Sideways door (wall-flanked along the N/S axis): same body sprite for open and
-        // closed; the difference shows in the dropped overlays handled by drawWallOverlayAt.
-        // Front-facing door swaps the body sprite for the row-9 "open" variant when open.
-        if (isWallish(level, x, y - 1)) return TileSprites.RAISED_DOOR_SIDEWAYS;
-        return t == Tile.DOOR_OPEN ? TileSprites.RAISED_DOOR_OPEN : TileSprites.RAISED_DOOR;
+    private int crystalDoor(Level level, int x, int y) {
+        if (TileQuery.isSidewaysDoor(level, x, y)) return TileSprites.CRYSTAL_DOOR_SIDEWAYS_CLOSED_LOWER;
+        return TileQuery.isClosedDoorAt(level, x, y) ? TileSprites.CRYSTAL_DOOR_CLOSED : TileSprites.DOOR_OPEN;
     }
 
     private static boolean isWallish(Level level, int x, int y) {

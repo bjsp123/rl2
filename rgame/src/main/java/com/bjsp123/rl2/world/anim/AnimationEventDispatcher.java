@@ -45,5 +45,6 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.MobAbilityUsed m)        animator.onMobAbilityUsed(level, m);
         else if (ev instanceof GameEvent.DoorOpened m)            animator.onDoorOpened(level, m);
         else if (ev instanceof GameEvent.DoorClosed m)            animator.onDoorClosed(level, m);
+        else if (ev instanceof GameEvent.OnetimeDoorBroken m)     animator.onOnetimeDoorBroken(level, m);
     }
 }

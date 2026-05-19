@@ -102,6 +102,8 @@ public final class StatBlock {
      *  *suppress* terrifiable, that's a separate "fearlessness" boolean). Default true,
      *  factories clear it on terrifying mobs themselves. */
     public boolean terrifiable = true;
+    /** Mob will not willingly enter a lit tile. OR-merged. */
+    public boolean hatesLight = false;
 
     public StatBlock() {}
 
@@ -136,6 +138,7 @@ public final class StatBlock {
         knockbackSquares = 0;
         terrifying  = false;
         terrifiable = false;
+        hatesLight  = false;
         return this;
     }
 
@@ -171,6 +174,7 @@ public final class StatBlock {
         knockbackSquares = src.knockbackSquares;
         terrifying  = src.terrifying;
         terrifiable = src.terrifiable;
+        hatesLight  = src.hatesLight;
         return this;
     }
 
@@ -215,6 +219,7 @@ public final class StatBlock {
         knockbackSquares += other.knockbackSquares;
         if (other.terrifying)         terrifying         = true;
         if (other.terrifiable)        terrifiable        = true;
+        if (other.hatesLight)         hatesLight         = true;
         return this;
     }
 }

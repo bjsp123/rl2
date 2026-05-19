@@ -56,6 +56,7 @@ public final class MobDefinition {
     public boolean poisonsOnAttack;
     public boolean terrifying;
     public boolean terrifiable = true;  // StatBlock default
+    public boolean hatesLight;
     public double  eatSpawnChance;
     public double  mushroomEatSpawnChance;
     public double  turnSpawnChance;
@@ -249,6 +250,7 @@ public final class MobDefinition {
         d.poisonsOnAttack     = CsvTable.boolCell(row, "poisonsOnAttack", false);
         d.terrifying          = CsvTable.boolCell(row, "terrifying", false);
         d.terrifiable         = CsvTable.boolCell(row, "terrifiable", true);
+        d.hatesLight          = CsvTable.boolCell(row, "hatesLight", false);
 
         d.eatSpawnChance         = CsvTable.dblCell(row, "eatSpawnChance", 0);
         d.mushroomEatSpawnChance = CsvTable.dblCell(row, "mushroomEatSpawnChance", 0);
@@ -443,6 +445,7 @@ public final class MobDefinition {
         m.intrinsic.poisonsOnAttack    = poisonsOnAttack;
         m.intrinsic.terrifying         = terrifying;
         m.intrinsic.terrifiable        = terrifiable;
+        m.intrinsic.hatesLight         = hatesLight;
 
         m.intrinsic.eatSpawnChance         = eatSpawnChance;
         m.intrinsic.mushroomEatSpawnChance = mushroomEatSpawnChance;

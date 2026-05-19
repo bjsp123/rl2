@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.world.render;
 import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
+import com.bjsp123.rl2.world.anim.AnimationVars;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Point;
@@ -101,7 +102,7 @@ public class Effect {
     }
 
     public enum EffectTint {
-        RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN
+        RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN, PINK
     }
 
     private static final float TILE_PX = 16f;
@@ -555,6 +556,45 @@ public class Effect {
             e.particleVX[i] = (rng.nextFloat() - 0.5f) * 0.5f;
             e.particleVY[i] = 1.5f + rng.nextFloat() * 1.0f;
             e.particleSpawnFrame[i] = rng.nextInt(3);
+        }
+        return e;
+    }
+
+    /** Particle burst when the player smashes a one-time door. Two layers: a radial
+     *  outward spray of shards and a cluster of upward-arcing splinters that rise
+     *  4-8 px then fall back under gravity. Pink tint, chunky particles, non-blocking. */
+    public static Effect doorBreakBurst(Point location, Random rng) {
+        int radialCount  = 14;
+        int splashCount  = 16;
+        int count        = radialCount + splashCount;
+        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
+        e.tint         = EffectTint.PINK;
+        e.ignoresFov   = true;
+        e.particleSize = 3f;
+        e.particleX0 = new float[count];
+        e.particleY0 = new float[count];
+        e.particleVX = new float[count];
+        e.particleVY = new float[count];
+        float cx = TILE_PX * 0.5f;
+        float cy = TILE_PX * 0.35f;   // feet height
+        // Radial shards - spread at even angles, moderate outward speed.
+        for (int i = 0; i < radialCount; i++) {
+            float angle = (float)(i * Math.PI * 2.0 / radialCount) + rng.nextFloat() * 0.4f;
+            float speed = 0.5f + rng.nextFloat() * 0.7f;
+            e.particleX0[i] = cx + (rng.nextFloat() - 0.5f) * 4f;
+            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 3f;
+            e.particleVX[i] = (float) Math.cos(angle) * speed;
+            e.particleVY[i] = (float) Math.sin(angle) * speed;
+        }
+        // Upward-arcing splinters - vy chosen so peak height is 4-8 px.
+        for (int i = 0; i < splashCount; i++) {
+            int j = radialCount + i;
+            float h  = 4f + rng.nextFloat() * 4f;
+            float vy = (float) Math.sqrt(2.0 * AnimationVars.PARTICLE_GRAVITY * h);
+            e.particleX0[j] = cx + (rng.nextFloat() - 0.5f) * 6f;
+            e.particleY0[j] = cy + (rng.nextFloat() - 0.5f) * 2f;
+            e.particleVX[j] = (rng.nextFloat() - 0.5f) * 0.8f;
+            e.particleVY[j] = vy;
         }
         return e;
     }

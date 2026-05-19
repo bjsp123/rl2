@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.model;
 
 public enum Tile {
-    FLOOR, FLOOR_WOOD, WALL, DOOR, DOOR_OPEN, CHASM, LAMP, STAIRS_UP, STAIRS_DOWN,
+    FLOOR, FLOOR_WOOD, WALL, DOOR, DOOR_OPEN, CRYSTAL_DOOR_OPEN, CHASM, LAMP, STAIRS_UP, STAIRS_DOWN,
     /** Decorative "special floor" - walkable like FLOOR but rendered with the
      *  special-floor sprite. Adjacent regular-FLOOR cells receive an edge or
      *  corner overlay so the special-floor patch reads as a distinct surface. */
@@ -21,15 +21,37 @@ public enum Tile {
      *  the upper half overhanging into the cell to the north (same convention
      *  as the lamp / large statue). Source art faces west; {@code _R} flips
      *  the sprite at draw time. Blocks movement, not sight. */
-    THRONE_L, THRONE_R;
+    THRONE_L, THRONE_R,
+    /** Transparent door  blocking all movement and ranged attacks.
+     *  Light and sight pass through freely. Used for stair-up rooms. */
+    CRYSTAL_DOOR,
+    /** Like CRYSTAL_DOOR but converts to FLOOR when the player steps through.
+     *  Monsters can never pass. Shows a pulsing danger symbol overlay. */
+    ONETIME_DOOR;
 
-    /** True only if no mob can ever cross. CHASM is per-mob, handled by MobSystem. */
+    /** True for any door state (open, closed, crystal, one-time). */
+    public boolean isDoor() {
+        return this == DOOR || this == DOOR_OPEN ||this == CRYSTAL_DOOR_OPEN || this == CRYSTAL_DOOR || this == ONETIME_DOOR;
+    }
+
+    /** True for any door that is currently closed (blocks passage and projectiles). */
+    public boolean isClosedDoor() {
+        return this == DOOR || this == CRYSTAL_DOOR || this == ONETIME_DOOR;
+    }
+
+    /** True only if no mob can ever cross. CHASM is per-mob; ONETIME_DOOR is
+     *  per-mob — both handled by TileQuery.blocksMovementAt. */
     public boolean blocksMovement() {
         return this == WALL || this == LAMP
             || this == STATUE_SMALL_L || this == STATUE_SMALL_R
             || this == STATUE_LARGE_L || this == STATUE_LARGE_R
             || this == ALTAR
             || this == THRONE_L || this == THRONE_R;
+    }
+
+    /** True if the tile stops a projectile or wand ray. */
+    public boolean blocksProjectile() {
+        return isClosedDoor() || blocksMovement();
     }
 
     public boolean blocksSight() {

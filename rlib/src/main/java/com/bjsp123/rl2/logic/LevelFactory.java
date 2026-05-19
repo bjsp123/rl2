@@ -167,11 +167,18 @@ public final class LevelFactory {
         // stamping below mutates the working list (claimed unique rooms get
         // removed), but the snapshot preserves the full layout.
         for (int[] r : rooms) level.rooms.add(new Level.RoomSnapshot(r[0], r[1], r[2], r[3]));
+        int reservedBefore = level.reservedRects.size();
         LevelFactoryThemedRooms.stampUniqueRoom(level, rooms, unique, rng);
+        for (int i = reservedBefore; i < level.reservedRects.size(); i++) {
+            changeRoomDoors(level, level.reservedRects.get(i), Tile.DOOR, Tile.ONETIME_DOOR);
+        }
         LevelFactoryThemedRooms.stampRegularThemedRooms(level, rooms, rng);
         LevelFactoryUtils.pruneOrphanDoors(level);
 
         placeStairs(level, rooms, hasUp, hasDown, rng);
+        if (hasUp && !rooms.isEmpty()) {
+            changeRoomDoors(level, rooms.get(0), Tile.DOOR, Tile.CRYSTAL_DOOR);
+        }
 
         LevelFactoryPopulate.placeWaterPools(level, rng);
         LevelFactoryPopulate.placeVegetation(level, rng);
@@ -992,6 +999,23 @@ public final class LevelFactory {
         if (x <= 0 || y <= 0 || x >= level.width - 1 || y >= level.height - 1) return;
         Tile t = level.tiles[x][y];
         if (t == Tile.FLOOR || t == Tile.FLOOR_WOOD) level.tiles[x][y] = Tile.DOOR;
+    }
+
+    private static void changeRoomDoors(Level level, int[] room, Tile from, Tile to) {
+        int x0 = room[0], y0 = room[1], w = room[2], h = room[3];
+        for (int x = x0 - 1; x <= x0 + w; x++) {
+            swapDoor(level, x, y0 - 1, from, to);
+            swapDoor(level, x, y0 + h, from, to);
+        }
+        for (int y = y0; y < y0 + h; y++) {
+            swapDoor(level, x0 - 1, y, from, to);
+            swapDoor(level, x0 + w, y, from, to);
+        }
+    }
+
+    private static void swapDoor(Level level, int x, int y, Tile from, Tile to) {
+        if (x <= 0 || y <= 0 || x >= level.width - 1 || y >= level.height - 1) return;
+        if (level.tiles[x][y] == from) level.tiles[x][y] = to;
     }
 
     // -------------------------------------------------------------------------

@@ -60,7 +60,8 @@ public sealed interface GameEvent permits
         GameEvent.MobJumped,
         GameEvent.MobAbilityUsed,
         GameEvent.DoorOpened,
-        GameEvent.DoorClosed {
+        GameEvent.DoorClosed,
+        GameEvent.OnetimeDoorBroken {
 
     /** Mob took a single tile step. The animator translates this into a step interpolation. */
     record MobMoved(Mob mob, int fromX, int fromY, int toX, int toY) implements GameEvent {}
@@ -243,4 +244,7 @@ public sealed interface GameEvent permits
 
     record DoorOpened(Point pos) implements GameEvent {}
     record DoorClosed(Point pos) implements GameEvent {}
+
+    /** Player smashed a one-time door — tile has already been converted to FLOOR. */
+    record OnetimeDoorBroken(Point pos) implements GameEvent {}
 }

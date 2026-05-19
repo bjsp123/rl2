@@ -3,7 +3,7 @@ package com.bjsp123.rl2.logic;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
-import com.bjsp123.rl2.model.Tile;
+import com.bjsp123.rl2.model.TileQuery;
 
 /** Pure lookup and occupancy helpers for mobs on a level. */
 public final class MobQueries {
@@ -13,9 +13,7 @@ public final class MobQueries {
     /** Returns true if a non-INANIMATE mob or wall blocks the given tile. */
     public static boolean blocksMovement(Level level, Mob self, Point p) {
         int x = p.tileX(), y = p.tileY();
-        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return true;
-        if (level.tiles[x][y].blocksMovement()) return true;
-        if (level.tiles[x][y] == Tile.CHASM && !self.effectiveStats().flying) return true;
+        if (TileQuery.blocksMovementAt(level, x, y, self)) return true;
         for (Mob m : level.mobs) {
             if (m == self) continue;
             if (m.position.tileX() == x && m.position.tileY() == y) return true;

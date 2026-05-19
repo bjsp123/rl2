@@ -52,6 +52,7 @@ public final class SurfaceSprites {
 
     // Raw atlas sheet - kept for UI regions and in-world vegetation regions.
     private static Texture sheet;
+    private static TextureRegion dangerSymbolRegion;
     // In-world per-liquid textures (Linear+Repeat for the scroll shader).
     private static Map<Surface, Texture> liquidTextures;
     // In-world vegetation variants, direct regions on surfaces.png.
@@ -71,6 +72,13 @@ public final class SurfaceSprites {
     private SurfaceSprites() {}
 
     // -- UI region accessors -------------------------------------------------
+
+    /** Danger-symbol overlay sprite (surfaces.png row 0, col 2, 32-px cell).
+     *  Used for the pulsing overlay on ONETIME_DOOR tiles. */
+    public static TextureRegion dangerSymbol() {
+        if (dangerSymbolRegion == null) load();
+        return dangerSymbolRegion;
+    }
 
     public static TextureRegion regionFor(Surface s) {
         if (surfaceRegions == null) load();
@@ -124,6 +132,7 @@ public final class SurfaceSprites {
             sheetPm = new Pixmap(Gdx.files.internal(SURFACES_PATH));
             SpriteAtlas.load();
             sheet = SpriteAtlas.texture();
+            dangerSymbolRegion = new TextureRegion(sheet, 2 * VEG_CELL, SpriteAtlas.surfacesY(), VEG_CELL, VEG_CELL);
             int sw = sheetPm.getWidth(), sh = sheetPm.getHeight();
 
             liquidTextures = new EnumMap<>(Surface.class);
@@ -246,6 +255,7 @@ public final class SurfaceSprites {
     /** Release every cached Texture. Subsequent accessors reload on demand. */
     public static void disposeShared() {
         sheet = null; // owned by SpriteAtlas
+        dangerSymbolRegion = null;
         if (iceTex != null) { iceTex.dispose(); iceTex = null; }
         if (fire1Tex != null) { fire1Tex.dispose(); fire1Tex = null; }
         if (fire2Tex != null) { fire2Tex.dispose(); fire2Tex = null; }

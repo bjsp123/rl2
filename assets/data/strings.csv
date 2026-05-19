@@ -671,6 +671,8 @@ tile.ALTAR,altar
 tile.CHASM,chasm
 tile.DOOR,door
 tile.DOOR_OPEN,open door
+tile.CRYSTAL_DOOR,crystal door
+tile.CRYSTAL_DOOR_OPEN,open crystal door
 tile.FLOOR,floor
 tile.FLOOR_SPECIAL,floor
 tile.FLOOR_WOOD,wooden floor
