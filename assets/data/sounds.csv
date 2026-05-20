@@ -76,6 +76,7 @@ sfx.player.move.straightforward.1,sfx/steps/Steps_tiles-001.ogg
 sfx.player.move.straightforward.2,sfx/steps/Steps_tiles-001.ogg
 sfx.world.door.open,sfx/door_wood_open_01.wav
 sfx.world.door.close,sfx/door_wood_close_02.wav
+sfx.world.door.break,sfx/t_magic_spell_ice_06.wav
 sfx.player.equip,sfx/t_ui_equip_gear.wav
 sfx.player.equip.weapon,sfx/ui_equip_metal_04.wav
 sfx.player.equip.offhand,

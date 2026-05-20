@@ -290,6 +290,14 @@ public final class Animator {
         MobAnimState s = states.get(player);
         if (s == null || s.stepTotal <= 0 || s.delayFrames > 0) return;
         if (!MobSystem.isVisibleToPlayer(level, player)) return;
+        // No dust on surface (water / oil / blood / ice) or vegetation (grass /
+        // mushrooms / trees / fire) tiles — splashes handle those instead.
+        int destX = player.position.tileX();
+        int destY = player.position.tileY();
+        if (destX >= 0 && destY >= 0 && destX < level.width && destY < level.height) {
+            if (level.surface    != null && level.surface[destX][destY]    != null) return;
+            if (level.vegetation != null && level.vegetation[destX][destY] != null) return;
+        }
 
         float t = Math.min(1f, s.stepFrame / (float) s.stepTotal);
         float visualTX = player.position.tileX() + s.stepFromDx * (1f - t);
@@ -378,6 +386,12 @@ public final class Animator {
                 case ICE   -> Effect.EffectTint.WHITE;
             };
             stage.add(Effect.footSplash(new Point(m.toX(), m.toY()), tint, RNG));
+        } else if (m.mob() != null && m.mob().behavior == Mob.Behavior.PLAYER
+                && level.vegetation != null
+                && level.vegetation[m.toX()][m.toY()] == Level.Vegetation.GRASS) {
+            // Player stepping into grass kicks up a pale-green splash. Green tint
+            // blends to white over the lifetime, reading as pale green throughout.
+            stage.add(Effect.footSplash(new Point(m.toX(), m.toY()), Effect.EffectTint.GREEN, RNG));
         }
     }
 
@@ -406,7 +420,7 @@ public final class Animator {
         boolean isPlayer = attacker.behavior == Mob.Behavior.PLAYER;
         float flashDelay = (n > 0f) ? stateOf(attacker).delayFrames : 0;
         stage.add(Effect.attackFlash(attacker.position, isPlayer,
-                attacker.facingEast, flashDelay));
+                attacker.facingEast, (int) flashDelay));
         if (sounds != null) {
             if (isPlayer) sounds.playAt("sfx.player.attack.melee", level, attacker.position);
             else sounds.playAt("sfx.mob.attack.melee" + (attacker.mobType != null ? "." + attacker.mobType.toLowerCase() : ""), level, attacker.position);
@@ -482,7 +496,9 @@ public final class Animator {
                 && m.caster().rangedDamageType == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL;
         Effect missile = physical
                 ? Effect.physicalMissile(m.from(), m.to())
-                : Effect.magicMissile(m.from(), m.to(), RNG);
+                : Effect.magicMissile(m.from(), m.to(), null, Effect.EffectTint.WHITE,
+                                      com.bjsp123.rl2.world.anim.AnimationVars.PARTICLE_GRAVITY,
+                                      1.5f, false, RNG);
         stage.add(missile);
         if (m.trajectoryVisible()) {
             queue.sequential(missile.totalFrames());
@@ -565,8 +581,7 @@ public final class Animator {
     }
 
     void onOnetimeDoorBroken(Level level, GameEvent.OnetimeDoorBroken m) {
-        stage.add(Effect.doorBreakBurst(m.pos(), RNG));
-        stage.add(Effect.doorBreakSplash(m.pos(), RNG));
+        Effect.doorBreakEffect(stage, sounds, level, m.pos(), RNG);
     }
 
     void onItemThrown(Level level, GameEvent.ItemThrown m) {
@@ -1279,7 +1294,7 @@ public final class Animator {
                 size = baseSize;
             }
         }
-        return Effect.magicMissileColored(from, to, palette, head, gravity, size, bright, RNG);
+        return Effect.magicMissile(from, to, palette, head, gravity, size, bright, RNG);
     }
 
     // -- Sound key helpers ----------------------------------------------------------

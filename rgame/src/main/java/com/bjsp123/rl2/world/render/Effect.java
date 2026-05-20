@@ -3,7 +3,13 @@ import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
+import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
+import com.bjsp123.rl2.audio.SoundManager;
+import com.bjsp123.rl2.world.anim.AnimationVars;
+import com.bjsp123.rl2.world.render.EffectBuilder.FlashStyle;
+import com.bjsp123.rl2.world.render.EffectBuilder.HoverStyle;
+import com.bjsp123.rl2.world.render.EffectBuilder.StreakDirection;
 
 import java.util.Random;
 
@@ -16,6 +22,12 @@ import java.util.Random;
  *
  * <p>Owns its own {@code frame} counter advanced once per render frame by
  * {@link EffectStage#tick()}; finished effects are removed.
+ *
+ * <p><b>Layering.</b> Every factory in this class is a thin game-named wrapper that
+ * delegates to one or more {@link EffectBuilder} primitives. Each factory either
+ * freezes parameter values as game-visual decisions (specific counts, durations,
+ * palettes) or composes multiple primitives into a named game event. Game-name is
+ * the value-add; the underlying parameter-space lives in {@link EffectBuilder}.
  */
 public class Effect {
     public enum EffectType {
@@ -104,8 +116,8 @@ public class Effect {
         RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN, PINK, MAUVE
     }
 
-    private static final float TILE_PX = 16f;
-    private static final float MAGIC_MISSILE_FLIGHT_FRACTION = 0.7f;
+    /** Pixel pitch of one tile — matches the renderer's CELL size. */
+    private static final float CELL = 16f;
 
     public Point location;
     public Point endLocation;
@@ -206,203 +218,101 @@ public class Effect {
         return frameCount > 0 ? frameCount : type.frameCount;
     }
 
-    private static int framesForDistance(Point from, Point to, float pxPerFrame) {
-        float dxTiles = to.tileX() - from.tileX();
-        float dyTiles = to.tileY() - from.tileY();
-        float distPx  = (float) Math.sqrt(dxTiles * dxTiles + dyTiles * dyTiles) * TILE_PX;
-        return Math.max(1, Math.round(distPx / pxPerFrame));
-    }
+    // ====================================================================
+    // Game-named factories. Each is a thin wrapper over EffectBuilder that
+    // freezes 1-3 game-visual decisions (counts, durations, palettes, etc.)
+    // or composes multiple primitives into a single named game event.
+    // ====================================================================
 
     public static Effect floatingText(Point location, String text, EffectTint tint) {
-        Effect e = new Effect(location, EffectType.FLOATING_TEXT);
-        e.text = text;
-        e.tint = tint;
-        return e;
+        return EffectBuilder.hoverText(location, text, tint, 0, EffectType.FLOATING_TEXT.frameCount);
     }
 
     public static Effect thrownItem(Point from, Point to, Item item) {
-        Effect e = new Effect(from, EffectType.THROWN_ITEM);
-        e.endLocation = to;
-        e.thrownItem = item;
-        e.frameCount = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.THROWN_ITEM_PX_PER_FRAME);
-        return e;
+        return EffectBuilder.arcItem(from, to, item, /*spinDeg*/ 360f, /*endScale*/ 1f,
+                /*arcHeightPx*/ CELL * 0.5f, /*blocking*/ true,
+                EffectBuilder.framesForDistance(from, to, AnimationVars.THROWN_ITEM_PX_PER_FRAME));
     }
 
-    /** Loot-on-death toss - same shape as {@link #thrownItem} (arc + spin) but
-     *  uses the non-blocking {@link EffectType#LOOT_TOSS} type so the death
-     *  animation doesn't gate the next mob's turn. */
+    /** Loot-on-death toss - same arc + spin as {@link #thrownItem} but non-blocking. */
     public static Effect lootToss(Point from, Point to, Item item) {
-        Effect e = new Effect(from, EffectType.LOOT_TOSS);
-        e.endLocation = to;
-        e.thrownItem = item;
-        e.frameCount = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.THROWN_ITEM_PX_PER_FRAME);
-        return e;
+        return EffectBuilder.arcItem(from, to, item, /*spinDeg*/ 360f, /*endScale*/ 1f,
+                /*arcHeightPx*/ CELL * 0.5f, /*blocking*/ false,
+                EffectBuilder.framesForDistance(from, to, AnimationVars.THROWN_ITEM_PX_PER_FRAME));
     }
 
-    /** Pickup toss - item flies off {@code from}'s tile toward the screen's
-     *  bottom-right corner, shrinking and fading as it goes. Non-blocking. */
+    /** Pickup toss - item flies off {@code from} toward the inventory tab. */
     public static Effect pickupToss(Point from, Item item) {
-        Effect e = new Effect(from, EffectType.PICKUP_TOSS);
-        e.thrownItem = item;
-        return e;
+        return EffectBuilder.pickupToss(from, item);
     }
 
-    public static Effect attackFlash(Point at, boolean isPlayer, boolean facesRight) {
-        return attackFlash(at, isPlayer, facesRight, 0);
-    }
-
-    /** Attack-flash with a render-frame start delay. {@code startDelay} parks the
-     *  effect at frame 0 for that many frames before it begins playing - used to
-     *  stagger flashes when multiple mobs attack on the same tick so the slashes
-     *  appear in sequence rather than overlapping. */
+    /** Attack-flash on a tile, with required {@code startDelay} (pass 0 for none). */
     public static Effect attackFlash(Point at, boolean isPlayer, boolean facesRight,
-                                     float startDelay) {
-        Effect e = new Effect(at, EffectType.ATTACK_FLASH);
-        e.spriteCol = isPlayer ? 0 : 1;
+                                     int startDelay) {
+        Effect e = EffectBuilder.flash(at,
+                isPlayer ? FlashStyle.ATTACK_PLAYER : FlashStyle.ATTACK_NPC,
+                null, startDelay, EffectType.ATTACK_FLASH.frameCount, null);
         e.facesRight = facesRight;
-        e.startDelay = (int)Math.max(0f, startDelay);
         return e;
     }
 
-    /** Knockback flash on a unit's tile. {@code startDelay} parks the
-     *  effect at frame 0 for that many render frames before the flash
-     *  begins - used to wait until a knockback slide finishes so the
-     *  graphic appears ON the unit at its destination, not at the
-     *  midpoint of the slide. */
     public static Effect knockbackFlash(Point at, int startDelay) {
-        Effect e = new Effect(at, EffectType.KNOCKBACK_FLASH);
-        e.startDelay = Math.max(0, startDelay);
-        return e;
+        return EffectBuilder.flash(at, FlashStyle.KNOCKBACK, null, startDelay,
+                EffectType.KNOCKBACK_FLASH.frameCount, null);
     }
 
     public static Effect surpriseIcon(Point at) {
-        return new Effect(at, EffectType.SURPRISE_ICON);
+        return EffectBuilder.flash(at, FlashStyle.SURPRISE, null, 0,
+                EffectType.SURPRISE_ICON.frameCount, null);
     }
 
-    /** Foot-dust cloud - anchored to the spawning mob's foot in world
-     *  pixel coords with a per-frame drift in the mob's move direction.
-     *  Each cloud randomises its starting size and grey-shade for
-     *  visual variety. {@code tileX/tileY} is the tile under the spawn
-     *  point - used by the renderer's per-tile dust-tint lookup and the
-     *  level-visibility cull. */
+    /** Foot-dust cloud — random 20..36 frame lifetime for per-puff variety. */
     public static Effect dustCloud(int tileX, int tileY,
                                    float pxX, float pxY,
                                    float vxPxPerFrame, float vyPxPerFrame,
                                    Random rng) {
-        Effect e = new Effect(new Point(tileX, tileY), EffectType.DUST_CLOUD);
-        e.dustPxX = pxX;
-        e.dustPxY = pxY;
-        e.dustVxPxPerFrame = vxPxPerFrame;
-        e.dustVyPxPerFrame = vyPxPerFrame;
-        e.dustStartW = 4f + rng.nextFloat() * 3f;       // 4..7 px
-        e.dustShade  = 1.0f + rng.nextFloat() * 0.30f;  // 1.0..1.3 (paler)
-        // Per-cloud duration jitter - overrides EffectType.DUST_CLOUD's
-        // default so a batch of clouds doesn't all fade out on the same
-        // beat. ~ 333..600 ms at the default render cadence.
-        e.frameCount = 20 + rng.nextInt(17);             // 20..36 frames
-        return e;
+        return EffectBuilder.driftCloud(tileX, tileY, pxX, pxY, vxPxPerFrame, vyPxPerFrame,
+                /*cloudType*/ null, 20 + rng.nextInt(17), rng);
     }
 
-    /** One soft tinted ellipse spawned from a cloud-layer cell. The puff
-     *  appears at ({@code pxX}, {@code pxY}) within the cell, expands to
-     *  ~2x its starting width over its lifetime, drifts at the supplied
-     *  per-frame velocity, and fades out. Use many per tile per second
-     *  (rate driven by the cell's duration) to read as a body of gas. */
+    /** Cloud-layer puff — random 36..53 frame lifetime, type-tinted. */
     public static Effect cloudPuff(int tileX, int tileY,
                                    float pxX, float pxY,
                                    float vxPxPerFrame, float vyPxPerFrame,
                                    Level.Cloud type, Random rng) {
-        Effect e = new Effect(new Point(tileX, tileY), EffectType.CLOUD_PUFF);
-        e.dustPxX = pxX;
-        e.dustPxY = pxY;
-        e.dustVxPxPerFrame = vxPxPerFrame;
-        e.dustVyPxPerFrame = vyPxPerFrame;
-        e.dustStartW = 5f + rng.nextFloat() * 4f;       // 5..9 px base
-        e.cloudType  = type;
-        // Lifetime jitter so a batch of puffs from the same tile doesn't
-        // all fade on the same beat - ~ 600..900 ms at the default render
-        // cadence.
-        e.frameCount = 36 + rng.nextInt(18);            // 36..53 frames
-        return e;
+        return EffectBuilder.driftCloud(tileX, tileY, pxX, pxY, vxPxPerFrame, vyPxPerFrame,
+                type, 36 + rng.nextInt(18), rng);
     }
 
-    public static Effect magicMissile(Point from, Point to, Random rng) {
-        Effect e = new Effect(from, EffectType.MAGIC_MISSILE);
-        e.endLocation = to;
-        int flightFrames = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
-        int flightEnd    = flightFrames;
-        e.frameCount     = Math.max(1, Math.round(flightFrames / MAGIC_MISSILE_FLIGHT_FRACTION));
-        e.impactFrame    = flightEnd;
-        int count = 24;
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        e.particleSpawnFrame = new int[count];
-        for (int i = 0; i < count; i++) {
-            e.particleSpawnFrame[i] = (int) Math.round(i * (flightEnd - 1f) / Math.max(1, count - 1));
-            e.particleX0[i] = (rng.nextFloat() - 0.5f) * 4f;
-            e.particleY0[i] = (rng.nextFloat() - 0.5f) * 4f;
-            e.particleVX[i] = (rng.nextFloat() - 0.5f) * 1.2f;
-            e.particleVY[i] = (rng.nextFloat() - 0.5f) * 1.2f;
-        }
-        return e;
+    /**
+     * Magic-missile projectile (head + trail). A magic missile is conceptually
+     * <i>projectile + impact-burst</i>; this factory produces the projectile half.
+     * The impact burst is fired separately by the caller's pendingImpact callback
+     * (see {@link #wandImpactBurst}).
+     *
+     * <p>Pass {@code palette = null} for the plain basic-ranged look (24-particle
+     * trail); pass a wand-element palette + element-tinted head for the wand cast
+     * (36-particle trail). Trail count is derived from whether {@code palette} is
+     * non-null. Velocity jitter is also derived (plain trails wobble more loosely;
+     * coloured wand trails are tighter).
+     */
+    public static Effect magicMissile(Point from, Point to,
+                                      EffectTint[] palette, EffectTint headTint,
+                                      float particleGravity, float particleSize,
+                                      boolean bright, Random rng) {
+        int trailCount   = (palette == null) ? 24   : 36;
+        float velJitter  = (palette == null) ? 1.2f : 0.8f;
+        return EffectBuilder.projectile(from, to, palette, headTint,
+                particleGravity, particleSize, bright, trailCount, velJitter, rng);
     }
 
-    public static Effect magicMissileColored(Point from, Point to,
-                                             EffectTint[] palette, EffectTint headTint,
-                                             float gravity, float size, boolean bright,
-                                             Random rng) {
-        Effect e = new Effect(from, EffectType.MAGIC_MISSILE);
-        e.endLocation     = to;
-        e.particleTints   = palette;
-        e.headTint        = headTint;
-        e.particleGravity = gravity;
-        e.particleSize    = size;
-        e.particleBright  = bright;
-        int flightFrames = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
-        int flightEnd    = flightFrames;
-        e.frameCount     = Math.max(1, Math.round(flightFrames / MAGIC_MISSILE_FLIGHT_FRACTION));
-        e.impactFrame    = flightEnd;
-        int count = 36;
-        e.particleX0         = new float[count];
-        e.particleY0         = new float[count];
-        e.particleVX         = new float[count];
-        e.particleVY         = new float[count];
-        e.particleSpawnFrame = new int[count];
-        for (int i = 0; i < count; i++) {
-            e.particleSpawnFrame[i] = (int) Math.round(i * (flightEnd - 1f) / Math.max(1, count - 1));
-            e.particleX0[i] = (rng.nextFloat() - 0.5f) * 4f;
-            e.particleY0[i] = (rng.nextFloat() - 0.5f) * 4f;
-            e.particleVX[i] = (rng.nextFloat() - 0.5f) * 0.8f;
-            e.particleVY[i] = (rng.nextFloat() - 0.5f) * 0.8f;
-        }
-        return e;
-    }
-
-    /** Radial particle burst spawned when a wand missile visually arrives.
-     *  Particles fire outward from the tile centre, coloured to match the element. */
+    /** Impact-burst half of a magic missile — 20 element-tinted sparks at the
+     *  arrival tile. Element drives the tint via {@link #wandElementTint}. */
     public static Effect wandImpactBurst(Point location, Item.ItemEffect element, Random rng) {
-        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
-        e.ignoresFov = true;
-        e.tint = wandElementTint(element);
-        int count = 20;
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        e.particleSpawnFrame = new int[count]; // all spawn at frame 0
-        float cx = TILE_PX * 0.5f;
-        float cy = TILE_PX * 0.5f;
-        for (int i = 0; i < count; i++) {
-            float angle = (float)(i * Math.PI * 2.0 / count) + rng.nextFloat() * 0.3f;
-            float speed = 1.5f + rng.nextFloat() * 1.5f;
-            e.particleX0[i] = cx;
-            e.particleY0[i] = cy;
-            e.particleVX[i] = (float) Math.cos(angle) * speed;
-            e.particleVY[i] = (float) Math.sin(angle) * speed;
-        }
-        return e;
+        return EffectBuilder.burst(location, wandElementTint(element),
+                /*count*/ 20, /*speedMin*/ 1.5f, /*speedMax*/ 3f,
+                /*size*/ 1.5f, /*bright*/ false,
+                /*duration*/ EffectType.PARTICLE_BURST.frameCount, rng);
     }
 
     private static EffectTint wandElementTint(Item.ItemEffect element) {
@@ -417,289 +327,124 @@ public class Effect {
     }
 
     public static Effect sleepZ(Point location, Random rng) {
-        Effect e = new Effect(location, EffectType.SLEEP_Z);
-        e.particleX0 = new float[]{ (rng.nextFloat() - 0.5f) * 6f };
-        e.particleY0 = new float[]{ rng.nextFloat() * (float) (Math.PI * 2) };
-        return e;
+        return EffectBuilder.sleepZ(location, rng);
     }
 
     public static Effect lightMote(Point location, Random rng) {
-        Effect e = new Effect(location, EffectType.LIGHT_MOTE);
-        e.particleX0 = new float[]{ rng.nextFloat() * (float) (Math.PI * 2) };
-        e.particleY0 = new float[]{ (rng.nextFloat() - 0.5f) * 6f };
-        e.particleVX = new float[]{ 0.7f + rng.nextFloat() * 0.6f };
-        return e;
+        return EffectBuilder.lightMote(location, rng);
     }
 
     public static Effect fireParticle(Point location, Random rng) {
-        Effect e = new Effect(location, EffectType.FIRE_PARTICLE);
-        e.particleX0 = new float[]{ rng.nextFloat() * (float) (Math.PI * 2) };
-        e.particleY0 = new float[]{ 1.0f + rng.nextFloat() * 1.5f };
-        e.particleVX = new float[]{ -1.5f + rng.nextFloat() * 3f };
-        return e;
+        return EffectBuilder.fireParticle(location, rng);
     }
 
     public static Effect explosion(Point location, int radiusTiles, Random rng) {
-        Effect e = new Effect(location, EffectType.EXPLOSION);
-        int frames = 28;
-        e.frameCount = frames;
-        int count = 18 + 10 * Math.max(1, radiusTiles);
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        float maxRange = Math.max(1, radiusTiles) * TILE_PX;
-        for (int i = 0; i < count; i++) {
-            e.particleX0[i] = TILE_PX * 0.5f;
-            e.particleY0[i] = TILE_PX * 0.5f;
-            float ang = rng.nextFloat() * (float) (Math.PI * 2);
-            float frac = 0.4f + rng.nextFloat() * 0.6f;
-            float v = (frac * maxRange) / frames;
-            e.particleVX[i] = (float) Math.cos(ang) * v;
-            e.particleVY[i] = (float) Math.sin(ang) * v;
-        }
-        return e;
+        return EffectBuilder.explosion(location, radiusTiles, /*duration*/ 28, rng);
     }
 
-    /** Build a grappling-rope effect from {@code from} to {@code to}.
-     *  {@code success == true} -> the rope extends then retracts over the
-     *  paired total of {@code extendFrames + retractFrames}; the dragged
-     *  mob's {@link com.bjsp123.rl2.event.GameEvent.MobKnockedBack} slide
-     *  is queued to start at frame {@code extendFrames} so it visually
-     *  rides the retract. {@code success == false} -> the rope holds at
-     *  full extent for the second phase then flashes and fades. */
+    /** Grappling-rope beam — {@code success = true} retracts, {@code false} holds
+     *  and pulses. The dragged-mob slide is queued separately by the caller. */
     public static Effect grappleRope(Point from, Point to, boolean success,
                                      int extendFrames, int tailFrames) {
-        Effect e = new Effect(from, EffectType.GRAPPLE_ROPE);
-        e.endLocation = to;
-        e.grappleSuccess = success;
-        e.grappleExtendFrames = Math.max(1, extendFrames);
-        e.frameCount = Math.max(1, extendFrames + tailFrames);
-        return e;
+        return EffectBuilder.beam(from, to, /*tint*/ null,
+                extendFrames, tailFrames, /*holdAndPulse*/ !success,
+                /*particleCount*/ 0, /*particleSize*/ 0f,
+                Math.max(1, extendFrames + tailFrames));
     }
 
     public static Effect ray(Point from, Point to, EffectTint tint) {
-        Effect e = new Effect(from, EffectType.RAY);
-        e.endLocation = to;
-        e.tint        = tint;
-        return e;
+        return EffectBuilder.beam(from, to, tint, 0, 0, false, 0, 0,
+                EffectType.RAY.frameCount);
     }
 
     public static Effect blast(Point location) {
-        return new Effect(location, EffectType.BLAST);
+        return EffectBuilder.flash(location, FlashStyle.BLAST, null, 0,
+                EffectType.BLAST.frameCount, null);
     }
 
     public static Effect buffIcon(Point location, Buff.BuffType type, String fallbackText) {
-        Effect e = new Effect(location, EffectType.BUFF_ICON);
-        e.text = fallbackText;
-        e.buffType = type;
-        return e;
+        return EffectBuilder.hoverSprite(location, type, fallbackText,
+                EffectType.BUFF_ICON.frameCount);
     }
 
-    /** 32-particle powerup-pickup cloud: each particle has an individual spawn
-     *  time in [0, 64] frames (+/-32 stagger), a random offset of +/-16 px in X and
-     *  +/-8 px in Y from the tile centre, drifts straight up, turns white, then
-     *  fades. Per-particle timing is honoured by {@code FxRenderer.drawParticleBurst}
-     *  when {@code particleSpawnFrame} is populated. */
+    /** Powerup-pickup particle cloud — 64-frame spawn spread, wide initial X jitter. */
     public static Effect powerupParticles(Point at, EffectTint tint, int count, Random rng) {
-        int particleLife = 40;
-        int spawnSpread  = 64;   // particles spawn between frame 0 and frame 64
-        Effect e = new Effect(at, EffectType.PARTICLE_BURST);
-        e.frameCount = spawnSpread + particleLife;
-        e.tint = tint;
-        e.particleX0         = new float[count];
-        e.particleY0         = new float[count];
-        e.particleVX         = new float[count];
-        e.particleVY         = new float[count];
-        e.particleSpawnFrame = new int[count];
-        for (int i = 0; i < count; i++) {
-            e.particleX0[i]         = 8f + (rng.nextFloat() - 0.5f) * 32f;   // centre +/- 16 px
-            e.particleY0[i]         = 8f + (rng.nextFloat() - 0.5f) * 16f;   // centre +/- 8 px
-            e.particleVX[i]         = 0f;
-            e.particleVY[i]         = 0.25f + rng.nextFloat() * 0.25f;        // gentle upward drift
-            e.particleSpawnFrame[i] = rng.nextInt(spawnSpread + 1);            // 0 .. 64
-        }
-        return e;
+        return EffectBuilder.fountain(at, tint, count,
+                /*spawnSpread*/ 64, /*life*/ 40,
+                /*riseSpeedMin*/ 0.25f, /*riseSpeedMax*/ 0.5f,
+                /*horizontalJitter*/ 0f, /*fadeToWhite*/ true,
+                /*positionJitterX*/ 32f, /*positionJitterY*/ 16f, rng);
     }
 
     public static Effect particleBurst(Point location, EffectTint tint, int count, Random rng) {
-        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
-        e.tint = tint;
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        for (int i = 0; i < count; i++) {
-            e.particleX0[i] = 2f + rng.nextFloat() * 12f;
-            e.particleY0[i] = 8f + rng.nextFloat() * 8f;
-            e.particleVX[i] = (rng.nextFloat() - 0.5f) * 4.5f;
-            e.particleVY[i] = 1.6f + rng.nextFloat() * 2.0f;
-        }
-        return e;
+        return EffectBuilder.particleBurst(location, tint, count, rng);
     }
 
-    /** Liquid splash at a character's feet when stepping onto a surface tile.
-     *  Radial spray in the upper half-disc, gravity arcs the droplets back down,
-     *  tint blends to white over the burst's lifetime. */
+    /** Liquid (or grass) splash at a character's feet. Radial cone 20°..160° with
+     *  gravity and a gentle bounce when droplets hit the tile floor. */
     public static Effect footSplash(Point location, EffectTint tint, Random rng) {
-        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
-        e.tint = tint;
-        e.ignoresFov = true;
-        e.particleFadeToWhite = true;
-        int count = 8 + rng.nextInt(4);   // 8..11 droplets
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        float cx = TILE_PX * 0.5f;
-        float cy = TILE_PX * 0.35f;
-        for (int i = 0; i < count; i++) {
-            // Angle 20..160° — outward & upward, no straight-down droplets.
-            float angle = (float) Math.toRadians(20f + rng.nextFloat() * 140f);
-            float speed = 1.2f + rng.nextFloat() * 1.0f;
-            e.particleX0[i] = cx + (rng.nextFloat() - 0.5f) * 4f;
-            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 2f;
-            e.particleVX[i] = (float) Math.cos(angle) * speed;
-            e.particleVY[i] = (float) Math.sin(angle) * speed;
-        }
-        return e;
+        return EffectBuilder.splash(location, tint,
+                /*count*/ 8 + rng.nextInt(4),
+                /*speedMin*/ 1.2f, /*speedMax*/ 2.2f,
+                /*bounceDamping*/ 0.4f, /*particleSize*/ 1.5f,
+                /*angleMinDeg*/ 20f, /*angleMaxDeg*/ 160f,
+                /*duration*/ 60, rng);
     }
 
-    /** First of the two layers played when the player smashes a one-time door:
-     *  bright cyan-to-white sparks fired out from the tile centre along ~10 radial
-     *  trails, each trail a chain of 5 particles with staggered spawn frames so the
-     *  chain reads as a streak rather than a single dot. Per-particle path. */
-    public static Effect doorBreakBurst(Point location, Random rng) {
-        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
-        e.tint           = EffectTint.CYAN;
-        e.ignoresFov     = true;
-        e.particleSize   = 2.5f;
-        e.particleBright = true;                 // halo + core
-        int trails           = 10;
-        int particlesPerTrail = 5;
-        int spawnStagger     = 2;                // frames between trail-mates
-        int count = trails * particlesPerTrail;
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        e.particleSpawnFrame = new int[count];
-        float cx = TILE_PX * 0.5f;
-        float cy = TILE_PX * 0.5f;
-        for (int trail = 0; trail < trails; trail++) {
-            float angle = (float)(trail * Math.PI * 2.0 / trails) + rng.nextFloat() * 0.25f;
-            float speed = 2.4f + rng.nextFloat() * 1.8f;
-            float vx    = (float) Math.cos(angle) * speed;
-            float vy    = (float) Math.sin(angle) * speed;
-            for (int k = 0; k < particlesPerTrail; k++) {
-                int i = trail * particlesPerTrail + k;
-                e.particleX0[i] = cx;
-                e.particleY0[i] = cy;
-                e.particleVX[i] = vx;
-                e.particleVY[i] = vy;
-                e.particleSpawnFrame[i] = k * spawnStagger;
-            }
-        }
-        return e;
+    /**
+     * Bundled visual + audio for the player smashing a one-time door: a cyan
+     * magic-missile-style burst of sparks at the tile centre, a mauve bouncing
+     * splash in a tight vertical cone at the base of the tile, and a crash sound
+     * keyed by {@code sfx.world.door.break}.
+     *
+     * <p>{@code sounds} may be {@code null} (silent — visual only).
+     */
+    public static void doorBreakEffect(EffectStage stage, SoundManager sounds,
+                                       Level level, Point at, Random rng) {
+        stage.add(EffectBuilder.burst(at, EffectTint.CYAN,
+                /*count*/ 20, /*speedMin*/ 1.5f, /*speedMax*/ 3f,
+                /*size*/ 1.5f, /*bright*/ false,
+                /*duration*/ EffectType.PARTICLE_BURST.frameCount, rng));
+        stage.add(EffectBuilder.splash(at, EffectTint.MAUVE,
+                /*count*/ 12, /*speedMin*/ 1.6f, /*speedMax*/ 3f,
+                /*bounceDamping*/ 0.5f, /*particleSize*/ 1.5f,
+                /*angleMinDeg*/ 70f, /*angleMaxDeg*/ 110f,
+                /*duration*/ 72, rng));
+        if (sounds != null) sounds.playAt("sfx.world.door.break", level, at);
     }
 
-    /** Second of the two layers played on one-time door break: mauve droplets that
-     *  launch upward, fall under gravity, and bounce a couple of times against the
-     *  base of the door tile (particle y = 0) before settling. The bouncing is
-     *  handled in {@code FxRenderer.drawParticleBurst} via {@link #particleBounceDamping}. */
-    public static Effect doorBreakSplash(Point location, Random rng) {
-        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
-        e.tint                  = EffectTint.MAUVE;
-        e.ignoresFov            = true;
-        e.particleSize          = 3f;
-        e.frameCount            = 72;
-        e.particleBounceDamping = 0.5f;
-        int count = 12;
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        float cx = TILE_PX * 0.5f;
-        float cy = TILE_PX * 0.5f;
-        for (int i = 0; i < count; i++) {
-            // Upper half-disc (30°..150°): outward + upward, gravity does the rest.
-            float angle = (float) Math.toRadians(30f + rng.nextFloat() * 120f);
-            float speed = 1.6f + rng.nextFloat() * 1.4f;
-            e.particleX0[i] = cx + (rng.nextFloat() - 0.5f) * 4f;
-            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 2f;
-            e.particleVX[i] = (float) Math.cos(angle) * speed;
-            e.particleVY[i] = (float) Math.sin(angle) * speed;
-        }
-        return e;
-    }
-
-    /** Item falling into a chasm - revolves, shrinks, and fades at {@code location}.
-     *  Non-blocking (excluded from the Animator's freeze-frames tally). */
     public static Effect fallingItem(Point location, Item item) {
-        Effect e = new Effect(location, EffectType.FALLING_ITEM);
-        e.thrownItem = item;
-        return e;
+        return EffectBuilder.spinShrinkFadeItem(location, item, EffectType.FALLING_ITEM.frameCount);
     }
 
-    /** Mob falling into a chasm - revolves, shrinks, and fades at
-     *  {@code location} using the mob's sprite. Non-blocking. */
-    public static Effect fallingMob(Point location,
-                                    com.bjsp123.rl2.model.Mob mob) {
-        Effect e = new Effect(location, EffectType.FALLING_MOB);
-        e.fallenMob = mob;
-        return e;
+    public static Effect fallingMob(Point location, Mob mob) {
+        return EffectBuilder.spinShrinkFadeMob(location, mob, EffectType.FALLING_MOB.frameCount);
     }
 
     public static Effect teleportStreaks(Point location, boolean up, Random rng) {
-        int count = 12;
-        Effect e = new Effect(location, EffectType.TELEPORT_STREAKS);
-        e.tint = EffectTint.GREEN;
-        e.particleX0 = new float[count];
-        e.particleY0 = new float[count];
-        e.particleVX = new float[count];
-        e.particleVY = new float[count];
-        for (int i = 0; i < count; i++) {
-            e.particleX0[i] = 1f + rng.nextFloat() * 14f;
-            float speed = 0.7f + rng.nextFloat() * 0.6f;
-            if (up) {
-                e.particleY0[i] = rng.nextFloat() * 4f;
-                e.particleVY[i] =  speed;
-            } else {
-                e.particleY0[i] = 12f + rng.nextFloat() * 4f;
-                e.particleVY[i] = -speed;
-            }
-            e.particleVX[i] = 0f;
-        }
-        return e;
+        return EffectBuilder.streaks(location, EffectTint.GREEN, /*count*/ 12,
+                /*speedMin*/ 0.7f, /*speedMax*/ 1.3f,
+                up ? StreakDirection.UP : StreakDirection.DOWN,
+                EffectType.TELEPORT_STREAKS.frameCount, rng);
     }
 
-    /** Single floating "up" glyph drifting upward and fading from the
-     *  given tile. {@code startDelay} is in render frames so a swarm of
-     *  arrows can be staggered (level-up uses 10 arrows over ~600 ms). */
+    /** Single floating "up" glyph drifting upward and fading. {@code startDelay}
+     *  staggers a swarm of arrows for the level-up visual. */
     public static Effect upArrow(Point at, EffectTint tint, int startDelay) {
-        Effect e = new Effect(at, EffectType.UP_ARROW);
-        e.tint       = tint;
-        e.text       = TextCatalog.get("effect.levelUp.up");
-        e.startDelay = Math.max(0, startDelay);
-        return e;
+        return EffectBuilder.hoverGlyph(at, TextCatalog.get("effect.levelUp.up"),
+                tint, startDelay, EffectType.UP_ARROW.frameCount, HoverStyle.ARROW_RISE);
     }
 
-    /** Mob-tinted overlay: redraws {@code mob}'s sprite layered on top
-     *  of its tile, with tint cycling grey -> white -> gold over the
-     *  effect's lifetime. Used by the LEVEL_UP powerup pickup. */
-    public static Effect powerupFlash(com.bjsp123.rl2.model.Mob mob, Point at) {
-        Effect e = new Effect(at, EffectType.POWERUP_FLASH);
-        e.fallenMob = mob;
-        return e;
+    /** Mob-tinted overlay — sprite redraw cycling grey → white → gold. */
+    public static Effect powerupFlash(Mob mob, Point at) {
+        return EffectBuilder.flash(at, FlashStyle.TINT_CYCLE, null, 0,
+                EffectType.POWERUP_FLASH.frameCount, mob);
     }
 
-    /** Physical projectile travelling from {@code from} to {@code to} at the
-     *  standard missile speed. The sprite (col 3 of the slash band) is rotated
-     *  to face the travel direction at draw time. */
+    /** Physical projectile (spear / arrow) — rotated sprite tracing an A → B line. */
     public static Effect physicalMissile(Point from, Point to) {
-        Effect e = new Effect(from, EffectType.PHYSICAL_MISSILE);
-        e.endLocation = to;
-        e.frameCount = framesForDistance(from, to, com.bjsp123.rl2.world.anim.AnimationVars.MAGIC_MISSILE_PX_PER_FRAME);
-        return e;
+        return EffectBuilder.arcSprite(from, to, /*sprite*/ null, /*rotationOnly*/ 0f,
+                /*arcHeightPx*/ 0f,
+                EffectBuilder.framesForDistance(from, to, AnimationVars.MAGIC_MISSILE_PX_PER_FRAME));
     }
 }
