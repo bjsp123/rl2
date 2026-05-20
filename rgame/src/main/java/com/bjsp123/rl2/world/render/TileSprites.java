@@ -109,7 +109,7 @@ public final class TileSprites {
     public static final int DOOR_CLOSED                   =  8 * TERRAIN_COLS + 0;
     public static final int DOOR_OVERHANG                 =  8 * TERRAIN_COLS + 1;
     public static final int DOOR_SIDE_CLOSED_LOWER         =  8 * TERRAIN_COLS + 2;
-    public static final int DOOR_SIDEWAYS_OVERHANG_CLOSED =  8 * TERRAIN_COLS + 3; // +1 r-s, +2 l-s
+    public static final int DOOR_SIDEWAYS_OVERHANG =  8 * TERRAIN_COLS + 3; // +1 r-s, +2 l-s
     public static final int DOOR_SIDEWAYS_CLOSED_UPPER    =  8 * TERRAIN_COLS + 7; // wall-over-sideways-door cutout
     /** Open-door body for the front-facing variant - one row below {@link #DOOR_CLOSED}. */
     public static final int DOOR_OPEN                       =  9 * TERRAIN_COLS + 0;

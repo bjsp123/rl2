@@ -566,6 +566,7 @@ public final class Animator {
 
     void onOnetimeDoorBroken(Level level, GameEvent.OnetimeDoorBroken m) {
         stage.add(Effect.doorBreakBurst(m.pos(), RNG));
+        stage.add(Effect.doorBreakSplash(m.pos(), RNG));
     }
 
     void onItemThrown(Level level, GameEvent.ItemThrown m) {

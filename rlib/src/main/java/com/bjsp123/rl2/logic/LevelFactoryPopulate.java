@@ -584,12 +584,16 @@ public final class LevelFactoryPopulate {
         return false;
     }
 
-    /** True if (x, y) falls inside the room that contains the stairs-up tile.
-     *  Rooms with stairs up are kept mob-free so the player spawns into a safe area. */
+    /** True if (x, y) falls inside the room the player will occupy on arrival —
+     *  the room containing the stairs-up tile, or on depth 1 (no stairs up) the
+     *  room containing {@code level.spawnPoint}. Kept mob-free so the player
+     *  isn't dropped right next to a hostile. */
     private static boolean inStairsUpRoom(Level level, int x, int y) {
-        if (level.stairsUp == null || level.rooms == null) return false;
-        int sx = level.stairsUp.tileX();
-        int sy = level.stairsUp.tileY();
+        if (level.rooms == null) return false;
+        Point anchor = level.stairsUp != null ? level.stairsUp : level.spawnPoint;
+        if (anchor == null) return false;
+        int sx = anchor.tileX();
+        int sy = anchor.tileY();
         for (Level.RoomSnapshot r : level.rooms) {
             if (sx >= r.x && sx < r.x + r.w && sy >= r.y && sy < r.y + r.h) {
                 return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;

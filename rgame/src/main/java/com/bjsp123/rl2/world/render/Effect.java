@@ -1,7 +1,6 @@
 package com.bjsp123.rl2.world.render;
 import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Buff;
-import com.bjsp123.rl2.world.anim.AnimationVars;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Point;
@@ -102,7 +101,7 @@ public class Effect {
     }
 
     public enum EffectTint {
-        RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN, PINK
+        RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN, PINK, MAUVE
     }
 
     private static final float TILE_PX = 16f;
@@ -167,6 +166,11 @@ public class Effect {
     public float particleGravity;
     public float particleSize = 1.5f;
     public boolean particleBright;
+    /** PARTICLE_BURST only (global-t path): velocity retained on each floor bounce
+     *  (0 = no bouncing, 0..1 = damped rebound). Floor is the bottom of the tile
+     *  cell (particle y = 0). Set this and the standard gravity drives the
+     *  damped-bounce trajectory in {@link FxRenderer#drawParticleBurst}. */
+    public float particleBounceDamping;
     /** BUFF_ICON only: which buff to render the icon for. */
     public Buff.BuffType buffType;
 
@@ -534,67 +538,97 @@ public class Effect {
         return e;
     }
 
-    /** Small liquid splash at a character's feet when stepping onto a surface tile.
-     *  Particles arc up then fall back under gravity; tint fades from the surface
-     *  colour toward white over each particle's lifetime for a washed-out splash look. */
+    /** Liquid splash at a character's feet when stepping onto a surface tile.
+     *  Radial spray in the upper half-disc, gravity arcs the droplets back down,
+     *  tint blends to white over the burst's lifetime. */
     public static Effect footSplash(Point location, EffectTint tint, Random rng) {
         Effect e = new Effect(location, EffectType.PARTICLE_BURST);
         e.tint = tint;
         e.ignoresFov = true;
         e.particleFadeToWhite = true;
-        int count = 4 + rng.nextInt(3);
+        int count = 8 + rng.nextInt(4);   // 8..11 droplets
+        e.particleX0 = new float[count];
+        e.particleY0 = new float[count];
+        e.particleVX = new float[count];
+        e.particleVY = new float[count];
+        float cx = TILE_PX * 0.5f;
+        float cy = TILE_PX * 0.35f;
+        for (int i = 0; i < count; i++) {
+            // Angle 20..160° — outward & upward, no straight-down droplets.
+            float angle = (float) Math.toRadians(20f + rng.nextFloat() * 140f);
+            float speed = 1.2f + rng.nextFloat() * 1.0f;
+            e.particleX0[i] = cx + (rng.nextFloat() - 0.5f) * 4f;
+            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 2f;
+            e.particleVX[i] = (float) Math.cos(angle) * speed;
+            e.particleVY[i] = (float) Math.sin(angle) * speed;
+        }
+        return e;
+    }
+
+    /** First of the two layers played when the player smashes a one-time door:
+     *  bright cyan-to-white sparks fired out from the tile centre along ~10 radial
+     *  trails, each trail a chain of 5 particles with staggered spawn frames so the
+     *  chain reads as a streak rather than a single dot. Per-particle path. */
+    public static Effect doorBreakBurst(Point location, Random rng) {
+        Effect e = new Effect(location, EffectType.PARTICLE_BURST);
+        e.tint           = EffectTint.CYAN;
+        e.ignoresFov     = true;
+        e.particleSize   = 2.5f;
+        e.particleBright = true;                 // halo + core
+        int trails           = 10;
+        int particlesPerTrail = 5;
+        int spawnStagger     = 2;                // frames between trail-mates
+        int count = trails * particlesPerTrail;
         e.particleX0 = new float[count];
         e.particleY0 = new float[count];
         e.particleVX = new float[count];
         e.particleVY = new float[count];
         e.particleSpawnFrame = new int[count];
         float cx = TILE_PX * 0.5f;
-        float cy = TILE_PX * 0.35f;
-        for (int i = 0; i < count; i++) {
-            e.particleX0[i] = cx + (rng.nextFloat() - 0.5f) * 7f;
-            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 3f;
-            e.particleVX[i] = (rng.nextFloat() - 0.5f) * 0.5f;
-            e.particleVY[i] = 1.5f + rng.nextFloat() * 1.0f;
-            e.particleSpawnFrame[i] = rng.nextInt(3);
+        float cy = TILE_PX * 0.5f;
+        for (int trail = 0; trail < trails; trail++) {
+            float angle = (float)(trail * Math.PI * 2.0 / trails) + rng.nextFloat() * 0.25f;
+            float speed = 2.4f + rng.nextFloat() * 1.8f;
+            float vx    = (float) Math.cos(angle) * speed;
+            float vy    = (float) Math.sin(angle) * speed;
+            for (int k = 0; k < particlesPerTrail; k++) {
+                int i = trail * particlesPerTrail + k;
+                e.particleX0[i] = cx;
+                e.particleY0[i] = cy;
+                e.particleVX[i] = vx;
+                e.particleVY[i] = vy;
+                e.particleSpawnFrame[i] = k * spawnStagger;
+            }
         }
         return e;
     }
 
-    /** Particle burst when the player smashes a one-time door. Two layers: a radial
-     *  outward spray of shards and a cluster of upward-arcing splinters that rise
-     *  4-8 px then fall back under gravity. Pink tint, chunky particles, non-blocking. */
-    public static Effect doorBreakBurst(Point location, Random rng) {
-        int radialCount  = 14;
-        int splashCount  = 16;
-        int count        = radialCount + splashCount;
+    /** Second of the two layers played on one-time door break: mauve droplets that
+     *  launch upward, fall under gravity, and bounce a couple of times against the
+     *  base of the door tile (particle y = 0) before settling. The bouncing is
+     *  handled in {@code FxRenderer.drawParticleBurst} via {@link #particleBounceDamping}. */
+    public static Effect doorBreakSplash(Point location, Random rng) {
         Effect e = new Effect(location, EffectType.PARTICLE_BURST);
-        e.tint         = EffectTint.PINK;
-        e.ignoresFov   = true;
-        e.particleSize = 3f;
+        e.tint                  = EffectTint.MAUVE;
+        e.ignoresFov            = true;
+        e.particleSize          = 3f;
+        e.frameCount            = 72;
+        e.particleBounceDamping = 0.5f;
+        int count = 12;
         e.particleX0 = new float[count];
         e.particleY0 = new float[count];
         e.particleVX = new float[count];
         e.particleVY = new float[count];
         float cx = TILE_PX * 0.5f;
-        float cy = TILE_PX * 0.35f;   // feet height
-        // Radial shards - spread at even angles, moderate outward speed.
-        for (int i = 0; i < radialCount; i++) {
-            float angle = (float)(i * Math.PI * 2.0 / radialCount) + rng.nextFloat() * 0.4f;
-            float speed = 0.5f + rng.nextFloat() * 0.7f;
+        float cy = TILE_PX * 0.5f;
+        for (int i = 0; i < count; i++) {
+            // Upper half-disc (30°..150°): outward + upward, gravity does the rest.
+            float angle = (float) Math.toRadians(30f + rng.nextFloat() * 120f);
+            float speed = 1.6f + rng.nextFloat() * 1.4f;
             e.particleX0[i] = cx + (rng.nextFloat() - 0.5f) * 4f;
-            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 3f;
+            e.particleY0[i] = cy + (rng.nextFloat() - 0.5f) * 2f;
             e.particleVX[i] = (float) Math.cos(angle) * speed;
             e.particleVY[i] = (float) Math.sin(angle) * speed;
-        }
-        // Upward-arcing splinters - vy chosen so peak height is 4-8 px.
-        for (int i = 0; i < splashCount; i++) {
-            int j = radialCount + i;
-            float h  = 4f + rng.nextFloat() * 4f;
-            float vy = (float) Math.sqrt(2.0 * AnimationVars.PARTICLE_GRAVITY * h);
-            e.particleX0[j] = cx + (rng.nextFloat() - 0.5f) * 6f;
-            e.particleY0[j] = cy + (rng.nextFloat() - 0.5f) * 2f;
-            e.particleVX[j] = (rng.nextFloat() - 0.5f) * 0.8f;
-            e.particleVY[j] = vy;
         }
         return e;
     }

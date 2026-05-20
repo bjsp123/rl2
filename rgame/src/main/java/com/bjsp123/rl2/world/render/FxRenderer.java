@@ -47,6 +47,7 @@ final class FxRenderer {
     private static final Color TINT_BROWN  = new Color(0.55f, 0.34f, 0.16f, 1f);
     private static final Color TINT_ORANGE = new Color(1f, 0.55f, 0.1f, 1f);
     private static final Color TINT_PINK   = new Color(1f, 0.35f, 0.65f, 1f);
+    private static final Color TINT_MAUVE  = new Color(0.72f, 0.48f, 0.78f, 1f);
     /** POWERUP_FLASH cycle: dim grey -> bright white -> warm gold. */
     private static final Color TINT_GREY   = new Color(0.55f, 0.55f, 0.55f, 1f);
     private static final Color TINT_GOLD   = new Color(1.0f, 0.85f, 0.25f, 1f);
@@ -512,6 +513,7 @@ final class FxRenderer {
             // Per-particle path - each particle lives for AnimationVars.PARTICLE_LIFE frames
             // starting at its own spawn frame, independent of the others.
             Color base = tintToColor(e.tint, Color.WHITE);
+            float size = e.particleSize > 0 ? e.particleSize : AnimationVars.PARTICLE_SIZE;
             for (int i = 0; i < e.particleX0.length; i++) {
                 int age = e.frame - e.particleSpawnFrame[i];
                 if (age < 0 || age >= AnimationVars.PARTICLE_LIFE) continue;
@@ -526,8 +528,16 @@ final class FxRenderer {
                 float dy = e.particleVY[i] * age;
                 float px = baseX + e.particleX0[i] + dx;
                 float py = baseY + e.particleY0[i] + dy;
-                batch.setColor(cr, cg, cb, alpha);
-                batch.draw(whiteRegion, px, py, AnimationVars.PARTICLE_SIZE, AnimationVars.PARTICLE_SIZE);
+                if (e.particleBright) {
+                    // Soft outer halo at 50% alpha, then crisp core on top.
+                    batch.setColor(cr, cg, cb, alpha * 0.5f);
+                    batch.draw(whiteRegion, px - size / 2f, py - size / 2f, size * 2f, size * 2f);
+                    batch.setColor(cr, cg, cb, alpha);
+                    batch.draw(whiteRegion, px, py, size, size);
+                } else {
+                    batch.setColor(cr, cg, cb, alpha);
+                    batch.draw(whiteRegion, px, py, size, size);
+                }
             }
             batch.setColor(Color.WHITE);
             return;
@@ -548,14 +558,52 @@ final class FxRenderer {
         }
         batch.setColor(cr, cg, cb, alpha);
         float size = e.particleSize > 0 ? e.particleSize : AnimationVars.PARTICLE_SIZE;
+        boolean bounce = e.particleBounceDamping > 0f;
         for (int i = 0; i < e.particleX0.length; i++) {
             float dx = e.particleVX[i] * t;
-            float dy = e.particleVY[i] * t - 0.5f * AnimationVars.PARTICLE_GRAVITY * t * t;
+            float py;
+            if (bounce) {
+                py = baseY + bouncingY(t, e.particleY0[i], e.particleVY[i],
+                                       e.particleBounceDamping);
+            } else {
+                float dy = e.particleVY[i] * t - 0.5f * AnimationVars.PARTICLE_GRAVITY * t * t;
+                py = baseY + e.particleY0[i] + dy;
+            }
             float px = baseX + e.particleX0[i] + dx;
-            float py = baseY + e.particleY0[i] + dy;
             batch.draw(whiteRegion, px, py, size, size);
         }
         batch.setColor(Color.WHITE);
+    }
+
+    /** Closed-form damped-bounce trajectory. Particle starts at {@code y0} (tile-local
+     *  pixels, 0 = bottom of cell) with vertical velocity {@code vy0}, falls under
+     *  {@link AnimationVars#PARTICLE_GRAVITY}, and on hitting y = 0 rebounds with its
+     *  vertical velocity multiplied by {@code damping}. Returns the tile-local y at
+     *  time {@code t}; once the rebound velocity drops below a tiny threshold the
+     *  particle settles on the floor. */
+    private static float bouncingY(float t, float y0, float vy0, float damping) {
+        float g = AnimationVars.PARTICLE_GRAVITY;
+        if (y0 < 0f) y0 = 0f;
+        // Phase 0: free flight from (y0, vy0). Solve y0 + vy0*t - 0.5*g*t² = 0 for downward hit.
+        float disc = vy0*vy0 + 2f*g*y0;
+        if (disc < 0f) return y0 + vy0*t - 0.5f*g*t*t;
+        float t0 = (vy0 + (float)Math.sqrt(disc)) / g;
+        if (t <= t0) {
+            return y0 + vy0*t - 0.5f*g*t*t;
+        }
+        float remaining = t - t0;
+        float vyImpact = vy0 - g*t0;           // negative (downward)
+        float vy = -vyImpact * damping;         // positive (rebound)
+        for (int safety = 0; safety < 16; safety++) {
+            if (vy < 0.2f) return 0f;           // settled on the floor
+            float bounceTime = 2f * vy / g;
+            if (remaining <= bounceTime) {
+                return vy*remaining - 0.5f*g*remaining*remaining;
+            }
+            remaining -= bounceTime;
+            vy *= damping;
+        }
+        return 0f;
     }
 
     /** Head + trail rendering for a magic missile in flight. */
@@ -990,6 +1038,7 @@ final class FxRenderer {
             case ORANGE -> TINT_ORANGE;
             case CYAN  -> Color.CYAN;
             case PINK  -> TINT_PINK;
+            case MAUVE -> TINT_MAUVE;
             default    -> fallback;
         };
     }

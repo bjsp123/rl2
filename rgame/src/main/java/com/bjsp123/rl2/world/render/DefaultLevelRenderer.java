@@ -1637,11 +1637,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
             return;
         }
 
-        if(TileQuery.isSidewaysDoor(level, x, y)) {
-                int result = TileSprites.DOOR_SIDEWAYS_OVERHANG_CLOSED;
-                if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
-                if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
-                drawTile(result, x, y);
+        if (TileQuery.isSidewaysDoor(level, x, y)) {
+
+            int result = TileSprites.DOOR_SIDEWAYS_OVERHANG;
+            if (!stitchBarrier(level, x + 1, y - 1)) result += 1;
+            if (!stitchBarrier(level, x - 1, y - 1)) result += 2;
+            drawTile(result, x, y);
+            
             return;
         }
 
@@ -1655,7 +1657,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
         // Door top paints at the cell NORTH of the door (y+1 = north in y-up) - same cell
         // as wall overhangs use. The SPD convention: the door body occupies its own cell and
-        // the arched top visually sits in the tile above on screen.
+        // the arched top visually sits in the tile above on screen. The wood arch sprite is
+        // shared by all front-facing doors, crystal/one-time included.
         if (TileQuery.isDoorAt(level, x, y - 1)) {
             drawTile(TileSprites.DOOR_OVERHANG, x, y);
         }
@@ -1744,9 +1747,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
         return TileQuery.isClosedDoorAt(level, x, y) ? TileSprites.DOOR_CLOSED : TileSprites.DOOR_OPEN;
     }
 
+    /** Body sprite for closed crystal-family doors. Only CRYSTAL_DOOR and ONETIME_DOOR
+     *  route here; CRYSTAL_DOOR_OPEN goes through raisedDoor() because it visually
+     *  matches a wood open door. */
     private int crystalDoor(Level level, int x, int y) {
         if (TileQuery.isSidewaysDoor(level, x, y)) return TileSprites.CRYSTAL_DOOR_SIDEWAYS_CLOSED_LOWER;
-        return TileQuery.isClosedDoorAt(level, x, y) ? TileSprites.CRYSTAL_DOOR_CLOSED : TileSprites.DOOR_OPEN;
+        return TileSprites.CRYSTAL_DOOR_CLOSED;
     }
 
     private static boolean isWallish(Level level, int x, int y) {
