@@ -8,6 +8,7 @@ import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.World;
@@ -61,6 +62,40 @@ public final class V2Map extends V2Screen {
      *  screen-space (after pan + zoom). */
     private final List<Rect> boxRects   = new ArrayList<>();
     private final List<Integer> boxIndex = new ArrayList<>();
+
+    /** One entry per beacon (any state) visible on the map. Parallel arrays
+     *  with {@link #beaconRects} - populated each frame in {@link #drawBodyShape}
+     *  so {@link #onTouchDownInBody} can resolve a tap on a plus-sign to a
+     *  (levelIndex, beaconPos) target. Only {@link #beaconActive}-true
+     *  entries are valid teleport targets. */
+    private final List<Rect> beaconRects = new ArrayList<>();
+    private final List<int[]> beaconRefs = new ArrayList<>();   // {levelIdx, tileX, tileY}
+    private final List<Boolean> beaconActive = new ArrayList<>();
+
+    /** Wall-clock accumulator for the pulsing-plus-sign animation. Driven
+     *  by {@code Gdx.graphics.getDeltaTime()} in {@link #drawBodyShape}. */
+    private float beaconPulseT;
+    /** Wall-clock accumulator for the swirling backdrop blobs. Same dt as
+     *  {@link #beaconPulseT}; a separate field keeps the swirl phase
+     *  independent of the plus-sign pulse. */
+    private float bgSwirlT;
+
+    /** Open / closed flag for the teleport-confirmation modal. While
+     *  {@code true} the rest of the map screen ignores input - the only
+     *  active controls are the Yes / No buttons inside the popup. */
+    private boolean confirmOpen;
+    /** Destination level index + beacon position that the player is about
+     *  to teleport to once they confirm. Set when an active beacon is
+     *  clicked; consumed (or discarded) by the Yes / No handler. */
+    private int   pendingDestLevel = -1;
+    private Point pendingBeaconPos;
+    /** Hit rects for the confirmation Yes / No buttons. Populated each
+     *  frame in {@link #drawBodyShape} when {@link #confirmOpen} is set. */
+    private final Rect confirmYes = new Rect();
+    private final Rect confirmNo  = new Rect();
+    /** Confirmation popup geometry. Recomputed each frame from the map
+     *  window so it tracks resizes. */
+    private final Rect confirmPanel = new Rect();
 
     /** Pan offset applied to the level graph (post-zoom). Drag-in-body
      *  shifts these. Zero by default - graph centred on the window. */
@@ -119,6 +154,34 @@ public final class V2Map extends V2Screen {
         dragLastX = vx;
         dragLastY = vy;
         dragging  = false;
+        // While the confirmation popup is open, ALL input goes through its
+        // Yes / No buttons - no panning, no beacon clicks, no level
+        // selection. Touch outside the popup is swallowed so the player
+        // can't accidentally close it by tapping the map.
+        if (confirmOpen) {
+            if (confirmYes.contains(vx, vy)) {
+                confirmTeleport();
+            } else if (confirmNo.contains(vx, vy)) {
+                cancelTeleportConfirm();
+            }
+            return true;
+        }
+        // Beacon plus-signs take priority over the level box behind them -
+        // a tap on an active beacon opens the teleport confirmation, on
+        // an inactive one does nothing (eaten so it doesn't fall through
+        // to box selection).
+        for (int i = 0; i < beaconRects.size(); i++) {
+            if (!beaconRects.get(i).contains(vx, vy)) continue;
+            if (!Boolean.TRUE.equals(beaconActive.get(i))) return true;
+            int[] ref = beaconRefs.get(i);
+            // Out-of-orbs: silently swallow the click. The orb counter at
+            // the top of the screen tells the player why nothing happened.
+            if (teleportOrbCount() <= 0) return true;
+            pendingDestLevel = ref[0];
+            pendingBeaconPos = new Point(ref[1], ref[2]);
+            confirmOpen      = true;
+            return true;
+        }
         for (int i = 0; i < boxRects.size(); i++) {
             if (boxRects.get(i).contains(vx, vy)) {
                 int worldIdx = boxIndex.get(i);
@@ -180,6 +243,12 @@ public final class V2Map extends V2Screen {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
         boxRects.clear();
         boxIndex.clear();
+        beaconRects.clear();
+        beaconRefs.clear();
+        beaconActive.clear();
+        float dt = Gdx.graphics.getDeltaTime();
+        beaconPulseT += dt;
+        bgSwirlT     += dt;
 
         if (world == null || world.levels == null) return;
 
@@ -202,12 +271,27 @@ public final class V2Map extends V2Screen {
         // Scissor-clip the graph rendering to the visible band so a
         // panned / zoomed graph can't bleed into the title or info pane.
         Rect viewport = graphViewport();
+        // Border around the scrollable viewport - drawn BEFORE scissor
+        // pushes so the border itself stays visible. 1-px frame in the
+        // standard mid-tone so the boundary reads clearly even when the
+        // graph is empty.
+        s.setColor(UIVars.BORDER_MID);
+        s.rect(viewport.x,                  viewport.y,                  viewport.w, 1f);
+        s.rect(viewport.x,                  viewport.y + viewport.h - 1, viewport.w, 1f);
+        s.rect(viewport.x,                  viewport.y,                  1f,         viewport.h);
+        s.rect(viewport.x + viewport.w - 1, viewport.y,                  1f,         viewport.h);
         s.flush();
         scissorIn.set(viewport.x, viewport.y, viewport.w, viewport.h);
         ctx.viewport.calculateScissors(s.getTransformMatrix(),
                 scissorIn, scissorOut);
         boolean clipped = com.badlogic.gdx.scenes.scene2d.utils.ScissorStack
                 .pushScissors(scissorOut);
+
+        // Background: solid near-black fill plus a few slowly orbiting soft
+        // dark-purple blobs so the viewport feels like a deep void rather
+        // than a flat panel. Drawn first inside the scissor so everything
+        // else paints on top.
+        drawSwirlBackground(s, viewport);
 
         // Pass A - connection arrows under the level boxes. Bright accent
         // colour so the staircase graph reads through the dim chrome.
@@ -245,6 +329,15 @@ public final class V2Map extends V2Screen {
 
             boxRects.add(new Rect(bx, by, bw, bh));
             boxIndex.add(i);
+
+            // Beacon plus-signs - one per beacon tile on visited levels.
+            // Currently at most one beacon room per level (perLevelUnique),
+            // so the loop hits at most a handful per box. Active beacons
+            // pulse; inactive ones render flat. Both share a thin black
+            // border for legibility against the mini-map fill.
+            if (lvl.visited && lvl.tiles != null) {
+                drawBeaconsOnBox(s, lvl, i, bx, by, bw, bh, ti);
+            }
         }
 
         s.flush();
@@ -262,6 +355,10 @@ public final class V2Map extends V2Screen {
                 Window.drawShape(ctx, info.x, info.y, info.w, info.h);
             }
         }
+
+        // Teleport confirmation popup chrome - drawn last so it sits on
+        // top of every other shape in this pass.
+        drawConfirmShape(s);
 
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
@@ -331,14 +428,19 @@ public final class V2Map extends V2Screen {
     }
 
     /** Visible band the graph is allowed to occupy - between the title
-     *  row and the bottom info-pane reservation. Used for scissor
-     *  clipping and pan clamping. */
+     *  row and the bottom orb-count strip + info-pane reservation. Used
+     *  for scissor clipping and pan clamping. */
     private Rect graphViewport() {
         float top    = window.top() - headerBandH();
-        float bottom = window.y + INFO_PANE_H + 16f;
+        float bottom = window.y + INFO_PANE_H + ORB_STRIP_H + 16f;
         return new Rect(window.x + 8f, bottom,
                 window.w - 16f, top - bottom);
     }
+
+    /** Height of the orb-count strip drawn between the graph viewport and
+     *  the bottom info pane. Sized for one line of regular text plus
+     *  padding. */
+    private static final float ORB_STRIP_H = 20f;
 
     /** Keep the pan within sane bounds - the graph's bounding box must
      *  retain at least a small overlap with the viewport so the user
@@ -402,6 +504,233 @@ public final class V2Map extends V2Screen {
         }
     }
 
+    /** Paint a very dark base into the graph viewport, then layer a few
+     *  slowly-orbiting soft blobs in deep blue / purple so the panel reads
+     *  as a quiet swirling void. Driven by {@link #bgSwirlT}; alpha and
+     *  positions modulate so the swirl moves continuously without ever
+     *  feeling busy. Assumes the caller already holds a scissor on the
+     *  viewport rect and that GL blend is enabled. */
+    private void drawSwirlBackground(ShapeRenderer s, Rect vp) {
+        // Solid near-black base.
+        s.setColor(0.04f, 0.04f, 0.07f, 1f);
+        s.rect(vp.x, vp.y, vp.w, vp.h);
+
+        // Three orbiting blobs. Each blob is drawn as a stack of concentric
+        // circles with decreasing alpha to fake a soft falloff with the
+        // ShapeRenderer's filled-shape pipeline.
+        float t = bgSwirlT;
+        float cx = vp.cx();
+        float cy = vp.cy();
+        float orbitR = Math.min(vp.w, vp.h) * 0.45f;
+        drawSwirlBlob(s,
+                cx + (float) Math.cos(t * 0.18f)        * orbitR * 0.7f,
+                cy + (float) Math.sin(t * 0.18f)        * orbitR * 0.4f,
+                /*outerR*/ Math.min(vp.w, vp.h) * 0.55f,
+                /*r*/ 0.18f, /*g*/ 0.10f, /*b*/ 0.28f, /*alpha*/ 0.55f);
+        drawSwirlBlob(s,
+                cx + (float) Math.cos(t * 0.27f + 2.1f) * orbitR * 0.5f,
+                cy + (float) Math.sin(t * 0.22f + 0.7f) * orbitR * 0.6f,
+                Math.min(vp.w, vp.h) * 0.42f,
+                0.10f, 0.14f, 0.32f, 0.50f);
+        drawSwirlBlob(s,
+                cx + (float) Math.cos(t * 0.12f + 4.0f) * orbitR * 0.8f,
+                cy + (float) Math.sin(t * 0.16f + 3.3f) * orbitR * 0.5f,
+                Math.min(vp.w, vp.h) * 0.36f,
+                0.22f, 0.08f, 0.20f, 0.45f);
+    }
+
+    /** Soft radial blob built from 5 concentric circles with linearly
+     *  decreasing alpha. ShapeRenderer's filled circle has no gradient
+     *  primitive so we fake one with overdraw. */
+    private void drawSwirlBlob(ShapeRenderer s, float cx, float cy,
+                               float outerR, float r, float g, float b, float alpha) {
+        int rings = 5;
+        for (int i = 0; i < rings; i++) {
+            float ringR  = outerR * (1f - i / (float) rings);
+            float ringA  = alpha * ((i + 1) / (float) rings);
+            s.setColor(r, g, b, ringA);
+            s.circle(cx, cy, ringR);
+        }
+    }
+
+    /** Count of TELEPORT_ORBs the player currently carries in their bag.
+     *  Used to gate beacon clicks and label the orb counter in the header.
+     *  Returns 0 if the play session isn't fully wired (defensive - the
+     *  map screen can be opened in attract mode too). */
+    private int teleportOrbCount() {
+        if (game.currentPlay == null) return 0;
+        Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(world.currentLevel());
+        if (player == null || player.inventory == null) return 0;
+        int n = 0;
+        for (com.bjsp123.rl2.model.Item it : player.inventory.bag) {
+            if (it == null) continue;
+            if ("TELEPORT_ORB".equals(it.type)) n += Math.max(1, it.count);
+        }
+        return n;
+    }
+
+    /** Pop one TELEPORT_ORB from the player's bag. Decrements a stack or
+     *  removes the item if the stack was 1. No-op if the player or bag
+     *  isn't available. */
+    private void consumeOneTeleportOrb() {
+        if (game.currentPlay == null) return;
+        Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(world.currentLevel());
+        if (player == null || player.inventory == null) return;
+        for (com.bjsp123.rl2.model.Item it : new ArrayList<>(player.inventory.bag)) {
+            if (it == null) continue;
+            if (!"TELEPORT_ORB".equals(it.type)) continue;
+            com.bjsp123.rl2.logic.InventorySystem.removeOneFromBag(player.inventory, it);
+            return;
+        }
+    }
+
+    /** Confirmation popup "Yes" handler - consume one orb and teleport,
+     *  then close the map back to the play screen. */
+    private void confirmTeleport() {
+        if (pendingBeaconPos == null || pendingDestLevel < 0) {
+            cancelTeleportConfirm();
+            return;
+        }
+        if (teleportOrbCount() <= 0) {
+            cancelTeleportConfirm();
+            return;
+        }
+        consumeOneTeleportOrb();
+        boolean ok = game.currentPlay != null
+                && game.currentPlay.teleportToBeacon(pendingDestLevel, pendingBeaconPos);
+        confirmOpen      = false;
+        pendingDestLevel = -1;
+        pendingBeaconPos = null;
+        if (ok) onBack.run();
+    }
+
+    /** Confirmation popup "No" handler - dismiss without consuming an orb. */
+    private void cancelTeleportConfirm() {
+        confirmOpen      = false;
+        pendingDestLevel = -1;
+        pendingBeaconPos = null;
+    }
+
+    /** Position + draw the confirmation popup chrome (panel + Yes / No
+     *  button bodies). Sized as a small modal centred on the map window.
+     *  Hit rects are written into {@link #confirmYes} / {@link #confirmNo}
+     *  so {@link #onTouchDownInBody} can dispatch the tap. Text labels
+     *  are painted later in {@link #drawConfirmText}. */
+    private void drawConfirmShape(ShapeRenderer s) {
+        if (!confirmOpen) return;
+        float panelW = 240f;
+        float panelH = 90f;
+        float panelX = window.cx() - panelW * 0.5f;
+        float panelY = window.cy() - panelH * 0.5f;
+        confirmPanel.set(panelX, panelY, panelW, panelH);
+        // Panel background - fully opaque so the swirling backdrop and any
+        // label text behind the modal can't bleed through. Single solid
+        // fill + a clear 2-px border so the dialog reads as a proper
+        // modal, not a translucent overlay.
+        s.setColor(0.06f, 0.06f, 0.09f, 1f);
+        s.rect(panelX, panelY, panelW, panelH);
+        s.setColor(UIVars.ACCENT);
+        // 2-px border by drawing 4 thin rects.
+        s.rect(panelX,            panelY,            panelW, 2f);
+        s.rect(panelX,            panelY + panelH-2, panelW, 2f);
+        s.rect(panelX,            panelY,            2f,     panelH);
+        s.rect(panelX + panelW-2, panelY,            2f,     panelH);
+
+        // Two big buttons centred along the bottom half of the popup.
+        float btnW = 80f;
+        float btnH = 26f;
+        float btnY = panelY + 10f;
+        float gap  = 16f;
+        float yesX = window.cx() - btnW - gap * 0.5f;
+        float noX  = window.cx() + gap * 0.5f;
+        confirmYes.set(yesX, btnY, btnW, btnH);
+        confirmNo .set(noX,  btnY, btnW, btnH);
+        s.setColor(UIVars.BORDER_MID);
+        s.rect(yesX, btnY, btnW, btnH);
+        s.rect(noX,  btnY, btnW, btnH);
+        s.setColor(0f, 0f, 0f, 1f);
+        s.rect(yesX + 1f, btnY + 1f, btnW - 2f, btnH - 2f);
+        s.rect(noX  + 1f, btnY + 1f, btnW - 2f, btnH - 2f);
+    }
+
+    /** Paint the confirmation popup's text labels: prompt at the top,
+     *  "Yes" / "No" on the two buttons. */
+    private void drawConfirmText(UiCtx ctx) {
+        if (!confirmOpen) return;
+        int depth = -1;
+        if (pendingDestLevel >= 0 && pendingDestLevel < world.levels.length
+                && world.levels[pendingDestLevel] != null) {
+            depth = world.levels[pendingDestLevel].depth;
+        }
+        String prompt = TextCatalog.format("ui.map.teleportConfirm",
+                TextCatalog.vars("depth", depth));
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                prompt, window.cx(), confirmPanel.y + confirmPanel.h - 14f);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
+                TextCatalog.get("ui.map.teleportYes"),
+                confirmYes.cx(), confirmYes.cy() - 4f);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.get("ui.map.teleportNo"),
+                confirmNo.cx(), confirmNo.cy() - 4f);
+    }
+
+    /** Scan {@code lvl} for beacon tiles and draw a plus-sign for each on top
+     *  of the level's mini-map box. Active beacons pulse via {@link #beaconPulseT}
+     *  and read as valid teleport targets; inactive ones draw flat. Each
+     *  plus is outlined with a thin black border (drawn as a slightly-larger
+     *  plus underneath) so the silhouette stays readable against any
+     *  mini-map fill colour. Records hit rects in {@link #beaconRects} for
+     *  {@link #onTouchDownInBody}. */
+    private void drawBeaconsOnBox(ShapeRenderer s, Level lvl, int worldIdx,
+                                  float bx, float by, float bw, float bh, float topInset) {
+        int lw = lvl.width, lh = lvl.height;
+        if (lw <= 0 || lh <= 0) return;
+        // Pulse amplitude for active beacons - scale and alpha modulated by a
+        // ~1.5 Hz sine. Border draws at the static base scale so the
+        // silhouette doesn't strobe.
+        float pulse = 0.5f + 0.5f * (float) Math.sin(beaconPulseT * 3.0);
+        float activeScale = 1.0f + 0.35f * pulse;
+        float baseArm = 5f * Math.max(0.5f, zoom);
+        float baseThick = 2f * Math.max(0.5f, zoom);
+        for (int ty = 0; ty < lh; ty++) {
+            for (int tx = 0; tx < lw; tx++) {
+                Tile t = lvl.tiles[tx][ty];
+                if (t != Tile.BEACON_INACTIVE && t != Tile.BEACON_ACTIVE) continue;
+                // Map tile (tx, ty) into the trapezoid - same maths as
+                // drawMiniMap, but evaluated at one cell centre.
+                float u = (tx + 0.5f) / (float) lw;
+                float v = (ty + 0.5f) / (float) lh;
+                float rowLeftX  = bx + topInset * v;
+                float rowRightX = bx + bw - topInset * v;
+                float cx = rowLeftX + (rowRightX - rowLeftX) * u;
+                float cy = by + bh * v;
+
+                boolean active = (t == Tile.BEACON_ACTIVE);
+                float arm = active ? baseArm * activeScale : baseArm;
+                float thick = baseThick;
+                // Black border: same plus, slightly larger, drawn first.
+                s.setColor(0f, 0f, 0f, 1f);
+                s.rect(cx - arm - 1f, cy - thick * 0.5f - 1f,
+                       (arm + 1f) * 2f, thick + 2f);
+                s.rect(cx - thick * 0.5f - 1f, cy - arm - 1f,
+                       thick + 2f, (arm + 1f) * 2f);
+                // Fill: warm yellow for active (visible from far), cool
+                // grey for inactive.
+                if (active) s.setColor(1f, 0.85f, 0.30f, 0.6f + 0.4f * pulse);
+                else        s.setColor(0.72f, 0.74f, 0.78f, 1f);
+                s.rect(cx - arm, cy - thick * 0.5f, arm * 2f, thick);
+                s.rect(cx - thick * 0.5f, cy - arm, thick, arm * 2f);
+
+                // Hit rect = bounding box of the plus arms.
+                float hitArm = baseArm * (active ? 1.35f : 1f) + 2f;
+                beaconRects.add(new Rect(cx - hitArm, cy - hitArm,
+                        hitArm * 2f, hitArm * 2f));
+                beaconRefs.add(new int[]{worldIdx, tx, ty});
+                beaconActive.add(active);
+            }
+        }
+    }
+
     /** Tint for one mini-map cell. Floor-like -> warm grey; chasm ->
      *  near-black; wall / blocking -> mid grey; unexplored -> fog. */
     private static Color tileTint(Tile t, boolean explored) {
@@ -443,49 +772,18 @@ public final class V2Map extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                 TextCatalog.get("ui.map.title"),
                 window.cx(), window.top() - ctx.headerLineH());
+        // Orb counter sits in its own strip BELOW the scrollable graph and
+        // ABOVE the info pane. Painted by drawBodyText since it's text.
+        float orbY = window.y + INFO_PANE_H + 16f + ORB_STRIP_H * 0.5f + 4f;
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.format("ui.map.orbCount",
+                        TextCatalog.vars("count", teleportOrbCount())),
+                window.cx(), orbY);
         if (world == null || world.levels == null) return;
 
-        // Depth label centred on each box.
-        float minCol = Float.POSITIVE_INFINITY, maxCol = Float.NEGATIVE_INFINITY;
-        float minD = Float.POSITIVE_INFINITY, maxD = Float.NEGATIVE_INFINITY;
-        for (Level lvl : world.levels) {
-            if (lvl == null) continue;
-            if (lvl.mapColumn < minCol) minCol = lvl.mapColumn;
-            if (lvl.mapColumn > maxCol) maxCol = lvl.mapColumn;
-            if (lvl.depth     < minD)   minD   = lvl.depth;
-            if (lvl.depth     > maxD)   maxD   = lvl.depth;
-        }
-        if (minCol == Float.POSITIVE_INFINITY) return;
-
-        // Scissor labels into the same graph viewport as the boxes so
-        // labels for off-screen panned levels don't peek into the title /
-        // info-pane bands.
-        Rect vp = graphViewport();
-        ctx.batch.flush();
-        scissorIn.set(vp.x, vp.y, vp.w, vp.h);
-        ctx.viewport.calculateScissors(ctx.batch.getTransformMatrix(),
-                scissorIn, scissorOut);
-        boolean labelClipped = com.badlogic.gdx.scenes.scene2d.utils
-                .ScissorStack.pushScissors(scissorOut);
-        float bw = BOX_W * zoom;
-        for (int i = 0; i < world.levels.length; i++) {
-            Level lvl = world.levels[i];
-            if (lvl == null) continue;
-            float[] xy = transformBox(lvl, minCol, maxCol, minD, maxD);
-            String label = lvl.visited
-                    ? TextCatalog.format("ui.map.level", TextCatalog.vars("depth", lvl.depth))
-                    : "?";
-            // Place the label in the lower band of the trapezoid (the
-            // wider, closer edge) so it stays legible above the
-            // perspective-shrunk top.
-            TextDraw.centre(ctx, ctx.fontRegular,
-                    lvl.visited ? UIVars.TEXT_BODY : UIVars.TEXT_DIM,
-                    label, xy[0] + bw * 0.5f, xy[1] + 4f * zoom);
-        }
-        ctx.batch.flush();
-        if (labelClipped) {
-            com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.popScissors();
-        }
+        // Per-box depth labels were intentionally removed - each level's
+        // box already conveys position via column + row; an additional
+        // "L{n}" caption adds clutter without information.
 
         // Bottom info pane text - only when a visited level is selected.
         if (selected >= 0 && selected < world.levels.length) {
@@ -494,6 +792,9 @@ public final class V2Map extends V2Screen {
                 drawInfoPaneText(ctx, lvl);
             }
         }
+        // Confirmation popup text - drawn last so it sits on top of every
+        // other label in this pass.
+        drawConfirmText(ctx);
     }
 
     private Rect infoPaneRect() {

@@ -42,6 +42,15 @@ public final class ThemedRoomDefinition {
 
     public Level.VisualTheme theme;
 
+    /** Per-level uniqueness tag. When non-empty, only one themed room with this
+     *  value may be stamped on a given level (in addition to the global
+     *  {@link #unique} flag, which limits to one per <em>world</em>). Used by
+     *  the beacon rooms - multiple rows share {@code perLevelUnique="BEACON"}
+     *  so any one of them may be picked but at most once per floor. Treated
+     *  like a {@link #unique} room for door post-processing
+     *  (perimeter doors become ONETIME_DOOR). */
+    public String perLevelUnique;
+
     /** Overall floor geometry of the room. {@link #RECTANGLE} keeps the carved
      *  rectangle as-is; {@link #ROUND} walls in the corners; {@link #WALKWAY}
      *  fills the interior with chasm and runs plank corridors out to each door;
@@ -69,7 +78,7 @@ public final class ThemedRoomDefinition {
      *  middle of the room (chapel-style); {@link #INSET_RECTANGLE} fills every
      *  interior FLOOR cell except the 1-tile strip ringing the walls (pedestal-
      *  style); {@link #CHECKERBOARD} alternates by parity for a chess-board look. */
-    public enum SpecialFloor { NONE, CENTER_4X4, INSET_RECTANGLE, CHECKERBOARD }
+    public enum SpecialFloor { NONE, CENTER_4X4, CENTER_3X3, INSET_RECTANGLE, CHECKERBOARD }
 
     /** Statue / lamp / altar / throne pattern token. Multiple decorations can
      *  compose. */
@@ -83,7 +92,16 @@ public final class ThemedRoomDefinition {
         /** Altar 1 cell south of the top wall, centred horizontally; two lamps
          *  one cell south of the altar flanking its centre. Used by the chapel
          *  room layout. */
-        CHAPEL_SHRINE
+        CHAPEL_SHRINE,
+        /** A single teleport beacon at the placement anchor. */
+        BEACON,
+        /** A teleport beacon, an altar (3-wide), and two large statues flanking
+         *  the assembly. Beacon sits 1 cell west of the altar's leftmost cell.
+         *  Statues drop silently if the room isn't wide enough to fit them. */
+        CHAPEL_BEACON,
+        /** A throne and a teleport beacon next to each other (beacon to the
+         *  immediate west of the throne). */
+        THRONE_BEACON
     }
 
     /** Where mob / item spawns land. {@link #CENTER} BFSes from the room's
@@ -92,7 +110,11 @@ public final class ThemedRoomDefinition {
      *  splits the spec list and seeds each half from the west / east edges
      *  (used by ant-war for the two anthills). {@link #CHASM_OK} BFSes from the
      *  centre but also collects chasm tiles - for flying mobs in the Belfry. */
-    public enum Placement  { CENTER, OPPOSITE_ENDS, CHASM_OK }
+    public enum Placement  { CENTER, OPPOSITE_ENDS, CHASM_OK,
+        /** Anchor decoration assemblies one cell south of the room's north wall
+         *  (leaving 1 floor row clear between wall and decoration); multi-row
+         *  assemblies grow southward from there. */
+        TOP }
 
     public static List<ThemedRoomDefinition> parseAll(String csv) {
         CsvTable table = CsvTable.parse(csv);
@@ -140,6 +162,9 @@ public final class ThemedRoomDefinition {
         d.mobs  = CsvTable.parseSpawnSpecList(CsvTable.str(row, "mobs", null));
         d.items = CsvTable.parseSpawnSpecList(CsvTable.str(row, "items", null));
         d.theme = CsvTable.enumCell(row, "theme", Level.VisualTheme.class, null);
+
+        String perLevel = CsvTable.str(row, "perLevelUnique", "").trim();
+        d.perLevelUnique = perLevel.isEmpty() ? null : perLevel;
 
         return d;
     }

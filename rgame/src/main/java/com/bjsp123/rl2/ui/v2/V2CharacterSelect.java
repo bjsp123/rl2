@@ -58,6 +58,9 @@ public final class V2CharacterSelect extends V2Screen {
     private boolean allItems;
     /** Grant +10 perk points on top of the character's normal allowance. */
     private boolean tenPerkPoints;
+    /** Reveal-whole-world flag: every level pre-explored, every beacon
+     *  pre-activated, +10 teleport orbs in the starting inventory. */
+    private boolean revealWholeWorld;
 
     private final Rect window       = new Rect();
     private final Rect charPopup    = new Rect();
@@ -195,7 +198,10 @@ public final class V2CharacterSelect extends V2Screen {
                         () -> { allItems = !allItems; show(); }),
                 new OptionRow(() -> TextCatalog.format("ui.characterSelect.tenPerkPoints",
                         TextCatalog.vars("state", onOff(tenPerkPoints))),
-                        () -> { tenPerkPoints = !tenPerkPoints; show(); })
+                        () -> { tenPerkPoints = !tenPerkPoints; show(); }),
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.revealWholeWorld",
+                        TextCatalog.vars("state", onOff(revealWholeWorld))),
+                        () -> { revealWholeWorld = !revealWholeWorld; show(); })
         )) {
             buttons.add(new Btn(row.label.get(), optionsPopup.x + pad, yTop,
                     btnW, btnH, row.onClick));
@@ -233,7 +239,8 @@ public final class V2CharacterSelect extends V2Screen {
         }
         game.saveSystem.clear(slot);
         game.setRootScreen(new PlayScreen(game, slot, selected,
-                customSeed, godMode, startingLevel, allItems, tenPerkPoints));
+                customSeed, godMode, startingLevel, allItems, tenPerkPoints,
+                revealWholeWorld));
     }
 
     // -- Seed entry ------------------------------------------------------

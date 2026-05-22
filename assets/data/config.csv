@@ -1,7 +1,7 @@
 kind,key,value
 gamebalance,MOBFIGHT_DEFAULT_TRIALS,10000
 gamebalance,MAX_CHARACTER_LEVEL,32
-gamebalance,XP_PER_LEVEL_STEP,10
+gamebalance,XP_PER_LEVEL_STEP,7
 gamebalance,PERK_POINTS_PER_LEVEL,1
 gamebalance,XP_PER_POWER_ORB,10
 gamebalance,MANA_PER_PILL,2
@@ -13,8 +13,8 @@ gamebalance,LEVEL_ROOM_TOLERANCE,2
 gamebalance,ROOM_MIN_SIZE,5
 gamebalance,ROOM_MAX_SIZE,10
 gamebalance,DUNGEON_DEPTH,8
-gamebalance,SIDE_BRANCH_PROBABILITY,0.25
-gamebalance,CROSSLINK_PROBABILITY,0.25
+gamebalance,TWO_LEVEL_PROBABILITY,0.6
+gamebalance,DIAGONAL_STAIR_PROBABILITY,0.25
 gamebalance,STARTING_MOBS_PER_LEVEL,5
 gamebalance,RANDOM_ITEMS_PER_LEVEL,2
 gamebalance,LOOT_DROP_FREQUENCY_COEFF,1.0

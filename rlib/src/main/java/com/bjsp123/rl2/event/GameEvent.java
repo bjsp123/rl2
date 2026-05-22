@@ -61,7 +61,11 @@ public sealed interface GameEvent permits
         GameEvent.MobAbilityUsed,
         GameEvent.DoorOpened,
         GameEvent.DoorClosed,
-        GameEvent.OnetimeDoorBroken {
+        GameEvent.OnetimeDoorBroken,
+        GameEvent.BeaconActivated,
+        GameEvent.PlayerTeleportOut,
+        GameEvent.PlayerTeleportIn,
+        GameEvent.InwardSpiralSpawn {
 
     /** Mob took a single tile step. The animator translates this into a step interpolation. */
     record MobMoved(Mob mob, int fromX, int fromY, int toX, int toY) implements GameEvent {}
@@ -139,8 +143,11 @@ public sealed interface GameEvent permits
     /** Radial fire-ball burst (on-death explosion, detonation). */
     record ExplosionEffect(Point pos, int radiusTiles) implements GameEvent {}
 
-    /** Single faint mote drifting up from a light source. */
-    record LightMoteSpawn(Point pos) implements GameEvent {}
+    /** Single faint mote drifting up from a light source.
+     *  {@code pixelOffsetY} lifts the mote's spawn point above the tile
+     *  centre - e.g. lamps emit at the lit upper half of their 2-tile-tall
+     *  sprite (16 px) while glowing items emit from the tile centre (0). */
+    record LightMoteSpawn(Point pos, float pixelOffsetY) implements GameEvent {}
 
     /** Mob recovered HP - drives the "+N" green heal-text floater. */
     record HealApplied(Mob mob, int amount) implements GameEvent {}
@@ -247,4 +254,26 @@ public sealed interface GameEvent permits
 
     /** Player smashed a one-time door — tile has already been converted to FLOOR. */
     record OnetimeDoorBroken(Point pos) implements GameEvent {}
+
+    /** A previously-inactive beacon just flipped to {@link com.bjsp123.rl2.model.Tile#BEACON_ACTIVE}
+     *  because the player stepped adjacent to it. The animator plays a fountain of
+     *  particles at the beacon's top cell plus a level-wide brightness flicker.
+     *  {@code pos} is the beacon's anchor (lower) cell. */
+    record BeaconActivated(Point pos) implements GameEvent {}
+
+    /** Player just teleported away from {@code pos} via the beacon network.
+     *  The animator plays an outgoing fade/streak effect at the source cell.
+     *  Fired before the player is removed from the source level. */
+    record PlayerTeleportOut(Point pos) implements GameEvent {}
+
+    /** Player just arrived at {@code pos} on the destination level via the
+     *  beacon network. The animator plays an incoming fade/streak effect.
+     *  Fired after the player has been placed on the destination level. */
+    record PlayerTeleportIn(Point pos) implements GameEvent {}
+
+    /** Ambient inward-spiral particle emitted from an active beacon's top
+     *  cell. Real-time-driven (like {@link LightMoteSpawn}) rather than
+     *  game-tick-driven so the cadence keeps ticking while the game is
+     *  paused on input. */
+    record InwardSpiralSpawn(Point pos) implements GameEvent {}
 }

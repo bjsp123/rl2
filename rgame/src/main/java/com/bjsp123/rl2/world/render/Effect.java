@@ -103,7 +103,18 @@ public class Effect {
          *  {@link Effect#location} to {@link Effect#endLocation},
          *  rotated to face its travel direction. Sprite is col 3 of
          *  the slash band in {@code buffs16.png}. */
-        PHYSICAL_MISSILE(36);
+        PHYSICAL_MISSILE(36),
+        /** Single particle that spirals inward to its anchor tile with a
+         *  dim -> bright -> dim Hann-window alpha curve. Active beacons
+         *  emit these continuously while in FOV. */
+        INWARD_SPIRAL(90),
+        /** One-shot screen-spanning brightness pulse. Painted as a
+         *  tinted full-viewport quad whose alpha follows a sine curve
+         *  (0 -> peak -> 0) over the effect's lifetime. Drawn by
+         *  {@code FxRenderer.drawScreenSpaceEffects} once per render
+         *  frame, AFTER the per-cell content pass. Used by beacon
+         *  activation. */
+        LEVEL_FLICKER(60);
 
         public final int frameCount;
 
@@ -114,6 +125,52 @@ public class Effect {
 
     public enum EffectTint {
         RED, YELLOW, WHITE, GREEN, BLUE, BROWN, ORANGE, CYAN, PINK, MAUVE
+    }
+
+    /** Particle-sprite selector for effects that paint small particles
+     *  (burst / splash / fountain / motes / spirals). Source cells live
+     *  in {@code sprites/buffs16.png} as a 2x3 grid right of the surprise
+     *  sprite; loaded via
+     *  {@link com.bjsp123.rl2.world.render.BuffIcons#particleRegion(int)}.
+     *  <p>{@link #STARS} / {@link #DROPS} are GROUP values - the builder
+     *  resolves them to a specific {@code STAR_*} / {@code DROP_*} variant
+     *  via the per-effect {@code Random} at construction time so all
+     *  particles in one effect share a single sprite (cheap renderer + a
+     *  bit of variation across spawns). Pass a specific variant if you
+     *  want to lock the look. */
+    public enum ParticleShape {
+        STARS, DROPS,
+        STAR_0, STAR_1, STAR_2, STAR_3,
+        DROP_0, DROP_1;
+
+        /** Resolve a group value to a concrete variant. Specific values
+         *  pass through unchanged. */
+        public ParticleShape resolve(java.util.Random rng) {
+            if (this == STARS) {
+                int i = rng == null ? 0 : rng.nextInt(4);
+                return new ParticleShape[]{STAR_0, STAR_1, STAR_2, STAR_3}[i];
+            }
+            if (this == DROPS) {
+                int i = rng == null ? 0 : rng.nextInt(2);
+                return new ParticleShape[]{DROP_0, DROP_1}[i];
+            }
+            return this;
+        }
+
+        /** Atlas index (0..5) of this shape's source cell. -1 for unresolved
+         *  group values (caller must call {@link #resolve(java.util.Random)}
+         *  first). */
+        public int atlasIndex() {
+            return switch (this) {
+                case STAR_0 -> 0;
+                case STAR_1 -> 1;
+                case DROP_0 -> 2;
+                case STAR_2 -> 3;
+                case STAR_3 -> 4;
+                case DROP_1 -> 5;
+                default     -> -1;
+            };
+        }
     }
 
     /** Pixel pitch of one tile — matches the renderer's CELL size. */
@@ -146,6 +203,13 @@ public class Effect {
     /** ATTACK_FLASH only: column in the slash band of {@code buffs16.png}. */
     public int spriteCol;
 
+    /** Vertical pixel offset applied on top of the tile-anchor baseline.
+     *  Lets the same effect be raised above the tile centre - e.g. beacon
+     *  motes / spirals emit from the lit upper half of the 2-tall sprite
+     *  rather than the floor cell. 0 = anchored at tile centre as
+     *  before. */
+    public float pixelOffsetY;
+
     /** DUST_CLOUD only: world pixel anchor (the foot-position of the
      *  spawning mob at the moment of spawn). The cloud drifts from here
      *  along {@link #dustVxPxPerFrame}, {@link #dustVyPxPerFrame}. */
@@ -168,6 +232,11 @@ public class Effect {
      *  toward white as they age - used by powerup pickups so the sparks start
      *  colored then turn white before fading. */
     public boolean particleFadeToWhite;
+    /** Sprite each particle is drawn with. Resolved to a concrete variant
+     *  by the builder so {@code FxRenderer} can do a single
+     *  {@link com.bjsp123.rl2.world.render.BuffIcons#particleRegion} lookup.
+     *  {@code null} = legacy whiteRegion stamp (kept as a fallback). */
+    public ParticleShape particleShape;
     public float[] particleX0;
     public float[] particleY0;
     public float[] particleVX;
@@ -334,6 +403,26 @@ public class Effect {
         return EffectBuilder.lightMote(location, rng);
     }
 
+    /** Single inward-spiral particle anchored at {@code location}'s tile
+     *  but lifted 32 px above the sprite base so the swirl forms around the
+     *  beacon's lit upper half. Wider radius than a single tile so the
+     *  spiral reads as a halo rather than a tight curl. Ambient emission
+     *  from active beacons; spawned on a real-time cadence by
+     *  {@code LevelSystem.tickLightMotesRealTime}. */
+    public static Effect inwardSpiralParticle(Point location, Random rng) {
+        return EffectBuilder.inwardSpiralParticle(location,
+                /*startRadiusPx*/ 28f, /*pixelOffsetY*/ 28f, rng);
+    }
+
+    /** Light mote lifted to match the beacon's spiral centre (28 px above
+     *  the sprite base) instead of the tile centre, so the two ambient
+     *  particle streams share an origin. */
+    public static Effect beaconLightMote(Point location, Random rng) {
+        Effect e = EffectBuilder.lightMote(location, rng);
+        e.pixelOffsetY = 28f;
+        return e;
+    }
+
     public static Effect fireParticle(Point location, Random rng) {
         return EffectBuilder.fireParticle(location, rng);
     }
@@ -380,15 +469,17 @@ public class Effect {
         return EffectBuilder.particleBurst(location, tint, count, rng);
     }
 
-    /** Liquid (or grass) splash at a character's feet. Radial cone 20°..160° with
-     *  gravity and a gentle bounce when droplets hit the tile floor. */
+    /** Liquid (or grass) splash at a character's feet. Tight upward cone with
+     *  gravity and a small bounce - kept brief so it reads as a footstep, not
+     *  a sustained spray. */
     public static Effect footSplash(Point location, EffectTint tint, Random rng) {
         return EffectBuilder.splash(location, tint,
-                /*count*/ 8 + rng.nextInt(4),
-                /*speedMin*/ 1.2f, /*speedMax*/ 2.2f,
-                /*bounceDamping*/ 0.4f, /*particleSize*/ 1.5f,
-                /*angleMinDeg*/ 20f, /*angleMaxDeg*/ 160f,
-                /*duration*/ 60, rng);
+                /*count*/ 5 + rng.nextInt(3),
+                /*speedMin*/ 0.7f, /*speedMax*/ 1.3f,
+                /*bounceDamping*/ 0.25f, /*particleSize*/ 1.5f,
+                /*angleMinDeg*/ 55f, /*angleMaxDeg*/ 125f,
+                /*duration*/ 24,
+                /*shape*/ ParticleShape.DROPS, rng);
     }
 
     /**
@@ -426,6 +517,41 @@ public class Effect {
                 /*speedMin*/ 0.7f, /*speedMax*/ 1.3f,
                 up ? StreakDirection.UP : StreakDirection.DOWN,
                 EffectType.TELEPORT_STREAKS.frameCount, rng);
+    }
+
+    /** Beacon activation visual. Three layers composed from primitives:
+     *  a bright yellow upward fountain rising from the beacon's top cell,
+     *  a wide white ignition burst, and a screen-spanning warm flicker
+     *  pulse so the player feels the beacon "ignite" the level. */
+    public static void beaconActivation(EffectStage stage, Point at, Random rng) {
+        // Top cell of the beacon - the fountain rises from the upper sprite half,
+        // which sits one tile north of the anchor cell.
+        Point top = new Point(at.tileX(), at.tileY() + 1);
+        stage.add(EffectBuilder.fountain(top, EffectTint.YELLOW,
+                /*count*/ 40,
+                /*spawnSpread*/ 30, /*life*/ 50,
+                /*riseSpeedMin*/ 0.7f, /*riseSpeedMax*/ 1.6f,
+                /*horizontalJitter*/ 0.9f, /*fadeToWhite*/ true,
+                /*positionJitterX*/ 6f, /*positionJitterY*/ 4f, rng));
+        stage.add(EffectBuilder.burst(top, EffectTint.WHITE,
+                /*count*/ 24, /*speedMin*/ 1.4f, /*speedMax*/ 2.8f,
+                /*size*/ 2.0f, /*bright*/ true,
+                /*duration*/ EffectType.PARTICLE_BURST.frameCount, rng));
+        stage.add(EffectBuilder.flickerLevel(top, EffectTint.YELLOW,
+                EffectType.LEVEL_FLICKER.frameCount));
+    }
+
+    /** Player-side teleport visual at the source cell - upward green streaks,
+     *  same family as {@link #teleportStreaks} so beacon teleports look like
+     *  the existing mob teleport. */
+    public static Effect playerTeleportOut(Point location, Random rng) {
+        return teleportStreaks(location, /*up=*/true, rng);
+    }
+
+    /** Player-side teleport visual at the destination cell - downward green
+     *  streaks settling onto the arrival tile. */
+    public static Effect playerTeleportIn(Point location, Random rng) {
+        return teleportStreaks(location, /*up=*/false, rng);
     }
 
     /** Single floating "up" glyph drifting upward and fading. {@code startDelay}

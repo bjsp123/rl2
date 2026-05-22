@@ -73,7 +73,9 @@ public final class BuffSystem {
         if (target.buffs == null) target.buffs = new java.util.ArrayList<>();
         // Hope grants immunity to FRIGHTENED - silently swallow incoming fear while
         // hope is active. Likewise fireImmune mobs don't take ON_FIRE.
-        if (type == BuffType.FRIGHTENED && (hasBuff(target, BuffType.HOPE) || !target.effectiveStats().terrifiable)) {
+        // Standing on a lit tile also blocks fear: courage in the light.
+        if (type == BuffType.FRIGHTENED && (hasBuff(target, BuffType.HOPE) || !target.effectiveStats().terrifiable
+                || isOnLitTile(level, target))) {
             return null;
         }
         if (type == BuffType.ON_FIRE && target.effectiveStats().fireImmune) return null;
@@ -103,6 +105,18 @@ public final class BuffSystem {
         }
         maybeFreeze(level, target, type, source);
         return buff;
+    }
+
+    /** True when {@code mob} stands on a tile currently illuminated by the
+     *  level's lighting pass. Used to gate FRIGHTENED both ways: lit tiles
+     *  block application and strip the buff on per-turn tick. Defensive
+     *  against null {@code level.lit} (transient field reset on load). */
+    private static boolean isOnLitTile(Level level, Mob mob) {
+        if (level == null || mob == null || mob.position == null) return false;
+        if (level.lit == null) return false;
+        int x = mob.position.tileX(), y = mob.position.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        return level.lit[x][y];
     }
 
     private static void maybeFreeze(Level level, Mob target, BuffType applied, Mob source) {
@@ -168,6 +182,16 @@ public final class BuffSystem {
                 if (Math.max(dx, dy) <= 1) {
                     apply(level, other, BuffType.FRIGHTENED, 1, FEAR_AURA_DURATION, src);
                 }
+            }
+        }
+        // Strip FRIGHTENED off any mob that stands on a lit tile - courage in
+        // the light. Run before the per-buff effect pass so a mob with fear
+        // who just stepped into light doesn't take one extra frightened
+        // turn before it clears.
+        for (Mob m : snapshot) {
+            if (m == null || m.hp <= 0 || m.buffs == null || m.buffs.isEmpty()) continue;
+            if (hasBuff(m, BuffType.FRIGHTENED) && isOnLitTile(level, m)) {
+                removeBuff(m, BuffType.FRIGHTENED);
             }
         }
         for (Mob m : snapshot) {

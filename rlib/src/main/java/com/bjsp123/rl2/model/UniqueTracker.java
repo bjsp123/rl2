@@ -16,4 +16,21 @@ public final class UniqueTracker {
     public Set<String> rooms = new HashSet<>();
     public Set<String> mobs  = new HashSet<>();
     public Set<String> items = new HashSet<>();
+
+    /** Scratch set of perLevelUnique tags claimed during the level currently
+     *  being generated. Cleared by {@link #resetForNewLevel} at the top of
+     *  every {@code LevelFactory.createDungeonLevel} call so the constraint
+     *  is correctly per-level. Transient - not saved with the world; once
+     *  generation finishes the contents are irrelevant. */
+    public transient Set<String> currentLevelPerLevelUniques = new HashSet<>();
+
+    /** Called at the start of each level's generation to reset the
+     *  per-level uniqueness scratch. */
+    public void resetForNewLevel() {
+        if (currentLevelPerLevelUniques == null) {
+            currentLevelPerLevelUniques = new HashSet<>();
+        } else {
+            currentLevelPerLevelUniques.clear();
+        }
+    }
 }

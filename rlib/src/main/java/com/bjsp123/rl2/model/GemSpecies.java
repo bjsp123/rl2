@@ -24,11 +24,18 @@ public enum GemSpecies {
     PETRICHOR   (VisualTheme.CONCRETE, 2, 0x88aa55ff),  // mossy green
     STEELROCK   (VisualTheme.CONCRETE, 3, 0xaaccffff),  // steel sheen
 
-    BLOODGLASS    (VisualTheme.STRAIGHTFORWARD, 1, 0xaa5588ff), // blood red  
-    SLIPGLASS     (VisualTheme.STRAIGHTFORWARD, 1, 0xaa9966ff), // sickly yellow-green
-    JADEGLASS  (VisualTheme.STRAIGHTFORWARD, 1, 0x33bb66ff),  // jade green
-    MILKSPAR   (VisualTheme.STRAIGHTFORWARD, 2, 0xddddddff),  // milky 
-    MALACHOR   (VisualTheme.STRAIGHTFORWARD, 3, 0x66ee88ff); // malachite green
+    BLOODGLASS    (VisualTheme.SHINY, 1, 0xaa5588ff), // blood red  
+    SLIPGLASS     (VisualTheme.SHINY, 1, 0xaa9966ff), // sickly yellow-green
+    JADEGLASS  (VisualTheme.SHINY, 1, 0x33bb66ff),  // jade green
+    MILKSPAR   (VisualTheme.SHINY, 2, 0xddddddff),  // milky 
+    MALACHOR   (VisualTheme.SHINY, 3, 0x66ee88ff), // malachite green
+
+    LETTUSTONE    (VisualTheme.GOTHIC, 1, 0x77bb77ff), // pale green  
+    PORQUOISE     (VisualTheme.GOTHIC, 1, 0x44aaaaff), // cyan-ish
+    HAMETHYST  (VisualTheme.GOTHIC, 1, 0xaa22aaff), // purple  
+    FLUOROS   (VisualTheme.GOTHIC, 2, 0x22aaeeff),  // bright cyan
+    PYRIUM   (VisualTheme.GOTHIC, 3, 0xccaa33ff);  // pyrite gold
+
 
     /** Dungeon theme this gem appears in. */
     public final VisualTheme theme;

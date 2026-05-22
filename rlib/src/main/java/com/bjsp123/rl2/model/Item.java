@@ -156,7 +156,14 @@ public class Item {
         POWERUP,
         /** Non-targeted charged tool that applies {@link Item#appliesBuff}
          *  to the user without consuming the item. */
-        APPLYBUFF
+        APPLYBUFF,
+        /** Open the world map screen so the player may teleport to any
+         *  active beacon. One item is consumed when the player confirms a
+         *  teleport on the map; merely opening the map does NOT consume
+         *  the item. UI-layer behaviour - {@link com.bjsp123.rl2.logic.ItemSystem#useItem}
+         *  is a no-op for this; the use-from-inventory path in the
+         *  controller pushes the V2Map screen. */
+        TELEPORT
     }
 
     /** Identifier - string key matching the {@code type} column of a row in

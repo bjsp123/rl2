@@ -30,21 +30,26 @@ public final class GemSprites {
     public static TextureRegion regionFor(GemSpecies species, int size) {
         loadGemTexture();
         Point sq = switch (species) {
-            case BLAZINGSTAR -> new Point(size-1,1);
-            case AZURITE     -> new Point(size-1,2);
-            case AMBERGLEAM  -> new Point(size-1,3);
-            case CUPRIUM    -> new Point(4+size,4);
-            case ARGENTEL     -> new Point(4+size,5);
-            case AURELIUM  -> new Point(4+size,6);
-            case BLOODGLASS    -> new Point(4+size,4);
-            case SLIPGLASS     -> new Point(4+size,5);
-            case JADEGLASS  -> new Point(4+size,6);
+            case BLAZINGSTAR -> new Point(size-1,0);
+            case AZURITE     -> new Point(size-1,1);
+            case AMBERGLEAM  -> new Point(size-1,2);
+            case LETTUSTONE -> new Point(size-1,3);
+            case PORQUOISE  -> new Point(size-1,4);
+            case HAMETHYST  -> new Point(size-1,5);
+            case CUPRIUM    -> new Point(4+size,3);
+            case ARGENTEL   -> new Point(4+size,5);
+            case AURELIUM   -> new Point(4+size,4);
+            case BLOODGLASS -> new Point(4+size,0);
+            case SLIPGLASS  -> new Point(4+size,1);
+            case JADEGLASS  -> new Point(4+size,2);
             case SCINTILLIUM -> new Point(1,6);
             case GLITTERSHARD -> new Point(7,6);
-            case PETRICHOR   -> new Point(5,6);
-            case STEELROCK   -> new Point(8,6);
+            case PETRICHOR  -> new Point(5,6);
+            case STEELROCK  -> new Point(8,6);
             case MILKSPAR   -> new Point(4,6);
             case MALACHOR   -> new Point(6,6);
+            case FLUOROS    -> new Point(0,6);
+            case PYRIUM     -> new Point(3,6);
             default   -> new Point(0,0);
         };
        

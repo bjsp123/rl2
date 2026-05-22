@@ -64,6 +64,11 @@ public class PlayScreen implements Screen {
     /** Pre-game-options "+10 perk points" flag - adds 10 perk points to
      *  whatever the character normally starts with. */
     private final boolean tenPerkPointsRequested;
+    /** Pre-game-options "reveal whole world" flag - marks every tile on
+     *  every level explored, flips every beacon to active, and adds 10
+     *  extra teleport orbs to the starting inventory so the player can
+     *  immediately use the network. */
+    private final boolean revealWholeWorldRequested;
 
     private World world;
     /** Exposed so burger-menu items from other packages can construct level-info
@@ -114,22 +119,38 @@ public class PlayScreen implements Screen {
      *  and delegates everything else here. Built in {@link #initialize()}. */
     private PlayController controller;
 
+    /** Teleport the player to a beacon. Thin wrapper around the
+     *  package-private {@link PlayController#teleportToBeacon} so UI screens
+     *  outside the screen package (e.g. V2Map) can trigger a beacon
+     *  teleport. */
+    public boolean teleportToBeacon(int destLevelIdx, com.bjsp123.rl2.model.Point beacon) {
+        if (controller == null) return false;
+        return controller.teleportToBeacon(destLevelIdx, beacon);
+    }
+
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls) {
-        this(game, slot, cls, null, false, 1, false, false);
+        this(game, slot, cls, null, false, 1, false, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls, Long seed) {
-        this(game, slot, cls, seed, false, 1, false, false);
+        this(game, slot, cls, seed, false, 1, false, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode) {
-        this(game, slot, cls, seed, godMode, 1, false, false);
+        this(game, slot, cls, seed, godMode, 1, false, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode, int startingLevel,
                       boolean allItems, boolean tenPerkPoints) {
+        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, false);
+    }
+
+    public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
+                      Long seed, boolean godMode, int startingLevel,
+                      boolean allItems, boolean tenPerkPoints,
+                      boolean revealWholeWorld) {
         this.game = game;
         this.saveSlot = slot;
         this.charClass = cls;
@@ -139,6 +160,7 @@ public class PlayScreen implements Screen {
         this.startingLevel = startingLevel;
         this.allItemsRequested = allItems;
         this.tenPerkPointsRequested = tenPerkPoints;
+        this.revealWholeWorldRequested = revealWholeWorld;
     }
 
     public PlayScreen(Rl2Game game, int slot, World loadedWorld) {
@@ -153,6 +175,7 @@ public class PlayScreen implements Screen {
         this.startingLevel = 1;
         this.allItemsRequested = false;
         this.tenPerkPointsRequested = false;
+        this.revealWholeWorldRequested = false;
     }
 
     @Override
@@ -284,6 +307,7 @@ public class PlayScreen implements Screen {
             }
             if (tenPerkPointsRequested) player.perkPoints += 10;
             if (allItemsRequested) grantOneOfEachItem(player);
+            if (revealWholeWorldRequested) revealWholeWorld(player, levels);
             startLevel.mobs.add(player);
             String playerName = player.name != null ? player.name
                     : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
@@ -429,6 +453,8 @@ public class PlayScreen implements Screen {
         if (newRun) controller.seedDefaultActionBar(player, charClass);
         v2Inventory.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
+        controller.setOpenMapScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
+                game, game.ui, game::popScreen, world)));
         v2Hud.setOnActionUse(controller::triggerActionSlot);
 
         gameInput = new GameInput(world, camera, cameraController);
@@ -497,6 +523,41 @@ public class PlayScreen implements Screen {
         }
     }
 
+    /** "Reveal whole world" debug option: mark every tile of every level
+     *  explored + visited, flip every inactive beacon to active so it's
+     *  immediately a teleport target on the map, and stock the player
+     *  with 10 extra teleport orbs on top of the class default. */
+    private static void revealWholeWorld(Mob player, Level[] levels) {
+        if (levels == null) return;
+        for (Level lvl : levels) {
+            if (lvl == null) continue;
+            lvl.visited = true;
+            if (lvl.explored != null) {
+                for (int x = 0; x < lvl.width; x++) {
+                    for (int y = 0; y < lvl.height; y++) lvl.explored[x][y] = true;
+                }
+            }
+            if (lvl.tiles != null) {
+                for (int x = 0; x < lvl.width; x++) {
+                    for (int y = 0; y < lvl.height; y++) {
+                        if (lvl.tiles[x][y] == com.bjsp123.rl2.model.Tile.BEACON_INACTIVE) {
+                            lvl.tiles[x][y] = com.bjsp123.rl2.model.Tile.BEACON_ACTIVE;
+                        }
+                    }
+                }
+            }
+        }
+        if (player != null && player.inventory != null) {
+            for (int i = 0; i < 10; i++) {
+                try {
+                    com.bjsp123.rl2.model.Item orb =
+                            com.bjsp123.rl2.logic.ItemFactory.build("TELEPORT_ORB");
+                    com.bjsp123.rl2.logic.InventorySystem.addToBag(player.inventory, orb);
+                } catch (RuntimeException ignored) { /* registry missing - skip */ }
+            }
+        }
+    }
+
     /** Save the in-progress world to disk. Called on hide/pause. */
     public void persist() {
         if (world != null && TurnSystem.findPlayer(world.currentLevel()) != null) {
@@ -549,8 +610,14 @@ public class PlayScreen implements Screen {
         // attack lunge / flinch, projectile in flight, death flicker / fade) bumps
         // animator.queue.freezeFrames; we wait for it to drain before letting another tick
         // advance. Off-screen actions add 0, so they never hold up the world.
+        // Additionally hold on pending projectile impacts: when freeze hits 0 on a
+        // projectile's final frame, animator.tick (run later in this same frame)
+        // fires the impact. If we ticked the world now, the target mob would get a
+        // free move BEFORE the impact applies and the projectile would land where
+        // they used to be. Waiting one more frame lets the impact resolve first.
         boolean ticked = !overlayOpen
-                && (com.bjsp123.rl2.ui.skin.Settings.instantActions() || animator.queue.freezeFrames == 0)
+                && (com.bjsp123.rl2.ui.skin.Settings.instantActions()
+                        || (animator.queue.freezeFrames == 0 && !animator.hasPendingImpacts()))
                 && controller.tick(level);
         if (ticked) {
             level.currentTurn = TurnSystem.standardTurnForTick(world.tick);

@@ -69,6 +69,18 @@ public final class EffectBuilder {
                                float speedMin, float speedMax,
                                float particleSize, boolean bright,
                                int durationFrames, Random rng) {
+        return burst(at, tint, count, speedMin, speedMax, particleSize, bright,
+                durationFrames, Effect.ParticleShape.STARS, rng);
+    }
+
+    /** {@link #burst} variant that pins the particle sprite to a specific
+     *  {@link Effect.ParticleShape}. Group values (STARS / DROPS) are
+     *  resolved to a concrete variant via {@code rng} at construction. */
+    public static Effect burst(Point at, EffectTint tint, int count,
+                               float speedMin, float speedMax,
+                               float particleSize, boolean bright,
+                               int durationFrames,
+                               Effect.ParticleShape shape, Random rng) {
         Effect e = new Effect(at, EffectType.PARTICLE_BURST);
         e.tint                = tint;
         e.ignoresFov          = true;
@@ -76,6 +88,7 @@ public final class EffectBuilder {
         e.particleSize        = particleSize;
         e.particleBright      = bright;
         e.frameCount          = durationFrames;
+        e.particleShape       = shape == null ? null : shape.resolve(rng);
         e.particleX0          = new float[count];
         e.particleY0          = new float[count];
         e.particleVX          = new float[count];
@@ -110,6 +123,18 @@ public final class EffectBuilder {
                                 float bounceDamping, float particleSize,
                                 float angleMinDeg, float angleMaxDeg,
                                 int durationFrames, Random rng) {
+        return splash(at, tint, count, speedMin, speedMax, bounceDamping,
+                particleSize, angleMinDeg, angleMaxDeg, durationFrames,
+                Effect.ParticleShape.STARS, rng);
+    }
+
+    /** {@link #splash} variant pinning the particle sprite. */
+    public static Effect splash(Point at, EffectTint tint, int count,
+                                float speedMin, float speedMax,
+                                float bounceDamping, float particleSize,
+                                float angleMinDeg, float angleMaxDeg,
+                                int durationFrames,
+                                Effect.ParticleShape shape, Random rng) {
         Effect e = new Effect(at, EffectType.PARTICLE_BURST);
         e.tint                  = tint;
         e.ignoresFov            = true;
@@ -117,6 +142,7 @@ public final class EffectBuilder {
         e.particleSize          = particleSize;
         e.particleBounceDamping = bounceDamping;
         e.frameCount            = durationFrames;
+        e.particleShape         = shape == null ? null : shape.resolve(rng);
         e.particleX0 = new float[count];
         e.particleY0 = new float[count];
         e.particleVX = new float[count];
@@ -152,11 +178,25 @@ public final class EffectBuilder {
                                   float horizontalJitter, boolean fadeToWhite,
                                   float positionJitterX, float positionJitterY,
                                   Random rng) {
+        return fountain(at, tint, count, spawnSpreadFrames, particleLifeFrames,
+                riseSpeedMin, riseSpeedMax, horizontalJitter, fadeToWhite,
+                positionJitterX, positionJitterY,
+                Effect.ParticleShape.STARS, rng);
+    }
+
+    /** {@link #fountain} variant pinning the particle sprite. */
+    public static Effect fountain(Point at, EffectTint tint, int count,
+                                  int spawnSpreadFrames, int particleLifeFrames,
+                                  float riseSpeedMin, float riseSpeedMax,
+                                  float horizontalJitter, boolean fadeToWhite,
+                                  float positionJitterX, float positionJitterY,
+                                  Effect.ParticleShape shape, Random rng) {
         Effect e = new Effect(at, EffectType.PARTICLE_BURST);
         e.tint                = tint;
         e.ignoresFov          = true;
         e.particleFadeToWhite = fadeToWhite;
         e.frameCount          = spawnSpreadFrames + particleLifeFrames;
+        e.particleShape       = shape == null ? null : shape.resolve(rng);
         e.particleX0          = new float[count];
         e.particleY0          = new float[count];
         e.particleVX          = new float[count];
@@ -558,6 +598,58 @@ public final class EffectBuilder {
         e.particleX0 = new float[]{ rng.nextFloat() * (float)(Math.PI * 2) };
         e.particleY0 = new float[]{ (rng.nextFloat() - 0.5f) * 6f };
         e.particleVX = new float[]{ 0.7f + rng.nextFloat() * 0.6f };
+        e.particleShape = Effect.ParticleShape.STARS.resolve(rng);
+        return e;
+    }
+
+    /** Teleport-orb palette for {@link #inwardSpiralParticle}. Cool
+     *  white/cyan/blue mix matching the teleport-bomb sprite's colours
+     *  so the swirl reads as the same arcane energy. WHITE appears twice
+     *  for a slightly higher proportion of bright cores; the renderer
+     *  brightens whichever tint is picked so the silhouette stays
+     *  punchy. */
+    private static final Effect.EffectTint[] SPIRAL_TINTS = {
+            Effect.EffectTint.WHITE,
+            Effect.EffectTint.WHITE,
+            Effect.EffectTint.CYAN,
+            Effect.EffectTint.BLUE
+    };
+
+    /** Single particle that spirals inward to {@code at} with a
+     *  dim -> bright -> dim Hann-window alpha curve over its lifetime; the
+     *  renderer is in {@code FxRenderer.drawInwardSpiral}. Like
+     *  {@link #lightMote}, this is a one-particle effect that encodes its
+     *  parameters in the 1-element {@code particleX0/Y0/VX} arrays:
+     *  {@code particleX0[0]} = initial angle (rad), {@code particleY0[0]} =
+     *  initial radius (px), {@code particleVX[0]} = number of rotations
+     *  over the particle's lifetime. {@code pixelOffsetY} lifts the
+     *  effect's centre above the tile's anchor baseline (e.g. beacons
+     *  spawn from the lit upper half of the sprite, not the floor cell).
+     *  Tint is randomised from a small palette so a steady emission
+     *  cadence reads as multicolour shimmer. */
+    public static Effect inwardSpiralParticle(Point at, float startRadiusPx,
+                                              float pixelOffsetY, Random rng) {
+        Effect e = new Effect(at, EffectType.INWARD_SPIRAL);
+        e.particleX0    = new float[]{ rng.nextFloat() * (float)(Math.PI * 2) };
+        e.particleY0    = new float[]{ startRadiusPx };
+        e.particleVX    = new float[]{ 1.5f + rng.nextFloat() };
+        e.tint          = SPIRAL_TINTS[rng.nextInt(SPIRAL_TINTS.length)];
+        e.pixelOffsetY  = pixelOffsetY;
+        e.particleShape = Effect.ParticleShape.STARS.resolve(rng);
+        return e;
+    }
+
+    /** Screen-spanning brightness pulse. Painted by
+     *  {@code FxRenderer.drawScreenSpaceEffects} as a tinted full-viewport
+     *  quad whose alpha follows {@code sin(pi * lifeT)} so it rises from 0,
+     *  peaks at mid-life, and fades to 0 at the end. The {@code anchor}
+     *  point is required by the {@link Effect} contract but doesn't drive
+     *  the visual - the viewport bounds come from the camera at draw time. */
+    public static Effect flickerLevel(Point anchor, EffectTint tint, int durationFrames) {
+        Effect e = new Effect(anchor, EffectType.LEVEL_FLICKER);
+        e.tint       = tint;
+        e.ignoresFov = true;       // screen-space; FOV doesn't apply
+        e.frameCount = durationFrames;
         return e;
     }
 

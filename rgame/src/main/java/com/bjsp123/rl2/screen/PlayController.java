@@ -62,6 +62,14 @@ final class PlayController {
      *  between steps, the path aborts. {@code -1} when no auto-path is in progress. */
     private double autoMoveLastHp = -1;
 
+    /** Callback to push the world-map screen from the controller. Set by
+     *  {@link PlayScreen} after the screen graph is wired so the controller
+     *  can request map-open in response to using a teleport-orb item
+     *  without taking a hard dependency on {@code Rl2Game}. */
+    private Runnable openMapScreen;
+    /** Wire the map-screen-open callback. */
+    public void setOpenMapScreen(Runnable r) { this.openMapScreen = r; }
+
     PlayController(World world,
                    Animator animator,
                    ActionBar actionBar,
@@ -195,9 +203,10 @@ final class PlayController {
                 ItemSystem.useItem(level, player, bound);
                 afterMove(level);
             }
-            case WAND    -> beginWand(level, player, bound);
-            case GRAPPLE -> beginGrapple(level, player, bound);
-            case JUMP    -> beginJump(level, player, bound);
+            case WAND     -> beginWand(level, player, bound);
+            case GRAPPLE  -> beginGrapple(level, player, bound);
+            case JUMP     -> beginJump(level, player, bound);
+            case TELEPORT -> { if (openMapScreen != null) openMapScreen.run(); }
             case NONE -> { /* handled above */ }
         }
     }
@@ -218,9 +227,10 @@ final class PlayController {
                     sounds.play("sfx.player.action.eat");
                 afterMove(level);
             }
-            case WAND    -> beginWand(level, user, item);
-            case GRAPPLE -> beginGrapple(level, user, item);
-            case JUMP    -> beginJump(level, user, item);
+            case WAND     -> beginWand(level, user, item);
+            case GRAPPLE  -> beginGrapple(level, user, item);
+            case JUMP     -> beginJump(level, user, item);
+            case TELEPORT -> { if (openMapScreen != null) openMapScreen.run(); }
             case NONE -> { /* unreachable - the popup gates Use on isUsable() */ }
         }
     }
@@ -531,6 +541,75 @@ final class PlayController {
                 }
             }
         }
+    }
+
+    /** Teleport the player to a 4-neighbour of {@code beacon} on level
+     *  {@code destLevelIdx}. Mirrors {@link #tryStairs} for the cross-level
+     *  swap, but brackets the move with player-teleport-out / teleport-in
+     *  events so the animator can play a fade visual at the source and
+     *  destination. Consumes the player's move cost so any mobs on the
+     *  destination level act once before the player gets input.
+     *
+     *  <p>Returns {@code true} if the teleport succeeded, {@code false} if
+     *  the destination is invalid or no walkable neighbour exists (in which
+     *  case the player stays put). */
+    public boolean teleportToBeacon(int destLevelIdx, Point beacon) {
+        if (destLevelIdx < 0 || destLevelIdx >= world.levels.length) return false;
+        Level destLevel = world.levels[destLevelIdx];
+        if (destLevel == null || beacon == null) return false;
+        // The beacon tile itself blocks movement, so the player lands on a
+        // walkable 4-neighbour. Deterministic order keeps reloads stable.
+        int bx = beacon.tileX(), by = beacon.tileY();
+        Point arrival = null;
+        int[][] dirs = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+        for (int[] d : dirs) {
+            int ax = bx + d[0], ay = by + d[1];
+            if (ax < 0 || ay < 0 || ax >= destLevel.width || ay >= destLevel.height) continue;
+            if (destLevel.tiles[ax][ay].blocksMovement()) continue;
+            // Don't land on top of another mob.
+            boolean occupied = false;
+            for (Mob m : destLevel.mobs) {
+                if (m != null && m.position != null
+                        && m.position.tileX() == ax && m.position.tileY() == ay) {
+                    occupied = true;
+                    break;
+                }
+            }
+            if (occupied) continue;
+            arrival = new Point(ax, ay);
+            break;
+        }
+        if (arrival == null) return false;
+
+        Level cur = world.currentLevel();
+        Mob player = TurnSystem.findPlayer(cur);
+        if (player == null) return false;
+
+        // Departure visual on the source level.
+        if (cur.events != null) {
+            cur.events.add(new com.bjsp123.rl2.event.GameEvent.PlayerTeleportOut(player.position));
+        }
+
+        cur.mobs.remove(player);
+        player.position       = arrival;
+        player.targetPosition = null;
+        destLevel.mobs.add(player);
+        world.currentLevelIndex = destLevelIdx;
+        destLevel.visited = true;
+
+        // Arrival visual on the destination level.
+        if (destLevel.events != null) {
+            destLevel.events.add(new com.bjsp123.rl2.event.GameEvent.PlayerTeleportIn(arrival));
+        }
+
+        TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+        for (Mob mob : destLevel.mobs) mob.effectiveStats();
+        afterMove(destLevel);
+        recenterCamera.run();
+        levelRenderer.markDirty();
+
+        if (sounds != null) sounds.play("sfx.world.action.enter_level");
+        return true;
     }
 
     private void tryStairs(int direction) {

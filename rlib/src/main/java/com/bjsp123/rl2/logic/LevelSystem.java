@@ -23,6 +23,10 @@ public class LevelSystem {
     /** Faster cadence for power-orb sparkles - magical loot should glint noticeably
      *  more than ambient lamps so the player's eye snaps to it across a room. */
     private static final int POWER_ORB_SPARKLE_INTERVAL_MS = 700;
+    /** Cadence for the inward-spiral particle emitted from every visible
+     *  active beacon. ~80 ms between emissions reads as a steady spiral
+     *  swarm without saturating the effect stage. */
+    private static final int INWARD_SPIRAL_INTERVAL_MS = 80;
     private static final java.util.Random LIGHT_MOTE_RNG = new java.util.Random();
 
     /** Mark every tile of {@code level} as explored, so the renderer paints
@@ -72,7 +76,7 @@ public class LevelSystem {
 
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                if (level.tiles[x][y] != Tile.LAMP) continue;
+                if (level.tiles[x][y] != Tile.LAMP && level.tiles[x][y] != Tile.BEACON_ACTIVE) continue;
                 ShadowCaster.castShadow(x, y, w, temp, blocking, LAMP_LIGHT_RADIUS);
                 for (int i = 0; i < accum.length; i++) if (temp[i]) accum[i] = true;
             }
@@ -105,14 +109,31 @@ public class LevelSystem {
         if (level == null || level.tiles == null || level.events == null) return;
         if (dtMs <= 0) return;
         double pPerLamp = dtMs / (double) LIGHT_MOTE_INTERVAL_MS;
+        double pPerSpiral = dtMs / (double) INWARD_SPIRAL_INTERVAL_MS;
         int w = level.width, h = level.height;
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                if (level.tiles[x][y] != Tile.LAMP) continue;
+                Tile t = level.tiles[x][y];
                 if (!level.visible[x][y]) continue;
-                if (LIGHT_MOTE_RNG.nextDouble() >= pPerLamp) continue;
-                level.events.add(new com.bjsp123.rl2.event.GameEvent.LightMoteSpawn(
-                        new com.bjsp123.rl2.model.Point(x, y)));
+                if (t == Tile.LAMP) {
+                    // Plain lamps emit tile-anchored motes on the standard cadence.
+                    // 16-px lift puts the spawn point at the lit upper half of
+                    // the 2-tile-tall sprite, not the dark base.
+                    if (LIGHT_MOTE_RNG.nextDouble() < pPerLamp) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.LightMoteSpawn(
+                                new com.bjsp123.rl2.model.Point(x, y), /*pixelOffsetY*/ 16f));
+                    }
+                } else if (t == Tile.BEACON_ACTIVE) {
+                    // Active beacons emit InwardSpiralSpawn at the faster
+                    // spiral cadence; the dispatcher spawns BOTH a spiral
+                    // particle and a co-located mote (both lifted to the
+                    // sprite's lit upper half), so there's no separate
+                    // LightMoteSpawn from beacons.
+                    if (LIGHT_MOTE_RNG.nextDouble() < pPerSpiral) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.InwardSpiralSpawn(
+                                new com.bjsp123.rl2.model.Point(x, y)));
+                    }
+                }
             }
         }
         // Glowing items (power orbs and friends) sparkle on the same channel - same
@@ -127,8 +148,9 @@ public class LevelSystem {
                 if (x < 0 || y < 0 || x >= w || y >= h) continue;
                 if (!level.visible[x][y]) continue;
                 if (LIGHT_MOTE_RNG.nextDouble() >= pPerOrb) continue;
+                // Items emit at the tile centre - no vertical lift.
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.LightMoteSpawn(
-                        new com.bjsp123.rl2.model.Point(x, y)));
+                        new com.bjsp123.rl2.model.Point(x, y), /*pixelOffsetY*/ 0f));
             }
         }
     }

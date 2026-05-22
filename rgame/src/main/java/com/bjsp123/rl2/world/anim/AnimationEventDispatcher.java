@@ -26,7 +26,13 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.BuffRemoved m)           { /* no visual */ }
         else if (ev instanceof GameEvent.BlastEffect m)           animator.onBlastEffect(level, m);
         else if (ev instanceof GameEvent.ExplosionEffect m)       animator.onExplosionEffect(level, m);
-        else if (ev instanceof GameEvent.LightMoteSpawn m)        animator.stage.add(Effect.lightMote(m.pos(), Animator.RNG));
+        else if (ev instanceof GameEvent.LightMoteSpawn m)        {
+            // Source-specific vertical lift (lamps emit higher than items)
+            // is carried on the event so the renderer just applies it.
+            Effect mote = Effect.lightMote(m.pos(), Animator.RNG);
+            mote.pixelOffsetY = m.pixelOffsetY();
+            animator.stage.add(mote);
+        }
         else if (ev instanceof GameEvent.WandImpactBurst m)       animator.onWandImpactBurst(level, m);
         else if (ev instanceof GameEvent.PotionBurst m)           animator.onPotionBurst(level, m);
         else if (ev instanceof GameEvent.MobSpawned m)            animator.onMobSpawned(level, m);
@@ -46,5 +52,17 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.DoorOpened m)            animator.onDoorOpened(level, m);
         else if (ev instanceof GameEvent.DoorClosed m)            animator.onDoorClosed(level, m);
         else if (ev instanceof GameEvent.OnetimeDoorBroken m)     animator.onOnetimeDoorBroken(level, m);
+        else if (ev instanceof GameEvent.BeaconActivated m)       animator.onBeaconActivated(m);
+        else if (ev instanceof GameEvent.PlayerTeleportOut m)     animator.onPlayerTeleportOut(m);
+        else if (ev instanceof GameEvent.PlayerTeleportIn m)      animator.onPlayerTeleportIn(m);
+        else if (ev instanceof GameEvent.InwardSpiralSpawn m)     {
+            // Beacons emit BOTH a spiral particle and a co-located light
+            // mote (both lifted 42 px above the sprite base) so the two
+            // ambient streams share an origin around the lit upper half
+            // of the beacon. Plain lamps still get LightMoteSpawn on its
+            // own tile-anchored cadence.
+            animator.stage.add(Effect.inwardSpiralParticle(m.pos(), Animator.RNG));
+            animator.stage.add(Effect.beaconLightMote(m.pos(), Animator.RNG));
+        }
     }
 }

@@ -65,6 +65,14 @@ public class Rl2Game extends Game {
     public void pushScreen(com.badlogic.gdx.Screen next) {
         com.badlogic.gdx.Screen cur = getScreen();
         if (cur != null && cur != next) {
+            // Freeze the play screen as the backdrop for the about-to-be-
+            // pushed V2 screen so menus (Map, Settings, ...) opened from
+            // in-game show the player's actual world instead of the
+            // title-screen attract demo. The snapshot is the FB AS IT IS
+            // NOW, i.e. after the last play-screen render.
+            if (currentPlay != null && cur == currentPlay) {
+                ui.captureBackdropFromFrameBuffer();
+            }
             com.badlogic.gdx.Screen prev = cur;
             ui.stack.push(() -> setScreen(prev));
         }
@@ -77,7 +85,14 @@ public class Rl2Game extends Game {
      *  (could be a screen or a popup). No-op when the stack is empty.
      *  Returns {@code true} when something was popped. */
     public boolean popScreen() {
-        return ui.stack.back();
+        boolean popped = ui.stack.back();
+        // If we've unwound back to the live play screen, the frozen
+        // backdrop snapshot is no longer needed - the world is being
+        // rendered fresh again.
+        if (popped && currentPlay != null && getScreen() == currentPlay) {
+            ui.clearBackdrop();
+        }
+        return popped;
     }
 
     /** Navigate to a root screen - clear the entire back-history stack
@@ -85,7 +100,12 @@ public class Rl2Game extends Game {
      *  "Quit to Title" / "Begin game" / "Game Over" - destinations
      *  where back-navigation shouldn't return to the previous window. */
     public void setRootScreen(com.badlogic.gdx.Screen root) {
-        if (ui != null) ui.stack.clear();
+        if (ui != null) {
+            ui.stack.clear();
+            // Root-screen transitions (Title, Game Over, Begin Game) leave
+            // any in-game context behind; the snapshot would be stale.
+            ui.clearBackdrop();
+        }
         setScreen(root);
     }
 

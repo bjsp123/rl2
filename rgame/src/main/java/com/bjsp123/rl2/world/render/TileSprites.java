@@ -83,6 +83,10 @@ import java.util.Map;
  *                     cell so the upper half overhangs into the cell above.
  *   (col 19, rows 0..1) - STATUE_LARGE (tall statue, 1x2 cells); same overhang
  *                     anchoring as the lamp, plus L/R facing flip at draw.
+ *   (col 11, rows 0..1) - BEACON (1x2 cells); same overhang anchoring as the
+ *                     lamp. Shared by BEACON_INACTIVE and BEACON_ACTIVE (the
+ *                     two tile values differ only behaviourally - light +
+ *                     particles for ACTIVE).
  *   (cols 0..1, rows 10..11) - STAIRS_UP ladder, 2x2 cells. Drawn on top of a
  *                     regular floor underlay, anchored at the bottom of the stair cell.
  *   (cols 2..3, rows 10..11) - STAIRS_DOWN ladder, 2x2 cells, same conventions.
@@ -167,6 +171,12 @@ public final class TileSprites {
     private static final int LAMP_ROW         = 0;
     private static final int STATUE_LARGE_COL = 19;
     private static final int STATUE_LARGE_ROW = 0;
+    /** Beacon ornament: 1x2 sprite anchored at the lower (floor) cell, upper
+     *  half overhangs north. The same sprite is shared by BEACON_INACTIVE and
+     *  BEACON_ACTIVE - the two tile values differ only behaviourally (light
+     *  + particles). */
+    private static final int BEACON_COL       = 11;
+    private static final int BEACON_ROW       = 0;
     private static final int STAIRS_UP_COL    = 0;
     private static final int STAIRS_UP_ROW    = 10;
     private static final int STAIRS_DOWN_COL  = 2;
@@ -212,7 +222,8 @@ public final class TileSprites {
     static {
         PATHS.put(VisualTheme.CRYSTAL,         "sprites/terrain_crystal.png");
         PATHS.put(VisualTheme.CONCRETE,        "sprites/terrain_concrete.png");
-        PATHS.put(VisualTheme.STRAIGHTFORWARD, "sprites/terrain_shiny.png");
+        PATHS.put(VisualTheme.SHINY,           "sprites/terrain_shiny.png");
+        PATHS.put(VisualTheme.GOTHIC,          "sprites/terrain_gothic.png");
     }
 
     private static Map<VisualTheme, Texture> textures;
@@ -225,6 +236,7 @@ public final class TileSprites {
     private static Map<VisualTheme, TextureRegion> stairsDownByTheme;
     private static Map<VisualTheme, TextureRegion> altarByTheme;
     private static Map<VisualTheme, TextureRegion> throneByTheme;
+    private static Map<VisualTheme, TextureRegion> beaconByTheme;
     /** Per-theme average floor + wall colours, sampled from the terrain atlas
      *  during {@link #load}. Used by the world map to tint level cards by
      *  theme. RGBA-packed via {@link com.badlogic.gdx.graphics.Color#toIntBits}. */
@@ -294,6 +306,14 @@ public final class TileSprites {
     public static TextureRegion throne(VisualTheme theme) {
         if (throneByTheme == null) load();
         return ornament(throneByTheme, theme);
+    }
+
+    /** Beacon ornament region (1x2 cells). Same sprite for both
+     *  {@link Tile#BEACON_INACTIVE} and {@link Tile#BEACON_ACTIVE} - the two
+     *  tile values differ only behaviourally (light + particles for ACTIVE). */
+    public static TextureRegion beacon(VisualTheme theme) {
+        if (beaconByTheme == null) load();
+        return ornament(beaconByTheme, theme);
     }
 
     /** Flat region-index for the FLOOR_SPECIAL base sprite. The renderer adds
@@ -376,6 +396,9 @@ public final class TileSprites {
             case STATUE_LARGE_L, STATUE_LARGE_R -> new int[]{STATUE_LARGE_COL, STATUE_LARGE_ROW, 1, 2};
             case ALTAR         -> new int[]{ALTAR_COL, ALTAR_ROW, ALTAR_W_CELLS, 1};
             case THRONE_L, THRONE_R -> new int[]{THRONE_COL, THRONE_ROW, 1, THRONE_H_CELLS};
+            // Both beacon states share the same atlas cell - distinction is
+            // purely behavioural (light + particles for ACTIVE).
+            case BEACON_INACTIVE, BEACON_ACTIVE -> new int[]{BEACON_COL, BEACON_ROW, 1, 2};
         };
     }
 
@@ -433,6 +456,7 @@ public final class TileSprites {
         stairsDownByTheme  = new EnumMap<>(VisualTheme.class);
         altarByTheme       = new EnumMap<>(VisualTheme.class);
         throneByTheme      = new EnumMap<>(VisualTheme.class);
+        beaconByTheme      = new EnumMap<>(VisualTheme.class);
         floorTintByTheme   = new EnumMap<>(VisualTheme.class);
         wallTintByTheme    = new EnumMap<>(VisualTheme.class);
         SpriteAtlas.load();
@@ -548,6 +572,12 @@ public final class TileSprites {
             throneByTheme.put(theme,
                     new TextureRegion(tex, throneX, yOffset + throneY, srcCell, throneHPx));
         }
+        int beaconX = BEACON_COL * srcCell;
+        int beaconY = BEACON_ROW * srcCell;
+        if (beaconX + srcCell <= sheetW && beaconY + 2 * srcCell <= sheetH) {
+            beaconByTheme.put(theme,
+                    new TextureRegion(tex, beaconX, yOffset + beaconY, srcCell, 2 * srcCell));
+        }
     }
 
     /** Release the cached terrain atlases. Subsequent accessors reload. */
@@ -562,6 +592,7 @@ public final class TileSprites {
         stairsDownByTheme  = null;
         altarByTheme       = null;
         throneByTheme      = null;
+        beaconByTheme      = null;
         floorTintByTheme   = null;
         wallTintByTheme    = null;
     }

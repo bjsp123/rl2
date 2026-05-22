@@ -45,12 +45,35 @@ public final class LevelFactoryThemedRooms {
                                        UniqueTracker unique, Random rng) {
         if (unique == null) return;
         if (level.layout == LevelFactory.Layout.VILLAGE) return;
+
+        // Pass 1: at most one globally-unique room per world.
+        stampOneSpecial(level, rooms, unique, rng, /*globalUnique=*/true);
+        // Pass 2: at most one perLevelUnique room per level (independent of
+        // pass 1 - a level may host both a globally-unique room AND a
+        // perLevelUnique-tagged room, each claiming its own room rect).
+        stampOneSpecial(level, rooms, unique, rng, /*globalUnique=*/false);
+    }
+
+    /** Single-pass picker shared by global-unique and per-level-unique
+     *  selection. {@code globalUnique=true} considers rows with
+     *  {@code unique=true} that haven't been claimed in {@link UniqueTracker#rooms};
+     *  {@code globalUnique=false} considers rows with non-null
+     *  {@code perLevelUnique} whose tag hasn't been claimed for this level. */
+    private static void stampOneSpecial(Level level, List<int[]> rooms,
+                                        UniqueTracker unique, Random rng,
+                                        boolean globalUnique) {
         double f = depthFraction(level);
         List<ThemedRoomDefinition> candidates = new ArrayList<>();
         for (String type : Registries.themedRoomTypes()) {
             ThemedRoomDefinition d = Registries.themedRoom(type);
-            if (d == null || !d.unique) continue;
-            if (unique.rooms.contains(d.type)) continue;
+            if (d == null) continue;
+            if (globalUnique) {
+                if (!d.unique) continue;
+                if (unique.rooms.contains(d.type)) continue;
+            } else {
+                if (d.perLevelUnique == null) continue;
+                if (unique.currentLevelPerLevelUniques.contains(d.perLevelUnique)) continue;
+            }
             if (f < d.powerMin || f > d.powerMax) continue;
             candidates.add(d);
         }
@@ -85,7 +108,8 @@ public final class LevelFactoryThemedRooms {
         ThemedRoomPainter.paint(level, d, r[0], r[1], r[2], r[3], rng);
         ThemedRoomPopulator.populate(level, d, r[0], r[1], r[2], r[3], spawnLevel, rng);
         level.reservedRects.add(new int[]{r[0], r[1], r[2], r[3]});
-        unique.rooms.add(d.type);
+        if (globalUnique) unique.rooms.add(d.type);
+        if (d.perLevelUnique != null) unique.currentLevelPerLevelUniques.add(d.perLevelUnique);
         tagSnapshotKind(level, r, d.type);
         rooms.remove(pairRooms.get(chosen));
     }

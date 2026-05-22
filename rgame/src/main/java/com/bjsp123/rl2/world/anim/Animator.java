@@ -350,6 +350,16 @@ public final class Animator {
         pendingImpacts.add(effect, onComplete);
     }
 
+    /** Whether any projectile / thrown-item visual is still awaiting its
+     *  impact callback. Used by {@link com.bjsp123.rl2.screen.PlayScreen} as
+     *  an additional gate on the per-frame world tick: if a projectile is
+     *  about to resolve, the world must not advance again until the impact
+     *  has applied, otherwise mobs targeted by the projectile can slip a
+     *  free move before the hit lands. */
+    public boolean hasPendingImpacts() {
+        return !pendingImpacts.isEmpty();
+    }
+
     // -- Event handlers -------------------------------------------------------------
 
     void onMobMoved(Level level, GameEvent.MobMoved m) {
@@ -582,6 +592,18 @@ public final class Animator {
 
     void onOnetimeDoorBroken(Level level, GameEvent.OnetimeDoorBroken m) {
         Effect.doorBreakEffect(stage, sounds, level, m.pos(), RNG);
+    }
+
+    void onBeaconActivated(GameEvent.BeaconActivated m) {
+        Effect.beaconActivation(stage, m.pos(), RNG);
+    }
+
+    void onPlayerTeleportOut(GameEvent.PlayerTeleportOut m) {
+        stage.add(Effect.playerTeleportOut(m.pos(), RNG));
+    }
+
+    void onPlayerTeleportIn(GameEvent.PlayerTeleportIn m) {
+        stage.add(Effect.playerTeleportIn(m.pos(), RNG));
     }
 
     void onItemThrown(Level level, GameEvent.ItemThrown m) {

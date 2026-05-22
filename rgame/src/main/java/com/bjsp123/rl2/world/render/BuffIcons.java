@@ -83,6 +83,61 @@ public final class BuffIcons {
         return attackFlashRegion(6);
     }
 
+    /** Beacon-glow halo (32x32). Sprite lives at row 1, col 9 of the
+     *  32x32 grid - the bottom-right cell of the current buffs16.png
+     *  layout. Addressed by row/col from the top-left so the lookup
+     *  stays stable if the sheet is later extended downward or
+     *  rightward. */
+    public static TextureRegion beaconGlowRegion() {
+        return slashCell(/*row*/ 1, /*col*/ 9);
+    }
+
+    /** Look up a 32x32 cell of {@code buffs16.png} by grid row/col, with
+     *  the 32x32 grid origin at the top of the sheet. Row 0 is the buff-
+     *  icon row + blank strip (the buff icons themselves are 16x16 inside
+     *  that row); row 1 onward is the 32x32 cell grid (slash band,
+     *  particle grid, beacon halo, ...). Returns {@code null} on sheet
+     *  load failure or out-of-bounds. */
+    private static TextureRegion slashCell(int row, int col) {
+        if (cache == null) load();
+        if (sheet == null) return null;
+        int sx = col * SLASH_CELL;
+        int sy = SpriteAtlas.buffsY() + row * SLASH_CELL;
+        int sw = sheet.getWidth(), sh = sheet.getHeight();
+        if (sx + SLASH_CELL > sw || sy + SLASH_CELL > sh) return null;
+        return new TextureRegion(sheet, sx, sy, SLASH_CELL, SLASH_CELL);
+    }
+
+    /** Edge length of one particle cell (16x16). */
+    private static final int PARTICLE_CELL = 16;
+    /** X origin of the 2x3 particle grid in {@code buffs16.png} - sits to
+     *  the right of the {@link #surpriseRegion} (col 6 of the 32x32 slash
+     *  band ends at x = 7 * 32 = 224). The grid then runs 3 cells wide,
+     *  2 rows tall. */
+    private static final int PARTICLE_X0   = 7 * SLASH_CELL;   // 224
+    /** Particle grid sits in the same y-band as the 32x32 slash row, but
+     *  the cells are 16-tall so it occupies y = SLASH_Y..SLASH_Y+31. */
+    private static final int PARTICLE_GRID_COLS = 3;
+    private static final int PARTICLE_GRID_ROWS = 2;
+
+    /** Particle sprite from the 2x3 grid in {@code buffs16.png}, indexed
+     *  0..5 reading left-to-right, top-to-bottom. Used by particle-based
+     *  effects (burst / splash / fountain / motes) instead of the
+     *  whiteRegion stamp. Returns {@code null} if the sheet failed to load
+     *  or the requested cell falls outside the sheet's bounds. */
+    public static TextureRegion particleRegion(int idx) {
+        if (cache == null) load();
+        if (sheet == null) return null;
+        if (idx < 0 || idx >= PARTICLE_GRID_COLS * PARTICLE_GRID_ROWS) return null;
+        int col = idx % PARTICLE_GRID_COLS;
+        int row = idx / PARTICLE_GRID_COLS;
+        int sx  = PARTICLE_X0 + col * PARTICLE_CELL;
+        int sy  = SpriteAtlas.buffsY() + SLASH_Y + row * PARTICLE_CELL;
+        int sw  = sheet.getWidth(), sh = sheet.getHeight();
+        if (sx + PARTICLE_CELL > sw || sy + PARTICLE_CELL > sh) return null;
+        return new TextureRegion(sheet, sx, sy, PARTICLE_CELL, PARTICLE_CELL);
+    }
+
     /** Number of icon columns per row in the buff-icon band. */
     private static final int COLS_PER_ROW = 20;
 

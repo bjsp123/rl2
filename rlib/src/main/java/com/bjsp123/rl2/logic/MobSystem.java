@@ -338,6 +338,23 @@ public class MobSystem {
             if (level.events != null) level.events.add(
                     new com.bjsp123.rl2.event.GameEvent.OnetimeDoorBroken(new com.bjsp123.rl2.model.Point(nx, ny)));
         }
+        // Beacon activation: the player stepping into any 8-neighbour of an
+        // inactive beacon flips it to active and emits a one-shot activation
+        // effect. Beacons themselves block movement, so the player never
+        // stands ON one - only adjacent.
+        if (mob.behavior == Mob.Behavior.PLAYER) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    if (dx == 0 && dy == 0) continue;
+                    int bx = nx + dx, by = ny + dy;
+                    if (bx < 0 || by < 0 || bx >= level.width || by >= level.height) continue;
+                    if (level.tiles[bx][by] != Tile.BEACON_INACTIVE) continue;
+                    level.tiles[bx][by] = Tile.BEACON_ACTIVE;
+                    if (level.events != null) level.events.add(
+                            new com.bjsp123.rl2.event.GameEvent.BeaconActivated(new Point(bx, by)));
+                }
+            }
+        }
         // Oil pickup: stepping onto an OIL surface applies the OILY buff for
         // OIL_STEP_BUFF_TURNS turns. Re-applies refresh the buff (max-merge) so wading
         // deeper resets the clock.
@@ -1014,9 +1031,16 @@ public class MobSystem {
             FireSystem.ignite(level, tx,     ty + 1);
             FireSystem.ignite(level, tx,     ty - 1);
         }
-        // Brand on-hit elemental effect - fired when a melee blow lands, using
-        // the attacker's equipped weapon brand (if any).
-        if (dealt > 0 && attacker != null && attacker.inventory != null) {
+        // Brand on-hit elemental effect - fired ONLY when a melee blow lands,
+        // using the attacker's equipped weapon brand (if any). Gating on
+        // MELEE is essential: the LIGHTNING brand's chain re-enters
+        // processAttack with AttackType.MAGIC for each chain victim, and
+        // without this gate every chain link would re-trigger the brand and
+        // recurse infinitely (StackOverflowError). Thrown / wand / ranged
+        // hits also bypass the brand for the same documented reason - the
+        // brand is on the equipped weapon swung in melee.
+        if (dealt > 0 && type == AttackType.MELEE
+                && attacker != null && attacker.inventory != null) {
             com.bjsp123.rl2.model.Item weapon = attacker.inventory.weapon;
             if (weapon != null && weapon.brand != null) {
                 BrandSystem.applyBrandOnHit(level, attacker, target, weapon.brand);
@@ -1338,6 +1362,16 @@ public class MobSystem {
                             .arrivalPointFrom(next, srcIdx, true);
                 }
             }
+            // No down-stairs (or no arrival tile) - fall back to depth 1.
+            // Anything destroyed at the very bottom loops to the top of
+            // the dungeon rather than being annihilated.
+            if (next == null || arrival == null) {
+                Level depth1 = findDepth1Level(world);
+                if (depth1 != null && depth1 != level) {
+                    next = depth1;
+                    arrival = freeFloorNear(depth1, depth1.spawnPoint);
+                }
+            }
         }
 
         Point fromPos = mob.position;
@@ -1372,6 +1406,131 @@ public class MobSystem {
         }
         processAttack(next, null, mob, dmg,
                 AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+    }
+
+    /** Relocate an item lying on a freshly-chasmed tile to the level it
+     *  would fall to (stairs-down target, or the depth-1 level as a
+     *  fallback per the world spec). Emits the existing item-fall visual
+     *  at the source tile and re-anchors the item at the destination's
+     *  spawn point. If no fall destination exists at all, the item is
+     *  consumed by the chasm (existing visual, removed from the world). */
+    public static void fallItemThroughChasm(Level srcLevel, com.bjsp123.rl2.model.Item it) {
+        if (srcLevel == null || it == null || it.location == null) return;
+        Point fromPos = it.location;
+        if (srcLevel.events != null) {
+            srcLevel.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
+                    it, fromPos));
+        }
+        srcLevel.items.remove(it);
+
+        Level dst = findFallDestination(srcLevel);
+        if (dst == null || dst == srcLevel) {
+            // No destination - item is destroyed by the fall.
+            it.location = null;
+            return;
+        }
+        Point arrival = freeFloorNear(dst, dst.spawnPoint);
+        if (arrival == null) {
+            // Destination exists but no walkable landing - destroy the item.
+            it.location = null;
+            return;
+        }
+        it.location = arrival;
+        dst.items.add(it);
+    }
+
+    /** Apply chasm-fall consequences to everything currently on tile
+     *  ({@code x}, {@code y}) of {@code level}. Non-flying mobs fall via
+     *  {@link #fallToNextLevel}; items relocate via
+     *  {@link #fallItemThroughChasm}. Flying mobs are unaffected. Snapshot
+     *  the lists before iterating because the fall routines mutate both. */
+    public static void applyChasmFallToTile(Level level, int x, int y) {
+        if (level == null || level.mobs == null) return;
+        java.util.List<Mob> mobSnap = new java.util.ArrayList<>(level.mobs);
+        for (Mob m : mobSnap) {
+            if (m == null || m.position == null || m.hp <= 0) continue;
+            if (m.position.tileX() != x || m.position.tileY() != y) continue;
+            if (m.effectiveStats().flying) continue;
+            fallToNextLevel(level, m);
+        }
+        if (level.items != null) {
+            java.util.List<com.bjsp123.rl2.model.Item> itemSnap =
+                    new java.util.ArrayList<>(level.items);
+            for (com.bjsp123.rl2.model.Item it : itemSnap) {
+                if (it == null || it.location == null) continue;
+                if (it.location.tileX() != x || it.location.tileY() != y) continue;
+                fallItemThroughChasm(level, it);
+            }
+        }
+    }
+
+    /** Pick the level that things falling out of {@code srcLevel} should
+     *  land on. First choice is the {@code stairsDownTarget} (one depth
+     *  below); if that's absent (deepest level, or topology hole), fall
+     *  back to depth 1 - per the design, a fall with nowhere lower loops
+     *  to the top of the dungeon. Returns {@code null} when even that's
+     *  not available (single-level world / un-linked world). */
+    private static Level findFallDestination(Level srcLevel) {
+        if (srcLevel == null || srcLevel.world == null) return null;
+        com.bjsp123.rl2.model.World world = srcLevel.world;
+        if (world.levels == null) return null;
+        int target = srcLevel.stairsDownTarget;
+        if (target >= 0 && target < world.levels.length) {
+            Level next = world.levels[target];
+            if (next != null) return next;
+        }
+        Level depth1 = findDepth1Level(world);
+        return depth1 == srcLevel ? null : depth1;
+    }
+
+    /** Locate the depth-1 level in {@code world}, or null if not present. */
+    private static Level findDepth1Level(com.bjsp123.rl2.model.World world) {
+        if (world == null || world.levels == null) return null;
+        for (Level l : world.levels) {
+            if (l != null && l.depth == 1) return l;
+        }
+        return null;
+    }
+
+    /** Find a walkable, unoccupied tile on {@code lvl} near {@code preferred}.
+     *  Falls back to a small spiral search if the preferred tile is blocked,
+     *  then to ANY walkable tile on the level. Used as the landing spot for
+     *  things falling out of nowhere (depth-1 fallback). */
+    private static Point freeFloorNear(Level lvl, Point preferred) {
+        if (lvl == null || lvl.tiles == null) return null;
+        if (preferred != null) {
+            int px = preferred.tileX(), py = preferred.tileY();
+            if (isFreeFloor(lvl, px, py)) return preferred;
+            // Spiral out up to radius 6.
+            for (int r = 1; r <= 6; r++) {
+                for (int dy = -r; dy <= r; dy++) {
+                    for (int dx = -r; dx <= r; dx++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;
+                        if (isFreeFloor(lvl, px + dx, py + dy)) {
+                            return new Point(px + dx, py + dy);
+                        }
+                    }
+                }
+            }
+        }
+        // Last-ditch scan.
+        for (int y = 0; y < lvl.height; y++) {
+            for (int x = 0; x < lvl.width; x++) {
+                if (isFreeFloor(lvl, x, y)) return new Point(x, y);
+            }
+        }
+        return null;
+    }
+
+    private static boolean isFreeFloor(Level lvl, int x, int y) {
+        if (x < 0 || y < 0 || x >= lvl.width || y >= lvl.height) return false;
+        com.bjsp123.rl2.model.Tile t = lvl.tiles[x][y];
+        if (t == null || !t.isFloorLike()) return false;
+        for (Mob m : lvl.mobs) {
+            if (m != null && m.position != null
+                    && m.position.tileX() == x && m.position.tileY() == y) return false;
+        }
+        return true;
     }
 
     /** Index of {@code lvl} in {@code world.levels}, or -1 if not found. */
@@ -1631,7 +1790,7 @@ public class MobSystem {
             case WAND    -> isWandUsableByAi(mob, item, level);
             case GRAPPLE -> isGrappleUsableByAi(mob, item, level);
             case JUMP    -> isJumpUsableByAi(mob, item, level);
-            case EAT, GRANT_PERK, POWERUP, NONE -> false;
+            case EAT, GRANT_PERK, POWERUP, TELEPORT, NONE -> false;
         };
     }
 
@@ -2843,6 +3002,20 @@ public class MobSystem {
             }
         } else if (te == ItemEffect.VOID && inBounds) {
             ItemSystem.applyVoidImpact(level, dst, lvl);
+        } else if (te == ItemEffect.TELEPORT && inBounds) {
+            // Teleport orb: every non-thrower mob inside the bomb disc is
+            // scattered to a random walkable tile on a random level. The
+            // thrower stays put - the orb is for displacing enemies, not
+            // accidental self-teleport at point-blank range.
+            java.util.List<Mob> toScatter = new ArrayList<>();
+            for (Mob m : level.mobs) {
+                if (m == null || m == thrower || m.position == null || m.hp <= 0) continue;
+                int dx = m.position.tileX() - tx;
+                int dy = m.position.tileY() - ty;
+                if (dx * dx + dy * dy > r2) continue;
+                toScatter.add(m);
+            }
+            for (Mob m : toScatter) scatterMobAcrossWorld(level, m);
         }
 
         // The item's fate after impact is now driven entirely by the
@@ -2880,6 +3053,56 @@ public class MobSystem {
         // time, not here - the deferred-impact path keeps the player's
         // turn-cost model unchanged regardless of how long the visual
         // arc takes.
+    }
+
+    /** Teleport {@code mob} to a random walkable, unoccupied tile on a
+     *  random level of {@code srcLevel.world}. The destination level may
+     *  be the same as the source. Emits a {@link com.bjsp123.rl2.event.GameEvent.MobTeleported}
+     *  on the level where the mob ends up so the existing teleport-fade
+     *  visual plays. Falls back gracefully (no-op) if no walkable tile can
+     *  be found after a bounded number of tries. */
+    private static void scatterMobAcrossWorld(Level srcLevel, Mob mob) {
+        if (srcLevel == null || srcLevel.world == null || mob == null) return;
+        com.bjsp123.rl2.model.Level[] levels = srcLevel.world.levels;
+        if (levels == null || levels.length == 0) return;
+        // Build the list of viable destination levels (non-null only) so the
+        // uniform pick can't roll a hole and bail.
+        java.util.List<com.bjsp123.rl2.model.Level> viable = new ArrayList<>();
+        for (com.bjsp123.rl2.model.Level lvl : levels) {
+            if (lvl != null && lvl.tiles != null) viable.add(lvl);
+        }
+        if (viable.isEmpty()) return;
+
+        com.bjsp123.rl2.model.Level dst = null;
+        int dx = -1, dy = -1;
+        for (int attempt = 0; attempt < 40; attempt++) {
+            com.bjsp123.rl2.model.Level cand = viable.get(RANDOM.nextInt(viable.size()));
+            int x = RANDOM.nextInt(cand.width);
+            int y = RANDOM.nextInt(cand.height);
+            if (!cand.tiles[x][y].isFloorLike()) continue;
+            if (MobQueries.mobAt(cand, new Point(x, y)) != null) continue;
+            dst = cand;
+            dx  = x;
+            dy  = y;
+            break;
+        }
+        if (dst == null) return;
+
+        Point fromPoint = mob.position;
+        // Cross-level scatter: move the mob between mob lists. Same-level
+        // scatter just updates position.
+        if (dst != srcLevel) {
+            srcLevel.mobs.remove(mob);
+            dst.mobs.add(mob);
+        }
+        mob.position = new Point(dx, dy);
+        if (dst.events != null) {
+            dst.events.add(new com.bjsp123.rl2.event.GameEvent.MobTeleported(
+                    mob,
+                    fromPoint != null ? fromPoint.tileX() : dx,
+                    fromPoint != null ? fromPoint.tileY() : dy,
+                    dx, dy));
+        }
     }
 
     private static Point releasePointForCapturedMob(Level level, Point preferred, Mob thrower) {

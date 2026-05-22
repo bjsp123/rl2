@@ -121,6 +121,16 @@ public final class ItemDefinition {
      *  many copies to be placed before random clusters are rolled. */
     public int guaranteedPerLevel;
 
+    /** When TRUE, this item is excluded from the random-generator pool
+     *  used by mob loot drops and the random-scatter pass on level
+     *  population. It can still be placed by the guaranteed-per-level
+     *  scatter (CSV column {@code guaranteedPerLevel}) and by explicit
+     *  themed-room {@code items} cells - both of which pass an
+     *  "include restricted" flag down to {@link ItemGenerator}. Used
+     *  for headline rewards (POWER_ORB) so they show up only at
+     *  predictable places. */
+    public boolean restrictedDrop;
+
     /** Atlas-cell coordinates on {@code sprites/items.png} (32-px grid). Read by
      *  the rgame-side {@code ItemSprites} loader; rlib code never touches them. */
     public int spriteCol;
@@ -192,6 +202,7 @@ public final class ItemDefinition {
         d.theme             = CsvTable.enumCell(row, "theme",
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
         d.guaranteedPerLevel = CsvTable.intCell(row, "guaranteedPerLevel", 0);
+        d.restrictedDrop     = CsvTable.boolCell(row, "restrictedDrop", false);
 
         d.spriteCol     = CsvTable.intCell(row, "spriteCol", 0);
         d.spriteRow     = CsvTable.intCell(row, "spriteRow", 0);

@@ -185,7 +185,7 @@ public final class GameBalance {
     /** Hard cap - characters stop leveling at this level even if they accrue more XP. */
     public static int MAX_CHARACTER_LEVEL   = 32;
     /** XP cost to advance from level {@code N} to {@code N+1} = {@code N x XP_PER_LEVEL_STEP}. */
-    public static int XP_PER_LEVEL_STEP     = 10;
+    public static int XP_PER_LEVEL_STEP     = 7;
     /** Perk points granted on each level-up. (Per-stat level deltas are now
      *  per-mob - see the {@code *PerLevel} columns of {@code mobs.csv}.) */
     public static int PERK_POINTS_PER_LEVEL = 1;
@@ -241,16 +241,18 @@ public final class GameBalance {
 
     // ------------------------- World generation -----------------------------
     /** Number of dungeon depths the world generator builds. Depth 1 (top) and
-     *  {@code DUNGEON_DEPTH} (bottom) are CENTER-side single-level rows; the
-     *  intermediate depths each carry one WEST + one EAST level. */
-    public static int DUNGEON_DEPTH = 5;
-    /** Per-roll probability that a given E or W level grows a dead-end side
-     *  branch (a single extra level at column +/-2 of the parent's depth). */
-    public static double SIDE_BRANCH_PROBABILITY = 0.4;
-    /** Per-roll probability that a given E or W level (where a sibling exists
-     *  at depth+1) gets a second downstairs cross-linking it to the opposite
-     *  side, in addition to its same-side downstairs. */
-    public static double CROSSLINK_PROBABILITY = 0.4;
+     *  {@code DUNGEON_DEPTH} (bottom) are single SHINY CENTER-column levels;
+     *  intermediate depths each carry one or two levels picked from the three
+     *  themed columns (CONCRETE/west, CRYSTAL/center, GOTHIC/east). */
+    public static int DUNGEON_DEPTH = 8;
+    /** Per-depth probability that an intermediate depth carries two levels
+     *  (any 2 of the 3 themed columns) instead of a single CRYSTAL/center
+     *  level. */
+    public static double TWO_LEVEL_PROBABILITY = 0.6;
+    /** Per-level probability that a level gets a second "diagonal" downstair
+     *  to a different-column level at depth+1, in addition to its primary
+     *  (same-column-preferred) downstair. */
+    public static double DIAGONAL_STAIR_PROBABILITY = 0.25;
 
     // ------------------------- Level population ------------------------------
     /** Base hostile-mob target when populating a fresh level. Actual count is

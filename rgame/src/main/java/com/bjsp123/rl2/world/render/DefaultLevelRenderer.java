@@ -96,10 +96,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  sit in dim sodium-amber light, so shadows lean warm rather than neutral.
      *  Used for the CONCRETE theme. */
     private static final Color SHADOW_CONCRETE = new Color(0.06f, 0.04f, 0.02f, 0.65f);
-    /** Black with a hint of cyan - paired with the STRAIGHTFORWARD theme so its
+    /** Black with a hint of cyan - paired with the SHINY theme so its
      *  cool-lit terrain reads with shadows that bias toward the same hue rather
      *  than neutral grey. */
-    private static final Color SHADOW_STRAIGHTFORWARD = new Color(0f, 0.05f, 0.08f, 0.65f);
+    private static final Color SHADOW_SHINY  = new Color(0f, 0.05f, 0.08f, 0.65f);
+    /** Very dark purple - nearly black with a violet cast. Paired with the
+     *  GOTHIC theme so its purple-stone terrain reads with deep violet shadows. */
+    private static final Color SHADOW_GOTHIC = new Color(0.06f, 0.02f, 0.08f, 0.65f);
 
     /**
      * Tint for every shadow pass (floor-edge, wall-base, rear-corner) on this level. One
@@ -107,9 +110,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
      */
     private static Color getShadowColor(Level level) {
         return switch (level.theme) {
-            case CRYSTAL         -> SHADOW_BLACK;
-            case CONCRETE        -> SHADOW_CONCRETE;
-            case STRAIGHTFORWARD -> SHADOW_STRAIGHTFORWARD;
+            case CRYSTAL  -> SHADOW_BLACK;
+            case CONCRETE -> SHADOW_CONCRETE;
+            case SHINY    -> SHADOW_SHINY;
+            case GOTHIC   -> SHADOW_GOTHIC;
         };
     }
 
@@ -153,6 +157,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private TextureRegion currentStairsDown;
     private TextureRegion currentAltar;
     private TextureRegion currentThrone;
+    private TextureRegion currentBeacon;
     /** Mob the player is currently inspecting via look mode. When non-null, the renderer
      *  overlays its state-of-mind above its tile and draws this mob's attitude toward
      *  every other visible mob. {@link com.bjsp123.rl2.screen.PlayScreen} updates it each
@@ -504,6 +509,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         currentStairsDown   = TileSprites.stairsDown(level.theme);
         currentAltar        = TileSprites.altar(level.theme);
         currentThrone       = TileSprites.throne(level.theme);
+        currentBeacon       = TileSprites.beacon(level.theme);
         TileBounds view = visibleTileBounds(level, camera);
         outlines.ensureCurrent();
 
@@ -599,6 +605,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 if (explored) {
                     drawRearVegetationAt(level, x, y);
                     drawLampAt(level, x, y);
+                    drawBeaconAt(level, x, y);
                     drawStairsAt(level, x, y);
                     drawStatueAt(level, x, y);
                     drawAltarAt(level, x, y);
@@ -663,6 +670,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         long _t4 = System.nanoTime(); int _f4 = batch.renderCalls;
         if (DRAW_FOG) fog.render(batch);
+        // Screen-space FX overlay (currently the beacon-activation level
+        // flicker) - drawn ABOVE fog so unseen cells also get the warm
+        // pulse, since the activation reads as a level-wide event.
+        if (animator != null) {
+            fxRenderer.drawScreenSpaceEffects(animator.stage, camera);
+        }
         gameFbo.endWorldPass(batch);
         long _t5 = System.nanoTime();
 
@@ -1372,6 +1385,44 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.draw(currentLampOrnament, dx, dy, CELL, 2f * CELL);
     }
 
+    /**
+     * Beacon overlay for one cell. 1x2 sprite anchored at the floor cell (same
+     * convention as the lamp). Both BEACON_INACTIVE and BEACON_ACTIVE render
+     * with the same sprite - their distinction is purely behavioural (light
+     * + particles, handled by other systems for the ACTIVE state).
+     */
+    private void drawBeaconAt(Level level, int x, int y) {
+        Tile t = level.tiles[x][y];
+        if (t != Tile.BEACON_INACTIVE && t != Tile.BEACON_ACTIVE) return;
+        if (currentBeacon == null) return;
+        float dx = x * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
+        // Active beacons get a pulsing halo at the swirl centre (28 px
+        // above the sprite base, matching the inward-spiral particles).
+        // The halo is the dedicated sprite at row 1, col 9 of buffs16.png
+        // (the bottom-right 32x32 cell at the time of writing). Drawn
+        // BEFORE the beacon sprite so the silhouette stays crisp on top.
+        if (t == Tile.BEACON_ACTIVE) {
+            TextureRegion glow = com.bjsp123.rl2.world.render.BuffIcons.beaconGlowRegion();
+            if (glow != null) {
+                float cx = dx + CELL * 0.5f;
+                float cy = dy + 28f;
+                // Two-phase pulse: size breathes (~1.4 s period), alpha
+                // breathes slightly out-of-phase so the halo never feels
+                // static even at min-amplitude.
+                float pulse = 0.5f + 0.5f * (float) Math.sin(bobTime * (Math.PI * 2.0 / 1.4));
+                float size  = 24f + 8f * pulse;
+                float alpha = 0.55f + 0.35f * pulse;
+                batch.setColor(1f, 1f, 1f, alpha);
+                batch.draw(glow, cx - size * 0.5f, cy - size * 0.5f, size, size);
+                batch.setColor(Color.WHITE);
+            }
+        }
+        outlines.drawRegion(batch, currentBeacon, dx, dy, CELL, 2f * CELL);
+        batch.setColor(Color.WHITE);
+        batch.draw(currentBeacon, dx, dy, CELL, 2f * CELL);
+    }
+
     /** Width of the contact shadow under a small statue, in screen pixels. */
     private static final int STATUE_SMALL_SHADOW_W = 10;
     /** Width of the contact shadow under a tall statue. Wider than the small variant so a
@@ -1588,6 +1639,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
             case THRONE_L, THRONE_R -> {
                 if (currentThrone != null) drawStatueShadow(x, y, false);
             }
+            case BEACON_INACTIVE, BEACON_ACTIVE -> {
+                if (currentBeacon != null) drawLampShadow(x, y);
+            }
             default -> {}
         }
     }
@@ -1686,7 +1740,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
             case STATUE_SMALL_L, STATUE_SMALL_R,
                  STATUE_LARGE_L, STATUE_LARGE_R,
                  ALTAR,
-                 THRONE_L, THRONE_R -> TileSprites.floorVariant(hash);
+                 THRONE_L, THRONE_R,
+                 BEACON_INACTIVE, BEACON_ACTIVE -> TileSprites.floorVariant(hash);
         };
     }
 

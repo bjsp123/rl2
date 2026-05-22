@@ -27,7 +27,17 @@ public enum Tile {
     CRYSTAL_DOOR,
     /** Like CRYSTAL_DOOR but converts to FLOOR when the player steps through.
      *  Monsters can never pass. Shows a pulsing danger symbol overlay. */
-    ONETIME_DOOR;
+    ONETIME_DOOR,
+    /** Teleport beacon, inactive. 2-tile-tall sprite anchored at this cell (top
+     *  half overhangs into the cell to the north). Blocks movement and
+     *  projectiles like a large statue. Flips to {@link #BEACON_ACTIVE} when
+     *  the player steps adjacent. Shares one atlas cell with BEACON_ACTIVE -
+     *  the distinction is purely behavioural (light + particles). */
+    BEACON_INACTIVE,
+    /** Active teleport beacon. Emits light like a LAMP and spawns ambient
+     *  particle effects. Teleport destinations on the world map are picked
+     *  from the set of active beacons. */
+    BEACON_ACTIVE;
 
     /** True for any door state (open, closed, crystal, one-time). */
     public boolean isDoor() {
@@ -46,7 +56,13 @@ public enum Tile {
             || this == STATUE_SMALL_L || this == STATUE_SMALL_R
             || this == STATUE_LARGE_L || this == STATUE_LARGE_R
             || this == ALTAR
-            || this == THRONE_L || this == THRONE_R;
+            || this == THRONE_L || this == THRONE_R
+            || this == BEACON_INACTIVE || this == BEACON_ACTIVE;
+    }
+
+    /** True if the tile is a beacon (either state). */
+    public boolean isBeacon() {
+        return this == BEACON_INACTIVE || this == BEACON_ACTIVE;
     }
 
     /** True if the tile stops a projectile or wand ray. */

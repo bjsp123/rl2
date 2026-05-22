@@ -4,34 +4,39 @@ import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.LevelFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 /**
  * Procedural world generator. Reads {@link GameBalance#DUNGEON_DEPTH},
- * {@link GameBalance#SIDE_BRANCH_PROBABILITY}, and
- * {@link GameBalance#CROSSLINK_PROBABILITY} to build a layered DAG of
+ * {@link GameBalance#TWO_LEVEL_PROBABILITY}, and
+ * {@link GameBalance#DIAGONAL_STAIR_PROBABILITY} to build a layered DAG of
  * {@link Level}s and wires the per-level {@code stairs(Up|Down)(Alt)Target}
  * indices that drive both inter-level transitions and {@code MapScreen}.
  *
- * <p>Shape: depth 1 and {@code DUNGEON_DEPTH} are single CENTER levels. Every
- * intermediate depth carries one WEST + one EAST level. From each E/W level at
- * depth {@code d}:
+ * <p>Shape: the world reads as three parallel themed columns -
+ * {@link Level.VisualTheme#CONCRETE} at column 0 (WEST),
+ * {@link Level.VisualTheme#CRYSTAL} at column 1 (CENTER),
+ * {@link Level.VisualTheme#GOTHIC} at column 2 (EAST). Depth 1 and depth N are
+ * single {@link Level.VisualTheme#SHINY} CENTER levels. Each intermediate depth
+ * carries 1 level (always CRYSTAL) or 2 levels (any 2 of 3 columns), rolled per
+ * depth via {@code TWO_LEVEL_PROBABILITY}.
+ *
+ * <p>Stair wiring per source level at depth {@code d}:
  * <ul>
- *   <li>The default downstair always reaches the same-side level at {@code d+1}
- *       (or the bottom CENTER if {@code d+1 == DUNGEON_DEPTH}).</li>
- *   <li>With probability {@code CROSSLINK_PROBABILITY}, a second downstair
- *       reaches the opposite-side level at {@code d+1} - only relevant when
- *       both sides exist there ({@code d+1 < DUNGEON_DEPTH}).</li>
- *   <li>With probability {@code SIDE_BRANCH_PROBABILITY}, a second downstair
- *       reaches a fresh dead-end "side branch" level at the same depth, column
- *       +/-2 of the parent. Mutually exclusive with the crosslink - a level can
- *       grow at most one extra downstair.</li>
+ *   <li>Primary downstair: prefer the same-column level at {@code d+1}, else
+ *       the nearest occupied column (preferring uncovered destinations).</li>
+ *   <li>Every destination at {@code d+1} is guaranteed at least one incoming
+ *       stair - if a roll leaves a destination uncovered after primary
+ *       assignment, an alt stair is added to cover it.</li>
+ *   <li>Beyond mandatory coverage, an additional "diagonal" alt stair is rolled
+ *       per source via {@code DIAGONAL_STAIR_PROBABILITY}, pointing at a
+ *       different-column destination than the primary.</li>
  * </ul>
  *
- * <p>Top + bottom CENTER levels reach all surviving {@code d=2} / {@code d=N-1}
- * E/W rows via their primary + alt stair pair. {@code DUNGEON_DEPTH = 2}
- * collapses to a CENTER-CENTER pair with a single edge between them.
+ * <p>{@code DUNGEON_DEPTH = 2} collapses to top-SHINY -> bottom-SHINY with a
+ * single edge.
  */
 public final class WorldTopology {
 
@@ -43,86 +48,143 @@ public final class WorldTopology {
      *  unique themed rooms only spawn once across the whole world. */
     public static Level[] build(int width, int height, Random rng, UniqueTracker unique) {
         int depth = Math.max(2, GameBalance.DUNGEON_DEPTH);
-        double pBranch = clamp01(GameBalance.SIDE_BRANCH_PROBABILITY);
-        double pCross  = clamp01(GameBalance.CROSSLINK_PROBABILITY);
+        double pTwo  = clamp01(GameBalance.TWO_LEVEL_PROBABILITY);
+        double pDiag = clamp01(GameBalance.DIAGONAL_STAIR_PROBABILITY);
 
         List<Level> out = new ArrayList<>();
 
-        // 1. Allocate the main spine. mainW[d] / mainE[d] hold the level index
-        //    at depth d on the WEST / EAST side; -1 where the slot doesn't exist.
-        int[] mainW = new int[depth + 1];   // index by depth
-        int[] mainE = new int[depth + 1];
-        int[] mainC = new int[depth + 1];   // for top + bottom CENTER
-        for (int d = 0; d <= depth; d++) { mainW[d] = mainE[d] = mainC[d] = -1; }
+        // slot[col][d] = level index in `out`, -1 if absent. Columns: 0=W, 1=C, 2=E.
+        int[][] slot = new int[3][depth + 1];
+        for (int c = 0; c < 3; c++) Arrays.fill(slot[c], -1);
 
-        // Top CENTER (depth 1).
-        mainC[1] = addLevel(out, width, height, /*hasUp=*/false, /*hasDown=*/true,
-                /*depth=*/1, Level.Side.CENTER, /*column=*/0f, unique, rng);
+        // Depth 1: single SHINY CENTER level.
+        slot[1][1] = addLevel(out, width, height, /*hasUp=*/false, /*hasDown=*/true,
+                /*depth=*/1, Level.Side.CENTER, /*mapColumn=*/0f,
+                Level.VisualTheme.SHINY, unique, rng);
 
-        // Intermediate depths: one W + one E each.
+        // Intermediate depths: roll 1 level (always CRYSTAL) or 2 levels
+        // (any 2 of 3 columns picked uniformly).
         for (int d = 2; d < depth; d++) {
-            mainW[d] = addLevel(out, width, height, true, true, d, Level.Side.WEST, -1f, unique, rng);
-            mainE[d] = addLevel(out, width, height, true, true, d, Level.Side.EAST, +1f, unique, rng);
+            int[] cols;
+            if (rng.nextDouble() < pTwo) {
+                int pair = rng.nextInt(3);
+                cols = switch (pair) {
+                    case 0  -> new int[]{0, 1};   // CONCRETE + CRYSTAL
+                    case 1  -> new int[]{0, 2};   // CONCRETE + GOTHIC
+                    default -> new int[]{1, 2};   // CRYSTAL  + GOTHIC
+                };
+            } else {
+                cols = new int[]{1};               // CRYSTAL only
+            }
+            for (int c : cols) {
+                slot[c][d] = addLevel(out, width, height, true, true, d,
+                        sideForCol(c), mapColumnForCol(c),
+                        themeForCol(c), unique, rng);
+            }
         }
 
-        // Bottom CENTER (depth = DUNGEON_DEPTH).
-        mainC[depth] = addLevel(out, width, height, true, false, depth, Level.Side.CENTER, 0f, unique, rng);
+        // Depth N: single SHINY CENTER level.
+        slot[1][depth] = addLevel(out, width, height, true, false,
+                depth, Level.Side.CENTER, 0f,
+                Level.VisualTheme.SHINY, unique, rng);
 
-        // 2. Wire the spine - same-side downstairs at every depth d in [2, N-1].
-        //    Top CENTER feeds 2W + 2E; bottom CENTER receives from (N-1)W + (N-1)E.
-        if (depth == 2) {
-            // Degenerate world: top CENTER -> bottom CENTER, single edge.
-            connectDown(out, mainC[1], mainC[2], /*alt=*/false);
-        } else {
-            connectDown(out, mainC[1], mainW[2], false);
-            // Top CENTER's alt-down points at 2E.
-            LevelFactory.addAltStairsDown(out.get(mainC[1]));
-            connectDown(out, mainC[1], mainE[2], true);
-
-            for (int d = 2; d < depth - 1; d++) {
-                connectDown(out, mainW[d], mainW[d + 1], false);
-                connectDown(out, mainE[d], mainE[d + 1], false);
-            }
-            // (N-1)W and (N-1)E both feed the bottom CENTER, which uses up + upAlt.
-            connectDown(out, mainW[depth - 1], mainC[depth], false);
-            LevelFactory.addAltStairsUp(out.get(mainC[depth]));
-            connectDown(out, mainE[depth - 1], mainC[depth], true);
-        }
-
-        // 3. Per-E/W roll: at most one extra downstair (crosslink OR side branch).
-        for (int d = 2; d < depth; d++) {
-            for (int idx : new int[]{mainW[d], mainE[d]}) {
-                if (idx < 0) continue;
-                Level lvl = out.get(idx);
-                boolean amWest = lvl.side == Level.Side.WEST;
-
-                // Crosslink: requires both sides to exist at depth d+1.
-                boolean canCross = (d + 1 < depth);
-                int crossTarget  = canCross ? (amWest ? mainE[d + 1] : mainW[d + 1]) : -1;
-                if (canCross && crossTarget >= 0 && rng.nextDouble() < pCross) {
-                    LevelFactory.addAltStairsDown(lvl);
-                    connectDown(out, idx, crossTarget, true);
-                    LevelFactory.addAltStairsUp(out.get(crossTarget));
-                    Level dst = out.get(crossTarget);
-                    if (dst.stairsUpTarget == idx) {
-                        // Already wired as primary; skip alt wiring.
-                    } else {
-                        dst.stairsUpAltTarget = idx;
-                    }
-                    continue;
-                }
-
-                // Side branch: dead-end at parent depth, column +/-2.
-                if (rng.nextDouble() < pBranch) {
-                    int sideIdx = addLevel(out, width, height, true, false,
-                            d, lvl.side, amWest ? -2f : +2f, unique, rng);
-                    LevelFactory.addAltStairsDown(lvl);
-                    connectDown(out, idx, sideIdx, true);
-                }
-            }
+        // Wire downstairs depth-by-depth so every destination ends up reachable.
+        for (int d = 1; d < depth; d++) {
+            wireDepth(out, slot, d, pDiag, rng);
         }
 
         return out.toArray(new Level[0]);
+    }
+
+    /** Allocate downstairs from depth {@code d} into depth {@code d+1}. Phase 1
+     *  picks a primary for every source (same-column preferred, then nearest
+     *  uncovered, then nearest at all). Phase 2 covers any destination still
+     *  missing an incoming edge with a mandatory alt stair. Phase 3 rolls
+     *  optional diagonal alt stairs for sources that still have a free alt
+     *  slot. */
+    private static void wireDepth(List<Level> out, int[][] slot, int d,
+                                  double pDiag, Random rng) {
+        int dn = d + 1;
+        int[] srcs = new int[]{slot[0][d],  slot[1][d],  slot[2][d]};
+        int[] dsts = new int[]{slot[0][dn], slot[1][dn], slot[2][dn]};
+
+        int[] primaryTargetCol = new int[]{-1, -1, -1};
+        boolean[] dstCovered   = new boolean[]{false, false, false};
+
+        // Phase 1: primary stair per source.
+        for (int c = 0; c < 3; c++) {
+            if (srcs[c] < 0) continue;
+            int tgt = pickPrimaryCol(c, dsts, dstCovered);
+            if (tgt < 0) continue;
+            primaryTargetCol[c] = tgt;
+            dstCovered[tgt] = true;
+            wire(out, srcs[c], dsts[tgt], /*altStair=*/false);
+        }
+
+        // Phase 2: mandatory coverage for uncovered destinations.
+        for (int c = 0; c < 3; c++) {
+            if (dsts[c] < 0 || dstCovered[c]) continue;
+            int srcCol = pickFreeAltSrc(out, srcs, primaryTargetCol, c);
+            if (srcCol < 0) continue;
+            wire(out, srcs[srcCol], dsts[c], /*altStair=*/true);
+            dstCovered[c] = true;
+        }
+
+        // Phase 3: optional diagonal alt stairs.
+        for (int c = 0; c < 3; c++) {
+            if (srcs[c] < 0) continue;
+            Level src = out.get(srcs[c]);
+            if (src.stairsDownAltTarget != -1) continue;       // alt already used
+            if (rng.nextDouble() >= pDiag) continue;
+            int altCol = pickDiagonalCol(dsts, primaryTargetCol[c]);
+            if (altCol < 0) continue;
+            wire(out, srcs[c], dsts[altCol], /*altStair=*/true);
+        }
+    }
+
+    /** Phase 1 helper: same-column first, then nearest uncovered, then nearest
+     *  covered. Returns -1 if no destination exists at all (shouldn't happen
+     *  because every intermediate depth has at least one level). */
+    private static int pickPrimaryCol(int srcCol, int[] dsts, boolean[] dstCovered) {
+        if (dsts[srcCol] >= 0) return srcCol;
+        for (int dist = 1; dist <= 2; dist++) {
+            int left  = srcCol - dist;
+            int right = srcCol + dist;
+            if (left  >= 0 && dsts[left]  >= 0 && !dstCovered[left])  return left;
+            if (right <= 2 && dsts[right] >= 0 && !dstCovered[right]) return right;
+        }
+        for (int dist = 1; dist <= 2; dist++) {
+            int left  = srcCol - dist;
+            int right = srcCol + dist;
+            if (left  >= 0 && dsts[left]  >= 0) return left;
+            if (right <= 2 && dsts[right] >= 0) return right;
+        }
+        return -1;
+    }
+
+    /** Phase 2 helper: find a source that hasn't yet used its alt-stair slot
+     *  and whose primary target isn't already the destination we're trying to
+     *  cover. Returns -1 if no such source exists. */
+    private static int pickFreeAltSrc(List<Level> out, int[] srcs,
+                                      int[] primaryTargetCol, int dstCol) {
+        for (int c = 0; c < 3; c++) {
+            if (srcs[c] < 0) continue;
+            if (out.get(srcs[c]).stairsDownAltTarget != -1) continue;
+            if (primaryTargetCol[c] == dstCol) continue;
+            return c;
+        }
+        return -1;
+    }
+
+    /** Phase 3 helper: pick any destination column other than the source's
+     *  primary target. Returns -1 if no such destination exists. */
+    private static int pickDiagonalCol(int[] dsts, int primaryCol) {
+        for (int c = 0; c < 3; c++) {
+            if (dsts[c] < 0) continue;
+            if (c == primaryCol) continue;
+            return c;
+        }
+        return -1;
     }
 
     /** Allocate one fresh level, append it to {@code out}, and stamp the supplied
@@ -133,18 +195,32 @@ public final class WorldTopology {
     private static int addLevel(List<Level> out, int width, int height,
                                 boolean hasUp, boolean hasDown,
                                 int depth, Level.Side side, float mapColumn,
+                                Level.VisualTheme theme,
                                 UniqueTracker unique, Random rng) {
-        // Pass depth into createDungeonLevel up front - population reads
-        // {@code level.depth} for power-level / unique-mob eligibility, so
-        // setting it after construction would be too late and every level
-        // would generate as if it were depth 1.
         long levelSeed = rng.nextLong();
         Level lvl = LevelFactory.createDungeonLevel(width, height, depth, hasUp, hasDown,
-                                                    unique, levelSeed);
+                                                    theme, unique, levelSeed);
         lvl.side      = side;
         lvl.mapColumn = mapColumn;
         out.add(lvl);
         return out.size() - 1;
+    }
+
+    /** Wire a downward edge from {@code srcIdx} to {@code dstIdx}, allocating
+     *  alt-stair tiles as needed so the connection has a real tile on both
+     *  sides. {@code altStair=true} adds a second downstair to the source;
+     *  the destination automatically uses its primary up-tile if free, else its
+     *  alt up-tile (which is allocated here on demand). */
+    private static void wire(List<Level> out, int srcIdx, int dstIdx, boolean altStair) {
+        Level src = out.get(srcIdx);
+        Level dst = out.get(dstIdx);
+        if (altStair && src.stairsDownAlt == null) {
+            LevelFactory.addAltStairsDown(src);
+        }
+        if (dst.stairsUpTarget != -1 && dst.stairsUpAlt == null) {
+            LevelFactory.addAltStairsUp(dst);
+        }
+        connectDown(out, srcIdx, dstIdx, altStair);
     }
 
     /** Wire a downward edge from {@code srcIdx} to {@code dstIdx}. {@code alt = true}
@@ -158,6 +234,26 @@ public final class WorldTopology {
         else      src.stairsDownTarget    = dstIdx;
         if (dst.stairsUpTarget == -1)         dst.stairsUpTarget    = srcIdx;
         else if (dst.stairsUpAltTarget == -1) dst.stairsUpAltTarget = srcIdx;
+    }
+
+    private static Level.Side sideForCol(int col) {
+        return switch (col) {
+            case 0  -> Level.Side.WEST;
+            case 2  -> Level.Side.EAST;
+            default -> Level.Side.CENTER;
+        };
+    }
+
+    private static float mapColumnForCol(int col) {
+        return col - 1f;
+    }
+
+    private static Level.VisualTheme themeForCol(int col) {
+        return switch (col) {
+            case 0  -> Level.VisualTheme.CONCRETE;
+            case 2  -> Level.VisualTheme.GOTHIC;
+            default -> Level.VisualTheme.CRYSTAL;
+        };
     }
 
     private static double clamp01(double v) {

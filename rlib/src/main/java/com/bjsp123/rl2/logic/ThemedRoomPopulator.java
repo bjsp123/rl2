@@ -134,7 +134,11 @@ final class ThemedRoomPopulator {
         if (ref == null || ref.isEmpty()) return null;
         ItemGenerator.LootCategory cat = ItemGenerator.LootCategory.parse(ref);
         if (cat != null) {
-            return ItemGenerator.generateItem(powerLevel, level.theme, cat, rng);
+            // Themed rooms are the curated home for restricted-drop items
+            // (POWER_ORB), so include them when resolving the room's
+            // category specs - that's the whole point of the restriction.
+            return ItemGenerator.generateItem(powerLevel, level.theme, cat,
+                    /*includeRestricted=*/ true, rng);
         }
         return ItemGenerator.buildItem(ref, powerLevel, rng);
     }

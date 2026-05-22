@@ -96,8 +96,10 @@ final class AttractMode {
         int[] size = levelSizeForWindow();
         requestedLevelW = size[0];
         requestedLevelH = size[1];
+        Level.VisualTheme[] themes = Level.VisualTheme.values();
+        Level.VisualTheme theme = themes[rng.nextInt(themes.length)];
         level = LevelFactory.createDungeonLevel(requestedLevelW, requestedLevelH, depth,
-                false, false, unique, rng.nextLong());
+                false, false, theme, unique, rng.nextLong());
         level.initTransients();
         world = new World();
         world.levels = new Level[]{ level };

@@ -30,7 +30,7 @@ final class ThemedRoomPainter {
         paintVegetation  (level, def.vegetation,   x, y, w, h, rng);
         paintSpecialFloor(level, def.specialFloor, x, y, w, h);
         for (ThemedRoomDefinition.Decoration d : def.decorations) {
-            paintDecoration(level, d, x, y, w, h, rng);
+            paintDecoration(level, d, x, y, w, h, def.placement, rng);
         }
     }
 
@@ -133,8 +133,22 @@ final class ThemedRoomPainter {
         switch (s) {
             case NONE             -> { }
             case CENTER_4X4       -> paintSpecialFloorCenter4x4(level, x, y, w, h);
+            case CENTER_3X3       -> paintSpecialFloorCenter3x3(level, x, y, w, h);
             case INSET_RECTANGLE  -> paintSpecialFloorInsetRect(level, x, y, w, h);
             case CHECKERBOARD     -> paintSpecialFloorCheckerboard(level, x, y, w, h);
+        }
+    }
+
+    /** Drop a 3x3 patch of FLOOR_SPECIAL centred on the room. Used by the
+     *  round beacon room - the activation pad in the middle of the floor. */
+    private static void paintSpecialFloorCenter3x3(Level level, int x, int y, int w, int h) {
+        if (w < 3 || h < 3) return;
+        int patchX0 = x + (w - 3) / 2;
+        int patchY0 = y + (h - 3) / 2;
+        for (int i = patchX0; i < patchX0 + 3 && i < x + w - 1; i++) {
+            for (int j = patchY0; j < patchY0 + 3 && j < y + h - 1; j++) {
+                setFloorSpecialIfFloor(level, i, j);
+            }
         }
     }
 
@@ -237,7 +251,9 @@ final class ThemedRoomPainter {
 
     private static void paintDecoration(Level level,
                                         ThemedRoomDefinition.Decoration d,
-                                        int x, int y, int w, int h, Random rng) {
+                                        int x, int y, int w, int h,
+                                        ThemedRoomDefinition.Placement placement,
+                                        Random rng) {
         switch (d) {
             case STATUES_SMALL_CORNERS  -> placeStatuesAtCorners(level, x, y, w, h, rng, true);
             case STATUES_LARGE_CORNERS  -> placeStatuesAtCorners(level, x, y, w, h, rng, false);
@@ -253,7 +269,69 @@ final class ThemedRoomPainter {
                                                   x + w / 2, y + h / 2);
             case SMALL_STATUES_SCATTERED -> paintSmallStatuesScattered(level, x, y, w, h, rng);
             case CHAPEL_SHRINE          -> paintChapelShrine(level, x, y, w, h);
+            case BEACON                 -> paintBeacon(level, x, y, w, h, placement);
+            case CHAPEL_BEACON          -> paintChapelBeacon(level, x, y, w, h, placement, rng);
+            case THRONE_BEACON          -> paintThroneBeacon(level, x, y, w, h, placement, rng);
         }
+    }
+
+    /** Returns the anchor row for the given placement. TOP = 1 cell south of
+     *  the north wall (leaving 1 floor row clear); other placements fall back
+     *  to vertical centre. */
+    private static int anchorY(int y, int h, ThemedRoomDefinition.Placement p) {
+        return p == ThemedRoomDefinition.Placement.TOP ? y + h - 2 : y + h / 2;
+    }
+
+    /** Single beacon at the room's horizontal centre, on the placement-anchor
+     *  row. */
+    private static void paintBeacon(Level level, int x, int y, int w, int h,
+                                    ThemedRoomDefinition.Placement placement) {
+        int cx = x + w / 2;
+        int ay = anchorY(y, h, placement);
+        LevelFactoryRooms.placeBeacon(level, cx, ay);
+    }
+
+    /** Chapel-style assembly: a centred altar (3-wide), a beacon 1 cell west
+     *  of the altar's leftmost cell, and two large statues flanking the whole
+     *  arrangement (dropped silently if the room is too narrow). All elements
+     *  sit on the placement-anchor row. */
+    private static void paintChapelBeacon(Level level, int x, int y, int w, int h,
+                                          ThemedRoomDefinition.Placement placement,
+                                          Random rng) {
+        if (w < 4) return;
+        int cx = x + w / 2;
+        int ay = anchorY(y, h, placement);
+        // Altar anchor at (cx, ay); the renderer extends one cell east + west.
+        if (LevelFactoryUtils.inBounds(level, cx, ay)
+                && level.tiles[cx][ay] == Tile.FLOOR) {
+            level.tiles[cx][ay] = Tile.ALTAR;
+        }
+        // Beacon: 1 cell west of the altar's leftmost cell (cx-1) -> (cx-2, ay).
+        LevelFactoryRooms.placeBeacon(level, cx - 2, ay);
+        // Flanking statues at (cx-3, ay) and (cx+2, ay) - need w >= 6.
+        if (w >= 6) {
+            LevelFactoryRooms.placeStatue(level, cx - 3, ay,
+                    LevelFactoryRooms.randomLargeStatue(rng));
+            LevelFactoryRooms.placeStatue(level, cx + 2, ay,
+                    LevelFactoryRooms.randomLargeStatue(rng));
+        }
+    }
+
+    /** Throne + beacon side-by-side at the placement-anchor row, centred
+     *  horizontally. Throne anchor at the centre cell, beacon immediately
+     *  west of it. */
+    private static void paintThroneBeacon(Level level, int x, int y, int w, int h,
+                                          ThemedRoomDefinition.Placement placement,
+                                          Random rng) {
+        if (w < 3) return;
+        int cx = x + w / 2;
+        int ay = anchorY(y, h, placement);
+        Tile throne = rng.nextBoolean() ? Tile.THRONE_L : Tile.THRONE_R;
+        if (LevelFactoryUtils.inBounds(level, cx, ay)
+                && level.tiles[cx][ay] == Tile.FLOOR) {
+            level.tiles[cx][ay] = throne;
+        }
+        LevelFactoryRooms.placeBeacon(level, cx - 1, ay);
     }
 
     /** Drop 2-6 small statues at random interior positions, leaving a 1-cell

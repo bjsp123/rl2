@@ -49,6 +49,16 @@ public final class LevelFactoryRooms {
         level.tiles[x][y] = Tile.LAMP;
     }
 
+    /** Drop a BEACON_INACTIVE tile at (x, y) under the same rules as
+     *  {@link #placeStatue}. Beacons activate later, when the player steps
+     *  adjacent. Package-private. */
+    static void placeBeacon(Level level, int x, int y) {
+        if (!LevelFactoryUtils.inBounds(level, x, y)) return;
+        if (!level.tiles[x][y].canHoldItem()) return;
+        if (LevelFactoryUtils.adjacentToDoor(level, x, y)) return;
+        level.tiles[x][y] = Tile.BEACON_INACTIVE;
+    }
+
     // -- ROUND --------------------------------------------------------------
 
     /** Round the corners of the room: any FLOOR cell outside the inscribed ellipse becomes

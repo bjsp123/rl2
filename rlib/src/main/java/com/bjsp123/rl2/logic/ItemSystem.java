@@ -83,7 +83,13 @@ public final class ItemSystem {
                     com.bjsp123.rl2.logic.MobProgression.awardXp(level, picker,
                         GameBalance.XP_PER_POWER_ORB);
                 }
-                
+                // XPGainBurst drives both the orange/yellow/white pickup
+                // sparkles AND the xppill pickup sound in the Animator;
+                // without this event the absorb is silent (which is what
+                // an XPPILL / POWER_ORB pickup sounded like before).
+                if (level != null && level.events != null && picker.position != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.XPGainBurst(picker.position));
+                }
             }
             case HP_UP -> {
                 double maxHp = picker.effectiveStats().maxHp;
@@ -379,6 +385,11 @@ public final class ItemSystem {
                         level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(
                                 new com.bjsp123.rl2.model.Point(x, y)));
                     }
+                    // Floor under any mob / item just vanished - send them
+                    // down. Non-flying mobs fall via the standard
+                    // fall-to-next-level path; items relocate to the same
+                    // destination. Flying mobs hover and are unaffected.
+                    MobSystem.applyChasmFallToTile(level, x, y);
                 }
             }
         }
@@ -474,6 +485,11 @@ public final class ItemSystem {
                 if (level.events != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(
                             new com.bjsp123.rl2.model.Point(x, y)));
+                }
+                // Floor became CHASM in the reroll - send anything on it
+                // down (or to depth 1 as the fallback).
+                if (next == com.bjsp123.rl2.model.Tile.CHASM) {
+                    MobSystem.applyChasmFallToTile(level, x, y);
                 }
             }
         }
@@ -743,7 +759,7 @@ public final class ItemSystem {
             case DRINK       -> drinkPotion(level, user, item);
             case GRANT_PERK  -> grantXP(level, user, item);//grantPerk(level, user, item);
             case APPLYBUFF   -> acted = useChargedBuffTool(level, user, item);
-            case WAND, GRAPPLE, JUMP, NONE -> { return; } // need a target or a specialized caller
+            case WAND, GRAPPLE, JUMP, TELEPORT, NONE -> { return; } // need a target or a specialized caller
         }
         if (acted) TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
     }

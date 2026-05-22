@@ -72,8 +72,10 @@ sfx.player.move.crystal.1,sfx/steps/Steps_snow-001.ogg
 sfx.player.move.crystal.2,sfx/steps/Steps_snow-002.ogg
 sfx.player.move.concrete.1,
 sfx.player.move.concrete.2,
-sfx.player.move.straightforward.1,sfx/steps/Steps_tiles-001.ogg
-sfx.player.move.straightforward.2,sfx/steps/Steps_tiles-001.ogg
+sfx.player.move.shiny.1,sfx/steps/Steps_tiles-001.ogg
+sfx.player.move.shiny.2,sfx/steps/Steps_tiles-001.ogg
+sfx.player.move.gothic.1,
+sfx.player.move.gothic.2,
 sfx.world.door.open,sfx/door_wood_open_01.wav
 sfx.world.door.close,sfx/door_wood_close_02.wav
 sfx.world.door.break,sfx/t_magic_spell_ice_06.wav

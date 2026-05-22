@@ -30,7 +30,7 @@ final class SpriteAtlas {
 
     private static Texture atlas;
     private static int mobsOffsetY, itemsOffsetY, gemsOffsetY, buffsOffsetY;
-    private static int terrainCrystalOffsetY, terrainConcreteOffsetY, terrainShinyOffsetY;
+    private static int terrainCrystalOffsetY, terrainConcreteOffsetY, terrainShinyOffsetY, terrainGothicOffsetY;
     private static int surfacesOffsetY, shadowOvalOffsetY, lampShadowOvalOffsetY;
 
     private SpriteAtlas() {}
@@ -45,6 +45,7 @@ final class SpriteAtlas {
             Pixmap crystal  = new Pixmap(Gdx.files.internal("sprites/terrain_crystal.png"));
             Pixmap concrete = new Pixmap(Gdx.files.internal("sprites/terrain_concrete.png"));
             Pixmap shiny    = new Pixmap(Gdx.files.internal("sprites/terrain_shiny.png"));
+            Pixmap gothic   = new Pixmap(Gdx.files.internal("sprites/terrain_gothic.png"));
             Pixmap surfaces = new Pixmap(Gdx.files.internal("sprites/surfaces.png"));
             Pixmap shadow   = buildOval(SHADOW_W, SHADOW_H, SHADOW_ALPHA);
             Pixmap lamp     = buildOval(LAMP_W,   LAMP_H,   LAMP_ALPHA);
@@ -53,7 +54,8 @@ final class SpriteAtlas {
                     Math.max(Math.max(mobs.getWidth(),  items.getWidth()),
                              Math.max(gems.getWidth(),  buffs.getWidth())),
                     Math.max(Math.max(crystal.getWidth(), concrete.getWidth()),
-                             Math.max(shiny.getWidth(),   surfaces.getWidth())));
+                             Math.max(Math.max(shiny.getWidth(), gothic.getWidth()),
+                                      surfaces.getWidth())));
 
             mobsOffsetY            = 0;
             itemsOffsetY           = mobsOffsetY            + mobs.getHeight();
@@ -62,7 +64,8 @@ final class SpriteAtlas {
             terrainCrystalOffsetY  = buffsOffsetY           + buffs.getHeight();
             terrainConcreteOffsetY = terrainCrystalOffsetY  + crystal.getHeight();
             terrainShinyOffsetY    = terrainConcreteOffsetY + concrete.getHeight();
-            surfacesOffsetY        = terrainShinyOffsetY    + shiny.getHeight();
+            terrainGothicOffsetY   = terrainShinyOffsetY    + shiny.getHeight();
+            surfacesOffsetY        = terrainGothicOffsetY   + gothic.getHeight();
             shadowOvalOffsetY      = surfacesOffsetY        + surfaces.getHeight();
             lampShadowOvalOffsetY  = shadowOvalOffsetY      + SHADOW_H;
             int totalH             = lampShadowOvalOffsetY  + LAMP_H;
@@ -77,6 +80,7 @@ final class SpriteAtlas {
             combined.drawPixmap(crystal,  0, terrainCrystalOffsetY);
             combined.drawPixmap(concrete, 0, terrainConcreteOffsetY);
             combined.drawPixmap(shiny,    0, terrainShinyOffsetY);
+            combined.drawPixmap(gothic,   0, terrainGothicOffsetY);
             combined.drawPixmap(surfaces, 0, surfacesOffsetY);
             combined.drawPixmap(shadow,   0, shadowOvalOffsetY);
             combined.drawPixmap(lamp,     0, lampShadowOvalOffsetY);
@@ -84,7 +88,8 @@ final class SpriteAtlas {
             mobs.dispose();   items.dispose();
             gems.dispose();   buffs.dispose();
             crystal.dispose();concrete.dispose();
-            shiny.dispose();  surfaces.dispose();
+            shiny.dispose();  gothic.dispose();
+            surfaces.dispose();
             shadow.dispose(); lamp.dispose();
 
             atlas = new Texture(combined);
@@ -105,9 +110,10 @@ final class SpriteAtlas {
     static int terrainY(VisualTheme theme) {
         if (theme == null) return terrainCrystalOffsetY;
         return switch (theme) {
-            case CRYSTAL         -> terrainCrystalOffsetY;
-            case CONCRETE        -> terrainConcreteOffsetY;
-            case STRAIGHTFORWARD -> terrainShinyOffsetY;
+            case CRYSTAL  -> terrainCrystalOffsetY;
+            case CONCRETE -> terrainConcreteOffsetY;
+            case SHINY    -> terrainShinyOffsetY;
+            case GOTHIC   -> terrainGothicOffsetY;
         };
     }
 

@@ -90,7 +90,8 @@ public class Level {
     public enum VisualTheme {
                 CRYSTAL,
                CONCRETE,
-               STRAIGHTFORWARD
+               SHINY,
+               GOTHIC
     }
 
     public int width;

@@ -24,6 +24,8 @@ final class PendingImpactQueue {
         pending.add(new PendingImpact(effect, onComplete));
     }
 
+    boolean isEmpty() { return pending.isEmpty(); }
+
     boolean fireCompleting(Level level, Animator animator) {
         boolean fired = false;
         for (Iterator<PendingImpact> it = pending.iterator(); it.hasNext(); ) {

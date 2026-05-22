@@ -93,13 +93,15 @@ public final class LevelFactory {
      *  bug where every level looked like depth 1 to the stamping code). */
     public static Level createDungeonLevel(int w, int h, int depth,
                                            boolean hasUp, boolean hasDown,
+                                           VisualTheme theme,
                                            com.bjsp123.rl2.model.UniqueTracker unique) {
-        return createDungeonLevel(w, h, depth, hasUp, hasDown, unique, ROOT_RNG.nextLong());
+        return createDungeonLevel(w, h, depth, hasUp, hasDown, theme, unique, ROOT_RNG.nextLong());
     }
 
     /** Seeded variant - same seed -> same level, modulo class-loaded factory state. */
     public static Level createDungeonLevel(int w, int h, int depth,
                                            boolean hasUp, boolean hasDown,
+                                           VisualTheme theme,
                                            com.bjsp123.rl2.model.UniqueTracker unique,
                                            long seed) {
         Random rng = new Random(seed);
@@ -114,12 +116,10 @@ public final class LevelFactory {
         Level level = new Level(w, h);
         level.depth = depth;        // before population - populate reads depth-fraction.
         level.flags.addAll(flags);
+        if (unique != null) unique.resetForNewLevel();
 
         level.layout = Layout.values()[rng.nextInt(Layout.values().length)];
-        // Equal 1/3 chance per registered theme - VisualTheme.values() drives the
-        // distribution so adding a fourth theme will rebalance automatically.
-        VisualTheme[] themes = VisualTheme.values();
-        level.theme = themes[rng.nextInt(themes.length)];
+        level.theme = theme;
 
         List<int[]> rooms = switch (level.layout) {
             case BSP          -> buildBsp(level, rng);

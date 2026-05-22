@@ -58,7 +58,14 @@ public final class SurfaceSprites {
     // In-world vegetation variants, direct regions on surfaces.png.
     private static Map<Vegetation, TextureRegion> vegA;
     private static Map<Vegetation, TextureRegion> vegB;
-    // Shore-mask variants 0..15 — TextureRegions into SpriteAtlas (no separate Textures).
+    // Shore-mask variants 0..15. Held as STANDALONE 32x32 Textures (not
+    // atlas-backed) so the surface-mask shader's v_texCoords span 0..1
+    // across each drawn cell - the shader uses v_texCoords to interpolate
+    // the liquid sample UVs, and an atlas-relative span would collapse
+    // the liquid to a near-single-pixel slice per cell (looked like a
+    // square grid).
+    private static Texture[]       maskTextures;
+    private static TextureRegion[] maskRegions;
     // Procedural placeholder for ICE - atlas doesn't ship one.
     private static Texture iceTex;
     // Fire animation sheets.
@@ -107,10 +114,16 @@ public final class SurfaceSprites {
         return vegB == null ? null : vegB.get(v);
     }
 
-    /** Shore-mask region for a 4-bit N/E/S/W neighbour bitfield (0..15). Backed by
-     *  SpriteAtlas — variant 0 is the intentionally-transparent column in surfaces.png. */
+    /** Shore-mask region for a 4-bit N/E/S/W neighbour bitfield (0..15).
+     *  Backed by per-variant standalone 32x32 textures (not the combined
+     *  atlas) so the surface-mask shader's {@code v_texCoords} span 0..1
+     *  across the drawn cell - which it relies on to remap the local UV
+     *  onto the scrolling liquid texture. Variant 0 is the intentionally-
+     *  transparent strip in surfaces.png. */
     public static TextureRegion maskTexture(int variant) {
         if (variant < 0 || variant >= MASK_VARIANTS) return null;
+        if (maskRegions == null) load();
+        if (maskRegions != null && maskRegions[variant] != null) return maskRegions[variant];
         return SpriteAtlas.maskRegion(variant);
     }
 
@@ -139,6 +152,26 @@ public final class SurfaceSprites {
             putLiquid(sheetPm, Surface.WATER, 0, sw, sh);
             putLiquid(sheetPm, Surface.BLOOD, 1, sw, sh);
             putLiquid(sheetPm, Surface.OIL,   2, sw, sh);
+
+            // Shore-mask variants - extracted into 16 standalone 32x32
+            // Textures so the surface-mask shader's v_texCoords come out
+            // as the natural 0..1 span across each drawn cell. Source row
+            // sits below the three liquid rows in surfaces.png.
+            maskTextures = new Texture[MASK_VARIANTS];
+            maskRegions  = new TextureRegion[MASK_VARIANTS];
+            int maskY = 3 * LIQUID_TILE;       // y = 192 within surfaces.png
+            for (int i = 0; i < MASK_VARIANTS; i++) {
+                int srcX = i * MASK_TILE;
+                if (srcX + MASK_TILE > sw || maskY + MASK_TILE > sh) continue;
+                Pixmap mp = new Pixmap(MASK_TILE, MASK_TILE, sheetPm.getFormat());
+                mp.setBlending(Pixmap.Blending.None);
+                mp.drawPixmap(sheetPm, 0, 0, srcX, maskY, MASK_TILE, MASK_TILE);
+                Texture mt = new Texture(mp);
+                mp.dispose();
+                mt.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                maskTextures[i] = mt;
+                maskRegions[i]  = new TextureRegion(mt);
+            }
             // ICE - atlas doesn't carry one (in-world reads off the end of the sheet).
             // Synthesise a 32x32 procedural placeholder; same Texture serves both UI
             // and in-world rendering.
@@ -260,6 +293,11 @@ public final class SurfaceSprites {
         if (fire1Tex != null) { fire1Tex.dispose(); fire1Tex = null; }
         if (fire2Tex != null) { fire2Tex.dispose(); fire2Tex = null; }
         disposeAll(liquidTextures); liquidTextures = null;
+        if (maskTextures != null) {
+            for (Texture t : maskTextures) if (t != null) t.dispose();
+            maskTextures = null;
+        }
+        maskRegions = null;
         vegA = null;
         vegB = null;
         surfaceRegions = null;

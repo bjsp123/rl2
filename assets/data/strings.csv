@@ -357,6 +357,8 @@ item.SWORD.description2,"As well as decent damage, it's heavy enough to knock sm
 item.SWORD.name,sword
 item.TASTY_MEAT.description,A plump pink chunk of tasty meat.
 item.TASTY_MEAT.name,tasty meat
+item.TELEPORT_ORB.description,"A swirling crystal sphere. Use to open the world map and teleport to any active beacon. Throw to scatter every caught creature across the dungeon."
+item.TELEPORT_ORB.name,teleport orb
 item.THROWING_KNIFE.description,This well balanced knife can be thrown from some way off.
 item.THROWING_KNIFE.description2,Minor magic helps it return to its thrower -- a bit.
 item.THROWING_KNIFE.name,throwing knife
@@ -478,7 +480,8 @@ item.useVerb.POWERUP,absorb
 item.useVerb.WAND,zap
 level.theme.CONCRETE,concrete
 level.theme.CRYSTAL,crystal
-level.theme.STRAIGHTFORWARD,stone
+level.theme.SHINY,stone
+level.theme.GOTHIC,gothic
 lore.items.accuracy,Accuracy
 lore.items.apDamage,AP damage
 lore.items.area,Area
@@ -731,6 +734,7 @@ ui.characterSelect.seed,Seed: {seed}
 ui.characterSelect.seedExample,e.g. AB12CD
 ui.characterSelect.seedPrompt,Seed (blank for random)
 ui.characterSelect.seedRandom,Seed: random
+ui.characterSelect.revealWholeWorld,Reveal whole world: {state}
 ui.characterSelect.startingLevel,Starting level: {level}
 ui.characterSelect.tenPerkPoints,+10 perk points: {state}
 ui.characterSelect.title,Choose Class
@@ -892,7 +896,11 @@ ui.list.sep,", "
 ui.list.two,{a} and {b}
 ui.map.level,L{depth}
 ui.map.mobs,Mobs:  {mobs}
+ui.map.orbCount,"Teleport orbs: {count}"
 ui.map.rooms,Rooms: {rooms}
+ui.map.teleportConfirm,Teleport to level {depth}? (1 orb)
+ui.map.teleportNo,No
+ui.map.teleportYes,Yes
 ui.map.title,Map
 ui.menu.credits,Credits
 ui.menu.levelInfo,Level Info

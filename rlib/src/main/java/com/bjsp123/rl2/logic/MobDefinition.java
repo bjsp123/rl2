@@ -215,8 +215,8 @@ public final class MobDefinition {
         // cell behaves exactly like the field had never been touched.
         MobDefinition d = new MobDefinition();
         d.type        = CsvTable.str(row, "type", null);
-        d.name        = TextCatalog.mobName(d.type, CsvTable.str(row, "name", null));
-        d.description = TextCatalog.mobDescription(d.type, CsvTable.str(row, "description", null));
+        d.name        = TextCatalog.mobName(d.type, null);
+        d.description = TextCatalog.mobDescription(d.type, null);
         d.material    = CsvTable.enumCell(row, "material", Mob.Material.class, Mob.Material.FLESH);
         d.behavior    = CsvTable.enumCell(row, "behavior", Mob.Behavior.class, Mob.Behavior.MOB);
 

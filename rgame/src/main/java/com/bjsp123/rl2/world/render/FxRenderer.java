@@ -113,6 +113,12 @@ final class FxRenderer {
         } else if (effect.type == EffectType.LIGHT_MOTE) {
             if (!level.visible[ex][ey]) return;
             drawLightMote(effect);
+        } else if (effect.type == EffectType.INWARD_SPIRAL) {
+            if (!level.visible[ex][ey]) return;
+            drawInwardSpiral(effect);
+        } else if (effect.type == EffectType.LEVEL_FLICKER) {
+            // Screen-space; rendered once per frame by drawScreenSpaceEffects.
+            return;
         } else if (effect.type == EffectType.ATTACK_FLASH) {
             if (!level.visible[ex][ey]) return;
             drawAttackFlash(effect);
@@ -424,6 +430,19 @@ final class FxRenderer {
         batch.setColor(Color.WHITE);
     }
 
+    /** Resolve the per-particle sprite for {@code e}. Returns the cached
+     *  particle region from {@link com.bjsp123.rl2.world.render.BuffIcons}
+     *  when the effect carries a concrete {@link Effect.ParticleShape};
+     *  falls back to {@link #whiteRegion} otherwise (legacy stamp + a
+     *  defensive landing for atlas-missing edge cases). */
+    private TextureRegion particleSpriteFor(Effect e) {
+        if (e == null || e.particleShape == null) return whiteRegion;
+        int idx = e.particleShape.atlasIndex();
+        if (idx < 0) return whiteRegion;
+        TextureRegion r = com.bjsp123.rl2.world.render.BuffIcons.particleRegion(idx);
+        return r != null ? r : whiteRegion;
+    }
+
     /** Render one LIGHT_MOTE - a soft pale spark drifting up from a light source. */
     private void drawLightMote(Effect e) {
         if (e.particleX0 == null || e.particleX0.length == 0) return;
@@ -434,7 +453,7 @@ final class FxRenderer {
         float jitterX  = e.particleY0[0];
         float speed    = e.particleVX != null && e.particleVX.length > 0 ? e.particleVX[0] : 1f;
         float baseX = e.location.tileX() * (float) CELL;
-        float baseY = e.location.tileY() * (float) CELL;
+        float baseY = e.location.tileY() * (float) CELL + e.pixelOffsetY;
         float swayX = (float) Math.sin(phase + lifeT * 6f) * 1.2f;
         float px = baseX + CELL / 2f + jitterX + swayX;
         float py = baseY + CELL * 0.5f + speed * lifeT * 12f;
@@ -442,10 +461,89 @@ final class FxRenderer {
                 ? 0.55f * (lifeT / 0.3f)
                 : 0.55f * (1f - (lifeT - 0.3f) / 0.7f);
         if (alpha <= 0f) return;
+        TextureRegion sprite = particleSpriteFor(e);
         batch.setColor(1f, 0.95f, 0.7f, alpha);
-        batch.draw(whiteRegion, px - 1f, py - 1f, 2f, 2f);
+        batch.draw(sprite, px - 2f, py - 2f, 4f, 4f);
         batch.setColor(1f, 1f, 0.9f, alpha);
-        batch.draw(whiteRegion, px - 0.5f, py - 0.5f, 1f, 1f);
+        batch.draw(sprite, px - 1f, py - 1f, 2f, 2f);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Render one INWARD_SPIRAL particle - a single spark that spirals
+     *  toward its anchor point (lifted by {@code pixelOffsetY}) with a
+     *  dim -> bright -> dim Hann-window alpha envelope. Parameters live
+     *  in the 1-element synthetic-particle arrays: angle, start radius,
+     *  and rotations-per-lifetime. Tint comes from {@link Effect#tint};
+     *  the builder picks a random palette colour per particle so a stream
+     *  reads as a multicolour shimmer. */
+    private void drawInwardSpiral(Effect e) {
+        if (e.particleX0 == null || e.particleX0.length == 0) return;
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float lifeT = Math.min(1f, e.frame / (float) total);
+        float initAngle = e.particleX0[0];
+        float startR    = e.particleY0[0];
+        float rotations = e.particleVX != null && e.particleVX.length > 0 ? e.particleVX[0] : 1f;
+
+        float angle  = initAngle + rotations * lifeT * (float)(Math.PI * 2);
+        float radius = startR * (1f - lifeT);
+
+        float baseX = e.location.tileX() * (float) CELL + CELL * 0.5f;
+        float baseY = e.location.tileY() * (float) CELL + CELL * 0.5f + e.pixelOffsetY;
+        float px = baseX + (float) Math.cos(angle) * radius;
+        float py = baseY + (float) Math.sin(angle) * radius;
+
+        // Hann window: 0 at endpoints, peaks at mid-life.
+        float alpha = 0.5f * (1f - (float) Math.cos(2.0 * Math.PI * lifeT));
+        if (alpha <= 0f) return;
+
+        Color tint = tintToColor(e.tint, Color.WHITE);
+        TextureRegion sprite = particleSpriteFor(e);
+        // Three-layer stamp for a bold spark: wide tinted halo, mid-size
+        // tinted body, near-white core. Sizes doubled vs the original
+        // 2-px draw so the swirl reads boldly against the dark world.
+        batch.setColor(tint.r, tint.g, tint.b, alpha * 0.45f);
+        batch.draw(sprite, px - 3f, py - 3f, 6f, 6f);
+        batch.setColor(tint.r, tint.g, tint.b, alpha);
+        batch.draw(sprite, px - 2f, py - 2f, 4f, 4f);
+        batch.setColor(
+                Math.min(1f, tint.r + 0.4f),
+                Math.min(1f, tint.g + 0.4f),
+                Math.min(1f, tint.b + 0.4f),
+                alpha);
+        batch.draw(sprite, px - 1f, py - 1f, 2f, 2f);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Paint screen-spanning effects in {@code stage} (currently just
+     *  {@link EffectType#LEVEL_FLICKER}). Called once per render frame
+     *  by {@link DefaultLevelRenderer} AFTER the per-cell content pass,
+     *  so the flicker lays on top of the drawn world. {@code camera} is
+     *  used to size the full-viewport quad. */
+    void drawScreenSpaceEffects(EffectStage stage, com.badlogic.gdx.graphics.OrthographicCamera camera) {
+        if (stage == null || camera == null) return;
+        for (Effect e : stage.active) {
+            if (e.type != EffectType.LEVEL_FLICKER) continue;
+            if (e.startDelay > 0) continue;
+            drawLevelFlicker(e, camera);
+        }
+    }
+
+    /** Render one LEVEL_FLICKER - a tinted full-viewport quad whose alpha
+     *  follows a sine pulse over the effect's lifetime (0 -> peak -> 0). */
+    private void drawLevelFlicker(Effect e, com.badlogic.gdx.graphics.OrthographicCamera camera) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float lifeT = Math.min(1f, e.frame / (float) total);
+        float alpha = (float) Math.sin(Math.PI * lifeT) * 0.35f;
+        if (alpha <= 0f) return;
+        Color tint = tintToColor(e.tint, Color.YELLOW);
+        float halfW = camera.viewportWidth  * camera.zoom * 0.5f;
+        float halfH = camera.viewportHeight * camera.zoom * 0.5f;
+        batch.setColor(tint.r, tint.g, tint.b, alpha);
+        batch.draw(whiteRegion,
+                camera.position.x - halfW, camera.position.y - halfH,
+                halfW * 2f, halfH * 2f);
         batch.setColor(Color.WHITE);
     }
 
@@ -507,6 +605,7 @@ final class FxRenderer {
         if (e.particleX0 == null) return;
         float baseX = e.location.tileX() * (float) CELL;
         float baseY = e.location.tileY() * (float) CELL;
+        TextureRegion sprite = particleSpriteFor(e);
 
         if (e.particleSpawnFrame != null
                 && e.particleSpawnFrame.length == e.particleX0.length) {
@@ -531,12 +630,12 @@ final class FxRenderer {
                 if (e.particleBright) {
                     // Soft outer halo at 50% alpha, then crisp core on top.
                     batch.setColor(cr, cg, cb, alpha * 0.5f);
-                    batch.draw(whiteRegion, px - size / 2f, py - size / 2f, size * 2f, size * 2f);
+                    batch.draw(sprite, px - size / 2f, py - size / 2f, size * 2f, size * 2f);
                     batch.setColor(cr, cg, cb, alpha);
-                    batch.draw(whiteRegion, px, py, size, size);
+                    batch.draw(sprite, px, py, size, size);
                 } else {
                     batch.setColor(cr, cg, cb, alpha);
-                    batch.draw(whiteRegion, px, py, size, size);
+                    batch.draw(sprite, px, py, size, size);
                 }
             }
             batch.setColor(Color.WHITE);
@@ -570,7 +669,7 @@ final class FxRenderer {
                 py = baseY + e.particleY0[i] + dy;
             }
             float px = baseX + e.particleX0[i] + dx;
-            batch.draw(whiteRegion, px, py, size, size);
+            batch.draw(sprite, px, py, size, size);
         }
         batch.setColor(Color.WHITE);
     }

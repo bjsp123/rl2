@@ -60,6 +60,17 @@ public final class UiCtx implements Disposable {
     private final Vector3 unprojBuf = new Vector3();
     private AttractMode attract;
 
+    /** Snapshot of the play screen taken just before it was hidden behind
+     *  a pushed V2 screen (Map, Settings, ...). When non-null,
+     *  {@link #renderAttract(float)} draws this in place of the attract
+     *  demo so in-game menus get the player's actual world as a frozen
+     *  backdrop. Held as a TextureRegion because
+     *  {@code ScreenUtils.getFrameBufferTexture} returns one ready-flipped
+     *  for upright rendering. Captured by {@code Rl2Game.pushScreen} and
+     *  cleared by {@code popScreen} (back to PlayScreen) or
+     *  {@code setRootScreen} (Title / Game Over). */
+    private TextureRegion inGameBackdrop;
+
     public UiCtx() {
         FreeTypeFontGenerator gen = new FreeTypeFontGenerator(
                 Gdx.files.internal("ui/fonts/PixelOperator-Bold.ttf"));
@@ -154,12 +165,51 @@ public final class UiCtx implements Disposable {
         if (attract != null) attract.resize();
     }
 
-    /** Draw the shared title/menu backdrop. It is owned by the UI context so
-     *  pushed V2 screens keep the same simulated dungeon running underneath
-     *  their chrome instead of restarting it per screen. */
+    /** Draw the shared title/menu backdrop. When a frozen in-game
+     *  snapshot is set ({@link #captureBackdropFromFrameBuffer()}), draws
+     *  that full-viewport in place of the attract demo - so V2 screens
+     *  pushed from in-game sit on top of the player's actual world. */
     public void renderAttract(float delta) {
+        if (inGameBackdrop != null) {
+            applyProjection();
+            batch.begin();
+            batch.setColor(1f, 1f, 1f, 1f);
+            // ScreenUtils.getFrameBufferTexture returns a region with v
+            // pre-flipped so a regular batch.draw paints it upright.
+            batch.draw(inGameBackdrop, 0f, 0f, worldW(), worldH());
+            batch.end();
+            return;
+        }
         if (attract == null) attract = new AttractMode(this);
         attract.render(delta);
+    }
+
+    /** Snapshot the current GL framebuffer to a Texture and store it as
+     *  the in-game backdrop. Called by {@code Rl2Game} just before
+     *  pushing a V2 screen on top of the play screen so the menu reads
+     *  against the player's actual world. */
+    public void captureBackdropFromFrameBuffer() {
+        disposeBackdrop();
+        inGameBackdrop = com.badlogic.gdx.utils.ScreenUtils.getFrameBufferTexture();
+    }
+
+    /** Drop the cached in-game backdrop (if any) and free its GPU memory.
+     *  Called when navigation leaves the modal stack on top of the play
+     *  screen - either popping back to live gameplay, or transitioning
+     *  to a root screen (Title / Game Over) where the snapshot is no
+     *  longer relevant. */
+    public void clearBackdrop() {
+        disposeBackdrop();
+    }
+
+    /** Internal helper: release the GPU texture held by the backdrop
+     *  region (TextureRegion itself has no dispose) and null the field. */
+    private void disposeBackdrop() {
+        if (inGameBackdrop != null) {
+            Texture t = inGameBackdrop.getTexture();
+            if (t != null) t.dispose();
+            inGameBackdrop = null;
+        }
     }
 
     /** Clear the framebuffer to the dim-overlay-suitable black so popups dim
@@ -171,6 +221,7 @@ public final class UiCtx implements Disposable {
 
     @Override
     public void dispose() {
+        disposeBackdrop();
         if (attract != null) attract.dispose();
         if (v2Stage != null) v2Stage.dispose();
         shapes.dispose();

@@ -130,6 +130,19 @@ public final class ItemGenerator {
      *  a GEM on a theme with no gem table. */
     public static Item generateItem(double powerLevel, VisualTheme theme,
                                     LootCategory cat, Random rng) {
+        return generateItem(powerLevel, theme, cat, /*includeRestricted=*/ false, rng);
+    }
+
+    /** Overload that controls whether items with
+     *  {@link ItemDefinition#restrictedDrop} are eligible. Themed-room
+     *  population passes {@code true} to access headline rewards like
+     *  POWER_ORB through the standard category resolution; mob drops and
+     *  random scatter use the default {@code false} so those items only
+     *  ever spawn via guaranteed-per-level scatter or explicit themed-room
+     *  drops. */
+    public static Item generateItem(double powerLevel, VisualTheme theme,
+                                    LootCategory cat, boolean includeRestricted,
+                                    Random rng) {
         if (rng == null) return null;
         LootCategory c = (cat == null) ? LootCategory.ANY : cat;
 
@@ -147,7 +160,7 @@ public final class ItemGenerator {
             if (g != null) return g;
         }
 
-        return rollNonGem(powerLevel, theme, c, rng);
+        return rollNonGem(powerLevel, theme, c, includeRestricted, rng);
     }
 
     /** Build a specific item type and apply plusses for the given power level.
@@ -289,7 +302,8 @@ public final class ItemGenerator {
      *  uniformly from candidates with positive weight; returns {@code null}
      *  when the pool is empty. */
     private static Item rollNonGem(double powerLevel, VisualTheme theme,
-                                   LootCategory cat, Random rng) {
+                                   LootCategory cat, boolean includeRestricted,
+                                   Random rng) {
         List<String> candidates = categoryTypes(cat);
         List<String> pool = new ArrayList<>(candidates.size());
         List<Double> weights = new ArrayList<>(candidates.size());
@@ -297,6 +311,7 @@ public final class ItemGenerator {
         for (String type : candidates) {
             ItemDefinition d = Registries.item(type);
             if (d == null) continue;
+            if (d.restrictedDrop && !includeRestricted) continue;
             double w = powerWeight(d.powerMin, d.powerMax, powerLevel);
             if (w <= 0) continue;
             w *= themeMultiplier(d.theme, theme);
