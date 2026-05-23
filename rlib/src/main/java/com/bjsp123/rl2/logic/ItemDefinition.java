@@ -121,6 +121,10 @@ public final class ItemDefinition {
      *  many copies to be placed before random clusters are rolled. */
     public int guaranteedPerLevel;
 
+    /** Signature-item flag - see {@link Item#scalesWithUser}. CSV column
+     *  {@code scalesWithUser}; blank/FALSE everywhere except jade items. */
+    public boolean scalesWithUser;
+
     /** When TRUE, this item is excluded from the random-generator pool
      *  used by mob loot drops and the random-scatter pass on level
      *  population. It can still be placed by the guaranteed-per-level
@@ -203,6 +207,7 @@ public final class ItemDefinition {
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
         d.guaranteedPerLevel = CsvTable.intCell(row, "guaranteedPerLevel", 0);
         d.restrictedDrop     = CsvTable.boolCell(row, "restrictedDrop", false);
+        d.scalesWithUser     = CsvTable.boolCell(row, "scalesWithUser", false);
 
         d.spriteCol     = CsvTable.intCell(row, "spriteCol", 0);
         d.spriteRow     = CsvTable.intCell(row, "spriteRow", 0);
@@ -250,6 +255,7 @@ public final class ItemDefinition {
         it.knockbackSquares = knockbackSquares;
         it.glows                 = glows;
         it.inventoryCategory     = inventoryCategory;
+        it.scalesWithUser        = scalesWithUser;
         if (it.baseChargeMax > 0) {
             it.charge = it.maxCharge();
         }

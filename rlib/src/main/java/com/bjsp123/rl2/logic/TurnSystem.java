@@ -62,6 +62,12 @@ public class TurnSystem {
             }
         }
 
+        // Per-game-tick buff duration decrement. Runs every tick so buff
+        // expiry lands exactly when the budget runs out, not snapped to the
+        // next standard-turn boundary. DOT damage application is separate
+        // and stays per-standard-turn (see {@link BuffSystem#tickPerTurn}).
+        BuffSystem.tickEveryGameTick(level, 1);
+
         MobAi.processAllAiTurns(level);
 
         level.standardTurnTickAcc++;
@@ -116,6 +122,11 @@ public class TurnSystem {
                 MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
             }
         }
+
+        // Catch up the per-game-tick buff decrement by the same delta this
+        // bulk advance just consumed. Keeps buff expiry on the exact tick the
+        // budget runs out regardless of which advance path drove the clock.
+        BuffSystem.tickEveryGameTick(level, delta);
 
         level.standardTurnTickAcc += delta;
         while (level.standardTurnTickAcc >= STANDARD_TURN_TICKS) {

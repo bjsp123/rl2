@@ -15,3 +15,30 @@ tasks.register('dumpWorld', JavaExec) {
     classpath   = sourceSets.main.runtimeClasspath
     workingDir  = rootProject.projectDir
 }
+
+// Headless 1v1 round-robin power ranker. Spawns every fightable mob (plus the
+// three player classes), runs N trials of GameBalance.mobfight between every
+// pair, and prints a ranking at character level 1 and 10.
+// Override the per-pair trial count: ./gradlew :rlib:rankPower --args="2000"
+tasks.register('rankPower', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Rank every mob (+ player classes) by 1v1 win rate'
+    mainClass   = 'com.bjsp123.rl2.util.MobPowerRankMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}
+
+// Full-fat arena power ranker. Spawns each fighter with starting inventory +
+// perks, builds a real CombatArena level, and lets the AI fight it out turn
+// by turn (items, wands, bombs, JADE_*, terrain all active). Each match
+// costs ~10-100ms, so default trials is small.
+// Override: ./gradlew :rlib:rankPowerFull --args="10"
+tasks.register('rankPowerFull', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Rank fighters by full arena combat (items, AI, terrain)'
+    mainClass   = 'com.bjsp123.rl2.util.FullArenaRankMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}

@@ -350,8 +350,9 @@ public final class V2CharacterStats extends BasePopup {
                                 TextCatalog.vars("name", buffName, "level", b.level)),
                         left + 22f, top,
                         window.right() - UIVars.PAD_CONTENT - (left + 22f));
-                if (b.durationTurns > 0) {
-                    pendingDots.add(new float[]{ left + 17f, top - 16f, b.durationTurns });
+                int displayTurns = com.bjsp123.rl2.logic.BuffSystem.displayTurns(b.durationTicks);
+                if (displayTurns > 0) {
+                    pendingDots.add(new float[]{ left + 17f, top - 16f, displayTurns });
                 }
                 Rect hit = new Rect();
                 hit.set(left, top - 18f, window.right() - UIVars.PAD_CONTENT - left, 20f);

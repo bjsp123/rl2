@@ -61,7 +61,7 @@ public final class CloudSystem {
     private static final int POISON_BUFF_LEVEL = 1;
     /** Buff duration (turns) applied per poison-cloud tick. Short - the cloud
      *  re-applies it next turn if the mob is still standing in it. */
-    private static final int POISON_BUFF_DURATION = 2;
+    private static final int POISON_BUFF_DURATION_TICKS = 2 * TurnSystem.STANDARD_TURN_TICKS;
 
     private static final Random RNG = new Random();
 
@@ -206,7 +206,7 @@ public final class CloudSystem {
             int x = m.position.tileX(), y = m.position.tileY();
             if (typeAt(level, x, y) != Cloud.POISON) continue;
             BuffSystem.apply(level, m, Buff.BuffType.POISONED,
-                    POISON_BUFF_LEVEL, POISON_BUFF_DURATION, null);
+                    POISON_BUFF_LEVEL, POISON_BUFF_DURATION_TICKS, null);
         }
     }
 

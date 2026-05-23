@@ -163,7 +163,15 @@ public class Item {
          *  the item. UI-layer behaviour - {@link com.bjsp123.rl2.logic.ItemSystem#useItem}
          *  is a no-op for this; the use-from-inventory path in the
          *  controller pushes the V2Map screen. */
-        TELEPORT
+        TELEPORT,
+        /** Charge tool (jade bull) - pick a visible hostile mob within
+         *  {@link Item#abilityPower} squares (Chebyshev), dash to the tile
+         *  adjacent to it along the line of approach, deliver a free melee
+         *  strike, and knock the target back by {@link Item#knockbackSquares}
+         *  tiles. One charge consumed per use; player-only (AI gate refuses
+         *  it). UI-layer caller in {@code PlayController} drives the
+         *  targeting overlay and then calls {@code ItemSystem.castCharge}. */
+        CHARGE
     }
 
     /** Identifier - string key matching the {@code type} column of a row in
@@ -338,6 +346,13 @@ public class Item {
      *  bucketing. Null only for procedural items (gems) which set the
      *  category in {@code GemSystem.createGem}. */
     public InventoryCategory inventoryCategory;
+
+    /** Signature-item flag - when true, this item's
+     *  {@code ItemStats.effectiveLevel} gains a bonus based on the holder's
+     *  character level (capped). Marked on the jade-bull / jade-crab /
+     *  jade-fish so their per-level math (knockback, buff level + duration,
+     *  AOE) scales with the player. Off (false) for every other item. */
+    public boolean scalesWithUser;
 
     /** Gem species - non-null iff this item is a gem. Drives icon colour, theme
      *  shape (triangle for crystal, square for concrete), and same-kind recipe matching.

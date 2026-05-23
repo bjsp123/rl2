@@ -241,7 +241,8 @@ public final class FireSystem {
                 // Fire on the floor sets the mob alight for ~5 turns. Re-applies extend
                 // the duration via BuffSystem's max-merge contract.
                 com.bjsp123.rl2.logic.BuffSystem.apply(level, m,
-                        com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE, 1, 5, null);
+                        com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE, 1,
+                        5 * com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS, null);
                 burning = true;
             }
             if (burning) {

@@ -61,14 +61,17 @@ public final class BuffSystem {
     /**
      * Apply a buff to {@code target}. If a buff of {@code type} already exists, it's
      * upgraded to {@code max(existingLevel, level)} / {@code max(existingDuration,
-     * durationTurns)}. Spawns a floating "buff name" effect above the target's head so
+     * durationTicks)}. Spawns a floating "buff name" effect above the target's head so
      * the player sees what landed.
+     *
+     * <p>{@code durationTicks} is the buff length in <b>game ticks</b>; convert from
+     * standard turns at the call site via {@code N * TurnSystem.STANDARD_TURN_TICKS}.
      *
      * <p>Returns the resulting {@link Buff} (either the upgraded existing one or a
      * fresh one) so call sites can read final stats if needed.
      */
     public static Buff apply(Level level, Mob target, BuffType type,
-                             int buffLevel, int durationTurns, Mob source) {
+                             int buffLevel, int durationTicks, Mob source) {
         if (target == null || type == null) return null;
         if (target.buffs == null) target.buffs = new java.util.ArrayList<>();
         // Hope grants immunity to FRIGHTENED - silently swallow incoming fear while
@@ -85,11 +88,22 @@ public final class BuffSystem {
         }
 
         int newLevel    = Math.max(1, buffLevel);
-        int newDuration = Math.max(1, durationTurns);
+        int newDuration = Math.max(1, durationTicks);
         Buff existing = get(target, type);
         if (existing != null) {
-            existing.level         = Math.max(existing.level,         newLevel);
-            existing.durationTurns = Math.max(existing.durationTurns, newDuration);
+            // KILLER is a stacking buff: re-applying it on each kill ADDS the
+            // incoming level to the existing stack count and RESETS the
+            // duration (instead of the default max-merge). The Warrior's
+            // perk feeds {@code ceil(perkLvl/2)} as the incoming level so
+            // higher-rank KILLER perk means each kill bumps the stack
+            // faster.
+            if (type == BuffType.KILLER) {
+                existing.level         = existing.level + newLevel;
+                existing.durationTicks = newDuration;
+            } else {
+                existing.level         = Math.max(existing.level,         newLevel);
+                existing.durationTicks = Math.max(existing.durationTicks, newDuration);
+            }
             if (source != null) existing.source = source;
             target.statsDirty = true;
             maybeFreeze(level, target, type, source);
@@ -125,7 +139,7 @@ public final class BuffSystem {
         Buff wet = get(target, BuffType.WET);
         if (chilled == null || wet == null) return;
         int lvl = Math.max(chilled.level, wet.level);
-        int dur = Math.max(chilled.durationTurns, wet.durationTurns);
+        int dur = Math.max(chilled.durationTicks, wet.durationTicks);
         Mob src = source != null ? source : (chilled.source != null ? chilled.source : wet.source);
         apply(level, target, BuffType.FROZEN, lvl, dur, src);
     }
@@ -145,22 +159,24 @@ public final class BuffSystem {
     public static void shortenFrozenOnDamage(Mob mob) {
         Buff frozen = get(mob, BuffType.FROZEN);
         if (frozen == null) return;
-        frozen.durationTurns -= 2;
-        if (frozen.durationTurns <= 0) removeBuff(mob, BuffType.FROZEN);
+        frozen.durationTicks -= 2 * TurnSystem.STANDARD_TURN_TICKS;
+        if (frozen.durationTicks <= 0) removeBuff(mob, BuffType.FROZEN);
     }
 
     /** --- Per-turn driver --------------------------------------------------- */
 
-    /**
-     * Run all per-turn buff effects on every mob in the level, then decrement durations
-     * and remove expired buffs. Called once per standard turn from {@link TurnSystem#tick}'s
-     * standard-turn pass.
-     */
-    /** Duration (in game turns) of the FRIGHTENED buff applied when a terrifiable mob
-     *  is adjacent to a terrifying one. Two turns lets the fear persist for one full
-     *  AI round after the mob has already walked away from the terrifier. */
-    public static final int FEAR_AURA_DURATION = 2;
+    /** FRIGHTENED-aura duration applied to a terrifiable mob adjacent to a
+     *  terrifying one, in <b>game ticks</b>. Two standard turns lets the fear
+     *  persist for one full AI round after the mob has walked away from the
+     *  terrifier. */
+    public static final int FEAR_AURA_DURATION_TICKS = 2 * TurnSystem.STANDARD_TURN_TICKS;
 
+    /**
+     * Per-standard-turn pass. Drives terrifying-aura propagation, FRIGHTENED
+     * light-purge, and damage-over-time application (ON_FIRE, POISONED,
+     * BLEEDING, REGENERATION). Duration decrement is NOT done here - that
+     * runs every game tick via {@link #tickEveryGameTick}.
+     */
     public static void tickPerTurn(Level level) {
         if (level == null || level.mobs == null) return;
         // Snapshot the mob list once for both passes: applyPerTurnEffect can call
@@ -180,7 +196,7 @@ public final class BuffSystem {
                 int dx = Math.abs(other.position.tileX() - sx);
                 int dy = Math.abs(other.position.tileY() - sy);
                 if (Math.max(dx, dy) <= 1) {
-                    apply(level, other, BuffType.FRIGHTENED, 1, FEAR_AURA_DURATION, src);
+                    apply(level, other, BuffType.FRIGHTENED, 1, FEAR_AURA_DURATION_TICKS, src);
                 }
             }
         }
@@ -205,14 +221,40 @@ public final class BuffSystem {
             for (Buff b : new java.util.ArrayList<>(m.buffs)) {
                 applyPerTurnEffect(level, m, b);
             }
-            // Decrement durations + drop expired.
+        }
+    }
+
+    /**
+     * Per-game-tick pass. Decrements every active buff's {@code durationTicks}
+     * by {@code dtTicks} and removes any that hit zero. Called from
+     * {@link TurnSystem#tick} every game tick (and from
+     * {@code TurnSystem.advanceToNextEvent} during catch-up) so buff expiry
+     * lands on the exact tick the budget runs out - not snapped to the next
+     * standard-turn boundary.
+     */
+    public static void tickEveryGameTick(Level level, int dtTicks) {
+        if (level == null || level.mobs == null || dtTicks <= 0) return;
+        for (Mob m : level.mobs) {
+            if (m == null || m.buffs == null || m.buffs.isEmpty()) continue;
+            if (m.hp <= 0) { m.buffs.clear(); continue; }
             Iterator<Buff> it = m.buffs.iterator();
+            boolean changed = false;
             while (it.hasNext()) {
                 Buff b = it.next();
-                b.durationTurns--;
-                if (b.durationTurns <= 0) it.remove();
+                b.durationTicks -= dtTicks;
+                if (b.durationTicks <= 0) { it.remove(); changed = true; }
             }
+            if (changed) m.statsDirty = true;
         }
+    }
+
+    /** HUD-friendly turn count for a buff's remaining duration. Uses ceiling
+     *  division so a still-active sub-turn buff renders as {@code (1t)} rather
+     *  than {@code (0t)}. */
+    public static int displayTurns(int durationTicks) {
+        if (durationTicks <= 0) return 0;
+        return (durationTicks + TurnSystem.STANDARD_TURN_TICKS - 1)
+                / TurnSystem.STANDARD_TURN_TICKS;
     }
 
     /** Per-turn effect for one buff. Damage / heal happens via
@@ -242,11 +284,14 @@ public final class BuffSystem {
                 if (killed) logDotDeath(m, "succumbs to poison");
             }
             case BLEEDING -> {
-                // (level x duration) / 2 HP / turn - strong at first then
-                // tapers as the duration counts down. Read durationTurns
-                // BEFORE the post-effect decrement so the first tick uses
-                // the full duration the user-source applied.
-                int dmg = Math.max(1, (b.level * b.durationTurns) / 2);
+                // (level x standardTurnsRemaining) / 2 HP per standard turn -
+                // strong at first then tapers as the duration counts down.
+                // Convert ticks to standard turns for game-feel parity with the
+                // pre-tick implementation: a buff applied for 6 standard turns
+                // (600 ticks) at level 4 still ticks for 12 / 10 / 8 / 6 / 4 /
+                // 2 over its life.
+                int turnsLeft = displayTurns(b.durationTicks);
+                int dmg = Math.max(1, (b.level * turnsLeft) / 2);
                 emitPeriodicDamage(level, m, BuffType.BLEEDING, dmg);
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL);
@@ -329,8 +374,13 @@ public final class BuffSystem {
                 }
                 case HASTED -> moveMultiplier *= Math.pow(0.8, b.level);
                 case KILLER -> {
-                    moveMultiplier *= 0.8;
-                    actionMultiplier *= 0.8;
+                    // KILLER stacks via the apply() carve-out above. Each
+                    // stack multiplies action + move cost by 0.85 (a gentler
+                    // decay than the old constant 0.8 so 5+ stacks don't
+                    // trivialise turns entirely).
+                    double k = Math.pow(0.85, Math.max(1, b.level));
+                    moveMultiplier   *= k;
+                    actionMultiplier *= k;
                 }
                 case CHILLED -> chilledPenalty = Math.max(chilledPenalty, 80 + b.level * 15);
                 default -> { /* other buff types don't yet contribute to the stat block */ }
@@ -417,7 +467,7 @@ public final class BuffSystem {
             if (sb.length() > 0) sb.append('\n');
             sb.append(displayName(b.type));
             if (b.level > 1) sb.append(" +").append(b.level - 1);
-            sb.append(" (").append(b.durationTurns).append("t)");
+            sb.append(" (").append(displayTurns(b.durationTicks)).append("t)");
         }
         return sb.toString();
     }

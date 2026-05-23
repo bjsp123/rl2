@@ -109,6 +109,16 @@ public class PlayScreen implements Screen {
     private boolean initialized;
     private HallOfFameEntry lastSnapshot;
 
+    /** Latched once the player is detected gone from {@code level.mobs}. While true,
+     *  the world tick is suspended (no more AI actions) but the Animator keeps
+     *  draining events and advancing frames so the killing attack's lunge / flinch
+     *  and the player's death flicker / fade play to completion before the
+     *  V2GameOver screen takes over. The actual screen transition fires only when
+     *  {@link com.bjsp123.rl2.world.anim.Animator#playerDeathAnimComplete()}
+     *  reports the ghost has finished fading and no freeze frames or pending
+     *  impacts remain. */
+    private boolean deathTransitionPending;
+
     /** Shared cursor-memory for Look and targeting. Records the most recent mob and the
      *  most recent non-mob tile the player interacted with; {@link TargetHistory#pickInitial}
      *  turns that into a "best guess" starting cell for every new cursor-picking flow. */
@@ -616,6 +626,7 @@ public class PlayScreen implements Screen {
         // free move BEFORE the impact applies and the projectile would land where
         // they used to be. Waiting one more frame lets the impact resolve first.
         boolean ticked = !overlayOpen
+                && !deathTransitionPending
                 && (com.bjsp123.rl2.ui.skin.Settings.instantActions()
                         || (animator.queue.freezeFrames == 0 && !animator.hasPendingImpacts()))
                 && controller.tick(level);
@@ -665,7 +676,13 @@ public class PlayScreen implements Screen {
         // here so any path that changes the player's level (stairs,
         // chasm fall, debug "starting level") feeds the same poll.
         checkDepthAchievements();
-        if (player != null && playerAfter == null && lastSnapshot != null) {
+        // First frame the player has been removed from level.mobs: capture
+        // the death snapshot + clear the save (irreversible bookkeeping) and
+        // LATCH the V2GameOver transition. The screen swap itself waits for
+        // the killing attack's lunge / flinch + the death flicker / fade to
+        // finish - see deathTransitionPending javadoc.
+        if (player != null && playerAfter == null && lastSnapshot != null
+                && !deathTransitionPending) {
             java.util.List<com.bjsp123.rl2.model.LogEvent> logEntries = com.bjsp123.rl2.logic.EventLog.all();
             for (int i = logEntries.size() - 1; i >= 0; i--) {
                 com.bjsp123.rl2.model.LogEvent le = logEntries.get(i);
@@ -678,6 +695,13 @@ public class PlayScreen implements Screen {
             }
             game.saveSystem.clear(saveSlot);
             game.currentPlay = null;
+            deathTransitionPending = true;
+        }
+        // Latched: wait for the death animation to drain, then transition.
+        if (deathTransitionPending
+                && animator.queue.freezeFrames == 0
+                && !animator.hasPendingImpacts()
+                && animator.playerDeathAnimComplete()) {
             dispose();
             // Game over is terminal - clear the back-stack so the user can't
             // pop back into a disposed PlayScreen.

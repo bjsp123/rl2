@@ -290,7 +290,7 @@ public final class ItemLore {
 
     private static String useBehaviorVerb(UseBehavior u) {
         return switch (u) {
-            case EAT, DRINK, WAND, GRANT_PERK, GRAPPLE, JUMP, POWERUP, APPLYBUFF, TELEPORT, NONE ->
+            case EAT, DRINK, WAND, GRANT_PERK, GRAPPLE, JUMP, POWERUP, APPLYBUFF, TELEPORT, CHARGE, NONE ->
                     TextCatalog.get("item.useVerb." + u.name());
         };
     }

@@ -85,7 +85,7 @@ public final class BrandSystem {
             }
             case FREEZE -> {
                 BuffSystem.apply(level, target, Buff.BuffType.CHILLED,
-                        b.elementpower, 8, attacker);
+                        b.elementpower, 8 * TurnSystem.STANDARD_TURN_TICKS, attacker);
                 if (tx >= 0 && ty >= 0 && tx < level.width && ty < level.height
                         && level.surface[tx][ty] == Level.Surface.WATER) {
                     level.surface[tx][ty] = Level.Surface.ICE;

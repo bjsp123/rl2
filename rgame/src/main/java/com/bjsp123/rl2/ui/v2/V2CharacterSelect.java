@@ -395,10 +395,13 @@ public final class V2CharacterSelect extends V2Screen {
                 && !def.startingPerks.isEmpty()) {
             TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, TextCatalog.get("ui.characterSelect.perks"), left, top);
             top -= lh;
-            for (Perk p : def.startingPerks) {
+            for (com.bjsp123.rl2.logic.MobDefinition.StartPerk sp : def.startingPerks) {
                 if (top < guard) break;
+                String label = sp.level > 1
+                        ? "  " + sp.perk.displayName() + " +" + (sp.level - 1)
+                        : "  " + sp.perk.displayName();
                 TextDraw.TextBlock perk = TextDraw.block(ctx.fontRegular,
-                        "  " + p.displayName(), maxLineW, 2, lh);
+                        label, maxLineW, 2, lh);
                 TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, perk, left, top);
                 top -= perk.height();
             }

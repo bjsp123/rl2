@@ -360,6 +360,20 @@ public final class Animator {
         return !pendingImpacts.isEmpty();
     }
 
+    /** True when no ghost currently in the fade-out list belongs to a PLAYER mob.
+     *  Used by {@code PlayScreen} to hold the V2GameOver transition until the
+     *  killing attack's lunge / flinch / flicker / fade animation has fully
+     *  played for the dying player; without this latch the screen swap fires
+     *  the same render frame the death event is emitted, cutting the animation
+     *  short. Returns true (no animation in flight) when there's no player
+     *  ghost - works for live runs and for the pre-death state. */
+    public boolean playerDeathAnimComplete() {
+        for (Ghost g : ghosts) {
+            if (g.mob != null && g.mob.behavior == Mob.Behavior.PLAYER) return false;
+        }
+        return true;
+    }
+
     // -- Event handlers -------------------------------------------------------------
 
     void onMobMoved(Level level, GameEvent.MobMoved m) {

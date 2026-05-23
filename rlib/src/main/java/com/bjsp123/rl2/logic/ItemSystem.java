@@ -46,11 +46,47 @@ public final class ItemSystem {
         if (eater == null || item == null || item.foodValue <= 0) return;
         eater.satiety = Math.min(GameBalance.STARTING_SATIETY, eater.satiety + item.foodValue);
         applyConsumableBuff(level, eater, item);
+        applyManaFountRecharge(level, eater);
         MobSystem.removeFromInventory(eater, item);
         if (eater.behavior == Behavior.PLAYER) {
             EventLog.add(Messages.playerEats(actorName(eater), item.name));
         } else if (eater.name != null && item.name != null) {
             EventLog.add(Messages.mobUsesItem(eater.name, item.name, false));
+        }
+    }
+
+    /** MANA_FOUNT perk hook - on food / potion consumption, every wand in the
+     *  user's bag + equipped slots gains {@code perkLvl} charges, clamped at
+     *  each wand's effective max charge. No-op when the user doesn't carry
+     *  the perk. Called from {@link #eat} and {@link #drinkPotion}. */
+    private static void applyManaFountRecharge(Level level, Mob user) {
+        if (user == null || user.perks == null || user.inventory == null) return;
+        int lvl = user.perks.getOrDefault(com.bjsp123.rl2.model.Perk.MANA_FOUNT, 0);
+        if (lvl <= 0) return;
+        boolean topped = false;
+        if (user.inventory.bag != null) {
+            for (Item bagItem : user.inventory.bag) {
+                if (bagItem == null) continue;
+                if (bagItem.useBehavior != Item.UseBehavior.WAND) continue;
+                if (bagItem.baseChargeMax <= 0) continue;
+                float max = ItemStats.effectiveMaxCharge(bagItem, user);
+                float before = bagItem.charge;
+                bagItem.charge = Math.min(max, bagItem.charge + lvl);
+                if (bagItem.charge > before) topped = true;
+            }
+        }
+        for (Item eq : user.inventory.allEquipped()) {
+            if (eq == null) continue;
+            if (eq.useBehavior != Item.UseBehavior.WAND) continue;
+            if (eq.baseChargeMax <= 0) continue;
+            float max = ItemStats.effectiveMaxCharge(eq, user);
+            float before = eq.charge;
+            eq.charge = Math.min(max, eq.charge + lvl);
+            if (eq.charge > before) topped = true;
+        }
+        if (topped && level != null && level.events != null && user.position != null) {
+            // Reuse the heal-applied floater as a "+N mana" visual cue.
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(user, lvl));
         }
     }
 
@@ -141,6 +177,7 @@ public final class ItemSystem {
     public static void drinkPotion(Level level, Mob drinker, Item item) {
         if (drinker == null || item == null) return;
         applyPotionEffect(level, drinker, item, drinker);
+        applyManaFountRecharge(level, drinker);
         emitPotionBurst(level, drinker.position, item);
         MobSystem.removeFromInventory(drinker, item);
         if (drinker.behavior == Behavior.PLAYER) {
@@ -213,12 +250,13 @@ public final class ItemSystem {
 
     /** Apply the item's CSV-declared {@link Item#appliesBuff} to the user, with
      *  level / duration scaled by the standard item-level helpers. No-op when the
-     *  item carries no buff. */
+     *  item carries no buff. Holder-aware so a scaling jade item's buff picks
+     *  up the {@code scalesWithUser} character-level bonus. */
     private static void applyConsumableBuff(Level level, Mob user, Item item) {
         if (item == null || item.appliesBuff == null
                 || item.appliesBuff.isEmpty()) return;
-        int lvl = ItemStats.effectiveBuffLevel(item);
-        int dur = ItemStats.effectiveBuffDuration(item);
+        int lvl = ItemStats.effectiveBuffLevel(item, user);
+        int dur = ItemStats.effectiveBuffDuration(item, user);
         for (com.bjsp123.rl2.model.Buff.BuffType b : item.appliesBuff) {
             BuffSystem.apply(level, user, b, lvl, dur, user);
         }
@@ -759,7 +797,7 @@ public final class ItemSystem {
             case DRINK       -> drinkPotion(level, user, item);
             case GRANT_PERK  -> grantXP(level, user, item);//grantPerk(level, user, item);
             case APPLYBUFF   -> acted = useChargedBuffTool(level, user, item);
-            case WAND, GRAPPLE, JUMP, TELEPORT, NONE -> { return; } // need a target or a specialized caller
+            case WAND, GRAPPLE, JUMP, CHARGE, TELEPORT, NONE -> { return; } // need a target or a specialized caller
         }
         if (acted) TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
     }
@@ -885,6 +923,107 @@ public final class ItemSystem {
         TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
     }
 
+    /** CHARGE-behavior use: dash adjacent to {@code target} mob and deliver a
+     *  free melee swing followed by a knockback. Targeting overlay (in
+     *  {@code PlayController}) has already vetted that the target is a visible
+     *  hostile mob within Chebyshev range. Returns silently when the dash is
+     *  invalid (no mob, no adjacent landing, out of charges, etc.). One
+     *  charge consumed; costs one {@code moveCost}. */
+    public static void castCharge(Level level, Mob user, Item item, Point target) {
+        if (level == null || user == null || item == null || target == null) return;
+        if (user.position == null) return;
+        if (item.baseChargeMax > 0 && item.charge < 1f) {
+            if (user.behavior == Behavior.PLAYER) {
+                EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                        TextCatalog.format("eventlog.item.noCharge",
+                                TextCatalog.vars("item",
+                                        itemName(item, "eventlog.item.itemFallback"))),
+                        com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+            }
+            return;
+        }
+        Mob victim = MobQueries.mobAt(level, target);
+        if (victim == null || victim == user || victim.hp <= 0) return;
+
+        int effLvl = ItemStats.effectiveLevel(item, user);
+        int dashRange = Math.max(1, (int) item.abilityPower + effLvl / 2);
+        int dx = Math.abs(target.tileX() - user.position.tileX());
+        int dy = Math.abs(target.tileY() - user.position.tileY());
+        if (Math.max(dx, dy) > dashRange) return;
+
+        Point arrival = pickChargeArrival(level, user.position, target);
+        if (arrival == null) return;
+
+        // Dash visual + position update.
+        Point from = user.position;
+        user.position = arrival;
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobJumped(user, from, arrival));
+        }
+
+        // Free melee swing - mirrors {@code MobSystem.attack}'s damage roll
+        // but bypasses the to-hit roll (the dash strike auto-connects) and
+        // skips the standard attack-time knockback so we can apply the
+        // jade-bull's own knockback below.
+        int rawAtk = MobSystem.rollRange(MobSystem.rawDamageRange(user));
+        int armor  = MobSystem.rollRange(MobSystem.resistRange(victim));
+        int physical = Math.max(0, rawAtk - armor);
+        int ap = MobSystem.rollRange(MobSystem.apDamageRange(user));
+        int total = physical + ap;
+        MobSystem.processAttack(level, user, victim, total,
+                MobSystem.AttackType.MELEE, MobSystem.DamageElement.PHYSICAL);
+
+        // Knockback - jade bull's intrinsic knockbackSquares plus its
+        // scalesWithUser bonus (+effLvl when flagged), then the standard
+        // KNOCKBACK-perk contribution (capped at 5 tiles; levels 6-10 add
+        // wall-slam damage instead).
+        if (victim.hp > 0) {
+            int kb = item.knockbackSquares
+                    + (item.scalesWithUser ? effLvl : 0);
+            int perkLvl = user.perks != null
+                    ? user.perks.getOrDefault(com.bjsp123.rl2.model.Perk.KNOCKBACK, 0)
+                    : 0;
+            kb += Math.min(5, perkLvl);
+            int wallSlam = Math.max(0, perkLvl - 5);
+            if (kb > 0) {
+                MobSystem.knockBack(level, victim, kb, arrival, wallSlam);
+            }
+        }
+
+        if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+        if (user.behavior == Behavior.PLAYER) {
+            EventLog.add(Messages.playerUses(actorName(user),
+                    useVerb(item, "eventlog.item.verb.use"), item.name));
+        }
+        TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+    }
+
+    /** Pick the dash arrival tile: an 8-neighbor of {@code target} that is
+     *  walkable, unoccupied, and as close as possible to {@code userPos} (so
+     *  the dash lands on the natural side of the victim). Returns null when
+     *  no neighbour is free. */
+    private static Point pickChargeArrival(Level level, Point userPos, Point target) {
+        Point best = null;
+        int bestDist = Integer.MAX_VALUE;
+        int tx = target.tileX(), ty = target.tileY();
+        int ux = userPos.tileX(), uy = userPos.tileY();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = tx + dx, ny = ty + dy;
+                if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                if (level.tiles[nx][ny].blocksMovement()) continue;
+                if (MobQueries.mobAt(level, new Point(nx, ny)) != null) continue;
+                int d = Math.max(Math.abs(nx - ux), Math.abs(ny - uy));
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = new Point(nx, ny);
+                }
+            }
+        }
+        return best;
+    }
+
     /** JUMP-behavior use: teleport the jumper to {@code target} within Chebyshev
      *  radius {@code item.abilityPower}. The target must be a passable, unoccupied tile.
      *  Costs one {@code moveCost}. Emits {@link com.bjsp123.rl2.event.GameEvent.MobJumped}. */
@@ -901,7 +1040,12 @@ public final class ItemSystem {
             }
             return;
         }
-        int radius = Math.max(0, (int) item.abilityPower);
+        // JUMP perk scales the item's effective level - radius picks up
+        // {@code +perkLvl} tiles when the jumper has the perk. Charge regen
+        // / max charge already flow through ItemStats.effectiveMaxCharge,
+        // so the perk improves both axes for any JUMP-behavior item.
+        int radius = Math.max(0, (int) item.abilityPower
+                + ItemStats.effectiveLevel(item, jumper));
         int dx = Math.abs(target.tileX() - jumper.position.tileX());
         int dy = Math.abs(target.tileY() - jumper.position.tileY());
         if (Math.max(dx, dy) > radius) return;

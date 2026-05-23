@@ -135,6 +135,14 @@ final class PlayController {
             // Drain events into the animator after every event so the sequential flag
             // reflects animations queued by THIS advance — not just pre-existing state.
             animator.consume(level);
+            // Refresh the player's visibility map immediately so any mob that just
+            // moved / teleported into LoS becomes visible before the next iteration
+            // (or before this frame's render). Without this the renderer's mob list
+            // is stale until {@link #afterMove} fires at the end of the controller
+            // tick, which is what produced the "killed by an enemy I never saw"
+            // phantom-damage bug: a mob could step into LoS and fire a projectile
+            // mid-tick and its sprite wouldn't appear until the NEXT render frame.
+            LevelSystem.updateVisibility(level);
             // Only a SEQUENTIAL animation (lunge, knockback slide, chained death-fade)
             // breaks the loop — concurrent mob slides play together on one render frame.
             if (animator.queue.consumeSequentialFlag()) break;
@@ -206,6 +214,7 @@ final class PlayController {
             case WAND     -> beginWand(level, player, bound);
             case GRAPPLE  -> beginGrapple(level, player, bound);
             case JUMP     -> beginJump(level, player, bound);
+            case CHARGE   -> beginCharge(level, player, bound);
             case TELEPORT -> { if (openMapScreen != null) openMapScreen.run(); }
             case NONE -> { /* handled above */ }
         }
@@ -230,6 +239,7 @@ final class PlayController {
             case WAND     -> beginWand(level, user, item);
             case GRAPPLE  -> beginGrapple(level, user, item);
             case JUMP     -> beginJump(level, user, item);
+            case CHARGE   -> beginCharge(level, user, item);
             case TELEPORT -> { if (openMapScreen != null) openMapScreen.run(); }
             case NONE -> { /* unreachable - the popup gates Use on isUsable() */ }
         }
@@ -306,6 +316,23 @@ final class PlayController {
         }, item);
     }
 
+    /** Charge use entry point. Opens the targeting overlay restricted to
+     *  visible hostile mobs within Chebyshev range
+     *  {@code abilityPower + (effLvl/2)}, then routes the confirmed tile
+     *  through {@link ItemSystem#castCharge}. Mirrors {@link #beginJump} in
+     *  shape. */
+    private void beginCharge(Level level, Mob user, Item item) {
+        targetingOverlay.setPlayer(user);
+        targetingOverlay.setLevel(level);
+        targetingOverlay.setValidTiles(chargeGrid(level, user, item), level.width, level.height);
+        targetingOverlay.activate(target -> {
+            Level cur = world.currentLevel();
+            ItemSystem.castCharge(cur, user, item, target);
+            animator.consume(cur);
+            afterMove(cur);
+        }, item);
+    }
+
     /** Kick off target-picking for a throw action from the inventory popup. */
     void beginThrow(Mob thrower, Item item) {
         if (thrower == null || item == null) return;
@@ -364,11 +391,13 @@ final class PlayController {
         return grid;
     }
 
-    /** Grid of valid jump destinations: within Chebyshev radius, passable, unoccupied. */
+    /** Grid of valid jump destinations: within Chebyshev radius, passable, unoccupied.
+     *  Radius widens with the JUMP perk via {@link ItemStats#effectiveLevel}. */
     private static boolean[][] jumpGrid(Level level, Mob jumper, Item item) {
         boolean[][] grid = new boolean[level.width][level.height];
         if (jumper.position == null) return grid;
-        int radius = Math.max(0, (int) item.abilityPower);
+        int radius = Math.max(0, (int) item.abilityPower
+                + com.bjsp123.rl2.logic.ItemStats.effectiveLevel(item, jumper));
         int px = jumper.position.tileX(), py = jumper.position.tileY();
         for (int x = Math.max(0, px - radius); x <= Math.min(level.width - 1, px + radius); x++) {
             for (int y = Math.max(0, py - radius); y <= Math.min(level.height - 1, py + radius); y++) {
@@ -379,6 +408,48 @@ final class PlayController {
             }
         }
         return grid;
+    }
+
+    /** Grid of valid charge targets: visible hostile mob within
+     *  {@code abilityPower + effLvl/2} Chebyshev tiles, with at least one
+     *  walkable 8-neighbor (so {@code castCharge} has a landing tile). */
+    private static boolean[][] chargeGrid(Level level, Mob user, Item item) {
+        boolean[][] grid = new boolean[level.width][level.height];
+        if (user.position == null || level.visible == null) return grid;
+        int effLvl = com.bjsp123.rl2.logic.ItemStats.effectiveLevel(item, user);
+        int radius = Math.max(1, (int) item.abilityPower + effLvl / 2);
+        int px = user.position.tileX(), py = user.position.tileY();
+        for (com.bjsp123.rl2.model.Mob m : level.mobs) {
+            if (m == null || m == user || m.position == null || m.hp <= 0) continue;
+            int mx = m.position.tileX(), my = m.position.tileY();
+            if (!level.visible[mx][my]) continue;
+            int d = Math.max(Math.abs(mx - px), Math.abs(my - py));
+            if (d > radius || d < 1) continue;
+            if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(user, m)
+                    != com.bjsp123.rl2.logic.MobSystem.Attitude.ATTACK) continue;
+            // Require at least one walkable 8-neighbor for the arrival tile.
+            if (!hasFreeNeighbor(level, mx, my)) continue;
+            grid[mx][my] = true;
+        }
+        return grid;
+    }
+
+    /** True iff at least one Chebyshev-1 neighbour of {@code (x,y)} is in
+     *  bounds, not movement-blocking, and not occupied by another mob.
+     *  Used by {@link #chargeGrid} to gate dash targets to mobs the user
+     *  can actually land next to. */
+    private static boolean hasFreeNeighbor(Level level, int x, int y) {
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                if (level.tiles[nx][ny].blocksMovement()) continue;
+                if (MobQueries.mobAt(level, new Point(nx, ny)) != null) continue;
+                return true;
+            }
+        }
+        return false;
     }
 
     void cancelThrow() {

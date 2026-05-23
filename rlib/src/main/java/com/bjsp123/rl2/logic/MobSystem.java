@@ -99,14 +99,16 @@ public class MobSystem {
 
     private static final Random RANDOM = new Random();
 
-    /** Default duration in turns that the {@link com.bjsp123.rl2.model.Buff.BuffType#OILY}
-     *  buff lasts when a mob steps onto an OIL surface. The buff system tracks the
-     *  countdown - see {@link BuffSystem#tickPerTurn}. */
-    public static final int OIL_STEP_BUFF_TURNS = 3;
+    /** Default duration in game ticks (3 standard turns) that the
+     *  {@link com.bjsp123.rl2.model.Buff.BuffType#OILY} buff lasts when a mob
+     *  steps onto an OIL surface. The buff system decrements per game tick - see
+     *  {@link BuffSystem#tickEveryGameTick}. */
+    public static final int OIL_STEP_BUFF_TICKS = 3 * TurnSystem.STANDARD_TURN_TICKS;
 
-    /** Default duration in turns that the {@link com.bjsp123.rl2.model.Buff.BuffType#WET}
-     *  buff lasts when a mob steps onto a WATER surface. */
-    public static final int WATER_STEP_BUFF_TURNS = 3;
+    /** Default duration in game ticks (3 standard turns) that the
+     *  {@link com.bjsp123.rl2.model.Buff.BuffType#WET} buff lasts when a mob
+     *  steps onto a WATER surface. */
+    public static final int WATER_STEP_BUFF_TICKS = 3 * TurnSystem.STANDARD_TURN_TICKS;
 
     /**
      * Use A* to move mob one tile toward its targetPosition, then apply move cost.
@@ -358,17 +360,21 @@ public class MobSystem {
         // Oil pickup: stepping onto an OIL surface applies the OILY buff for
         // OIL_STEP_BUFF_TURNS turns. Re-applies refresh the buff (max-merge) so wading
         // deeper resets the clock.
-        if (level.surface[nx][ny] == Surface.OIL) {
+        // BOMB_DODGER gates the surface step-buff so a Rogue with the perk
+        // stays dry crossing her own water / oil bombs.
+        boolean bombDodger = mob.perks != null
+                && mob.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0) >= 1;
+        if (level.surface[nx][ny] == Surface.OIL && !bombDodger) {
             BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.OILY,
-                    1, OIL_STEP_BUFF_TURNS, null);
+                    1, OIL_STEP_BUFF_TICKS, null);
         }
         // Water pickup: stepping into / over a WATER surface soaks the mob
-        // for WATER_STEP_BUFF_TURNS turns (so they take double damage from
+        // for WATER_STEP_BUFF_TICKS ticks (so they take double damage from
         // lightning until they dry off). Refreshes via the standard
         // max-merge so a long wade keeps resetting the clock.
-        if (level.surface[nx][ny] == Surface.WATER) {
+        if (level.surface[nx][ny] == Surface.WATER && !bombDodger) {
             BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.WET,
-                    1, WATER_STEP_BUFF_TURNS, null);
+                    1, WATER_STEP_BUFF_TICKS, null);
         }
         // Oil drip: an oily medium-or-larger mob drags its slick onto the new tile a
         // fraction of the time (50% per the OILY-buff spec). Tiny mobs (size <
@@ -855,17 +861,21 @@ public class MobSystem {
         // the death-fade plays at the destination tile. A knockback
         // collision can itself kill the target via environmental damage;
         // we guard the subsequent melee damage so we don't double-kill.
-        // Total knockback = stat-based (intrinsic + equipped weapon) plus
-        // one square per level of the {@link com.bjsp123.rl2.model.Perk#KNOCKBACK}
-        // perk, so a Warrior with KNOCKBACK 1 gets 1 sq even from a
-        // weapon that itself has none.
+        // Total knockback = stat-based (intrinsic + equipped weapon) plus the
+        // KNOCKBACK perk contribution. The perk's tile contribution caps at 5
+        // (perkLvl 1..5 = 1..5 tiles); levels 6-10 instead each add +1 to the
+        // wall-slam damage bonus dealt when the knockback's flight is blocked
+        // by a wall / chasm / mob.
         if (attacker.position != null) {
             int kb = attacker.effectiveStats().knockbackSquares;
+            int wallSlam = 0;
             if (attacker.perks != null) {
-                kb += attacker.perks.getOrDefault(
+                int p = attacker.perks.getOrDefault(
                         com.bjsp123.rl2.model.Perk.KNOCKBACK, 0);
+                kb       += Math.min(5, p);
+                wallSlam += Math.max(0, p - 5);
             }
-            if (kb > 0) knockBack(level, target, kb, attacker.position);
+            if (kb > 0) knockBack(level, target, kb, attacker.position, wallSlam);
         }
         boolean killed;
         int dealt;
@@ -1016,7 +1026,7 @@ public class MobSystem {
                 && element == DamageElement.PHYSICAL) {
             int lvl = Math.max(1, attacker.characterLevel);
             BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.POISONED,
-                    lvl, lvl * 3, attacker);
+                    lvl, lvl * 3 * TurnSystem.STANDARD_TURN_TICKS, attacker);
         }
         // Reactive fire burst. Mobs with {@link Mob#fireSpreadOnAttack} (e.g. blazing
         // firemouse) ignite their own tile + the four cardinal neighbours when they take
@@ -1217,12 +1227,21 @@ public class MobSystem {
             reward = 0;
             killer.score += reward;
             MobProgression.awardXp(level, killer, reward);
-            // KILLER perk: every kill grants the killer the KILLER buff (-20% attack /
-            // move cost) for 10 standard turns.
-            if (killer.perks != null
-                    && killer.perks.getOrDefault(com.bjsp123.rl2.model.Perk.KILLER, 0) > 0) {
-                BuffSystem.apply(level, killer,
-                        com.bjsp123.rl2.model.Buff.BuffType.KILLER, 1, 10, killer);
+            // KILLER perk: every kill stacks the KILLER buff on the killer.
+            // Per perk-level math (see Perk.KILLER javadoc): stacks-per-kill
+            // is ceil(perkLvl/2), duration refresh is 8 + 2*ceil(perkLvl/2)
+            // turns. BuffSystem.apply contains a stacking carve-out for
+            // KILLER that adds the incoming level to existing.level and
+            // resets duration rather than max-merging.
+            if (killer.perks != null) {
+                int perkLvl = killer.perks.getOrDefault(com.bjsp123.rl2.model.Perk.KILLER, 0);
+                if (perkLvl > 0) {
+                    int stacks   = (perkLvl + 1) / 2;
+                    int durationTicks = (8 + 2 * stacks) * TurnSystem.STANDARD_TURN_TICKS;
+                    BuffSystem.apply(level, killer,
+                            com.bjsp123.rl2.model.Buff.BuffType.KILLER,
+                            stacks, durationTicks, killer);
+                }
             }
             if (killer.history != null) {
                 String victimName = mob.name != null ? mob.name : "?";
@@ -1259,11 +1278,22 @@ public class MobSystem {
      * </ul>
      */
     public static void knockBack(Level level, Mob mob, int numSquares, Point from) {
-        knockBackInternal(level, mob, numSquares, from, 0);
+        knockBackInternal(level, mob, numSquares, from, 0, 0);
+    }
+
+    /** Knockback overload with a wall-slam damage bonus. The bonus is added to
+     *  the impact damage when the slide is short-circuited by a wall / chasm /
+     *  mob - i.e. the target is "pinned". Used by KNOCKBACK perk levels 6-10
+     *  (each level beyond 5 contributes +1 to {@code wallSlamBonus}). Zero is
+     *  the historical default; callers that don't pass it via the simple
+     *  overload behave identically to before. */
+    public static void knockBack(Level level, Mob mob, int numSquares, Point from,
+                                 int wallSlamBonus) {
+        knockBackInternal(level, mob, numSquares, from, 0, wallSlamBonus);
     }
 
     private static void knockBackInternal(Level level, Mob mob, int numSquares,
-                                          Point from, int depth) {
+                                          Point from, int depth, int wallSlamBonus) {
         if (depth >= 3 || mob == null || mob.position == null) return;
         int dx = Integer.signum(mob.position.tileX() - from.tileX());
         int dy = Integer.signum(mob.position.tileY() - from.tileY());
@@ -1279,7 +1309,7 @@ public class MobSystem {
             if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) {
                 mob.position = new Point(cx, cy);
                 emitKnockBack(level, mob, start, true);
-                processAttack(level, null, mob, remaining * 4,
+                processAttack(level, null, mob, remaining * 4 + wallSlamBonus,
                         AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
                 return;
             }
@@ -1296,7 +1326,7 @@ public class MobSystem {
             if (tile.blocksMovement()) {
                 mob.position = new Point(cx, cy);
                 emitKnockBack(level, mob, start, true);
-                processAttack(level, null, mob, remaining * 4,
+                processAttack(level, null, mob, remaining * 4 + wallSlamBonus,
                         AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
                 return;
             }
@@ -1305,13 +1335,13 @@ public class MobSystem {
             if (collided != null) {
                 mob.position = new Point(cx, cy);
                 emitKnockBack(level, mob, start, true);
-                processAttack(level, null, mob, remaining * 4,
+                processAttack(level, null, mob, remaining * 4 + wallSlamBonus,
                         AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
                 if (collided.hp > 0) {
                     processAttack(level, null, collided, remaining * 4,
                             AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
                     if (collided.hp > 0) {
-                        knockBackInternal(level, collided, remaining, mob.position, depth + 1);
+                        knockBackInternal(level, collided, remaining, mob.position, depth + 1, 0);
                     }
                 }
                 return;
@@ -1679,7 +1709,8 @@ public class MobSystem {
                     }
                     BuffSystem.apply(level, target, ab.applies,
                             Math.max(1, ab.appliedLevel),
-                            Math.max(1, ab.appliedDuration), caster);
+                            Math.max(1, ab.appliedDuration) * TurnSystem.STANDARD_TURN_TICKS,
+                            caster);
                 }
                 case HEAL -> {
                     if (level.events != null) {
@@ -1697,7 +1728,7 @@ public class MobSystem {
             }
             if (ab.cooldownTracker != null && ab.cooldownTurns > 0) {
                 BuffSystem.apply(level, caster, ab.cooldownTracker, 1,
-                        ab.cooldownTurns, caster);
+                        ab.cooldownTurns * TurnSystem.STANDARD_TURN_TICKS, caster);
             }
             TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
             return true;
@@ -1790,8 +1821,42 @@ public class MobSystem {
             case WAND    -> isWandUsableByAi(mob, item, level);
             case GRAPPLE -> isGrappleUsableByAi(mob, item, level);
             case JUMP    -> isJumpUsableByAi(mob, item, level);
+            case CHARGE  -> isChargeUsableByAi(mob, item, level);
             case EAT, GRANT_PERK, POWERUP, TELEPORT, NONE -> false;
         };
+    }
+
+    /** AI CHARGE gate. Requires (a) a hostile attack-target within the item's
+     *  {@code abilityPower + effLvl/2} Chebyshev radius, (b) the target is
+     *  NOT adjacent (Chebyshev > 1 - melee is cheaper than burning a charge),
+     *  (c) line-of-sight from caster to target, and (d) at least one
+     *  walkable + unoccupied 8-neighbour of the target for the dash to land
+     *  on. Mirrors the player-side {@code chargeGrid} in {@code PlayController}. */
+    private static boolean isChargeUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        if (mob == null || mob.position == null) return false;
+        if (item.baseChargeMax > 0 && item.charge < 1f) return false;
+        Mob target = nearestAttackTarget(mob, level);
+        if (target == null || target.position == null || target.hp <= 0) return false;
+        int dx = Math.abs(target.position.tileX() - mob.position.tileX());
+        int dy = Math.abs(target.position.tileY() - mob.position.tileY());
+        int cheb = Math.max(dx, dy);
+        if (cheb <= 1) return false; // already adjacent - just melee
+        int effLvl = ItemStats.effectiveLevel(item, mob);
+        int dashRange = Math.max(1, (int) item.abilityPower + effLvl / 2);
+        if (cheb > dashRange) return false;
+        if (!LevelUtilities.getLineOfSight(level, mob, target.position)) return false;
+        int tx = target.position.tileX(), ty = target.position.tileY();
+        for (int ndy = -1; ndy <= 1; ndy++) {
+            for (int ndx = -1; ndx <= 1; ndx++) {
+                if (ndx == 0 && ndy == 0) continue;
+                int nx = tx + ndx, ny = ty + ndy;
+                if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                if (level.tiles[nx][ny].blocksMovement()) continue;
+                if (MobQueries.mobAt(level, new Point(nx, ny)) != null) continue;
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Heuristic for {@code DRINK} potions - only quaff if it'll actually help.
@@ -1802,6 +1867,10 @@ public class MobSystem {
     private static boolean wouldDrinkHelp(Mob mob, com.bjsp123.rl2.model.Item item) {
         if (item == null) return false;
         if (item.damage.max() > 0) return false;
+        // Depleted charged tools (JADE_CRAB, JADE_FISH, FROG, etc.) can't fire;
+        // ItemSystem.useChargedBuffTool would short-circuit anyway, but gating
+        // here means the AI doesn't burn a per-item roll on an unusable choice.
+        if (item.baseChargeMax > 0 && item.charge < 1f) return false;
         com.bjsp123.rl2.model.Buff.BuffType primary = item.primaryBuff();
         if (primary == null) return false;
         if (BuffSystem.hasBuff(mob, primary)) return false;
@@ -1891,6 +1960,7 @@ public class MobSystem {
             case WAND    -> { if (!aiCastWand(mob, item, level)) return false; }
             case GRAPPLE -> { if (!aiCastGrapple(mob, item, level)) return false; }
             case JUMP    -> { if (!aiCastJump(mob, item, level)) return false; }
+            case CHARGE  -> { if (!aiCastCharge(mob, item, level)) return false; }
             default      -> { /* unreachable per the gate */ }
         }
         return mob.ticksTillMove != before;
@@ -1937,6 +2007,19 @@ public class MobSystem {
         if (threat == null) return false;
         com.bjsp123.rl2.model.Point dest = pickBestJumpTile(mob, item, level, threat);
         if (dest != null) ItemSystem.castJump(level, mob, item, dest);
+        return mob.ticksTillMove != before;
+    }
+
+    /** AI CHARGE cast - dash to the nearest attack-target's tile. The CHARGE
+     *  use itself picks the arrival tile and applies the swing + knockback via
+     *  {@link ItemSystem#castCharge}; this helper just provides the target
+     *  position. Gate ({@link #isChargeUsableByAi}) already verified range +
+     *  LoS + free arrival tile. */
+    private static boolean aiCastCharge(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
+        int before = mob.ticksTillMove;
+        Mob target = nearestAttackTarget(mob, level);
+        if (target == null || target.position == null) return false;
+        ItemSystem.castCharge(level, mob, item, target.position);
         return mob.ticksTillMove != before;
     }
 
@@ -2170,7 +2253,7 @@ public class MobSystem {
         if (cooldownTurns > 0) {
             BuffSystem.apply(level, shooter,
                     com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN, /*level=*/1,
-                    cooldownTurns, shooter);
+                    cooldownTurns * TurnSystem.STANDARD_TURN_TICKS, shooter);
         }
         TurnSystem.applyActionCost(shooter, ss.rangedCost > 0 ? ss.rangedCost : ss.attackCost);
         // Combat memory is recorded on impact (in processAttack) when the missile actually
@@ -2338,7 +2421,7 @@ public class MobSystem {
     }
 
     /** How many turns a just-hidden {@link Behavior#EXPLORE_HIDE} mob stays put. */
-    private static final int HIDING_TURN_COUNT = 5;
+    private static final int HIDING_DURATION_TICKS = 5 * TurnSystem.STANDARD_TURN_TICKS;
 
     /**
      * AI for {@link Behavior#EXPLORE_HIDE} mobs. The flee flavour of the mouse:
@@ -2382,7 +2465,7 @@ public class MobSystem {
             mob.targetPosition = null;
             mob.stateOfMind = StateOfMind.HIDING;
             BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.HIDING,
-                    /*level=*/1, HIDING_TURN_COUNT, mob);
+                    /*level=*/1, HIDING_DURATION_TICKS, mob);
             mob.intent = Mob.Intent.IDLE;
             TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
             return;
@@ -2470,16 +2553,21 @@ public class MobSystem {
                     || BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.PHASE)) continue;
             int d = Math.max(Math.abs(m.position.tileX() - mx),
                              Math.abs(m.position.tileY() - my));
-            // STEALTH perk halves enemy wake / vision radius when checking against the
-            // perked player. Round down so a 4-radius wake becomes 2.
-            double effRadius = radius;
-            if (m.perks != null
-                    && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0) {
-                effRadius = radius / 2.0;
-            }
-            if (d <= effRadius) return true;
+            if (d <= stealthScaledRadius(m, radius)) return true;
         }
         return false;
+    }
+
+    /** Apply the STEALTH perk to {@code observer}'s detection {@code radius}.
+     *  Returns {@code radius / (perkLvl + 1)} when {@code observer} carries
+     *  STEALTH (so L1 halves, L2 thirds, L10 elevenths the radius); returns
+     *  {@code radius} unchanged otherwise. Used by the four wake / vision
+     *  call sites in this class. */
+    private static double stealthScaledRadius(Mob observer, double radius) {
+        if (observer == null || observer.perks == null) return radius;
+        int lvl = observer.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0);
+        if (lvl <= 0) return radius;
+        return radius / (lvl + 1.0);
     }
 
     /** True iff any other mob within {@code radius} (Chebyshev) has ATTACK
@@ -2496,12 +2584,7 @@ public class MobSystem {
                     || BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.PHASE)) continue;
             int d = Math.max(Math.abs(m.position.tileX() - tx),
                              Math.abs(m.position.tileY() - ty));
-            double effRadius = radius;
-            if (m.perks != null
-                    && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0) {
-                effRadius = radius / 2.0;
-            }
-            if (d <= effRadius) return true;
+            if (d <= stealthScaledRadius(m, radius)) return true;
         }
         return false;
     }
@@ -2522,10 +2605,7 @@ public class MobSystem {
                 if (getAttitudeToMob(self, m) != Attitude.ATTACK) continue;
                 int d = Math.max(Math.abs(m.position.tileX() - sx),
                                  Math.abs(m.position.tileY() - sy));
-                double vision = (m.perks != null
-                        && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0)
-                        ? baseVision / 2.0 : baseVision;
-                if (d > vision) continue;
+                if (d > stealthScaledRadius(m, baseVision)) continue;
                 if (d < bestD) { bestD = d; best = m; }
             }
             return best;
@@ -2537,10 +2617,7 @@ public class MobSystem {
             if (getAttitudeToMob(self, m) != Attitude.ATTACK) continue;
             int d = Math.max(Math.abs(m.position.tileX() - sx),
                              Math.abs(m.position.tileY() - sy));
-            double vision = (m.perks != null
-                    && m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0) > 0)
-                    ? baseVision / 2.0 : baseVision;
-            if (d > vision) continue;
+            if (d > stealthScaledRadius(m, baseVision)) continue;
             if (d < bestD) { bestD = d; best = m; }
         }
         return best;
@@ -2698,7 +2775,30 @@ public class MobSystem {
      *  the visual lands. */
     public static void throwItem(Level level, Mob thrower, Item it, Point dst) {
         if (thrower == null || it == null || dst == null) return;
-        removeFromInventory(thrower, it);
+        // BOMB_DODGER conservation - bombs occasionally survive the throw.
+        // Save chance scales with perk level: 30% at L1, +12% per level,
+        // capped at saveCap = 0.75 (L<=5) or 0.75 + 0.05*(L-5) (L>5),
+        // reaching 100% at L10. Non-bomb throws always consume; non-perked
+        // throwers always consume. When the bomb is saved we keep the
+        // inventory entry but still emit the projectile (it visually flies
+        // out and detonates at the destination, just respawning in the
+        // thrower's bag - a bit of magical hand-wave).
+        boolean saved = false;
+        if (it.inventoryCategory == Item.InventoryCategory.BOMB
+                && thrower.perks != null) {
+            int lvl = thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0);
+            if (lvl > 0) {
+                double saveCap = lvl <= 5 ? 0.75 : 0.75 + (lvl - 5) * 0.05;
+                double chance = Math.min(saveCap, 0.30 + (lvl - 1) * 0.12);
+                if (RANDOM.nextDouble() < chance) saved = true;
+            }
+        }
+        if (!saved) {
+            removeFromInventory(thrower, it);
+        } else if (level != null && level.events != null && thrower.position != null) {
+            // Visible feedback so the player notices the bomb was preserved.
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(thrower, 0));
+        }
         // Clip the trajectory at the first mob / wall / statue between
         // thrower and the user-picked tile. Bombs detonate against the
         // obstacle rather than ghosting through it.
@@ -2712,7 +2812,9 @@ public class MobSystem {
         int throwCost = thrower.effectiveStats().attackCost;
         if (thrower.perks != null) {
             int hurlerLvl = thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.HURLER, 0);
-            for (int i = 0; i < hurlerLvl; i++) throwCost = (int) Math.ceil(throwCost * 0.75);
+            if (hurlerLvl > 0) {
+                throwCost = (int) Math.max(1, Math.round(throwCost * Math.pow(0.85, hurlerLvl)));
+            }
         }
         TurnSystem.applyActionCost(thrower, throwCost);
     }
@@ -2726,6 +2828,39 @@ public class MobSystem {
      * impact resolves -> subsequent visual events (ignite tiles, knock
      * back survivors, drop the item) all play AFTER the projectile lands.
      */
+    /** BOMB_DODGER damage multiplier - when {@code victim} carries the perk
+     *  AND {@code thrown} is a BOMB, incoming bomb damage is scaled by
+     *  {@code 0.5^perkLvl} (asymptotic - never zero). Returns 1.0 otherwise. */
+    static double bombDamageScale(Mob victim, Item thrown) {
+        if (victim == null || victim.perks == null || thrown == null) return 1.0;
+        if (thrown.inventoryCategory != Item.InventoryCategory.BOMB) return 1.0;
+        int lvl = victim.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0);
+        if (lvl <= 0) return 1.0;
+        return Math.pow(0.5, lvl);
+    }
+
+    /** BOMB_DODGER buff / knockback gate - true means skip the buff or
+     *  knockback application when the source is a BOMB and the victim has the
+     *  perk at any level. Binary on/off (no per-level scaling). */
+    static boolean bombBuffsIgnored(Mob victim, Item thrown) {
+        if (victim == null || victim.perks == null || thrown == null) return false;
+        if (thrown.inventoryCategory != Item.InventoryCategory.BOMB) return false;
+        return victim.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0) >= 1;
+    }
+
+    /** Apply BOMB_DODGER's damage scaling to a rolled bomb-damage amount
+     *  destined for {@code victim}. Returns {@code dmg} unchanged when no
+     *  scaling applies; otherwise multiplies and rounds. Never returns
+     *  negative; rounds away from zero so very low scaled damage still
+     *  registers as 1 when the input was positive. */
+    private static int scaledBombDamage(Mob victim, Item thrown, int dmg) {
+        if (dmg <= 0) return dmg;
+        double mult = bombDamageScale(victim, thrown);
+        if (mult >= 0.9999) return dmg;
+        int scaled = (int) Math.round(dmg * mult);
+        return Math.max(scaled, 1);
+    }
+
     public static void applyThrowImpact(Level level, Mob thrower, Item it, Point dst) {
         if (thrower == null || it == null || dst == null) return;
 
@@ -2822,9 +2957,16 @@ public class MobSystem {
             // tilesAffected + level * tilesAffectedPerLevel tiles around the impact tile.
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
-                processAttack(level, thrower, target, bombDamage, AttackType.THROWN, DamageElement.PHYSICAL);
-                BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE,
-                        Math.max(1, lvl), Math.max(1, 3 + lvl), thrower);
+                processAttack(level, thrower, target,
+                        scaledBombDamage(target, it, bombDamage),
+                        AttackType.THROWN, DamageElement.PHYSICAL);
+                if (!bombBuffsIgnored(target, it)) {
+                    BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE,
+                            Math.max(1, lvl),
+                            Math.max(TurnSystem.STANDARD_TURN_TICKS,
+                                    (3 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
+                            thrower);
+                }
             }
             for (int dx = -bombRadius; dx <= bombRadius; dx++) {
                 for (int dy = -bombRadius; dy <= bombRadius; dy++) {
@@ -2845,15 +2987,24 @@ public class MobSystem {
                     SurfaceSystem.addSurface(level, p, Surface.WATER);
                     Mob m = MobQueries.mobAt(level, p);
                     if (m != null && m != thrower) {
-                        BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.WET,
-                                Math.max(1, lvl), Math.max(1, WATER_STEP_BUFF_TURNS + lvl), thrower);
+                        if (!bombBuffsIgnored(m, it)) {
+                            BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.WET,
+                                    Math.max(1, lvl),
+                                    Math.max(TurnSystem.STANDARD_TURN_TICKS,
+                                            WATER_STEP_BUFF_TICKS + lvl * TurnSystem.STANDARD_TURN_TICKS),
+                                    thrower);
+                        }
                         soaked.add(m);
                     }
                 }
             }
             int kb = Math.max(0, lvl * it.knockbackSquares);
             if (kb > 0) {
-                for (Mob m : soaked) if (m.hp > 0) knockBack(level, m, kb, dst);
+                for (Mob m : soaked) {
+                    if (m.hp <= 0) continue;
+                    if (bombBuffsIgnored(m, it)) continue;
+                    knockBack(level, m, kb, dst);
+                }
             }
         } else if (te == ItemEffect.OIL && inBounds) {
             // Oil bomb: deals no damage but lays down an oil disc using the bomb area.
@@ -2870,8 +3021,12 @@ public class MobSystem {
                 int mx = m.position.tileX(), my = m.position.tileY();
                 int dx = mx - tx, dy = my - ty;
                 if (dx * dx + dy * dy <= r2) {
+                    if (bombBuffsIgnored(m, it)) continue;
                     BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.OILY,
-                            Math.max(1, lvl), Math.max(1, 5 + lvl), thrower);
+                            Math.max(1, lvl),
+                            Math.max(TurnSystem.STANDARD_TURN_TICKS,
+                                    (5 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
+                            thrower);
                 }
             }
         } else if (te == ItemEffect.BLAST && inBounds) {
@@ -2902,13 +3057,18 @@ public class MobSystem {
                     }
                     Mob m = MobQueries.mobAt(level, p);
                     if (m != null && m != thrower) {
-                        processAttack(level, thrower, m, dmg, AttackType.THROWN, DamageElement.PHYSICAL);
+                        processAttack(level, thrower, m,
+                                scaledBombDamage(m, it, dmg),
+                                AttackType.THROWN, DamageElement.PHYSICAL);
                         if (blastSurvivors != null && m.hp > 0) blastSurvivors.add(m);
                     }
                 }
             }
             if (blastSurvivors != null) {
-                for (Mob m : blastSurvivors) knockBack(level, m, it.knockbackSquares, dst);
+                for (Mob m : blastSurvivors) {
+                    if (bombBuffsIgnored(m, it)) continue;
+                    knockBack(level, m, it.knockbackSquares, dst);
+                }
             }
         } else if (te == ItemEffect.APPLYBUFFS && inBounds
                 && it.appliesBuff != null && !it.appliesBuff.isEmpty()) {
@@ -2923,6 +3083,7 @@ public class MobSystem {
                 int d = Math.max(Math.abs(m.position.tileX() - tx),
                                  Math.abs(m.position.tileY() - ty));
                 if (d > 1) continue;
+                if (bombBuffsIgnored(m, it)) continue;
                 for (com.bjsp123.rl2.model.Buff.BuffType b : it.appliesBuff) {
                     BuffSystem.apply(level, m, b, buffLvl, buffDur, thrower);
                 }
@@ -2975,7 +3136,9 @@ public class MobSystem {
             // conversion is blocked on a new ICE surface type - TODO.
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
-                processAttack(level, thrower, target, bombDamage, AttackType.THROWN, DamageElement.PHYSICAL);
+                processAttack(level, thrower, target,
+                        scaledBombDamage(target, it, bombDamage),
+                        AttackType.THROWN, DamageElement.PHYSICAL);
             }
             for (int dx = -bombRadius; dx <= bombRadius; dx++) {
                 for (int dy = -bombRadius; dy <= bombRadius; dy++) {
@@ -2993,8 +3156,12 @@ public class MobSystem {
                 int mx = m.position.tileX(), my = m.position.tileY();
                 int dx = mx - tx, dy = my - ty;
                 if (dx * dx + dy * dy <= r2) {
+                    if (bombBuffsIgnored(m, it)) continue;
                     BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.CHILLED,
-                            Math.max(1, lvl), Math.max(1, 6 + lvl), thrower);
+                            Math.max(1, lvl),
+                            Math.max(TurnSystem.STANDARD_TURN_TICKS,
+                                    (6 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
+                            thrower);
                     if (m != thrower) {
                         m.ticksTillMove += TurnSystem.STANDARD_TURN_TICKS;
                     }

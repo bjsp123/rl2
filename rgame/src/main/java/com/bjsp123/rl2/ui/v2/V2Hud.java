@@ -336,10 +336,10 @@ public final class V2Hud {
             s.setColor(UIVars.TEXT_DIM);
             for (int i = 0; i < max; i++) {
                 Buff b = dotPlayer.buffs.get(i);
-                if (b == null || b.type == null || b.durationTurns <= 0) continue;
+                if (b == null || b.type == null || b.durationTicks <= 0) continue;
                 if (BuffIcons.regionFor(b.type) == null) continue;
                 float dotX = bx + i * (iconSz + iconGap) + iconSz + 1f;
-                int dots = Math.min(8, b.durationTurns);
+                int dots = Math.min(8, com.bjsp123.rl2.logic.BuffSystem.displayTurns(b.durationTicks));
                 for (int d = 0; d < dots; d++) {
                     s.rect(dotX, by + d * 2f, 1f, 1f);
                 }

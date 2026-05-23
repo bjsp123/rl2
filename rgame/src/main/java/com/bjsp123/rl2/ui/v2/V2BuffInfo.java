@@ -86,9 +86,10 @@ public final class V2BuffInfo extends BasePopup {
         }
 
         top -= 6f;
-        String durStr = buff.durationTurns > 0
+        int displayTurns = com.bjsp123.rl2.logic.BuffSystem.displayTurns(buff.durationTicks);
+        String durStr = displayTurns > 0
                 ? TextCatalog.format("buff.info.turns",
-                        TextCatalog.vars("turns", buff.durationTurns))
+                        TextCatalog.vars("turns", displayTurns))
                 : TextCatalog.get("buff.info.permanent");
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, durStr, window.cx(), top);
 

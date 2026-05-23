@@ -144,8 +144,9 @@ public final class MobDefinition {
      *  whose definition carries a non-null slot are auto-equipped. Empty for
      *  non-player rows. */
     public List<StartItem> startingInventory = new ArrayList<>();
-    /** Perks the mob is born with. Each entry is a Perk enum name (level 1 each). */
-    public List<com.bjsp123.rl2.model.Perk> startingPerks = new ArrayList<>();
+    /** Perks the mob is born with. Each entry pairs a Perk with a starting
+     *  level (defaults to 1 when no {@code *N} suffix is supplied in CSV). */
+    public List<StartPerk> startingPerks = new ArrayList<>();
 
     /** Default HUD action-bar binds for player rows. Pipe-separated
      *  {@code <slotIndex>:<itemType>} entries - e.g.
@@ -194,6 +195,20 @@ public final class MobDefinition {
         public int count;
         public StartItem(String t, int c) {
             type = t; count = c;
+        }
+    }
+
+    /** One starting-perk line: the perk and the level it starts at
+     *  (defaults to 1 when the CSV cell omits the {@code *N} suffix).
+     *  The {@code *N} syntax lets class rows give their signature perks
+     *  a head-start - e.g. {@code KILLER*2} starts the warrior at perk
+     *  level 2 in KILLER, halving the perk-point cost to reach the L10
+     *  cap. */
+    public static final class StartPerk {
+        public com.bjsp123.rl2.model.Perk perk;
+        public int level;
+        public StartPerk(com.bjsp123.rl2.model.Perk p, int lvl) {
+            perk = p; level = lvl;
         }
     }
 
@@ -367,21 +382,33 @@ public final class MobDefinition {
     }
 
     /** Parse the {@code startingPerks} cell. Format: pipe-separated Perk enum
-     *  names. e.g. {@code KILLER | STEALTH}. */
-    private static List<com.bjsp123.rl2.model.Perk> parseStartingPerks(String cell) {
-        List<com.bjsp123.rl2.model.Perk> out = new ArrayList<>();
+     *  names, optionally suffixed with {@code *N} to set the starting level
+     *  (defaults to 1). e.g. {@code KILLER*2 | STEALTH} starts KILLER at
+     *  perk-level 2 and STEALTH at perk-level 1. */
+    private static List<StartPerk> parseStartingPerks(String cell) {
+        List<StartPerk> out = new ArrayList<>();
         if (cell == null || cell.isEmpty()) return out;
         for (String entry : cell.split("\\|")) {
             String e = entry.trim();
             if (e.isEmpty()) continue;
-            out.add(com.bjsp123.rl2.model.Perk.valueOf(e));
+            int star = e.indexOf('*');
+            String name = star < 0 ? e : e.substring(0, star).trim();
+            int level = 1;
+            if (star >= 0) {
+                try { level = Math.max(1, Integer.parseInt(e.substring(star + 1).trim())); }
+                catch (NumberFormatException ignored) { /* keep default */ }
+            }
+            out.add(new StartPerk(com.bjsp123.rl2.model.Perk.valueOf(name), level));
         }
         return out;
     }
 
     /** Parse the {@code initialBuffs} cell. Format:
      *  {@code TELEPORT_COOLDOWN:1:20 ; ANOTHER_BUFF:2:5}. Each entry is
-     *  {@code buffType:level:duration}. */
+     *  {@code buffType:level:durationStandardTurns}. The parsed duration is
+     *  multiplied by {@link com.bjsp123.rl2.logic.TurnSystem#STANDARD_TURN_TICKS}
+     *  at load time so CSV authors keep writing human-readable standard-turn
+     *  counts even though the buff system stores duration in ticks. */
     private static List<InitialBuff> parseInitialBuffs(String cell) {
         List<InitialBuff> out = new ArrayList<>();
         if (cell == null || cell.isEmpty()) return out;
@@ -393,7 +420,8 @@ public final class MobDefinition {
             InitialBuff b = new InitialBuff();
             b.type     = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[0]);
             b.level    = Integer.parseInt(parts[1]);
-            b.duration = Integer.parseInt(parts[2]);
+            b.duration = Integer.parseInt(parts[2])
+                    * com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS;
             out.add(b);
         }
         return out;
@@ -508,9 +536,9 @@ public final class MobDefinition {
                 if (it.isEquippable()) InventorySystem.equip(m.inventory, it);
             }
         }
-        // Starting perks: each entry awarded at level 1.
-        for (com.bjsp123.rl2.model.Perk perk : startingPerks) {
-            m.perks.put(perk, 1);
+        // Starting perks: level honours the *N suffix in the CSV cell.
+        for (StartPerk sp : startingPerks) {
+            m.perks.put(sp.perk, sp.level);
         }
     }
 }

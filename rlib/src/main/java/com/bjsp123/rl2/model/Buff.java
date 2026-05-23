@@ -6,11 +6,13 @@ package com.bjsp123.rl2.model;
  * {@link BuffType#FRIGHTENED} to its terrifiable neighbours) or environmental events
  * (stepping on a fire tile applies {@link BuffType#ON_FIRE}).
  *
- * <p>Both {@link #level} and {@link #durationTurns} ramp the strength of the buff. The
+ * <p>Both {@link #level} and {@link #durationTicks} ramp the strength of the buff. The
  * exact mapping is per-type and lives in {@code BuffSystem}; e.g. regeneration heals
- * {@code 1 + level/2} HP per turn, hasted multiplies {@code moveCost} by
+ * {@code 1 + level/2} HP per standard turn, hasted multiplies {@code moveCost} by
  * {@code 0.8^level}, anti-magic divides incoming non-physical damage by {@code 2^level},
- * etc. Duration counts down once per game turn; when it reaches 0 the buff is removed.
+ * etc. Duration counts down every game tick (via {@code BuffSystem.tickEveryGameTick});
+ * when it reaches 0 the buff is removed. One standard turn = {@code STANDARD_TURN_TICKS}
+ * (100) ticks, so storage at tick granularity gives ~1% precision on a "12 turn" buff.
  *
  * <p>If a mob already has a buff of a given type and the same type is applied again,
  * the existing entry is updated to take the <em>greater</em> of the existing and new
@@ -94,11 +96,12 @@ public class Buff {
         /** Killer perk's on-kill buff: reduces both {@code moveCost} and {@code attackCost}
          *  by 20%. Duration 10 standard turns. */
         KILLER,
-        /** Open-wound DOT. Per turn the mob loses
-         *  {@code (level * durationTurns) / 2} HP - strong at first then
-         *  tapers as the duration counts down. Doesn't stack with itself
-         *  (apply takes the max of level / duration via the standard
-         *  {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
+        /** Open-wound DOT. Per standard turn the mob loses
+         *  {@code (level * standardTurnsRemaining) / 2} HP - strong at first
+         *  then tapers as the duration counts down. {@code standardTurnsRemaining}
+         *  is {@code durationTicks / STANDARD_TURN_TICKS} (truncated). Doesn't
+         *  stack with itself (apply takes the max of level / duration via the
+         *  standard {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
         BLEEDING,
         /** Mob moves at 30% of normal action cost (+20 evasion). Ends instantly when
          *  the mob takes or deals any damage. */
@@ -112,9 +115,12 @@ public class Buff {
     /** Strength of the buff. {@code 1} is baseline; higher values amplify the per-tick
      *  effect of stat-modifying buffs (regen heal amount, anti-magic divisor, etc.). */
     public int level;
-    /** Game turns remaining before the buff is auto-removed. Decrements once per turn
-     *  via {@code BuffSystem.tickPerTurn}; on hitting 0 the buff is dropped. */
-    public int durationTurns;
+    /** Game ticks remaining before the buff is auto-removed. Decremented every game
+     *  tick by {@code BuffSystem.tickEveryGameTick}; on hitting 0 the buff is dropped.
+     *  One standard turn = {@code TurnSystem.STANDARD_TURN_TICKS} (100) ticks. HUD
+     *  displays this rounded up to the nearest turn via
+     *  {@code BuffSystem.displayTurns(durationTicks)}. */
+    public int durationTicks;
     /** Mob that originally applied this buff (e.g. the player who drank a sorcery
      *  potion, or the kissyblob that frightened a kobold). Used by death messages and
      *  history logs for attribution. Transient - references aren't persisted on save. */
@@ -122,10 +128,10 @@ public class Buff {
 
     public Buff() {}
 
-    public Buff(BuffType type, int level, int durationTurns, Mob source) {
+    public Buff(BuffType type, int level, int durationTicks, Mob source) {
         this.type          = type;
         this.level         = Math.max(1, level);
-        this.durationTurns = Math.max(1, durationTurns);
+        this.durationTicks = Math.max(1, durationTicks);
         this.source        = source;
     }
 }

@@ -291,6 +291,9 @@ item.JADE_CRAB.name,jade crab
 item.JADE_FISH.description,"A peaceful green fish carved from jade, cool and smooth in the hand."
 item.JADE_FISH.description2,Hold the fish and you pass through the world like a blur.
 item.JADE_FISH.name,jade fish
+item.JADE_BULL.description,"A small jade bull, head lowered, hooves churning. The stone is warm to the touch."
+item.JADE_BULL.description2,"Use to dash to a visible foe, strike them, and send them tumbling back."
+item.JADE_BULL.name,jade bull
 item.KATANA.description,"A deadly, razor sharp sword."
 item.KATANA.name,katana
 item.KITE_SHIELD.description,A sturdy kite shield offering good protection.
@@ -478,6 +481,8 @@ item.useVerb.JUMP,jump
 item.useVerb.NONE,use
 item.useVerb.POWERUP,absorb
 item.useVerb.WAND,zap
+item.useVerb.CHARGE,charge
+item.useVerb.TELEPORT,teleport
 level.theme.CONCRETE,concrete
 level.theme.CRYSTAL,crystal
 level.theme.SHINY,stone
@@ -658,18 +663,22 @@ mob.stat.maxHp,Max HP: {value}{perLevel}
 mob.unique,Unique foe
 perk.bombJack.description,+1 bomb effective level per perk level.
 perk.hurler.name,Hurler
-perk.hurler.description,+2 throw range and x0.75 throw action cost per level.
+perk.hurler.description,+2 throw range per level; throw action cost x0.85 (compounding) per level.
 perk.bombJack.name,Bomb Jack
-perk.jump.description,Move to any tile within 2 squares for one moveCost.
+perk.jump.description,Jump-tools (frog) gain +1 effective level per perk level - more range and more charges.
 perk.jump.name,Jump
-perk.killer.description,On kill: -20% attack/move cost for 10 turns.
+perk.killer.description,"On kill: stacking KILLER buff (x0.85 attack/move cost per stack). Each kill adds ceil(L/2) stacks and refreshes duration to 8 + 2*ceil(L/2) turns."
 perk.killer.name,Killer
-perk.knockback.description,+1 square of melee knockback per level.
+perk.knockback.description,+1 square of melee knockback per level (capped at 5). Levels beyond 5 add wall-slam damage when the target is pinned.
 perk.knockback.name,Knockback
-perk.stealth.description,Enemy wake radius and vision halved against you.
+perk.stealth.description,Enemy wake / vision radius vs you is scaled by 1/(L+1). L1 halves; L10 reduces to one-eleventh.
 perk.stealth.name,Stealth
-perk.wandmaster.description,Wands gain +1 effective level.
+perk.wandmaster.description,Wands gain +1 effective level per perk level.
 perk.wandmaster.name,Wandmaster
+perk.manaFount.description,Each food or potion you consume restores N charges to every wand you carry.
+perk.manaFount.name,Mana Fount
+perk.bombDodger.description,"Bomb damage halved per level; bomb buffs / knockback ignored at L1+; thrown bombs have a chance to be preserved (30% at L1, capped at 100% at L10)."
+perk.bombDodger.name,Bomb Dodger
 tile.ALTAR,altar
 tile.CHASM,chasm
 tile.DOOR,door
