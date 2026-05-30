@@ -65,6 +65,23 @@ public final class Messages {
                             EventPriority.LOW, true);
     }
 
+    /** "{target} takes N {element} damage." Emitted by
+     *  {@link MobSystem#processAttack} for every non-PHYSICAL damage element
+     *  (MAGIC / FIRE / POISON / SHOCK / STARVATION). The element name is
+     *  resolved via {@code eventlog.damageElement.<name>} so locales can map
+     *  enum names ("POISON") to display strings ("poison" / "venom"). */
+    public static LogEvent elementalDamage(String targetName,
+                                           MobSystem.DamageElement element,
+                                           int dmg, boolean playerInvolved) {
+        String elementText = TextCatalog.getOrDefault(
+                "eventlog.damageElement." + element.name().toLowerCase(),
+                element.name().toLowerCase());
+        return new LogEvent(TextCatalog.format("eventlog.combat.elementalDamage",
+                                    TextCatalog.vars("target", targetName == null ? "?" : targetName,
+                                            "damage", dmg, "element", elementText)),
+                            EventPriority.HIGH, playerInvolved);
+    }
+
     /** Verbose per-attack tuning line. Format:
      *  {@code "Goblin -> Player: PHYSICAL 8 [armor -3, PROTECTION -1] -> 4"}.
      *  When {@code rolled == 0} (a miss), the body collapses to {@code "miss"}. */
@@ -263,5 +280,116 @@ public final class Messages {
                 ? TextCatalog.format("eventlog.reason.parenthesized",
                         TextCatalog.vars("reason", reason))
                 : "";
+    }
+
+    // -- Buff / status messages ----------------------------------------------
+
+    /** "Adventurer is on fire." / "The kobold is poisoned." Fires when a fresh
+     *  buff is applied to a mob (not on duration / level refresh). HIGH
+     *  priority when the player is affected so the kill / death-screen log
+     *  picks it up; LOW otherwise to keep the rolling log readable. */
+    public static LogEvent buffApplied(String targetName, String buffName, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.buff.applied",
+                                    TextCatalog.vars("target", targetName, "buff", buffName)),
+                            involvesPlayer ? EventPriority.HIGH : EventPriority.LOW,
+                            involvesPlayer);
+    }
+
+    /** "Adventurer is no longer on fire." Fires when a buff's duration drains
+     *  to zero (natural expiry). Manual removes via removeBuff (chain effects
+     *  like REGEN removing POISONED, HOPE removing FRIGHTENED) are silent
+     *  by design. */
+    public static LogEvent buffExpired(String targetName, String buffName, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.buff.expired",
+                                    TextCatalog.vars("target", targetName, "buff", buffName)),
+                            involvesPlayer ? EventPriority.HIGH : EventPriority.LOW,
+                            involvesPlayer);
+    }
+
+    // -- Item / inventory messages -------------------------------------------
+
+    /** "Adventurer throws a fire bomb." Fires when the projectile launches,
+     *  not when it lands. */
+    public static LogEvent itemThrown(String throwerName, String itemName, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.item.thrown",
+                                    TextCatalog.vars("thrower", throwerName, "item", itemName)),
+                            involvesPlayer ? EventPriority.HIGH : EventPriority.LOW,
+                            involvesPlayer);
+    }
+
+    /** "The fire bomb detonates!" - fires at impact for damage-dealing bombs. */
+    public static LogEvent bombDetonates(String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.bomb.detonates",
+                                    TextCatalog.vars("item", itemName)),
+                            EventPriority.HIGH, true);
+    }
+
+    public static LogEvent itemEquipped(String playerName, String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.item.equipped",
+                                    TextCatalog.vars("player", playerName, "item", itemName)),
+                            EventPriority.LOW, true);
+    }
+
+    public static LogEvent itemUnequipped(String playerName, String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.item.unequipped",
+                                    TextCatalog.vars("player", playerName, "item", itemName)),
+                            EventPriority.LOW, true);
+    }
+
+    public static LogEvent powerupAbsorbed(String playerName, String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.powerup.absorbed",
+                                    TextCatalog.vars("player", playerName, "item", itemName)),
+                            EventPriority.HIGH, true);
+    }
+
+    // -- World / movement messages -------------------------------------------
+
+    public static LogEvent stairsDescended(String playerName, int newDepth) {
+        return new LogEvent(TextCatalog.format("eventlog.stairs.descended",
+                                    TextCatalog.vars("player", playerName, "depth", newDepth)),
+                            EventPriority.HIGH, true);
+    }
+
+    public static LogEvent stairsAscended(String playerName, int newDepth) {
+        return new LogEvent(TextCatalog.format("eventlog.stairs.ascended",
+                                    TextCatalog.vars("player", playerName, "depth", newDepth)),
+                            EventPriority.HIGH, true);
+    }
+
+    public static LogEvent doorOpened(String moverName, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.door.opened",
+                                    TextCatalog.vars("mover", moverName)),
+                            EventPriority.LOW, involvesPlayer);
+    }
+
+    public static LogEvent doorClosed(String moverName, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.door.closed",
+                                    TextCatalog.vars("mover", moverName)),
+                            EventPriority.LOW, involvesPlayer);
+    }
+
+    public static LogEvent doorBroken(String moverName, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.door.broken",
+                                    TextCatalog.vars("mover", moverName)),
+                            EventPriority.HIGH, involvesPlayer);
+    }
+
+    public static LogEvent mobFellInChasm(String mobName, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.mob.fellInChasm",
+                                    TextCatalog.vars("mob", mobName)),
+                            EventPriority.HIGH, involvesPlayer);
+    }
+
+    public static LogEvent knockbackSlam(String mobName, int damage, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.knockback.slam",
+                                    TextCatalog.vars("mob", mobName, "damage", damage)),
+                            involvesPlayer ? EventPriority.HIGH : EventPriority.LOW,
+                            involvesPlayer);
+    }
+
+    public static LogEvent beaconActivated(String playerName) {
+        return new LogEvent(TextCatalog.format("eventlog.beacon.activated",
+                                    TextCatalog.vars("player", playerName)),
+                            EventPriority.HIGH, true);
     }
 }

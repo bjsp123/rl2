@@ -58,7 +58,7 @@ public final class FireSystem {
     /** Mobs on fire take {@link #FIRE_DAMAGE_PER_INTERVAL} damage every this many
      *  <b>game ticks</b>. */
     public static final int FIRE_DAMAGE_INTERVAL_TICKS = 100;
-    public static final int FIRE_DAMAGE_PER_INTERVAL   = 5;
+    public static final int FIRE_DAMAGE_PER_INTERVAL   = 8;
 
     /** Per-turn chance that a fire tile spreads to a chosen empty-floor neighbour. Bumped
      *  from 0.01 - the old rate was so slow fire effectively died out before reaching the

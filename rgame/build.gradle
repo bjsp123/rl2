@@ -12,3 +12,22 @@ dependencies {
     // Native libraries are pulled per-platform by the desktop and android modules.
     api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
 }
+
+// =============================================================================
+// DIAGNOSTIC / DEV-ONLY TASKS
+//
+// Item-lore inspector for tuning. Not wired into any user-facing flow; lives
+// here because ItemLore is in rgame.
+// =============================================================================
+
+// [DEV] Dump ItemLore output for selected items at +0 and +5 so we can
+// eyeball "initial stats + scaling" formatting without booting the desktop
+// UI. Pass item type names as args; defaults to a representative spread.
+// Usage: ./gradlew :rgame:dumpItemLore --args="SWORD WAND_FIRE JADE_BULL"
+tasks.register('dumpItemLore', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Print ItemLore output for selected items at +0 and +5'
+    mainClass   = 'com.bjsp123.rl2.util.ItemLoreDumpMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+}

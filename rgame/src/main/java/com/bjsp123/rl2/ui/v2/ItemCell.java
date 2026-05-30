@@ -72,7 +72,7 @@ public final class ItemCell {
 
     private static void drawChargeBar(UiCtx ctx, Item item, Mob holder,
                                       float x, float y, float w) {
-        int max = ItemStats.effectiveMaxCharge(item, holder);
+        int max = ItemStats.effectiveMaxCharge(item, ItemStats.effectiveLevel(item, holder));
         float pad = 4f, barH = 3f;
         float barW = w - 2 * pad;
         float bx = x + pad, by = y + 4f;

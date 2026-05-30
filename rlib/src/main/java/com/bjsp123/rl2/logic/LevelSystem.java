@@ -155,8 +155,101 @@ public class LevelSystem {
         }
     }
 
+    /**
+     * Run a bounded shadow-cast FOV for {@code mob} and write the result into
+     * {@code out} (one boolean per tile, row-major, addressed as {@code out[x][y]}).
+     * Used by external decision systems (e.g. the SMART AI in {@code rai}) that need
+     * a per-mob vision grid without disturbing {@link Level#visible} (which is the
+     * player's FOV). Caller is responsible for sizing {@code out} to the level.
+     */
+    public static void computeMobVisibilityInto(Level level, Mob mob, boolean[][] out) {
+        if (level == null || mob == null || out == null) return;
+        int w = level.width, h = level.height;
+        int cx = mob.position.tileX();
+        int cy = mob.position.tileY();
+        if (cx < 0 || cy < 0 || cx >= w || cy >= h) return;
+        int radius = (int) Math.ceil(mob.effectiveStats().visionRadius);
+        boolean[] blocking = buildBlockingLocal(level, cx, cy, radius);
+        level.initVisibilityScratch();
+        boolean[] fov = level.visibilityTempScratch;
+        Arrays.fill(fov, 0, w * h, false);
+        ShadowCaster.castShadow(cx, cy, w, fov, blocking, radius);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                if (fov[y * w + x]) out[x][y] = true;
+    }
+
+    /**
+     * Move {@code mob} from its current level's STAIRS_DOWN tile to the linked deeper
+     * level (or alt target). Pure-model side of the stairs transition - no rendering,
+     * sound, or camera concerns. Used by {@code PlayController.tryStairs} (player) and
+     * by SMART AI's descend action (NPC agent).
+     *
+     * @return true on success, false when not on stairs / target invalid.
+     */
+    public static boolean descendStairs(com.bjsp123.rl2.model.World world, Mob mob) {
+        return useStairs(world, mob, /*direction=*/ 1);
+    }
+
+    /**
+     * Move {@code mob} from its current level's STAIRS_UP tile to the linked
+     * shallower level (or alt target). Pure-model side of the transition.
+     */
+    public static boolean ascendStairs(com.bjsp123.rl2.model.World world, Mob mob) {
+        return useStairs(world, mob, /*direction=*/ -1);
+    }
+
+    private static boolean useStairs(com.bjsp123.rl2.model.World world, Mob mob, int direction) {
+        if (world == null || mob == null || mob.position == null) return false;
+        Level cur = world.currentLevel();
+        if (cur == null) return false;
+        Tile here = cur.tiles[mob.position.tileX()][mob.position.tileY()];
+        if (direction > 0 && here != Tile.STAIRS_DOWN) return false;
+        if (direction < 0 && here != Tile.STAIRS_UP)   return false;
+
+        int srcIdx = world.currentLevelIndex;
+        int target;
+        if (direction > 0) {
+            target = mob.position.equals(cur.stairsDown)
+                    ? cur.stairsDownTarget
+                    : cur.stairsDownAltTarget;
+        } else {
+            target = mob.position.equals(cur.stairsUp)
+                    ? cur.stairsUpTarget
+                    : cur.stairsUpAltTarget;
+        }
+        if (target < 0 || target >= world.levels.length) return false;
+        Level next = world.levels[target];
+        com.bjsp123.rl2.model.Point dest =
+                com.bjsp123.rl2.model.WorldTopology.arrivalPointFrom(next, srcIdx, direction > 0);
+        if (dest == null) return false;
+
+        MobSystem.transferMobToLevel(cur, mob, next, dest);
+
+        TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
+        for (Mob other : next.mobs) other.effectiveStats();
+        if (mob.behavior == Behavior.PLAYER) {
+            String name = MobSystem.nameForLog(cur, mob);
+            EventLog.add(direction > 0
+                    ? Messages.stairsDescended(name, next.depth)
+                    : Messages.stairsAscended(name, next.depth));
+        }
+        return true;
+    }
+
     public static void updateVisibility(Level level) {
         int w = level.width, h = level.height;
+        // No PLAYER mob on this level (just died, or arena-style headless
+        // level)? Leave the prior FOV in place. Otherwise a freshly empty
+        // mob list wipes level.visible to all-false the moment the player
+        // is removed, blacking out the entire screen during the death
+        // cinematic before any animation can play.
+        boolean hasPlayer = false;
+        for (Mob mob : level.mobs) {
+            if (mob.behavior == Behavior.PLAYER) { hasPlayer = true; break; }
+        }
+        if (!hasPlayer) return;
+
         boolean[] blocking = buildBlocking(level, /*forLight=*/ false);
         boolean[] accum = scratchAccum(level);
         boolean[] temp  = scratchTemp(level);

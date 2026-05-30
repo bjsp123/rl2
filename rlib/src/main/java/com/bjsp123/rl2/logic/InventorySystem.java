@@ -205,13 +205,13 @@ public final class InventorySystem {
         out.name = src.name;
         out.description = src.description;
         out.damage = src.damage;
-        out.damagePerLevel = src.damagePerLevel;
         out.armor = src.armor;
-        out.armorPerLevel = src.armorPerLevel;
         out.lightRadius = src.lightRadius;
         out.foodValue = src.foodValue;
-        out.tilesAffected = src.tilesAffected;
-        out.tilesAffectedPerLevel = src.tilesAffectedPerLevel;
+        out.effectSize = src.effectSize;
+        out.effectDuration = src.effectDuration;
+        out.effectRange = src.effectRange;
+        out.effectPower = src.effectPower;
         out.throwEffect = src.throwEffect;
         out.useBehavior = src.useBehavior;
         out.wandEffect = src.wandEffect;

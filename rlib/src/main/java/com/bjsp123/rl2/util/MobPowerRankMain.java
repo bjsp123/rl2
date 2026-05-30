@@ -16,10 +16,12 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Headless 1v1 round-robin power ranker. For each requested character level it
- * spawns every "fightable" mob type (plus the three player classes), runs a
- * shared-pool {@link GameBalance#mobfight} between every pair, and prints a
- * power ranking sorted by mean win-rate against the field.
+ * [DEV / DIAGNOSTIC] Headless 1v1 round-robin power ranker. Not shipping code.
+ *
+ * <p>For each requested character level it spawns every "fightable" mob type
+ * (plus the three player classes), runs a shared-pool
+ * {@link GameBalance#mobfight} between every pair, and prints a power
+ * ranking sorted by mean win-rate against the field.
  *
  * <p>Gradle: {@code ./gradlew :rlib:rankPower --args="500"} (optional trial
  * count override; defaults to 500 per pair for a snappy run).
@@ -57,8 +59,7 @@ public final class MobPowerRankMain {
             com.bjsp123.rl2.logic.MobDefinition def = Registries.mob(type);
             if (def == null) continue;
             if (def.maxHp <= 0) continue;
-            boolean canHit = (def.damage.max() > 0)
-                    || (def.rangedDamage != null && def.rangedDamage.max() > 0);
+            boolean canHit = def.damage > 0 || def.rangedDamage > 0;
             if (!canHit) continue;
             out.add(type);
         }

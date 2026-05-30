@@ -109,59 +109,128 @@ public final class ItemLore {
         if (hdr.length() > 0) sb.append(hdr);
 
         // -- Combat ----------------------------------------------------------
+        // Every numeric line shows EFFECTIVE values (post-scaling at the
+        // item's effective level + holder bonuses). The trailing "+N/lvl"
+        // suffix - dynamically computed from ItemStats - tells the player
+        // how the stat will keep growing if the item levels up further.
         StringBuilder combat = new StringBuilder();
-        if (it.damage.max() > 0) {
-            line(combat, TextCatalog.get("lore.items.damage"), range(it.damage),
-                    !it.damagePerLevel.isZero(),
-                    perLevelRange(it.damagePerLevel));
+        if (it.damage > 0) {
+            line(combat, TextCatalog.get("lore.items.damage"),
+                    range(com.bjsp123.rl2.logic.ItemStats.effectiveDamageRange(it, effLvl)),
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.damagePerLevel(it)));
         }
-        if (it.apDamage.max() > 0) {
-            line(combat, TextCatalog.get("lore.items.apDamage"), range(it.apDamage),
-                    !it.apDamagePerLevel.isZero(),
-                    perLevelRange(it.apDamagePerLevel));
+        if (it.apDamage > 0) {
+            line(combat, TextCatalog.get("lore.items.apDamage"),
+                    range(com.bjsp123.rl2.logic.ItemStats.effectiveApDamageRange(it, effLvl)),
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.apDamagePerLevel(it)));
         }
-        if (it.armor.max() > 0) {
-            line(combat, TextCatalog.get("lore.items.armor"), range(it.armor),
-                    !it.armorPerLevel.isZero(),
-                    perLevelRange(it.armorPerLevel));
+        if (it.armor > 0) {
+            line(combat, TextCatalog.get("lore.items.armor"),
+                    range(com.bjsp123.rl2.logic.ItemStats.effectiveArmorRange(it, effLvl)),
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.armorPerLevel(it)));
         }
-        if (it.magicResist.max() > 0) {
-            line(combat, TextCatalog.get("lore.items.magicResist"), range(it.magicResist),
-                    !it.magicResistPerLevel.isZero(),
-                    perLevelRange(it.magicResistPerLevel));
+        if (it.magicResist > 0) {
+            line(combat, TextCatalog.get("lore.items.magicResist"),
+                    range(com.bjsp123.rl2.logic.ItemStats.effectiveMagicResistRange(it, effLvl)),
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.magicResistPerLevel(it)));
         }
-        if (it.accuracy != 0) {
+        int accuracy = com.bjsp123.rl2.logic.ItemStats.effectiveAccuracy(it, effLvl);
+        if (accuracy != 0) {
             line(combat, TextCatalog.get("lore.items.accuracy"),
-                    (it.accuracy > 0 ? "+" : "") + it.accuracy,
-                    false, "");
+                    (accuracy > 0 ? "+" : "") + accuracy,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.accuracyPerLevel(it)));
         }
-        if (it.evasion != 0) {
+        int evasion = com.bjsp123.rl2.logic.ItemStats.effectiveEvasion(it, effLvl);
+        if (evasion != 0) {
             line(combat, TextCatalog.get("lore.items.evasion"),
-                    (it.evasion > 0 ? "+" : "") + it.evasion,
-                    false, "");
+                    (evasion > 0 ? "+" : "") + evasion,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.evasionPerLevel(it)));
         }
+        // Speed multipliers don't scale with level - show the flat value.
         if (it.attackSpeed != Item.ATTACK_SPEED_DEFAULT) {
             line(combat, TextCatalog.get("lore.items.attackSpeed"),
-                    speedLabel(it.attackSpeed),
-                    false, "");
+                    speedLabel(it.attackSpeed), "");
         }
         if (it.moveSpeed != Item.MOVE_SPEED_DEFAULT) {
             line(combat, TextCatalog.get("lore.items.moveSpeed"),
-                    speedLabel(it.moveSpeed),
-                    false, "");
+                    speedLabel(it.moveSpeed), "");
         }
-        if (it.knockbackSquares > 0) {
-            line(combat, TextCatalog.get("lore.items.knockback"), it.knockbackSquares + " sq on hit", false, "");
+        int knockback = com.bjsp123.rl2.logic.ItemStats.effectiveKnockback(it, effLvl);
+        if (knockback > 0) {
+            line(combat, TextCatalog.get("lore.items.knockback"),
+                    knockback + " sq on hit",
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.knockbackPerLevel(it)));
         }
         if (combat.length() > 0) sb.append('\n').append(combat);
 
+        // -- Brand -----------------------------------------------------------
+        // Mechanical breakdown of the item's brand. Magnitudes shown here
+        // are post-scaling (matches what gets contributed to the wearer's
+        // stat block and what fires on-hit).
+        if (it.brand != null) {
+            StringBuilder bnd = new StringBuilder();
+            com.bjsp123.rl2.logic.BrandDefinition b = it.brand;
+            String brandName = b.name != null && !b.name.isEmpty()
+                    ? b.name : b.brand;
+            flag(bnd, "Brand: " + brandName);
+            int bDmg = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.damage,    effLvl);
+            int bArm = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.armor,     effLvl);
+            int bAM  = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.antimagic, effLvl);
+            int bAcc = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.accuracy,  effLvl);
+            int bEva = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.evasion,   effLvl);
+            int bKb  = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.knockback, effLvl,
+                    com.bjsp123.rl2.logic.GameBalance.KNOCKBACK_LEVEL_SCALE_FACTOR);
+            int bEpw = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.elementpower, effLvl);
+            // Brand stats scale via the same {@link ItemStats#scaleIncrement}
+            // rule as the host item's intrinsic stats, so we surface the
+            // per-level deltas dynamically too.
+            if (bDmg > 0) line(bnd, "+dmg",     "+" + bDmg,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.damage)));
+            if (bArm > 0) line(bnd, "+armor",   "+" + bArm,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.armor)));
+            if (bAM  > 0) line(bnd, "+resist",  "+" + bAM,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.antimagic)));
+            if (bAcc != 0) line(bnd, "+acc",    (bAcc > 0 ? "+" : "") + bAcc,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(Math.abs(b.accuracy))));
+            if (bEva != 0) line(bnd, "+eva",    (bEva > 0 ? "+" : "") + bEva,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(Math.abs(b.evasion))));
+            if (bKb  > 0) line(bnd, "+kb",      "+" + bKb,
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.knockback,
+                            com.bjsp123.rl2.logic.GameBalance.KNOCKBACK_LEVEL_SCALE_FACTOR)));
+            if (b.attackSpeed != 1.0) line(bnd, "atkSpd", speedLabel(b.attackSpeed), "");
+            if (b.moveSpeed   != 1.0) line(bnd, "movSpd", speedLabel(b.moveSpeed),   "");
+            if (b.element != null) {
+                String elem = b.element.name().toLowerCase();
+                line(bnd, "on hit", elem + (bEpw > 0 ? " (" + bEpw + ")" : ""),
+                        perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.elementpower)));
+            }
+            if (b.sorcery)      flag(bnd, "+sorcery");
+            if (b.resistFire)   flag(bnd, "+fire resist");
+            if (b.resistPoison) flag(bnd, "+poison resist");
+            if (bnd.length() > 0) sb.append('\n').append(bnd);
+        }
+
         // -- Light / food ----------------------------------------------------
         StringBuilder bod = new StringBuilder();
-        if (it.lightRadius > 0) {
-            line(bod, TextCatalog.get("lore.items.light"), trim(it.lightRadius) + " tiles", false, "");
+        double lightRadius = com.bjsp123.rl2.logic.ItemStats.effectiveLightRadius(it, effLvl);
+        if (lightRadius > 0) {
+            line(bod, TextCatalog.get("lore.items.light"), trim(lightRadius) + " tiles",
+                    perLevel(com.bjsp123.rl2.logic.ItemStats.lightRadiusPerLevel(it), "tiles"));
         }
-        if (it.foodValue > 0) {
-            line(bod, TextCatalog.get("lore.items.food"), ""+it.foodValue/1000, false, "");
+        int foodValue = com.bjsp123.rl2.logic.ItemStats.effectiveFoodValue(it, effLvl);
+        if (foodValue > 0) {
+            // foodValue is denominated in millisatiety; both the live and
+            // per-level numbers divide by 1000 for the UI.
+            int fvPerLvl = com.bjsp123.rl2.logic.ItemStats.foodValuePerLevel(it) / 1000;
+            line(bod, TextCatalog.get("lore.items.food"), "" + foodValue / 1000,
+                    perLevel(fvPerLvl));
+        }
+        int maxCharge = com.bjsp123.rl2.logic.ItemStats.effectiveMaxCharge(it, effLvl);
+        if (it.baseChargeMax > 0) {
+            int chargeHint = com.bjsp123.rl2.logic.ItemStats.maxChargePerLevelHint(it);
+            line(bod, TextCatalog.get("lore.items.maxCharge"),
+                    Integer.toString(maxCharge),
+                    chargeHint > 0 ? "(scales with level)" : "");
         }
         if (bod.length() > 0) sb.append('\n').append(bod);
 
@@ -176,7 +245,7 @@ public final class ItemLore {
                     if (!it.appliesBuff.isEmpty()) {
                         flag(use, TextCatalog.format("item.use.DRINK.buff",
                                 TextCatalog.vars("buffs", buffList(it.appliesBuff),
-                                        "duration", buffDurationSuffix(it))));
+                                        "duration", buffDurationSuffix(it, effLvl))));
                     }
                 }
                 case GRANT_PERK -> flag(use, TextCatalog.get("item.use.GRANT_PERK"));
@@ -190,11 +259,11 @@ public final class ItemLore {
                     if (it.wandEffect != null) {
                         flag(use, TextCatalog.format("item.use.WAND.effect",
                                 TextCatalog.vars("verb", verb,
-                                        "effect", wandEffectVerb(it.wandEffect, it))));
-                        if (it.tilesAffected > 0) {
-                            line(use, TextCatalog.get("lore.items.area"), it.tilesAffected + " tiles",
-                                    it.tilesAffectedPerLevel > 0,
-                                    perLevelTiles(it.tilesAffectedPerLevel));
+                                        "effect", wandEffectVerb(it.wandEffect, it, effLvl))));
+                        int area = com.bjsp123.rl2.logic.ItemStats.effectiveSize(it, effLvl);
+                        if (area > 0) {
+                            line(use, TextCatalog.get("lore.items.area"), area + " tiles",
+                                    perLevel(com.bjsp123.rl2.logic.ItemStats.effectSizePerLevel(it), "tiles"));
                         }
                     } else {
                         flag(use, TextCatalog.format("item.use.WAND.generic",
@@ -204,21 +273,41 @@ public final class ItemLore {
                 case GRAPPLE -> {
                     flag(use, TextCatalog.format("item.use.GRAPPLE",
                             TextCatalog.vars("verb", verb)));
-                    if (it.abilityPower > 0f) {
+                    float gpower = com.bjsp123.rl2.logic.ItemStats.effectivePower(it);
+                    if (gpower > 0f) {
+                        // effectivePower is a flat magnitude knob - no scaling.
                         line(use, TextCatalog.get("lore.items.maxSize"),
-                                Integer.toString((int) it.abilityPower),
-                                false, "");
+                                Integer.toString((int) gpower), "");
                     }
                 }
                 case JUMP -> {
                     flag(use, TextCatalog.format("item.use.JUMP",
                             TextCatalog.vars("verb", verb)));
-                    if (it.abilityPower > 0f) {
+                    int jrange = com.bjsp123.rl2.logic.ItemStats.effectiveRange(it, effLvl);
+                    if (jrange > 0) {
                         line(use, TextCatalog.get("lore.items.range"),
-                                ((int) it.abilityPower) + " squares",
-                                false, "");
+                                jrange + " squares",
+                                perLevel(com.bjsp123.rl2.logic.ItemStats.effectRangePerLevel(it), "sq"));
                     }
                 }
+                case CHARGE -> {
+                    flag(use, TextCatalog.format("item.use.CHARGE",
+                            TextCatalog.vars("verb", verb)));
+                    int crange = com.bjsp123.rl2.logic.ItemStats.effectiveRange(it, effLvl);
+                    if (crange > 0) {
+                        line(use, TextCatalog.get("lore.items.range"),
+                                crange + " squares",
+                                perLevel(com.bjsp123.rl2.logic.ItemStats.effectRangePerLevel(it), "sq"));
+                    }
+                    int ckb = com.bjsp123.rl2.logic.ItemStats.effectiveKnockback(it, effLvl);
+                    if (ckb > 0) {
+                        line(use, TextCatalog.get("lore.items.knockback"),
+                                ckb + " sq on hit",
+                                perLevel(com.bjsp123.rl2.logic.ItemStats.knockbackPerLevel(it), "sq"));
+                    }
+                }
+                case TELEPORT -> flag(use, TextCatalog.format("item.use.TELEPORT",
+                        TextCatalog.vars("verb", verb)));
                 case POWERUP -> {
                     if (it.wandEffect != null) {
                         flag(use, TextCatalog.format("item.use.POWERUP",
@@ -230,7 +319,7 @@ public final class ItemLore {
                         flag(use, TextCatalog.format("item.use.APPLYBUFF",
                                 TextCatalog.vars("verb", verb,
                                         "buffs", buffList(it.appliesBuff),
-                                        "duration", buffDurationSuffix(it))));
+                                        "duration", buffDurationSuffix(it, effLvl))));
                     }
                 }
                 case NONE -> { /* unreachable - outer guard */ }
@@ -244,23 +333,24 @@ public final class ItemLore {
             StringBuilder thr = new StringBuilder();
             if (it.throwEffect != null) {
                 flag(thr, TextCatalog.format("item.throw.effect",
-                        TextCatalog.vars("effect", wandEffectVerb(it.throwEffect, it))));
+                        TextCatalog.vars("effect", wandEffectVerb(it.throwEffect, it, effLvl))));
                 if (it.throwEffect == ItemEffect.APPLYBUFFS
                         && !it.appliesBuff.isEmpty()) {
                     flag(thr, TextCatalog.format("item.throw.applyBuffs",
                             TextCatalog.vars("buffs", buffList(it.appliesBuff),
-                                    "duration", buffDurationSuffix(it))));
+                                    "duration", buffDurationSuffix(it, effLvl))));
                 }
                 if (it.throwEffect == ItemEffect.POISONCLOUD
                         || it.throwEffect == ItemEffect.SMOKE) {
-                    if (it.tilesAffected > 0) {
-                        line(thr, TextCatalog.get("lore.items.cloudArea"), it.tilesAffected + " tiles",
-                                it.tilesAffectedPerLevel > 0,
-                                perLevelTiles(it.tilesAffectedPerLevel));
+                    int area = com.bjsp123.rl2.logic.ItemStats.effectiveSize(it, effLvl);
+                    int dur  = com.bjsp123.rl2.logic.ItemStats.effectiveDuration(it, effLvl);
+                    if (area > 0) {
+                        line(thr, TextCatalog.get("lore.items.cloudArea"), area + " tiles",
+                                perLevel(com.bjsp123.rl2.logic.ItemStats.effectSizePerLevel(it), "tiles"));
                     }
-                    if (it.abilityPower > 0f) {
-                        line(thr, TextCatalog.get("lore.items.cloudLifetime"), ((int) it.abilityPower) + " turns",
-                                false, "");
+                    if (dur > 0) {
+                        line(thr, TextCatalog.get("lore.items.cloudLifetime"), dur + " turns",
+                                perLevel(com.bjsp123.rl2.logic.ItemStats.effectDurationPerLevel(it), "turns"));
                     }
                 }
             }
@@ -296,11 +386,12 @@ public final class ItemLore {
     }
 
 
-    private static String wandEffectVerb(ItemEffect e, Item it) {
+    private static String wandEffectVerb(ItemEffect e, Item it, int effLvl) {
         return switch (e) {
             case DAMAGE -> TextCatalog.format("item.effect.DAMAGE",
-                    TextCatalog.vars("damage", range(it.damage),
-                            "perLevel", it.damagePerLevel.isZero() ? "" : " (" + perLevelRange(it.damagePerLevel).trim() + ")"));
+                    TextCatalog.vars("damage",
+                            range(com.bjsp123.rl2.logic.ItemStats.effectiveDamageRange(it, effLvl)),
+                            "perLevel", ""));
             case LEVEL_UP, HP_UP, MANA_UP -> TextCatalog.get("item.effect.power.default");
             default -> TextCatalog.getOrDefault("item.effect." + e.name(), "perform a magical action at the target");
         };
@@ -316,10 +407,11 @@ public final class ItemLore {
         return sb.toString();
     }
 
-    private static String buffDurationSuffix(Item it) {
-        if (it.abilityPower <= 0f) return "";
+    private static String buffDurationSuffix(Item it, int effLvl) {
+        int dur = com.bjsp123.rl2.logic.ItemStats.effectiveDuration(it, effLvl);
+        if (dur <= 0) return "";
         return TextCatalog.format("item.buff.duration",
-                TextCatalog.vars("turns", (int) it.abilityPower));
+                TextCatalog.vars("turns", dur));
     }
 
     /** User-facing verb describing what a {@link com.bjsp123.rl2.model.Item.UseBehavior#POWERUP}
@@ -328,7 +420,7 @@ public final class ItemLore {
         return switch (e) {
             case LEVEL_UP -> TextCatalog.get("item.effect.power.LEVEL_UP");
             case HP_UP    -> TextCatalog.format("item.effect.power.HP_UP",
-                    TextCatalog.vars("percent", (int) Math.round(it.abilityPower * 100)));
+                    TextCatalog.vars("percent", (int) Math.round(it.effectPower * 100)));
             case MANA_UP  -> TextCatalog.get("item.effect.power.MANA_UP");
             default       -> TextCatalog.get("item.effect.power.default");
         };
@@ -347,10 +439,26 @@ public final class ItemLore {
     }
 
     private static void line(StringBuilder sb, String label, String value,
-                             boolean condition, String value2) {
-        sb.append(pad(label, 12)).append(value);
-        if (condition) sb.append(value2);
+                             String perLevelSuffix) {
+        sb.append(pad(label, 15)).append(value);
+        if (perLevelSuffix != null && !perLevelSuffix.isEmpty()) {
+            sb.append("  ").append(perLevelSuffix);
+        }
         sb.append('\n');
+    }
+
+    /** Format the "(+N/lvl)" trailing hint when a stat has a non-zero
+     *  per-level increment. Empty string when {@code delta <= 0} so the
+     *  caller can pass it straight to {@link #line} for flat stats too. */
+    private static String perLevel(int delta) {
+        if (delta <= 0) return "";
+        return "(+" + delta + "/lvl)";
+    }
+
+    /** Same as {@link #perLevel(int)} but with a custom unit (e.g. "tiles"). */
+    private static String perLevel(int delta, String unit) {
+        if (delta <= 0) return "";
+        return "(+" + delta + " " + unit + "/lvl)";
     }
 
     private static void flag(StringBuilder sb, String text) {
@@ -368,16 +476,6 @@ public final class ItemLore {
         if (m == null) return "0";
         return m.min() == m.max() ? Integer.toString(m.min())
                                   : m.min() + "-" + m.max();
-    }
-
-    private static String perLevelRange(MinMax m) {
-        return TextCatalog.format("item.stat.perLevel",
-                TextCatalog.vars("range", range(m)));
-    }
-
-    private static String perLevelTiles(int tiles) {
-        return TextCatalog.format("item.stat.tilesPerLevel",
-                TextCatalog.vars("tiles", tiles));
     }
 
     private static String trim(double v) {

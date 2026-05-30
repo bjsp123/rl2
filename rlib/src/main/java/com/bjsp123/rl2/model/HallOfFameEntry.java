@@ -10,8 +10,15 @@ public class HallOfFameEntry {
     public int    depth;
     public List<String> equipment = new ArrayList<>();
     public long   timestampMillis;
-    /** Last player-relevant log line at the moment of death - the "cause" sentence. */
+    /** Last player-relevant log line at the moment of death - the "cause" sentence.
+     *  Kept for backwards-compat with older save records; new code populates
+     *  {@link #deathLog} instead. */
     public String deathMessage = "";
+    /** The final five rolling-log lines captured at the moment of death, ordered
+     *  oldest -> newest with the very last entry describing the cause. Shown on
+     *  the V2GameOver screen so the player can see the lead-up to their death.
+     *  Populated by PlayScreen when the death snapshot is captured. */
+    public List<String> deathLog = new ArrayList<>();
     public int    totalTurns   = 0;
     public int    beastsTamed  = 0;
     /** Perk.name() of the perk with the highest level at run-end, or "" if none. */

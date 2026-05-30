@@ -302,8 +302,8 @@ final class PlayController {
     }
 
     /** Jump use entry point. Opens the targeting overlay restricted to tiles within
-     *  Chebyshev radius {@code item.abilityPower}, then routes the confirmed tile
-     *  through {@link ItemSystem#castJump}. Non-blocking hop animation. */
+     *  Chebyshev radius {@link ItemStats#effectiveRange}, then routes the confirmed
+     *  tile through {@link ItemSystem#castJump}. Non-blocking hop animation. */
     private void beginJump(Level level, Mob user, Item item) {
         targetingOverlay.setPlayer(user);
         targetingOverlay.setLevel(level);
@@ -317,10 +317,9 @@ final class PlayController {
     }
 
     /** Charge use entry point. Opens the targeting overlay restricted to
-     *  visible hostile mobs within Chebyshev range
-     *  {@code abilityPower + (effLvl/2)}, then routes the confirmed tile
-     *  through {@link ItemSystem#castCharge}. Mirrors {@link #beginJump} in
-     *  shape. */
+     *  visible hostile mobs within Chebyshev range {@link ItemStats#effectiveRange},
+     *  then routes the confirmed tile through {@link ItemSystem#castCharge}.
+     *  Mirrors {@link #beginJump} in shape. */
     private void beginCharge(Level level, Mob user, Item item) {
         targetingOverlay.setPlayer(user);
         targetingOverlay.setLevel(level);
@@ -348,11 +347,11 @@ final class PlayController {
         }, item);
     }
 
-    /** Grid of valid grapple targets: visible + within Chebyshev range {@code 2 + abilityPower}. */
+    /** Grid of valid grapple targets: visible + within Chebyshev range {@code 2 + effectPower}. */
     private static boolean[][] grappleGrid(Level level, Mob user, Item item) {
         boolean[][] grid = new boolean[level.width][level.height];
         if (user.position == null || level.visible == null) return grid;
-        int radius = 2 + Math.max(0, (int) item.abilityPower);
+        int radius = 2 + Math.max(0, (int) com.bjsp123.rl2.logic.ItemStats.effectivePower(item));
         int px = user.position.tileX(), py = user.position.tileY();
         for (int x = Math.max(0, px - radius); x <= Math.min(level.width - 1, px + radius); x++) {
             for (int y = Math.max(0, py - radius); y <= Math.min(level.height - 1, py + radius); y++) {
@@ -396,8 +395,9 @@ final class PlayController {
     private static boolean[][] jumpGrid(Level level, Mob jumper, Item item) {
         boolean[][] grid = new boolean[level.width][level.height];
         if (jumper.position == null) return grid;
-        int radius = Math.max(0, (int) item.abilityPower
-                + com.bjsp123.rl2.logic.ItemStats.effectiveLevel(item, jumper));
+        int effLvl = com.bjsp123.rl2.logic.ItemStats.effectiveLevel(item, jumper);
+        int radius = Math.max(0,
+                com.bjsp123.rl2.logic.ItemStats.effectiveRange(item, effLvl));
         int px = jumper.position.tileX(), py = jumper.position.tileY();
         for (int x = Math.max(0, px - radius); x <= Math.min(level.width - 1, px + radius); x++) {
             for (int y = Math.max(0, py - radius); y <= Math.min(level.height - 1, py + radius); y++) {
@@ -411,13 +411,15 @@ final class PlayController {
     }
 
     /** Grid of valid charge targets: visible hostile mob within
-     *  {@code abilityPower + effLvl/2} Chebyshev tiles, with at least one
-     *  walkable 8-neighbor (so {@code castCharge} has a landing tile). */
+     *  {@link com.bjsp123.rl2.logic.ItemStats#effectiveRange} Chebyshev tiles,
+     *  with at least one walkable 8-neighbor (so {@code castCharge} has a
+     *  landing tile). */
     private static boolean[][] chargeGrid(Level level, Mob user, Item item) {
         boolean[][] grid = new boolean[level.width][level.height];
         if (user.position == null || level.visible == null) return grid;
         int effLvl = com.bjsp123.rl2.logic.ItemStats.effectiveLevel(item, user);
-        int radius = Math.max(1, (int) item.abilityPower + effLvl / 2);
+        int radius = Math.max(1,
+                com.bjsp123.rl2.logic.ItemStats.effectiveRange(item, effLvl));
         int px = user.position.tileX(), py = user.position.tileY();
         for (com.bjsp123.rl2.model.Mob m : level.mobs) {
             if (m == null || m == user || m.position == null || m.hp <= 0) continue;
@@ -687,42 +689,14 @@ final class PlayController {
         Level cur = world.currentLevel();
         Mob player = TurnSystem.findPlayer(cur);
         if (player == null) return;
-
-        Tile here = cur.tiles[player.position.tileX()][player.position.tileY()];
-        if (direction < 0 && here != Tile.STAIRS_UP)   return;
-        if (direction > 0 && here != Tile.STAIRS_DOWN) return;
-
-        int srcIdx = world.currentLevelIndex;
-        int target;
-        if (direction > 0) {
-            target = player.position.equals(cur.stairsDown)
-                    ? cur.stairsDownTarget
-                    : cur.stairsDownAltTarget;
-        } else {
-            target = player.position.equals(cur.stairsUp)
-                    ? cur.stairsUpTarget
-                    : cur.stairsUpAltTarget;
-        }
-        if (target < 0 || target >= world.levels.length) return;
-        Level next = world.levels[target];
-        Point dest = WorldTopology.arrivalPointFrom(next, srcIdx, direction > 0);
-        if (dest == null) return;
-
-        cur.mobs.remove(player);
-        player.position       = dest;
-        player.targetPosition = null;
-        next.mobs.add(player);
-        world.currentLevelIndex = target;
-        next.visited = true;
-
-        TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
-        // Prime effectiveStats for all mobs on the new level before afterMove so
-        // buildBlocking doesn't trigger cold recomputes for sleeping mobs.
-        for (Mob mob : next.mobs) mob.effectiveStats();
+        boolean ok = direction > 0
+                ? com.bjsp123.rl2.logic.LevelSystem.descendStairs(world, player)
+                : com.bjsp123.rl2.logic.LevelSystem.ascendStairs(world, player);
+        if (!ok) return;
+        Level next = world.currentLevel();
         afterMove(next);
         recenterCamera.run();
         levelRenderer.markDirty();
-
         if (sounds != null) sounds.play("sfx.world.action.enter_level");
         String playerName = player.name != null ? player.name
                 : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");

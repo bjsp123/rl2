@@ -269,7 +269,7 @@ final class ThemedRoomPainter {
                                                   x + w / 2, y + h / 2);
             case SMALL_STATUES_SCATTERED -> paintSmallStatuesScattered(level, x, y, w, h, rng);
             case CHAPEL_SHRINE          -> paintChapelShrine(level, x, y, w, h);
-            case BEACON                 -> paintBeacon(level, x, y, w, h, placement);
+            case BEACON                 -> paintBeacon(level, x, y, w, h, placement, rng);
             case CHAPEL_BEACON          -> paintChapelBeacon(level, x, y, w, h, placement, rng);
             case THRONE_BEACON          -> paintThroneBeacon(level, x, y, w, h, placement, rng);
         }
@@ -285,10 +285,11 @@ final class ThemedRoomPainter {
     /** Single beacon at the room's horizontal centre, on the placement-anchor
      *  row. */
     private static void paintBeacon(Level level, int x, int y, int w, int h,
-                                    ThemedRoomDefinition.Placement placement) {
+                                    ThemedRoomDefinition.Placement placement,
+                                    Random rng) {
         int cx = x + w / 2;
         int ay = anchorY(y, h, placement);
-        LevelFactoryRooms.placeBeacon(level, cx, ay);
+        LevelFactoryRooms.placeBeacon(level, cx, ay, rng);
     }
 
     /** Chapel-style assembly: a centred altar (3-wide), a beacon 1 cell west
@@ -307,7 +308,7 @@ final class ThemedRoomPainter {
             level.tiles[cx][ay] = Tile.ALTAR;
         }
         // Beacon: 1 cell west of the altar's leftmost cell (cx-1) -> (cx-2, ay).
-        LevelFactoryRooms.placeBeacon(level, cx - 2, ay);
+        LevelFactoryRooms.placeBeacon(level, cx - 2, ay, rng);
         // Flanking statues at (cx-3, ay) and (cx+2, ay) - need w >= 6.
         if (w >= 6) {
             LevelFactoryRooms.placeStatue(level, cx - 3, ay,
@@ -331,7 +332,7 @@ final class ThemedRoomPainter {
                 && level.tiles[cx][ay] == Tile.FLOOR) {
             level.tiles[cx][ay] = throne;
         }
-        LevelFactoryRooms.placeBeacon(level, cx - 1, ay);
+        LevelFactoryRooms.placeBeacon(level, cx - 1, ay, rng);
     }
 
     /** Drop 2-6 small statues at random interior positions, leaving a 1-cell

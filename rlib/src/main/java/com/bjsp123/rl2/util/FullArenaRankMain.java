@@ -21,15 +21,17 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Full-fat arena power ranker. Unlike {@link MobPowerRankMain} (which uses the
- * pure-melee {@link GameBalance#mobfight}), this runner builds a real
+ * [DEV / DIAGNOSTIC] Full-fat arena power ranker. Not shipping code.
+ *
+ * <p>Unlike {@link MobPowerRankMain} (which uses the pure-melee
+ * {@link GameBalance#mobfight}), this runner builds a real
  * {@link CombatArena} level for every fight, places the two combatants with
  * their full kits (starting inventory + perks + items applied via
  * {@link MobFactory#player} for the three player classes), and advances the
  * simulation through {@link CombatArena#tickHeadless} until one combatant
  * dies. So thrown bombs, fired wands, drunk potions, JADE_CRAB / JADE_FISH
  * invocations, AI behaviour, terrain interactions, and surface effects all
- * matter to the outcome.
+ * matter to the outcome. Writes a per-fight CSV to {@code arena_full.csv}.
  *
  * <p>Gradle: {@code ./gradlew :rlib:rankPowerFull --args="5"} (optional
  * trials-per-pair override; defaults to 5 because each match is much more
@@ -64,15 +66,35 @@ public final class FullArenaRankMain {
      *  fighters^2 * trials * avg-match-ms. */
     private static final int DEFAULT_TRIALS = 5;
 
+    /** Generated once for the whole run so the same world's gear catalogue
+     *  serves every duel. Deterministic seed so reruns reproduce.
+     *
+     *  <p>Built in {@link #main(String[])} after {@link #loadData(Path)} - a
+     *  class-load-time initialiser would run against an empty registry and
+     *  the gear world would contain only procedural gems, leaving every
+     *  fighter bare-handed. */
+    private static PlayerGearProvider GEAR;
+
+    /** Per-fight CSV writer. Same shape as the rank1vN CSV so downstream
+     *  tools can union the two datasets. */
+    private static java.io.PrintWriter FIGHT_LOG;
+
     public static void main(String[] args) throws IOException {
         int trials = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_TRIALS;
         Path assets = locateAssetsDir();
         loadData(assets);
+        GEAR = new PlayerGearProvider(0xC0FFEEL);
+
+        Path csvOut = Paths.get("arena_full.csv");
+        FIGHT_LOG = new java.io.PrintWriter(Files.newBufferedWriter(csvOut));
+        FIGHT_LOG.println("fighter_a,fighter_b,char_level,trial,outcome,turns,"
+                + "a_hp,a_max_hp,b_hp,b_max_hp");
 
         List<String> fighters = pickFighters();
         System.out.println("[rl2-rank-full] fighters: " + fighters.size()
                 + ", trials per pair: " + trials
                 + ", pairs: " + (fighters.size() * (fighters.size() - 1) / 2));
+        System.out.println("[rl2-rank-full] per-fight CSV: " + csvOut.toAbsolutePath());
 
         for (int charLvl : LEVELS) {
             long t0 = System.currentTimeMillis();
@@ -81,6 +103,8 @@ public final class FullArenaRankMain {
             System.out.println("  (level " + charLvl + " run took "
                     + (elapsed / 1000) + "s)");
         }
+        FIGHT_LOG.flush();
+        FIGHT_LOG.close();
     }
 
     /** Same fighter-pool gate as {@link MobPowerRankMain}: anything with
@@ -91,8 +115,7 @@ public final class FullArenaRankMain {
             com.bjsp123.rl2.logic.MobDefinition def = Registries.mob(type);
             if (def == null) continue;
             if (def.maxHp <= 0) continue;
-            boolean canHit = (def.damage.max() > 0)
-                    || (def.rangedDamage != null && def.rangedDamage.max() > 0);
+            boolean canHit = def.damage > 0 || def.rangedDamage > 0;
             if (!canHit) continue;
             out.add(type);
         }
@@ -102,46 +125,53 @@ public final class FullArenaRankMain {
 
     private static void rankAt(List<String> fighters, int charLvl, int trials) {
         int n = fighters.size();
-        double[] meanWinRate = new double[n];
-        int[] pairs = new int[n];
+        int[] wins   = new int[n];
+        int[] losses = new int[n];
+        int[] draws  = new int[n];
         long seed = 0xA15Eb00BBeefcafeL ^ charLvl;
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
-                double aWins = 0;
                 for (int t = 0; t < trials; t++) {
                     int outcome = simulateMatch(
                             fighters.get(i), fighters.get(j), charLvl,
-                            seed + (long) i * 1_000_003L + (long) j * 1009L + t);
-                    if (outcome == +1) aWins += 1;
-                    else if (outcome == 0) aWins += 0.5;
+                            seed + (long) i * 1_000_003L + (long) j * 1009L + t,
+                            t);
+                    if      (outcome == +1) { wins  [i]++; losses[j]++; }
+                    else if (outcome == -1) { losses[i]++; wins  [j]++; }
+                    else                    { draws [i]++; draws [j]++; }
                 }
-                meanWinRate[i] += aWins;
-                meanWinRate[j] += (trials - aWins);
-                pairs[i]++;
-                pairs[j]++;
             }
         }
+        // Win% counts draws as half wins.
+        double[] winPct = new double[n];
+        int[] pairFights = new int[n];
         for (int i = 0; i < n; i++) {
-            if (pairs[i] > 0) meanWinRate[i] /= (pairs[i] * (double) trials);
+            pairFights[i] = wins[i] + losses[i] + draws[i];
+            if (pairFights[i] > 0) {
+                winPct[i] = (wins[i] + 0.5 * draws[i]) / pairFights[i];
+            }
         }
         Integer[] order = new Integer[n];
         for (int i = 0; i < n; i++) order[i] = i;
         java.util.Arrays.sort(order,
-                Comparator.comparingDouble((Integer i) -> -meanWinRate[i]));
+                Comparator.comparingDouble((Integer i) -> -winPct[i]));
 
         System.out.println();
         System.out.println("==== Full-arena power ranking @ character level "
                 + charLvl + " ====");
-        System.out.printf("%-4s %-28s %6s%n", "rank", "mob", "win%");
+        System.out.printf("%-4s %-28s %7s %5s %5s %5s %6s%n",
+                "rank", "mob", "fights", "wins", "loss", "draw", "win%");
         for (int rank = 0; rank < n; rank++) {
             int i = order[rank];
-            System.out.printf("%4d %-28s %5.1f%%%n",
-                    rank + 1, fighters.get(i), meanWinRate[i] * 100.0);
+            System.out.printf("%4d %-28s %7d %5d %5d %5d %5.1f%%%n",
+                    rank + 1, fighters.get(i), pairFights[i],
+                    wins[i], losses[i], draws[i], winPct[i] * 100.0);
         }
     }
 
     /** Returns +1 if {@code aType} wins, -1 if {@code bType} wins, 0 on stalemate. */
-    private static int simulateMatch(String aType, String bType, int charLvl, long seed) {
+    private static int simulateMatch(String aType, String bType, int charLvl,
+                                     long seed, int trial) {
         Random rng = new Random(seed);
         Level level = CombatArena.buildArenaLevel(ARENA_W, ARENA_H, rng);
         World world = new World();
@@ -156,6 +186,17 @@ public final class FullArenaRankMain {
         if (a == null || b == null) return 0;
         MobProgression.setSpawnLevel(a, charLvl);
         MobProgression.setSpawnLevel(b, charLvl);
+        // PLAYER_* fighters: equip them with gear matching what they'd have
+        // found in a real playthrough up to the depth corresponding to
+        // charLvl. Other (mob) fighters keep their CSV starting kit.
+        if (a.mobType != null && a.mobType.startsWith("PLAYER_")) {
+            GEAR.applyKit(a, GEAR.kitForCharLvl(charLvl));
+            MobProgression.autoLevelUpPerks(a, rng);
+        }
+        if (b.mobType != null && b.mobType.startsWith("PLAYER_")) {
+            GEAR.applyKit(b, GEAR.kitForCharLvl(charLvl));
+            MobProgression.autoLevelUpPerks(b, rng);
+        }
         // Arena uses a single-level world, so TELEPORT_ORB's "scatter across
         // dungeon" becomes "scatter within the room" - either a near-no-op or
         // a free advantage to whoever throws first. Strip the orbs from both
@@ -188,17 +229,27 @@ public final class FullArenaRankMain {
         // events between ticks so the queue doesn't balloon.
         int maxTicks = MAX_STANDARD_TURNS *
                 com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS;
+        int result = 0;
+        int ticksElapsed = maxTicks;
         for (int t = 0; t < maxTicks; t++) {
             CombatArena.tickHeadless(level, world, 16);
             if (level.events != null) level.events.clear();
             boolean aDead = a.hp <= 0 || !level.mobs.contains(a);
             boolean bDead = b.hp <= 0 || !level.mobs.contains(b);
-            if (aDead && bDead) return 0;
-            if (aDead) return -1;
-            if (bDead) return +1;
-            if (!CombatArena.hostilePairExists(level)) break;
+            if (aDead && bDead) { result =  0; ticksElapsed = t; break; }
+            if (aDead)          { result = -1; ticksElapsed = t; break; }
+            if (bDead)          { result = +1; ticksElapsed = t; break; }
+            if (!CombatArena.hostilePairExists(level)) { ticksElapsed = t; break; }
         }
-        return 0; // stalemate
+        String outcome = result == +1 ? "a_win" : result == -1 ? "b_win" : "draw";
+        int turns = ticksElapsed / com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS;
+        if (FIGHT_LOG != null) {
+            FIGHT_LOG.printf("%s,%s,%d,%d,%s,%d,%.2f,%.2f,%.2f,%.2f%n",
+                    aType, bType, charLvl, trial, outcome, turns,
+                    Math.max(0, a.hp), a.effectiveStats().maxHp,
+                    Math.max(0, b.hp), b.effectiveStats().maxHp);
+        }
+        return result;
     }
 
     /** Remove every bag item whose {@code type} matches {@code typeKey}.

@@ -68,12 +68,16 @@ public final class CsvTable {
     }
 
     /** Parse one CSV line. Handles bare commas, quoted fields, and doubled
-     *  quotes inside a quoted field. Returned cells are NOT trimmed (a quoted
-     *  field with leading whitespace inside the quotes preserves it). */
+     *  quotes inside a quoted field. Honours the RFC 4180 contract that a
+     *  quoted field preserves its inner whitespace verbatim - leading and
+     *  trailing spaces only get trimmed on UNQUOTED cells. Lets template
+     *  strings carry significant whitespace (e.g. " for {turns} turns"
+     *  prefixes) by wrapping them in quotes. */
     private static List<String> parseLine(String line) {
         List<String> out = new ArrayList<>();
         StringBuilder cell = new StringBuilder();
         boolean inQuotes = false;
+        boolean cellWasQuoted = false;
         int i = 0;
         while (i < line.length()) {
             char c = line.charAt(i);
@@ -92,17 +96,19 @@ public final class CsvTable {
                 i++;
             } else {
                 if (c == ',') {
-                    out.add(cell.toString().trim());
+                    out.add(cellWasQuoted ? cell.toString() : cell.toString().trim());
                     cell.setLength(0);
+                    cellWasQuoted = false;
                 } else if (c == '"' && cell.length() == 0) {
                     inQuotes = true;
+                    cellWasQuoted = true;
                 } else {
                     cell.append(c);
                 }
                 i++;
             }
         }
-        out.add(cell.toString().trim());
+        out.add(cellWasQuoted ? cell.toString() : cell.toString().trim());
         return out;
     }
 

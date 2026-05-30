@@ -21,6 +21,17 @@ public class Pathfinder {
      * INANIMATE mobs are treated as obstacles; other mobs are not.
      */
     public static Point nextStep(Level level, Mob mover, Point to) {
+        return nextStepAvoiding(level, mover, to, null);
+    }
+
+    /**
+     * Same as {@link #nextStep} but skips any tile in {@code avoid}. Used by the SMART AI
+     * to first attempt a route that excludes hazards (e.g. consumed-on-step
+     * {@code ONETIME_DOOR} tiles); the caller falls back to the unrestricted
+     * {@link #nextStep} when this returns {@code null} and the hazard is unavoidable.
+     */
+    public static Point nextStepAvoiding(Level level, Mob mover, Point to,
+                                         java.util.Set<Point> avoid) {
         int sx = mover.position.tileX(), sy = mover.position.tileY();
         int tx = to.tileX(),             ty = to.tileY();
         if (sx == tx && sy == ty) return null;
@@ -71,7 +82,7 @@ public class Pathfinder {
             int g = ws.gScore[ci];
             for (int[] d : DIRS) {
                 int nx = cx + d[0], ny = cy + d[1];
-                if (!canEnter(level, mover, moverFlying, moverSize, nx, ny, tx, ty, ws)) continue;
+                if (!canEnter(level, mover, moverFlying, moverSize, nx, ny, tx, ty, ws, avoid)) continue;
                 int ni = cell(nx, ny, w);
                 int ng = g + 1;
                 if (ng < ws.gScore[ni]) {
@@ -85,9 +96,11 @@ public class Pathfinder {
     }
 
     private static boolean canEnter(Level level, Mob mover, boolean moverFlying, int moverSize,
-                                    int x, int y, int tx, int ty, Workspace ws) {
+                                    int x, int y, int tx, int ty, Workspace ws,
+                                    java.util.Set<Point> avoid) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
         if (TileQuery.blocksMovementAt(level, x, y, mover)) return false;
+        if (avoid != null && !(x == tx && y == ty) && avoid.contains(new Point(x, y))) return false;
         if (mover.behavior == Behavior.PLAYER
                 && level.explored != null
                 && !level.explored[x][y]
@@ -99,8 +112,11 @@ public class Pathfinder {
         // O(1) occupancy check from precomputed map
         int idx = cell(x, y, level.width);
         if (!ws.occupied[idx]) return true;
-        // Player can always step onto a mob's tile
-        if (mover.behavior == Behavior.PLAYER) return true;
+        // Player and SMART AI agents can always plan onto a mob's tile - the move
+        // system resolves the contact (attack hostile / swap places with ally) on
+        // arrival. Default-AI mobs (MOB/HUNTER/...) still need strict-larger-size
+        // to push past, so swarms of equal-size mobs don't auto-trample each other.
+        if (mover.behavior == Behavior.PLAYER || mover.behavior == Behavior.SMART) return true;
         // Non-player: can push past only a strictly smaller mob (swap-places on arrival)
         return moverSize > (ws.mobSize[idx] & 0xFF);
     }

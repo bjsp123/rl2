@@ -74,8 +74,12 @@ public final class V2Arena extends ScreenAdapter {
     private final Rect pauseBtn = new Rect();
     private final Rect ffBtn    = new Rect();
     private final Rect speedBtn = new Rect();
+    private final Rect logBtn   = new Rect();
     private final Rect abortBtn = new Rect();
-    private boolean pausePressed, ffPressed, speedPressed, abortPressed;
+    private boolean pausePressed, ffPressed, speedPressed, logPressed, abortPressed;
+
+    // Game-log overlay - shows EventLog entries from the in-progress fight.
+    private V2Log log;
 
     // Result banner state.
     private final Rect bannerWindow      = new Rect();
@@ -145,8 +149,12 @@ public final class V2Arena extends ScreenAdapter {
         // Block camera drag/pinch while the result banner is up.
         cameraController.setInputBlocker(() -> fightOver);
 
+        log = new V2Log(ctx);
+        // log.input() consumes everything when open and returns false
+        // otherwise, so events fall through to the HUD + camera when the
+        // log is closed. Same pattern PlayScreen uses for its log popup.
         Gdx.input.setInputProcessor(new InputMultiplexer(
-                cameraController, hudInput()));
+                log.input(), cameraController, hudInput()));
 
         animator.consume(level);
         Settings.setAnimationTransientOverride(ARENA_ANIM_SPEED);
@@ -180,10 +188,13 @@ public final class V2Arena extends ScreenAdapter {
             }
         }
         if (wand == null) return;
-        mage.intrinsic.rangedDamage = com.bjsp123.rl2.logic.ItemStats.effectiveDamageRange(wand);
+        // Seed a ranged attack from the wand's damage base; MobStats will
+        // expand it into a [N/2, N] range and scale it by character level.
+        mage.baseRangedDamage           = wand.damage;
         mage.intrinsic.rangedDistance   = 6;
         mage.intrinsic.rangedRateOfFire = 1;
         mage.intrinsic.rangedCost       = mage.intrinsic.attackCost;
+        mage.statsDirty                 = true;
     }
 
     @Override
@@ -222,6 +233,7 @@ public final class V2Arena extends ScreenAdapter {
         ctx.applyProjection();
         renderHud();
         if (fightOver) renderBanner();
+        if (log != null) log.renderSelf();
     }
 
     private void advanceOneCombatTick() {
@@ -309,14 +321,15 @@ public final class V2Arena extends ScreenAdapter {
         float pad = 8f;
         float btnH = 32f;
         float gap = 4f;
-        float[] widths = { 78f, 110f, 110f, 70f };
+        float[] widths = { 78f, 110f, 110f, 60f, 70f };
         float vh = ctx.worldH();
         float x = pad;
         float y = vh - pad - btnH;
         pauseBtn.set(x, y, widths[0], btnH); x += widths[0] + gap;
         ffBtn   .set(x, y, widths[1], btnH); x += widths[1] + gap;
         speedBtn.set(x, y, widths[2], btnH); x += widths[2] + gap;
-        abortBtn.set(x, y, widths[3], btnH);
+        logBtn  .set(x, y, widths[3], btnH); x += widths[3] + gap;
+        abortBtn.set(x, y, widths[4], btnH);
 
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
@@ -325,6 +338,7 @@ public final class V2Arena extends ScreenAdapter {
         drawBtn(s, pauseBtn, pausePressed);
         drawBtn(s, ffBtn,    ffPressed);
         drawBtn(s, speedBtn, speedPressed);
+        drawBtn(s, logBtn,   logPressed);
         drawBtn(s, abortBtn, abortPressed);
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
@@ -340,6 +354,9 @@ public final class V2Arena extends ScreenAdapter {
                 TextCatalog.format("ui.arena.speed",
                         TextCatalog.vars("speed", fastSpeed ? "4x" : "1x")),
                 speedBtn.cx(), speedBtn.cy() + 6f);
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.get("ui.arena.log"),
+                logBtn.cx(), logBtn.cy() + 6f);
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_WARN,
                 TextCatalog.get("ui.arena.abort"),
                 abortBtn.cx(), abortBtn.cy() + 6f);
@@ -429,6 +446,7 @@ public final class V2Arena extends ScreenAdapter {
                 if (pauseBtn.contains(vx, vy)) { pausePressed = true; return true; }
                 if (ffBtn   .contains(vx, vy)) { ffPressed    = true; return true; }
                 if (speedBtn.contains(vx, vy)) { speedPressed = true; return true; }
+                if (logBtn  .contains(vx, vy)) { logPressed   = true; return true; }
                 if (abortBtn.contains(vx, vy)) { abortPressed = true; return true; }
                 return false;
             }
@@ -471,6 +489,11 @@ public final class V2Arena extends ScreenAdapter {
                         Settings.setAnimationTransientOverride(
                                 fastSpeed ? ARENA_ANIM_SPEED : NORMAL_ANIM_SPEED);
                     }
+                    return true;
+                }
+                if (logPressed) {
+                    logPressed = false;
+                    if (logBtn.contains(vx, vy) && log != null) log.open();
                     return true;
                 }
                 if (abortPressed) {

@@ -113,12 +113,21 @@ public final class LevelFactory {
             w = (int) Math.round(w * 1.5);
             h = (int) Math.round(h * 1.5);
         }
+        // Roll the layout BEFORE allocation so VILLAGE can shrink the level
+        // (its buildings are intentionally small and the global default 48x48
+        // green sprawls too much). BIGLEVEL and VILLAGE compose multiplicatively
+        // so a BIGLEVEL village ends up near the base size.
+        Layout layout = Layout.values()[rng.nextInt(Layout.values().length)];
+        if (layout == Layout.VILLAGE) {
+            w = (int) Math.round(w * 2.0 / 3.0);
+            h = (int) Math.round(h * 2.0 / 3.0);
+        }
         Level level = new Level(w, h);
         level.depth = depth;        // before population - populate reads depth-fraction.
         level.flags.addAll(flags);
         if (unique != null) unique.resetForNewLevel();
 
-        level.layout = Layout.values()[rng.nextInt(Layout.values().length)];
+        level.layout = layout;
         level.theme = theme;
 
         List<int[]> rooms = switch (level.layout) {

@@ -13,10 +13,12 @@ import java.nio.file.Paths;
 import java.util.Random;
 
 /**
- * Headless world generator + YAML dumper. Reads the same data files that
- * {@code Rl2Game.create} reads (without libGDX), builds a {@link World} via
- * {@link WorldTopology#build}, and writes the {@link WorldYamlDump} output to
- * {@code world_dump.yaml} in the working directory (and stdout).
+ * [DEV / DIAGNOSTIC] Headless world generator + YAML dumper. Not shipping code.
+ *
+ * <p>Reads the same data files that {@code Rl2Game.create} reads (without
+ * libGDX), builds a {@link World} via {@link WorldTopology#build}, and writes
+ * the {@link WorldYamlDump} output to {@code world_dump.yaml} in the working
+ * directory (and stdout).
  *
  * <p>Wired up as a Gradle task - see {@code rlib/build.gradle}'s
  * {@code dumpWorld} task. Examples:

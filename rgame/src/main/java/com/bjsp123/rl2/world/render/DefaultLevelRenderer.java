@@ -876,7 +876,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      */
     private void drawFloorEdgeShadowAt(Level level, int x, int y) {
         if (!DRAW_EDGE_SHADOWS) return;
-        if (!level.tiles[x][y].isFloorLike()) return;
+        if (!cellCatchesFloorShadow(level.tiles[x][y])) return;
         batch.setColor(getShadowColor(level));
         float px = x * (float) CELL;
         float py = y * (float) CELL;
@@ -1024,6 +1024,20 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
         Tile t = level.tiles[x][y];
         return t == Tile.WALL || t == Tile.DOOR || t == Tile.DOOR_OPEN;
+    }
+
+    /** True for tiles that should catch the wall-edge shadow strip - floors
+     *  and walkable prop tiles, plus statue / altar / throne which sit on
+     *  visible floor and would look "lit from a different sun" without the
+     *  matching shadow. Tile.isFloorLike() is the movement-side gate and
+     *  excludes statues by design; this is the render-side variant. */
+    private static boolean cellCatchesFloorShadow(Tile t) {
+        if (t == null) return false;
+        if (t.isFloorLike()) return true;
+        return t == Tile.STATUE_SMALL_L || t == Tile.STATUE_SMALL_R
+            || t == Tile.STATUE_LARGE_L || t == Tile.STATUE_LARGE_R
+            || t == Tile.ALTAR
+            || t == Tile.THRONE_L || t == Tile.THRONE_R;
     }
 
     /**

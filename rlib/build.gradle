@@ -5,8 +5,17 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
-// Headless world dumper - generates a world via the rlib factory pipeline and
-// writes a YAML snapshot to world_dump.yaml in the repo root. No libGDX, no
+// =============================================================================
+// DIAGNOSTIC / DEV-ONLY TASKS
+//
+// Everything below is for tuning and debugging the game balance, not for
+// shipping. They live alongside the production code so we can iterate, but
+// they aren't wired into any user-facing flow. Safe to remove en masse if
+// the game ever ships from this gradle module.
+// =============================================================================
+
+// [DEV] Headless world dumper - generates a world via the rlib factory pipeline
+// and writes a YAML snapshot to world_dump.yaml in the repo root. No libGDX, no
 // rendering. Pass an optional seed: ./gradlew :rlib:dumpWorld --args="42"
 tasks.register('dumpWorld', JavaExec) {
     group       = 'diagnostics'
@@ -16,9 +25,9 @@ tasks.register('dumpWorld', JavaExec) {
     workingDir  = rootProject.projectDir
 }
 
-// Headless 1v1 round-robin power ranker. Spawns every fightable mob (plus the
-// three player classes), runs N trials of GameBalance.mobfight between every
-// pair, and prints a ranking at character level 1 and 10.
+// [DEV] Headless 1v1 round-robin power ranker. Spawns every fightable mob
+// (plus the three player classes), runs N trials of GameBalance.mobfight
+// between every pair, and prints a ranking at character level 1 and 10.
 // Override the per-pair trial count: ./gradlew :rlib:rankPower --args="2000"
 tasks.register('rankPower', JavaExec) {
     group       = 'diagnostics'
@@ -29,15 +38,46 @@ tasks.register('rankPower', JavaExec) {
     standardOutput = System.out
 }
 
-// Full-fat arena power ranker. Spawns each fighter with starting inventory +
-// perks, builds a real CombatArena level, and lets the AI fight it out turn
-// by turn (items, wands, bombs, JADE_*, terrain all active). Each match
-// costs ~10-100ms, so default trials is small.
+// [DEV] Full-fat arena power ranker. Spawns each fighter with starting
+// inventory + perks, builds a real CombatArena level, and lets the AI fight
+// it out turn by turn (items, wands, bombs, JADE_*, terrain all active).
+// Each match costs ~10-100ms, so default trials is small. Writes per-fight
+// rows to arena_full.csv for downstream slicing.
 // Override: ./gradlew :rlib:rankPowerFull --args="10"
 tasks.register('rankPowerFull', JavaExec) {
     group       = 'diagnostics'
     description = 'Rank fighters by full arena combat (items, AI, terrain)'
     mainClass   = 'com.bjsp123.rl2.util.FullArenaRankMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}
+
+// [DEV] 1-vs-N arena ranker. Each player class fights 3 of every non-player
+// mob. Tracks per-fight action counts (melee/wand/bomb/potion/tool/eat/throw)
+// and outcome via ActionTracker; writes per-fight rows to arena_fights.csv.
+// Optional second arg "strip-jade-bull" runs the same matrix with JADE_BULL
+// pulled from the warrior, for one-knob impact comparisons.
+// Override: ./gradlew :rlib:rank1vN --args="20"
+//   strip jade bull: ./gradlew :rlib:rank1vN --args="3 strip-jade-bull"
+tasks.register('rank1vN', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Rank player classes by 1-vs-3 win rate against each mob'
+    mainClass   = 'com.bjsp123.rl2.util.Arena1vNRankMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}
+
+// [DEV] Bomb x warrior loadout arena comparison. For each combination of
+// (warrior level, weapon, bomb), arenas 3-mob fights against every fightable
+// mob in the bestiary and writes per-fight + summary CSVs so we can see
+// which bomb actually carries which loadout. Trial count via --args.
+// Override: ./gradlew :rlib:bombLoadoutArena --args="5"
+tasks.register('bombLoadoutArena', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Compare bomb effectiveness across warrior levels + weapons'
+    mainClass   = 'com.bjsp123.rl2.util.BombLoadoutArenaMain'
     classpath   = sourceSets.main.runtimeClasspath
     workingDir  = rootProject.projectDir
     standardOutput = System.out

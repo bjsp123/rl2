@@ -326,7 +326,20 @@ public final class Animator {
     }
 
     /** Drain all events emitted during the previous {@code TurnSystem.tick}, populating
-     *  per-mob anim state and pushing visual effects into the stage. */
+     *  per-mob anim state and pushing visual effects into the stage.
+     *
+     *  <p>Arc-aware dispatch: throws and wand projectiles mutate world state
+     *  synchronously in rlib (see {@code MobSystem.throwItem} javadoc), so a
+     *  single batch typically contains the {@code ItemThrown} /
+     *  {@code WandMissileFired} event followed immediately by the damage /
+     *  death / blast / ignition events from {@code applyThrowImpact} /
+     *  {@code applyWandImpact}. To preserve the on-screen "arc flies ->
+     *  impact -> target reacts" reading we dispatch the projectile-spawning
+     *  event normally (registers the arc with {@link PendingImpactQueue})
+     *  and defer the dispatch of every subsequent event in the batch until
+     *  the arc lands. Cross-batch deferral works too: if another batch
+     *  arrives while an arc is still in flight (rare; the world-tick gate
+     *  in PlayScreen normally prevents this), its events also defer. */
     public void consume(Level level) {
         if (level.events == null || level.events.isEmpty()) return;
         if (sounds != null) sounds.beginFrame();
@@ -338,11 +351,32 @@ public final class Animator {
         Mob playerForEvents = eventObserver != null ? TurnSystem.findPlayer(level) : null;
         for (GameEvent ev : level.events) {
             if (eventObserver != null) eventObserver.onEvent(ev, playerForEvents, level);
-            AnimationEventDispatcher.dispatch(this, level, ev);
+            if (shouldDispatchImmediately(ev)) {
+                AnimationEventDispatcher.dispatch(this, level, ev);
+            } else {
+                final GameEvent deferred = ev;
+                boolean queued = pendingImpacts.addToLatestArc(
+                        () -> AnimationEventDispatcher.dispatch(this, level, deferred));
+                if (!queued) {
+                    // No active arc - dispatch normally.
+                    AnimationEventDispatcher.dispatch(this, level, ev);
+                }
+            }
             // MobIgnited / MobExtinguished / MobSlept / MobWoke are polled instead of
             // event-driven (the Animator scans BuffSystem and StateOfMind each tick).
         }
         level.events.clear();
+    }
+
+    /** Which events bypass arc-deferral. The projectile-spawning events
+     *  themselves (ItemThrown, WandMissileFired, WandRayFired) must run
+     *  immediately so the arc registers with {@link PendingImpactQueue}
+     *  before subsequent damage/death/blast events would queue against it.
+     *  Everything else gets the arc-deferral check. */
+    private static boolean shouldDispatchImmediately(GameEvent ev) {
+        return ev instanceof GameEvent.ItemThrown
+            || ev instanceof GameEvent.WandMissileFired
+            || ev instanceof GameEvent.WandRayFired;
     }
 
     /** Public helper used by PlayScreen to spawn player-side projectiles directly. */
@@ -547,13 +581,14 @@ public final class Animator {
             queue.sequential(missile.totalFrames());
             if (sounds != null) sounds.playAt(itemUseKey(m.wand()), level, m.from());
         }
-        Mob caster = m.caster();
         Point target = m.to();
         Item.ItemEffect element = m.element();
-        Item wand = m.wand();
-        int effLvl = m.effectiveLevel();
+        // ANIMATION-GATED LIFECYCLE: pop the deferred resolve that rlib's
+        // fireWand queued and run it when the missile arc lands. The visual
+        // impact burst stages at the same moment.
+        Runnable resolve = com.bjsp123.rl2.logic.MobSystem.popNextPendingImpact(level);
         pendingImpacts.add(missile, () -> {
-            com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wand, effLvl);
+            if (resolve != null) resolve.run();
             stage.add(com.bjsp123.rl2.world.render.Effect.wandImpactBurst(target, element, RNG));
         });
     }
@@ -565,13 +600,12 @@ public final class Animator {
             queue.sequential(ray.totalFrames());
             if (sounds != null) sounds.playAt(itemUseKey(m.wand()), level, m.from());
         }
-        Mob caster = m.caster();
-        Point target = m.to();
-        Item.ItemEffect element = m.element();
-        Item wand = m.wand();
-        int effLvl = m.effectiveLevel();
-        pendingImpacts.add(ray,
-                () -> com.bjsp123.rl2.logic.ItemSystem.applyWandImpact(level, caster, target, element, wand, effLvl));
+        // ANIMATION-GATED LIFECYCLE: pop the deferred resolve that rlib's
+        // fireWand queued and run it when the ray finishes.
+        Runnable resolve = com.bjsp123.rl2.logic.MobSystem.popNextPendingImpact(level);
+        pendingImpacts.add(ray, () -> {
+            if (resolve != null) resolve.run();
+        });
     }
 
     /** Visual for a mob ability cast on another mob - a green ray from
@@ -622,8 +656,6 @@ public final class Animator {
 
     void onItemThrown(Level level, GameEvent.ItemThrown m) {
         Item it = m.item();
-        Mob thrower = m.thrower();
-        Point dst = m.to();
         Effect thrown = Effect.thrownItem(m.from(), m.to(), it);
         stage.add(thrown);
         if (m.trajectoryVisible()) {
@@ -632,15 +664,17 @@ public final class Animator {
                 sounds.playAt(itemUseKey(it), level, m.from());
             }
         }
-        // Defer the engine mutation (damage, knockback, terrain ignite,
-        // surface paint, item drop) to the moment the projectile arrives.
-        // {@link MobSystem#throwItem} already removed the item from the
-        // thrower's inventory and applied move-cost so the turn gating
-        // is correct; this PendingImpact resolves the world-side effects
-        // exactly when the visual arc lands.
-        pendingImpacts.add(thrown,
-                () -> com.bjsp123.rl2.logic.MobSystem.applyThrowImpact(
-                        level, thrower, it, dst));
+        // ANIMATION-GATED LIFECYCLE step 4: pop the deferred resolve that
+        // rlib's throwItem queued for this throw and run it when the arc
+        // lands. The resolve is the call to applyThrowImpact - it mutates
+        // world state (damage, knockback, ignition, item-fate) AT THE
+        // MOMENT THE BOMB ARRIVES, not when the throw was decided. Damage
+        // popups / explosion FX / etc. all fire in the same tick as the
+        // mutation so the player never sees state ahead of the visual.
+        Runnable resolve = com.bjsp123.rl2.logic.MobSystem.popNextPendingImpact(level);
+        pendingImpacts.add(thrown, () -> {
+            if (resolve != null) resolve.run();
+        });
     }
 
     /** Loot tossed off a dying mob - arc the item from the corpse to its
@@ -792,7 +826,19 @@ public final class Animator {
         if (!MobSystem.isVisibleToPlayer(level, target)) return;
         switch (m.message()) {
             case HIT   -> {
-                stage.add(Effect.floatingText(target.position, "-" + m.amount(), Effect.EffectTint.RED));
+                // Element-aware floater: PHYSICAL keeps the plain red "-N"
+                // contract; the four mitigated elements (MAGIC/FIRE/POISON/SHOCK)
+                // get a coloured number with a buff-icon glyph to its left.
+                // STARVATION also routes to the plain red "-N" - the hunger UI
+                // already carries the explanation and an icon would be noise.
+                MobSystem.DamageElement el = m.element();
+                if (el == null || el == MobSystem.DamageElement.PHYSICAL
+                        || el == MobSystem.DamageElement.STARVATION) {
+                    stage.add(Effect.floatingText(target.position,
+                            "-" + m.amount(), Effect.EffectTint.RED));
+                } else {
+                    stage.add(Effect.damageFloater(target.position, m.amount(), el));
+                }
                 if (sounds != null) sounds.playAt(target.behavior == Mob.Behavior.PLAYER
                         ? "sfx.player.combat.hit" : "sfx.combat.result.hit", level, target.position);
             }
@@ -1037,6 +1083,7 @@ public final class Animator {
         for (Effect.EffectTint t : palette) {
             stage.add(Effect.particleBurst(m.pos(), t, 8, RNG));
         }
+        if (sounds != null) sounds.playAt("sfx.player.levelup", level, m.pos());
         int frames = 30;
         if (queue.freezeFrames < frames) queue.freezeFrames = frames;
     }

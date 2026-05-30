@@ -1,0 +1,6 @@
+seed,char_class,outcome,turns,depth_reached,max_depth,char_level,perks_spent,stairs_down,stairs_up,items_picked,mobs_killed,mobs_killed_env,bombs_thrown,wands_fired,potions_drunk,melee_attacks,hp_remaining,max_hp,satiety_remaining
+JUWFPK,WARRIOR,DEATH,125222,6,11,6,9,4,0,34,19,25,15,34,8,23,0.0,50.0,0
+BQXKID,WARRIOR,TIMEOUT,2000000,0,11,1,4,0,0,5,5,0,8,0,3,0,25.0,25.0,0
+ZAJVAS,WARRIOR,DEATH,44101,1,11,3,6,1,0,12,4,5,10,0,10,0,0.0,35.0,0
+WYPLWW,WARRIOR,DEATH,148998,6,9,6,9,4,0,33,38,93,19,5,8,83,0.0,50.0,0
+FYGNUR,WARRIOR,DEATH,79723,3,12,5,8,2,0,19,15,25,16,0,3,19,0.0,45.0,0

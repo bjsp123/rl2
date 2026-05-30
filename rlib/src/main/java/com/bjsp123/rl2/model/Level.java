@@ -118,6 +118,23 @@ public class Level {
      *  {@link com.bjsp123.rl2.logic.TurnSystem#tick}. Transient - events never survive
      *  a save/load cycle. */
     public transient List<com.bjsp123.rl2.event.GameEvent> events = new ArrayList<>();
+
+    /** FIFO queue of "resolve this impact" callbacks added during this tick.
+     *  Populated by {@code MobSystem.throwItem} and {@code ItemSystem.fireWand}
+     *  when they defer their world-state mutation to step 4 of the animation-
+     *  gated lifecycle (see throwItem javadoc). Drained by the rgame Animator
+     *  at arc completion (on-screen) or by {@code MobAi.processAllAiTurns}
+     *  between mob brains (headless). Each Runnable IS the deferred call to
+     *  the apply*Impact method and decrements {@link #pendingImpactCount}
+     *  when it runs. */
+    public transient java.util.Deque<Runnable> pendingImpacts = new java.util.ArrayDeque<>();
+
+    /** Count of outstanding pending impacts whose visuals haven't completed
+     *  yet. Increments when an animation-gated action queues an impact;
+     *  decrements when the impact's resolve callback runs. Used as the "world
+     *  is frozen" gate: while {@code > 0}, no mob brain should execute and no
+     *  game-tick should advance. */
+    public transient int pendingImpactCount = 0;
     public Tile[][] tiles;
     /** Liquid/slick overlay on a tile (water, blood, oil). {@code null} = none. */
     public Surface[][] surface;

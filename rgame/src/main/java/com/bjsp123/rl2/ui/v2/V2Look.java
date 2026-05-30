@@ -352,10 +352,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (it.brand != null && it.brand.element != null) {
             bits.add(TextCatalog.getOrDefault("ui.look.brandEffect." + it.brand.element.name(),
                     TextCatalog.get("ui.look.brandEffect.generic")));
-        } else if (it.throwEffect != null) {
-            bits.add(TextCatalog.getOrDefault("item.effect." + it.throwEffect.name(), ""));
+        } else if (it.throwEffect != null
+                && it.throwEffect != Item.ItemEffect.DAMAGE) {
+            // get() (not getOrDefault) so a missing key shows as ??key?? in
+            // the UI instead of an empty pill - lets us catch un-translated
+            // enum values during playtest.
+            bits.add(TextCatalog.get("item.effect." + it.throwEffect.name()));
         } else if (it.useBehavior != null && it.useBehavior != Item.UseBehavior.NONE) {
-            bits.add(TextCatalog.getOrDefault("item.useVerb." + it.useBehavior.name(), ""));
+            bits.add(TextCatalog.get("item.useVerb." + it.useBehavior.name()));
         }
         return String.join("  ", bits);
     }
@@ -391,8 +395,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 case HIDING -> TextCatalog.get("ui.look.state.hiding");
                 case FOLLOWING -> TextCatalog.get("ui.look.state.following");
             });
-            String intentLabel = intentLabel(m.intent);
-            if (!intentLabel.isEmpty()) bits.add(intentLabel);
+            // SMART AI mobs set intentDetail to a human-readable goal/action label
+            // (e.g. "SURVIVE: drink Lesser Healing"). Prefer that over the enum bucket
+            // when present so the look popup shows what the planner actually picked.
+            if (m.intentDetail != null && !m.intentDetail.isEmpty()) {
+                bits.add(m.intentDetail);
+            } else {
+                String intentLabel = intentLabel(m.intent);
+                if (!intentLabel.isEmpty()) bits.add(intentLabel);
+            }
         }
         return String.join("  ", bits);
     }

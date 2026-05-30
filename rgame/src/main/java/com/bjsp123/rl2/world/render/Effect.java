@@ -55,6 +55,12 @@ public class Effect {
         RAY(24),
         BLAST(20),
         BUFF_ICON(60),
+        /** Damage-element floater: rising buff-icon glyph + colored "-N" text
+         *  drawn side-by-side. Element-specific (FIRE, POISON, MAGIC, SHOCK).
+         *  Same lifetime curve as {@link #FLOATING_TEXT}; the icon is sourced
+         *  via {@link Effect#iconAtlasIndex} and the text colour via
+         *  {@link Effect#customColor}. */
+        DAMAGE_FLOATER(60),
         ATTACK_FLASH(17),
         /** Knockback impact graphic - flash + fade on top of a unit that
          *  was knocked back. Same fade curve as {@link #ATTACK_FLASH}. */
@@ -255,6 +261,14 @@ public class Effect {
     /** BUFF_ICON only: which buff to render the icon for. */
     public Buff.BuffType buffType;
 
+    /** DAMAGE_FLOATER only: flat atlas index into {@code buffs16.png}'s buff-
+     *  icon grid (col + row * 20). Negative means "no icon, draw text only". */
+    public int iconAtlasIndex = -1;
+    /** DAMAGE_FLOATER only: text colour. Overrides the {@link EffectTint}
+     *  switch so the floater can pick up the live {@link com.bjsp123.rl2.ui.v2.UIVars}
+     *  damage palette. */
+    public com.badlogic.gdx.graphics.Color customColor;
+
     /** CLOUD_PUFF only: which {@link Level.Cloud} type tinted the puff.
      *  Drives the colour switch in {@link FxRenderer#drawCloudPuff}. */
     public Level.Cloud cloudType;
@@ -295,6 +309,24 @@ public class Effect {
 
     public static Effect floatingText(Point location, String text, EffectTint tint) {
         return EffectBuilder.hoverText(location, text, tint, 0, EffectType.FLOATING_TEXT.frameCount);
+    }
+
+    /** Element-aware damage floater: rising buff-icon glyph + colored "-N"
+     *  text. PHYSICAL falls back to the plain {@link #floatingText} (red,
+     *  no icon) since that's the user-requested visual contract. */
+    public static Effect damageFloater(Point location, int amount,
+                                       com.bjsp123.rl2.logic.MobSystem.DamageElement element) {
+        com.badlogic.gdx.graphics.Color color;
+        int iconIdx;
+        switch (element) {
+            case SHOCK      -> { color = com.bjsp123.rl2.ui.v2.UIVars.DAMAGE_SHOCK;  iconIdx = 23; }
+            case POISON     -> { color = com.bjsp123.rl2.ui.v2.UIVars.DAMAGE_POISON; iconIdx = 7;  }
+            case FIRE       -> { color = com.bjsp123.rl2.ui.v2.UIVars.DAMAGE_FIRE;   iconIdx = 0;  }
+            case MAGIC      -> { color = com.bjsp123.rl2.ui.v2.UIVars.DAMAGE_MAGIC;  iconIdx = 4;  }
+            default         -> { color = com.bjsp123.rl2.ui.v2.UIVars.DAMAGE_PHYSICAL; iconIdx = -1; }
+        }
+        return EffectBuilder.damageFloater(location, "-" + amount, color, iconIdx,
+                EffectType.DAMAGE_FLOATER.frameCount);
     }
 
     public static Effect thrownItem(Point from, Point to, Item item) {

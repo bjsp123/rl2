@@ -580,7 +580,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private static void drawWandChargeBar(ShapeRenderer s, Rect r, Item it,
                                           com.bjsp123.rl2.model.Mob player) {
-        int max = com.bjsp123.rl2.logic.ItemStats.effectiveMaxCharge(it, player);
+        int max = com.bjsp123.rl2.logic.ItemStats.effectiveMaxCharge(it,
+                com.bjsp123.rl2.logic.ItemStats.effectiveLevel(it, player));
         float pad = 4f, barH = 3f;
         float barW = r.w - 2 * pad;
         float bx = r.x + pad, by = r.y + 4f;
@@ -953,13 +954,19 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             && player != null && selectedItem != null
                             && selectedItem.isEquippable()) {
                         Item it = selectedItem;
+                        String itemName = it.name != null ? it.name : it.type;
+                        String playerName = player.name != null ? player.name : "?";
                         if (com.bjsp123.rl2.logic.InventorySystem
                                 .isEquipped(player.inventory, it)) {
                             com.bjsp123.rl2.logic.InventorySystem
                                     .unequip(player.inventory, it);
+                            com.bjsp123.rl2.logic.EventLog.add(
+                                    com.bjsp123.rl2.logic.Messages.itemUnequipped(playerName, itemName));
                         } else {
                             com.bjsp123.rl2.logic.InventorySystem
                                     .equip(player.inventory, it);
+                            com.bjsp123.rl2.logic.EventLog.add(
+                                    com.bjsp123.rl2.logic.Messages.itemEquipped(playerName, itemName));
                             if (sounds != null)
                                 sounds.play("sfx.player.equip." + (it.inventoryCategory != null ? it.inventoryCategory.name().toLowerCase() : ""));
                         }

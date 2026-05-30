@@ -39,13 +39,13 @@ public class Item {
         /** Apply every buff in {@link Item#appliesBuff} to mobs in a
          *  Chebyshev radius 1 disc around the impact tile. */
         APPLYBUFFS,
-        /** Drop a poison cloud covering {@link Item#tilesAffected} tiles
-         *  around the impact (Euclidean disc). Cloud lifetime in turns
-         *  is taken from {@link Item#abilityPower}. */
+        /** Drop a poison cloud covering {@link Item#effectSize} tiles
+         *  around the impact. Cloud lifetime in turns is taken from
+         *  {@link Item#effectDuration}. */
         POISONCLOUD,
-        /** Drop a smoke cloud covering {@link Item#tilesAffected} tiles
-         *  around the impact (Euclidean disc). Cloud lifetime in turns
-         *  is taken from {@link Item#abilityPower}. */
+        /** Drop a smoke cloud covering {@link Item#effectSize} tiles
+         *  around the impact. Cloud lifetime in turns is taken from
+         *  {@link Item#effectDuration}. */
         SMOKE,
         /** Tear a void at the impact: pulls every mob within
          *  {@code (effectiveLevel / 2) + 1} tiles (Chebyshev) toward
@@ -63,7 +63,7 @@ public class Item {
          *  level when picked up. */
         LEVEL_UP,
         /** {@link UseBehavior#POWERUP} sub-effect: restore
-         *  {@code maxHP * abilityPower} HP when picked up. */
+         *  {@code maxHP * effectPower} HP when picked up. */
         HP_UP,
         /** {@link UseBehavior#POWERUP} sub-effect: every wand-charging
          *  item in the player's inventory gains its own
@@ -138,19 +138,19 @@ public class Item {
         /** Throw a grappling rope - pick a target tile, then yank everything
          *  on it (mob and any floor items) onto the nearest non-wall tile
          *  adjacent to the user. Mobs whose {@code size} exceeds the item's
-         *  {@link Item#abilityPower} (overloaded as the max-size cap for
-         *  GRAPPLE items) are too heavy: the rope flashes and fades without
-         *  pulling anything. Items that land on a chasm fall in. */
+         *  {@link Item#effectPower} (flat max-size cap) are too heavy: the
+         *  rope flashes and fades without pulling anything. Items that land
+         *  on a chasm fall in. */
         GRAPPLE,
         /** Quick-jump tool - picks a target tile within
-         *  {@link Item#abilityPower} squares (Chebyshev) of the user and
+         *  {@link Item#effectRange} squares (Chebyshev) of the user and
          *  teleports them there for one {@code moveCost}. */
         JUMP,
         /** Pickup-trigger consumable: the moment the player walks onto
          *  the item's tile it's destroyed and its {@link Item#wandEffect}
          *  is applied to the player. Effects: {@code LEVEL_UP} grants one
          *  character level; {@code HP_UP} restores
-         *  {@code maxHP * abilityPower} HP; {@code MANA_UP} adds each
+         *  {@code maxHP * effectPower} HP; {@code MANA_UP} adds each
          *  inventory item's own {@code chargeGain} to its current
          *  charge. POWERUP items are never picked up into the bag. */
         POWERUP,
@@ -165,7 +165,7 @@ public class Item {
          *  controller pushes the V2Map screen. */
         TELEPORT,
         /** Charge tool (jade bull) - pick a visible hostile mob within
-         *  {@link Item#abilityPower} squares (Chebyshev), dash to the tile
+         *  {@link Item#effectRange} squares (Chebyshev), dash to the tile
          *  adjacent to it along the line of approach, deliver a free melee
          *  strike, and knock the target back by {@link Item#knockbackSquares}
          *  tiles. One charge consumed per use; player-only (AI gate refuses
@@ -189,29 +189,23 @@ public class Item {
      *  on the inventory popup; the look popup deliberately ignores this
      *  to keep its silhouette compact. Empty when the CSV cell is blank. */
     public String description2 = "";
-    public MinMax damage = MinMax.ZERO;
-    /** Per-level damage range increment. Each {@code +N} on this item adds
-     *  {@code N * damagePerLevel} to {@link #damage}. Used by weapons (melee
-     *  + thrown), wands that deal direct damage (MISSILE, LIGHTNING), and
-     *  bombs whose impact deals direct damage. Zero for items that don't
-     *  scale damage per level. */
-    public MinMax damagePerLevel = MinMax.ZERO;
-    public MinMax armor  = MinMax.ZERO;
-    /** Per-level armor range increment. Mirrors {@link #damagePerLevel} but
-     *  for {@link #armor}. */
-    public MinMax armorPerLevel  = MinMax.ZERO;
-    /** Armor-piercing damage range - bypasses the target's armor on a hit.
-     *  Composed by sum into the wielder's {@code apDamage} stat in
-     *  {@link com.bjsp123.rl2.logic.ItemSystem#contributeInto}. */
-    public MinMax apDamage = MinMax.ZERO;
-    /** Per-level increment to {@link #apDamage}. */
-    public MinMax apDamagePerLevel = MinMax.ZERO;
-    /** Magic-resistance range - reduces magical / energy damage taken when
-     *  the item is equipped. Read from the CSV {@code antiMagic} column.
-     *  Composed by sum into the wielder's {@code magicResist} stat. */
-    public MinMax magicResist = MinMax.ZERO;
-    /** Per-level increment to {@link #magicResist}. */
-    public MinMax magicResistPerLevel = MinMax.ZERO;
+    /** Maximum damage. The range is {@code [damage/2, damage]} (integer half).
+     *  Scales by item level: effective max = {@code damage * (10 + level) / 10}.
+     *  Used by weapons, wands that deal direct damage (MISSILE, LIGHTNING),
+     *  and bombs whose impact deals direct damage. Zero for items that don't
+     *  deal damage. */
+    public int damage;
+    /** Maximum armor. Range {@code [armor/2, armor]}; same scaling rule as
+     *  {@link #damage}. */
+    public int armor;
+    /** Armor-piercing damage. Range {@code [apDamage/2, apDamage]}; bypasses
+     *  the target's armor on a hit. Composed by sum into the wielder's
+     *  {@code apDamage} stat in {@link com.bjsp123.rl2.logic.ItemStats#contributeInto}. */
+    public int apDamage;
+    /** Magic-resistance. Range {@code [magicResist/2, magicResist]}; reduces
+     *  magical / energy damage taken when the item is equipped. Read from the
+     *  CSV {@code antiMagic} column. */
+    public int magicResist;
     /** Bonus to the wielder's {@code accuracy}. Composed by sum. */
     public int accuracy;
     /** Bonus to the wielder's {@code evasion}. Composed by sum. */
@@ -233,12 +227,9 @@ public class Item {
     public double lightRadius;
     /** Number of tiles affected on use, for wands and bombs with an
      *  area-of-effect impact (water, oil, grass, fungus, fire, detonation,
-     *  bombs). Element wands convert this through
-     *  {@code MobSystem.radiusForTileCount} into a Euclidean disc radius;
-     *  bombs use it directly. Zero for items without an AOE component. */
-    public int tilesAffected;
-    /** Per-level increment to {@link #tilesAffected}. */
-    public int tilesAffectedPerLevel;
+     *  bombs). Scales with item level via TILECOUNT_LEVEL_SCALE_FACTOR.
+     *  Zero for items without an AOE component. */
+    public int effectSize;
     /** Satiety restored when the item is eaten. Zero for non-food. */
     public int foodValue;
     public Point location; // null when in an inventory
@@ -288,20 +279,22 @@ public class Item {
         return appliesBuff.isEmpty() ? null : appliesBuff.get(0);
     }
 
-    /** Generic "magnitude" knob - overloaded by useBehavior:
-     *  <ul>
-     *    <li>{@code APPLYBUFFS} / {@code DRINK} / {@code EAT}: base buff
-     *        duration in turns at item-level 0; effective duration scales
-     *        with item level via {@code (1 + item.level) * abilityPower}.</li>
-     *    <li>{@code POISONCLOUD}: cloud lifetime in turns at level 0.</li>
-     *    <li>{@code GRAPPLE}: max grappable target size cap.</li>
-     *    <li>{@code JUMP}: jump radius in squares.</li>
-     *    <li>{@code POWERUP}+{@code HP_UP}: fraction of max HP healed
-     *        on pickup (0.5 = half max HP).</li>
-     *  </ul>
-     *  Stored as a float so fractional powers (HP_UP, future scalars)
-     *  fit cleanly; integer call sites cast as needed. */
-    public float abilityPower;
+    /** Base buff duration / cloud lifetime in standard turns at item-level 0.
+     *  Used by APPLYBUFFS / DRINK / EAT items (REGENERATION, PHASE, ESP, ...)
+     *  and by cloud-bombs (POISONCLOUD, SMOKE). Scales with item level via
+     *  AMOUNT_LEVEL_SCALE_FACTOR. Zero for items with no buff component. */
+    public int effectDuration;
+
+    /** Base range in tiles for tools that move the user or target into a
+     *  picked tile: FROG (JUMP radius), JADE_BULL (CHARGE dash range).
+     *  Scales with item level via AMOUNT_LEVEL_SCALE_FACTOR. */
+    public int effectRange;
+
+    /** Flat magnitude knob - does NOT scale with item level. Used by:
+     *  GRAPPLING_HOOK (max grappable target size cap); POWERUP HP_UP
+     *  (fraction of max HP healed, stored as a float); POWERUP LEVEL_UP
+     *  (XP grant multiplier). Stored as float so fractional powers fit. */
+    public float effectPower;
 
     /** Wand-only: current charge level. Each {@link UseBehavior#WAND} fire
      *  consumes 1 charge; the wand refuses to fire when {@code < 1}.
@@ -347,13 +340,6 @@ public class Item {
      *  category in {@code GemSystem.createGem}. */
     public InventoryCategory inventoryCategory;
 
-    /** Signature-item flag - when true, this item's
-     *  {@code ItemStats.effectiveLevel} gains a bonus based on the holder's
-     *  character level (capped). Marked on the jade-bull / jade-crab /
-     *  jade-fish so their per-level math (knockback, buff level + duration,
-     *  AOE) scales with the player. Off (false) for every other item. */
-    public boolean scalesWithUser;
-
     /** Gem species - non-null iff this item is a gem. Drives icon colour, theme
      *  shape (triangle for crystal, square for concrete), and same-kind recipe matching.
      *  {@link #isGem()} reads off this field. */
@@ -370,11 +356,34 @@ public class Item {
      *  count 1 - equipping pulls one out of a bag stack. */
     public int count = 1;
 
+    /** Authorial "tier" anchor on the depth band the item type can spawn in.
+     *  Copied from {@code ItemDefinition.powerMin} by
+     *  {@code ItemDefinition.apply}. Procedural items (gems built directly via
+     *  GemSystem) leave this at 0.0. Used by {@link #getValue()} to bias toward
+     *  deeper-band items. */
+    public double minPowerLevel;
+
     public boolean isGem() { return gemSpecies != null; }
     public boolean isEquippable() {
         return inventoryCategory != null && inventoryCategory.isEquipment();
     }
     public boolean isUsable()     { return useBehavior != null && useBehavior != UseBehavior.NONE; }
+
+    /** Authorial "value" rank used by mob AI item-pick, kit pickers, and any
+     *  future tooltip / comparison surface. Three contributors:
+     *  <ul>
+     *    <li>+0.66 per inherent plus ({@link #level}).</li>
+     *    <li>+1.0 for any brand (binary).</li>
+     *    <li>+1.0 per 0.1 of {@link #minPowerLevel} (depth-tier bonus,
+     *        i.e. {@code minPowerLevel x 10}).</li>
+     *  </ul>
+     *  Scaling-independent; safe to use as a sort key across category peers. */
+    public double getValue() {
+        double v = 0.66 * Math.max(0, level);
+        if (brand != null) v += 1.0;
+        v += minPowerLevel * 10.0;
+        return v;
+    }
 
     /** True only for categories that may form stacks: potions, bombs, and food.
      *  All other item types (weapons, wands, gems, tools, ...) are always singletons. */
@@ -397,9 +406,9 @@ public class Item {
 
     public String describe() {
         StringBuilder sb = new StringBuilder(name);
-        if (level > 0)        sb.append(" +").append(level);
-        if (damage.max() > 0) sb.append(" (").append(damage.min()).append("-").append(damage.max()).append(" dmg)");
-        if (armor.max()  > 0) sb.append(" (").append(armor.min()).append("-").append(armor.max()).append(" armor)");
+        if (level > 0) sb.append(" +").append(level);
+        if (damage > 0) sb.append(" (").append(damage / 2).append("-").append(damage).append(" dmg)");
+        if (armor  > 0) sb.append(" (").append(armor / 2).append("-").append(armor).append(" armor)");
         if (lightRadius > 0) sb.append(" (light ").append((int) lightRadius).append(")");
         return sb.toString();
     }

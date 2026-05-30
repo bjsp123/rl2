@@ -92,7 +92,31 @@ buff.HEAL_COOLDOWN.name,Recharging
 buff.HIDING.description,Hidden from enemies. Moving or attacking will cancel this.
 buff.HIDING.name,Hiding
 buff.HOPE.description,Feeling hopeful and courageous.
+buff.HOPE.details,Grants immunity to frightened. Bonus accuracy and evasion scale with level.
 buff.HOPE.name,Blessed
+buff.ON_FIRE.details,Loses HP each turn (scales with level). Doubled if also oily. Cleared by being chilled or stepping into water.
+buff.POISONED.details,Loses HP each turn. Cured by regeneration.
+buff.BLEEDING.details,Loses HP each turn; bleed-rate tapers down as the duration shortens.
+buff.REGENERATION.details,Heals HP each turn. Also cures poison on apply.
+buff.HASTED.details,Move and attack costs reduced by 20% per level (compounding).
+buff.CHILLED.details,Move and attack costs increased substantially. Combine with wet to freeze.
+buff.FROZEN.details,Skips every action until the buff ends. Taking damage shortens the freeze.
+buff.WET.details,Doubles fire and lightning damage taken. Combines with chilled to freeze.
+buff.OILY.details,Doubles fire damage taken; ignition lasts longer when set on fire.
+buff.PROTECTION.details,Halves physical damage per level (asymptotic).
+buff.ANTI_MAGIC.details,Halves magic / fire damage per level (asymptotic).
+buff.INVISIBLE.details,Adds +40 evasion. Attacking ends the effect.
+buff.GHOSTLY.details,Adds +20 evasion and lets you levitate. Attacking ends the effect.
+buff.PHASE.details,Lets you walk through walls and adds +40 evasion. Attacking or taking damage ends the effect.
+buff.KILLER.details,Each kill stacks the buff: every stack multiplies move and attack costs by 0.85 (compounding).
+buff.ESP.details,Reveals all mobs on the level regardless of line of sight.
+buff.INSIGHT.details,Marks every tile as explored each turn.
+buff.STARVING.details,Hunger has run out. Regeneration is suppressed and HP slowly drains.
+buff.SHIELDED.details,Negates the next instance of incoming damage entirely.
+buff.SORCERY.details,Item effects fire at higher level - more damage, more range, longer durations.
+buff.FRIGHTENED.details,The AI will flee from the source of fear.
+buff.LEVITATING.details,Can cross chasms safely; ignores ground-level surfaces (water, oil).
+buff.HIDING.details,Mob remains stationary and cannot be targeted until disturbed.
 buff.INSIGHT.description,The whole level layout is revealed at the start of every turn.
 buff.INSIGHT.name,Insight
 buff.INVISIBLE.description,"Harder to hit, but attacking cancels the effect."
@@ -153,6 +177,12 @@ eventlog.combat.player.miss,{player} misses the {target}.
 eventlog.combat.roll.damage,{attacker} -> {target}: {element} {rolled}{mitigations} -> {dealt}
 eventlog.combat.roll.miss,{attacker} -> {target}: {element} miss
 eventlog.combat.roll.mitigations, [{mitigations}]
+eventlog.combat.elementalDamage,The {target} takes {damage} {element} damage.
+eventlog.damageElement.magic,magic
+eventlog.damageElement.fire,fire
+eventlog.damageElement.poison,poison
+eventlog.damageElement.shock,shock
+eventlog.damageElement.starvation,starvation
 eventlog.combat.surprise,{attacker} surprises {target}!
 eventlog.fallback.adventurer,Adventurer
 eventlog.fallback.creature,creature
@@ -191,6 +221,21 @@ eventlog.player.pickup,{player} picks up a {item}.
 eventlog.player.starves,{player} is starving!
 eventlog.player.uses,{player} {verb} the {item}.
 eventlog.reason.parenthesized, ({reason})
+eventlog.buff.applied,{target} is {buff}.
+eventlog.buff.expired,{target} is no longer {buff}.
+eventlog.item.thrown,{thrower} throws the {item}.
+eventlog.bomb.detonates,The {item} detonates!
+eventlog.item.equipped,{player} equips the {item}.
+eventlog.item.unequipped,{player} unequips the {item}.
+eventlog.powerup.absorbed,{player} absorbs the {item}.
+eventlog.stairs.descended,{player} descends to depth {depth}.
+eventlog.stairs.ascended,{player} climbs to depth {depth}.
+eventlog.door.opened,{mover} opens the door.
+eventlog.door.closed,{mover} closes the door.
+eventlog.door.broken,{mover} smashes through the door!
+eventlog.mob.fellInChasm,{mob} plunges into the chasm.
+eventlog.knockback.slam,{mob} slams into something for {damage} damage.
+eventlog.beacon.activated,{player} activates the beacon. The level lights up!
 help.001.para1,*Potions* are good.
 help.001.para2,So is *food*.
 help.001.title,Potions and food
@@ -380,6 +425,8 @@ item.WATER_BOMB.name,water bomb
 item.WAND_BANISHMENT.description,A wand bound in tarnished silver and tipped with flickering crystals.
 item.WAND_BANISHMENT.description2,This specialized wand can instantly banish creatures that are not really real.
 item.WAND_BANISHMENT.name,wand of banishment
+item.WAND_BLAST.description,A blunt brass wand. Concussive damage in a small area.
+item.WAND_BLAST.name,wand of blast
 item.WAND_DETONATION.description,A blackened iron wand inlaid with red runes. Detonates the target tile in a ball of fire.
 item.WAND_DETONATION.description2,Blows the target location to smithereens.
 item.WAND_DETONATION.name,wand of detonation
@@ -410,7 +457,7 @@ item.WAND_POLYMORPH.name,wand of polymorph
 item.WAND_WATER.description,A pale blue wand that drips with water.
 item.WAND_WATER.description2,Creates a pool of water at the target location.
 item.WAND_WATER.name,wand of water
-item.buff.duration, for {turns} turns (scaling with item level)
+item.buff.duration," for {turns} turns (scaling with item level)"
 item.effect.APPLYBUFFS,apply a magical effect to the target area
 item.effect.BANISHMENT,banish otherworldly beings
 item.effect.BLAST,create an explosion at the target
@@ -463,6 +510,8 @@ item.throw.effect,Throw it to {effect}.
 item.throw.return,Bounces back to the throwers feet after striking.
 item.throw.tame,Throwing this at a {mobs} tames it.
 item.use.APPLYBUFF,{verb} to gain {buffs}{duration}.
+item.use.CHARGE,Aim and {verb} at a visible foe to dash to them and strike.
+item.use.TELEPORT,{verb} to teleport.
 item.use.DRINK.buff,Drink to gain {buffs}{duration}.
 item.use.EAT,Can be eaten to restore satiety.
 item.use.GRANT_PERK,Consume to gain XP.
@@ -500,9 +549,12 @@ lore.items.food,Food value
 lore.items.knockback,Knockback
 lore.items.light,Shines light over
 lore.items.magicResist,Magic resist
+lore.items.maxCharge,Max charge
 lore.items.maxSize,Max size
 lore.items.moveSpeed,Move speed
 lore.items.range,Range
+mob.AWFUL_WRAITH.description,"These horrible phantoms seem to have something to do with the beacon system."
+mob.AWFUL_WRAITH.name,awful wraith
 mob.BARBARIAN_PRINCESS.description,"A fierce barbarian princess, fearless and pursuing her own goals"
 mob.BARBARIAN_PRINCESS.name,barbarian princess
 mob.BAT.description,"A large, menacing bat. It flutters around in the shadows, its eyes glowing with malevolent intent."
@@ -545,6 +597,8 @@ mob.KOBOLD_SPEARMAN.description,"A scaly humanoid clutching a bundle of crude sp
 mob.KOBOLD_SPEARMAN.name,kobold spearman
 mob.LARGE_MASK_IMP.description,An imp that hides its identity behind a grotesque mask.  It's slightly larger and stronger than its smaller kin.
 mob.LARGE_MASK_IMP.name,large mask imp
+mob.LARGE_WRAITH.description,"A powerful, enigmatic wraith fixed somehow in the physical world."
+mob.LARGE_WRAITH.name,otherwordly wraith
 mob.LOATHESOME_BUG.description,A loathsome bug. This cockroach-like creature has few redeeming features.  It's not very strong.
 mob.LOATHESOME_BUG.name,roach
 mob.MANEGARM.description,What twisted this huge dog into such a malevolent and brutal form?
@@ -609,6 +663,8 @@ mob.UNIQUE_SPIDER.description,A revolting spider laden with venom.
 mob.UNIQUE_SPIDER.name,black widow
 mob.WOLF.description,"A prowling wolf, looking for flesh."
 mob.WOLF.name,cave wolf
+mob.WRAITH.description,"A faint phantom shape, its hostility all too clear."
+mob.WRAITH.name,wraith
 mob.abilities.header,Abilities:
 mob.ability.BUFF,Casts {buff} on an ally{duration}{cooldown}
 mob.ability.HEAL,Heals an ally for {amount} HP{cooldown}
@@ -627,6 +683,8 @@ mob.flag.fireSpreadOnAttack,This creatures hits ignite tiles around the target.
 mob.flag.flying,This is a flying creature.
 mob.flag.mushroomEatSpawn,Feasting on mushrooms causes this creature to breed explosively.
 mob.flag.notTerrifiable,This creature does not frighten easily.
+mob.flag.noPickup,This creature will not pick up items.
+mob.flag.poisonImmune,This creature is immune to poison.
 mob.flag.poisonsOnAttack,This creatures venomous attacks poison the foe.
 mob.flag.terrifying,This terrifying being frightens nearby susceptible creatures.
 mob.flag.turnSpawn,Can send out servants to do its bidding.
@@ -675,7 +733,7 @@ perk.stealth.description,Enemy wake / vision radius vs you is scaled by 1/(L+1).
 perk.stealth.name,Stealth
 perk.wandmaster.description,Wands gain +1 effective level per perk level.
 perk.wandmaster.name,Wandmaster
-perk.manaFount.description,Each food or potion you consume restores N charges to every wand you carry.
+perk.manaFount.description,"Each food or potion you consume restores N/2 charges to every wand you carry; odd levels add a 50% chance of one extra charge. Level 1 = coinflip for 1 charge, level 10 = 5 charges."
 perk.manaFount.name,Mana Fount
 perk.bombDodger.description,"Bomb damage halved per level; bomb buffs / knockback ignored at L1+; thrown bombs have a chance to be preserved (30% at L1, capped at 100% at L10)."
 perk.bombDodger.name,Bomb Dodger
@@ -695,6 +753,39 @@ tile.STATUE_LARGE,large statue
 tile.STATUE_SMALL,small statue
 tile.THRONE,throne
 tile.WALL,wall
+tile.FLOOR.description,Plain stone floor. Easy to walk on; items rest where they land.
+tile.FLOOR_SPECIAL.description,Decoratively marked floor. Walks like ordinary floor.
+tile.FLOOR_WOOD.description,Wooden boards. Walks like ordinary floor.
+tile.WALL.description,Solid stone. Blocks all movement and sight.
+tile.DOOR.description,A closed wooden door. Walk into it to push it open.
+tile.DOOR_OPEN.description,An open doorway. Walk through freely.
+tile.CRYSTAL_DOOR.description,A closed crystal door. Light shines through; mobs and projectiles cannot.
+tile.CRYSTAL_DOOR_OPEN.description,An open crystal door. Walk through freely.
+tile.ONETIME_DOOR.description,A fragile crystal barrier. Shatters underfoot when you cross it - and once gone, never returns.
+tile.CHASM.description,A bottomless drop. Falling carries you to a deeper level - but the fall itself is dangerous.
+tile.STAIRS_UP.description,Stairs leading up. Step onto them and ascend.
+tile.STAIRS_DOWN.description,Stairs leading down. Step onto them and descend.
+tile.LAMP.description,A burning lamp. Lights the surrounding tiles. Walkable like floor.
+tile.STATUE_SMALL_L.description,A small carved statue. Blocks movement but you can see and shoot past it.
+tile.STATUE_SMALL_R.description,A small carved statue. Blocks movement but you can see and shoot past it.
+tile.STATUE_LARGE_L.description,A towering statue. Blocks movement, sight, and light - reads as a wall.
+tile.STATUE_LARGE_R.description,A towering statue. Blocks movement, sight, and light - reads as a wall.
+tile.ALTAR.description,A stone altar. Blocks movement; you can see past it.
+tile.THRONE_L.description,A carved throne. Blocks movement; you can see past it.
+tile.THRONE_R.description,A carved throne. Blocks movement; you can see past it.
+tile.BEACON_INACTIVE.description,A dormant teleport beacon. Walk adjacent to ignite it - then you can teleport to it from any other active beacon.
+tile.BEACON_ACTIVE.description,An active teleport beacon. Lights the surrounding tiles; serves as a teleport destination.
+terrain.attribute.walkable,Walkable.
+terrain.attribute.blocksMovement,Blocks movement.
+terrain.attribute.blocksSight,Blocks sight.
+terrain.attribute.seeThrough,See-through.
+terrain.attribute.blocksProjectile,Stops projectiles.
+terrain.attribute.canHoldItem,Items rest here.
+terrain.attribute.flammable,Flammable - catches fire from heat sources.
+terrain.attribute.emitsLight,Emits light.
+terrain.attribute.flyingOnly,Passable only to flying beings.
+terrain.attribute.oneWayBreak,Triggered terrain - breaks underfoot.
+terrain.attribute.teleportTarget,Teleport destination once activated.
 ui.achievement.toast,Achievement: {achievement}
 ui.arena.abort,Abort
 ui.arena.backToSetup,Back to setup
@@ -704,6 +795,7 @@ ui.arena.fastForward,Fast forward
 ui.arena.fightAgain,Fight again
 ui.arena.hallOfFame,Hall of Fame
 ui.arena.level,Level
+ui.arena.log,Log
 ui.arena.mage,mage
 ui.arena.mutualWipe,Mutual wipe
 ui.arena.pause,Pause

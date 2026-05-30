@@ -49,9 +49,29 @@ public enum Tile {
         return this == DOOR || this == CRYSTAL_DOOR || this == ONETIME_DOOR;
     }
 
-    /** True only if no mob can ever cross. CHASM is per-mob; ONETIME_DOOR is
-     *  per-mob — both handled by TileQuery.blocksMovementAt. */
+    /** The per-tile-type door attribute table. Returns {@code null} for
+     *  non-door tiles. See {@link DoorBehavior} for the orthogonal axes
+     *  (who-can-cross, blocks-sight when closed, on-cross effect, etc.).
+     *  Both the closed and open variants of a door type map to the SAME
+     *  {@code DoorBehavior} so auto-close paths can look up the closed-state
+     *  tile from the open one. */
+    public DoorBehavior doorBehavior() {
+        return switch (this) {
+            case DOOR, DOOR_OPEN                  -> DoorBehavior.WOODEN;
+            case CRYSTAL_DOOR, CRYSTAL_DOOR_OPEN  -> DoorBehavior.CRYSTAL;
+            case ONETIME_DOOR                     -> DoorBehavior.ONETIME;
+            default -> null;
+        };
+    }
+
+    /** True for mob-agnostic movement-blocking tiles. Closed doors return
+     *  true here (worst-case for renderer / level-builder / any caller
+     *  without a mob in hand). The per-mob movement gate
+     *  {@link TileQuery#blocksMovementAt} consults the door's
+     *  {@link DoorBehavior#passRule()} to grant passage to mobs that CAN
+     *  cross. CHASM is also per-mob (flying) and is handled by TileQuery. */
     public boolean blocksMovement() {
+        if (isClosedDoor()) return true;
         return this == WALL || this == LAMP
             || this == STATUE_SMALL_L || this == STATUE_SMALL_R
             || this == STATUE_LARGE_L || this == STATUE_LARGE_R
@@ -65,21 +85,37 @@ public enum Tile {
         return this == BEACON_INACTIVE || this == BEACON_ACTIVE;
     }
 
-    /** True if the tile stops a projectile or wand ray. */
+    /** True if the tile stops a projectile or wand ray. Closed doors
+     *  delegate to {@link DoorBehavior#blocksProjectileWhenClosed()} so
+     *  a future "shutter" door that lets arrows through is a one-line
+     *  change to the door table. */
     public boolean blocksProjectile() {
-        return isClosedDoor() || blocksMovement();
+        if (isClosedDoor()) {
+            DoorBehavior db = doorBehavior();
+            return db == null || db.blocksProjectileWhenClosed();
+        }
+        return blocksMovement();
     }
 
     public boolean blocksSight() {
-        return this == WALL || this == DOOR
+        if (isClosedDoor()) {
+            DoorBehavior db = doorBehavior();
+            return db == null || db.blocksSightWhenClosed();
+        }
+        return this == WALL
             || this == STATUE_LARGE_L || this == STATUE_LARGE_R;
     }
 
-    /** Walkable, "floor-like" - for movement, door placement, surface stitching, etc. */
+    /** Walkable, "floor-like" - for movement, door placement, surface stitching, etc.
+     *  Includes DOOR_OPEN / CRYSTAL_DOOR_OPEN since an opened doorway is
+     *  effectively floor for movement, neighbour queries, and random-tile
+     *  pickers - callers that need "literally a floor tile" should use
+     *  {@link #canHoldItem} instead. */
     public boolean isFloorLike() {
         return this == FLOOR || this == FLOOR_WOOD || this == FLOOR_SPECIAL
             || this == LAMP
-            || this == STAIRS_UP || this == STAIRS_DOWN;
+            || this == STAIRS_UP || this == STAIRS_DOWN
+            || this == DOOR_OPEN || this == CRYSTAL_DOOR_OPEN;
     }
 
     public boolean canHoldItem() {

@@ -34,9 +34,6 @@ public final class BuffSystem {
 
     private BuffSystem() {}
 
-    /** Per-turn HP loss for the {@link BuffType#ON_FIRE} buff at {@code level}. */
-    public static final int FIRE_DAMAGE_PER_TURN = 5;
-
     /** --- Queries ------------------------------------------------------------ */
 
     public static boolean hasBuff(Mob mob, BuffType type) {
@@ -82,6 +79,7 @@ public final class BuffSystem {
             return null;
         }
         if (type == BuffType.ON_FIRE && target.effectiveStats().fireImmune) return null;
+        if (type == BuffType.POISONED && target.effectiveStats().poisonImmune) return null;
         if (type == BuffType.ON_FIRE) {
             removeBuff(target, BuffType.FROZEN);
             removeBuff(target, BuffType.CHILLED);
@@ -113,6 +111,14 @@ public final class BuffSystem {
         target.buffs.add(buff);
         target.statsDirty = true;
         spawnApplyVfx(level, target, type);
+        // Log the apply for natural buff types - cooldown buffs are
+        // internal accounting (TELEPORT_COOLDOWN etc.) and would spam
+        // the log without telling the player anything useful.
+        if (!isCooldownBuff(type)) {
+            String name = MobSystem.nameForLog(level, target);
+            EventLog.add(Messages.buffApplied(name, displayName(type),
+                    target.behavior == Mob.Behavior.PLAYER));
+        }
         // Hope wipes any active fear - adding hope after a fright should free the mob.
         if (type == BuffType.HOPE) {
             removeBuff(target, BuffType.FRIGHTENED);
@@ -217,8 +223,13 @@ public final class BuffSystem {
                 continue;
             }
             // Snapshot - applyEffect can mutate buffs (e.g. invisibility cancel via
-            // attack) but the per-turn tick itself just reads.
+            // attack) but the per-turn tick itself just reads. Bail out as soon
+            // as the mob dies inside the loop so a later REGEN tick can't heal
+            // a corpse back to positive HP (which leaves the mob dead-in-mobs
+            // but with hp > 0 - a "zombie" state that breaks any caller doing
+            // `mob.hp <= 0` to detect death).
             for (Buff b : new java.util.ArrayList<>(m.buffs)) {
+                if (m.hp <= 0) break;
                 applyPerTurnEffect(level, m, b);
             }
         }
@@ -242,10 +253,33 @@ public final class BuffSystem {
             while (it.hasNext()) {
                 Buff b = it.next();
                 b.durationTicks -= dtTicks;
-                if (b.durationTicks <= 0) { it.remove(); changed = true; }
+                if (b.durationTicks <= 0) {
+                    it.remove();
+                    changed = true;
+                    // Natural expiry log - same gate as apply (cooldown
+                    // buffs are silent so the rolling log doesn't fill up
+                    // with "no longer on teleport cooldown" lines).
+                    if (!isCooldownBuff(b.type)) {
+                        String name = MobSystem.nameForLog(level, m);
+                        EventLog.add(Messages.buffExpired(name, displayName(b.type),
+                                m.behavior == Mob.Behavior.PLAYER));
+                    }
+                }
             }
             if (changed) m.statsDirty = true;
         }
+    }
+
+    /** True for buffs that exist purely as internal time-gates (the four
+     *  *_COOLDOWN buffs). Their apply / expire events would spam the log
+     *  with no player-meaningful information, so they're filtered out at
+     *  the {@link Messages#buffApplied} / {@link Messages#buffExpired}
+     *  emit sites. */
+    private static boolean isCooldownBuff(Buff.BuffType type) {
+        return type == Buff.BuffType.TELEPORT_COOLDOWN
+            || type == Buff.BuffType.RANGED_COOLDOWN
+            || type == Buff.BuffType.HASTE_COOLDOWN
+            || type == Buff.BuffType.HEAL_COOLDOWN;
     }
 
     /** HUD-friendly turn count for a buff's remaining duration. Uses ceiling
@@ -262,8 +296,8 @@ public final class BuffSystem {
     private static void applyPerTurnEffect(Level level, Mob m, Buff b) {
         switch (b.type) {
             case ON_FIRE -> {
-                int raw = takesDoubleFireDamage(m) ? FIRE_DAMAGE_PER_TURN * 2
-                                                   : FIRE_DAMAGE_PER_TURN;
+                int raw = takesDoubleFireDamage(m) ? GameBalance.FIRE_DAMAGE_PER_TURN * 2
+                                                   : GameBalance.FIRE_DAMAGE_PER_TURN;
                 int magicResist = MobSystem.rollRange(MobSystem.magicResistRange(m));
                 int dmg = Math.max(0, raw - magicResist);
                 if (dmg > 0) {
@@ -277,7 +311,8 @@ public final class BuffSystem {
                 }
             }
             case POISONED -> {
-                int dmg = 1 + b.level / 2;
+                // +50% rebalance: was 1 + level. Now 2 + (3*level)/2 (integer).
+                int dmg = 2 + (3 * b.level) / 2;
                 emitPeriodicDamage(level, m, BuffType.POISONED, dmg);
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON);
@@ -291,16 +326,21 @@ public final class BuffSystem {
                 // (600 ticks) at level 4 still ticks for 12 / 10 / 8 / 6 / 4 /
                 // 2 over its life.
                 int turnsLeft = displayTurns(b.durationTicks);
-                int dmg = Math.max(1, (b.level * turnsLeft) / 2);
+                // +50% rebalance: was (level * turnsLeft) / 2. Now ×3/4.
+                int dmg = Math.max(1, (3 * b.level * turnsLeft) / 4);
                 emitPeriodicDamage(level, m, BuffType.BLEEDING, dmg);
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL);
                 if (killed) logDotDeath(m, "bleeds out");
             }
             case REGENERATION -> {
-                if (!hasBuff(m, BuffType.POISONED)) {
-                    int heal = 1 + b.level / 2;
-                    MobSystem.heal(level, m, heal);
+                // +50% rebalance: was 1 + level. Now 2 + (3*level)/2 (integer).
+                int heal = 2 + (3 * b.level) / 2;
+                MobSystem.heal(level, m, heal);
+                
+                if (hasBuff(m, BuffType.POISONED)) {
+                    // remove poison
+                    removeBuff(m, BuffType.POISONED);
                 }
             }
             default -> {
@@ -375,10 +415,11 @@ public final class BuffSystem {
                 case HASTED -> moveMultiplier *= Math.pow(0.8, b.level);
                 case KILLER -> {
                     // KILLER stacks via the apply() carve-out above. Each
-                    // stack multiplies action + move cost by 0.85 (a gentler
-                    // decay than the old constant 0.8 so 5+ stacks don't
-                    // trivialise turns entirely).
-                    double k = Math.pow(0.85, Math.max(1, b.level));
+                    // stack multiplies action + move cost by 0.9 - softer
+                    // than the previous 0.85 / 0.8 multipliers so a
+                    // warrior on a kill streak speeds up gradually rather
+                    // than collapsing turn cost to 1.
+                    double k = Math.pow(0.9, Math.max(1, b.level));
                     moveMultiplier   *= k;
                     actionMultiplier *= k;
                 }

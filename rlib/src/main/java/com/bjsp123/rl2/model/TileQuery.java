@@ -30,13 +30,24 @@ public final class TileQuery {
     }
 
     /** True if the tile blocks movement for {@code mob} (OOB = true).
-     *  Handles CHASM (impassable unless flying), CRYSTAL_DOOR (impassable for all),
-     *  ONETIME_DOOR (impassable for non-player), and Tile.blocksMovement() for everything else. */
+     *  Per-mob axes that {@link Tile#blocksMovement()} (mob-agnostic) can't
+     *  decide are unified here: CHASM (impassable unless flying),
+     *  closed doors (consult {@link DoorBehavior#passRule()} - wooden lets
+     *  anyone through, crystal / one-time gate on PLAYER faction), and
+     *  light-hating mobs (can't enter lit tiles). */
     public static boolean blocksMovementAt(Level level, int x, int y, Mob mob) {
         if (oob(level, x, y)) return true;
         Tile t = level.tiles[x][y];
         if (t == Tile.CHASM) return mob == null || !mob.effectiveStats().flying;
-        if (t == Tile.CRYSTAL_DOOR || t == Tile.ONETIME_DOOR) return mob == null || mob.behavior != Mob.Behavior.PLAYER;
+        if (t.isClosedDoor()) {
+            // Wooden door: anyone may walk through; the actual bump-to-open
+            // fires in MobSystem.onMobEnteredTile. Crystal / one-time:
+            // only PLAYER-faction mobs (covers Behavior.PLAYER and SMART-
+            // piloted player agents).
+            DoorBehavior db = t.doorBehavior();
+            if (db == null) return true;
+            return !db.passRule().allows(mob);
+        }
         if (mob != null && mob.effectiveStats().hatesLight
                 && level.lit != null && level.lit[x][y]) return true;
         return t.blocksMovement();

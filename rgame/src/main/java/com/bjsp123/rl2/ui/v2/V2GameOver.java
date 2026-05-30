@@ -26,7 +26,8 @@ public final class V2GameOver extends V2Screen {
     // Layout rects - computed once in buildLayout().
     private final Rect window   = new Rect();
     private final Rect portrait = new Rect();
-    private float nameY, statsY, deathY;
+    private final Rect deathLogFrame = new Rect();
+    private float nameY, statsY;
 
     public V2GameOver(Rl2Game game, HallOfFameEntry record) {
         super(game.ui);
@@ -62,13 +63,20 @@ public final class V2GameOver extends V2Screen {
         // Text anchor Ys - derived from live font metrics so they scale with UiFontScale.
         nameY  = portrait.y - ctx.spacerLargeY();
         statsY = nameY  - ctx.headerLineH();
-        deathY = statsY - ctx.lineH();
 
         // Buttons - bottom of window.
         float btnH    = 52f;
         float btnGap  = 8f;
         float iconSz  = 52f;
         float btnY    = winY + 16f;
+
+        // Death-log frame - panel spanning the body between the stats line
+        // and the button row. Inset by 12px on each side from the window.
+        float frameX = winX + 12f;
+        float frameTopY = statsY - ctx.lineH();
+        float frameBottomY = btnY + btnH + 12f;
+        float frameH = Math.max(40f, frameTopY - frameBottomY);
+        deathLogFrame.set(frameX, frameBottomY, winW - 24f, frameH);
         float mainW   = winW - iconSz - btnGap - 32f;
         float mainX   = winX + 16f;
         float iconX   = mainX + mainW + btnGap;
@@ -92,6 +100,12 @@ public final class V2GameOver extends V2Screen {
         ctx.shapes.setColor(UIVars.SLOT_RECESS);
         ctx.shapes.rect(portrait.x - pad, portrait.y - pad,
                 portrait.w + 2f * pad, portrait.h + 2f * pad);
+
+        // Death-log frame - inset panel that visually groups the rolling
+        // log lines. Same recessed treatment as the portrait frame.
+        ctx.shapes.setColor(UIVars.SLOT_RECESS);
+        ctx.shapes.rect(deathLogFrame.x, deathLogFrame.y,
+                deathLogFrame.w, deathLogFrame.h);
     }
 
     @Override
@@ -120,16 +134,41 @@ public final class V2GameOver extends V2Screen {
                 TextCatalog.vars("score", record.score, "depth", record.depth));
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, stats, cx, statsY);
 
-        // Death message - word-wrapped up to 2 lines.
-        if (record.deathMessage != null && !record.deathMessage.isEmpty()) {
-            float maxW = window.w - 24f;
-            List<String> lines = new ArrayList<>();
-            TextDraw.wrap(ctx.fontRegular, record.deathMessage, maxW, 2, lines);
+        // Death log inside the framed panel. Left-justified, oldest at top,
+        // cause-of-death at the bottom rendered in full body-bright; older
+        // entries fade with age (90% -> 25% alpha by the topmost line) so
+        // the eye is drawn to the killing blow. Falls back to the single-
+        // line deathMessage when deathLog is empty (legacy saves).
+        List<String> lines = record.deathLog;
+        if ((lines == null || lines.isEmpty())
+                && record.deathMessage != null && !record.deathMessage.isEmpty()) {
+            lines = new ArrayList<>();
+            lines.add(record.deathMessage);
+        }
+        if (lines != null && !lines.isEmpty()) {
+            float inset = 8f;
+            float maxW = deathLogFrame.w - 2f * inset;
             float lineH = ctx.fontRegular.getLineHeight() + 2f;
-            float y = deathY;
-            for (String line : lines) {
-                TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, line, cx, y);
-                y -= lineH;
+            float textX = deathLogFrame.x + inset;
+            float y = deathLogFrame.y + deathLogFrame.h - inset;
+            int n = lines.size();
+            Color tmp = new Color();
+            for (int idx = 0; idx < n; idx++) {
+                String entry = lines.get(idx);
+                if (entry == null || entry.isEmpty()) continue;
+                List<String> wrapped = new ArrayList<>();
+                TextDraw.wrap(ctx.fontRegular, entry, maxW, 2, wrapped);
+                boolean isCause = idx == n - 1;
+                // Age fade: idx=n-1 (cause) -> 1.0, oldest -> 0.25 (linear).
+                float ageT = n <= 1 ? 1f : (idx / (float) (n - 1));
+                float alpha = 0.25f + 0.75f * ageT;
+                Color base = isCause ? UIVars.TEXT_BODY : UIVars.TEXT_DIM;
+                tmp.set(base.r, base.g, base.b, alpha);
+                for (String line : wrapped) {
+                    if (y < deathLogFrame.y + inset) break;
+                    TextDraw.left(ctx, ctx.fontRegular, tmp, line, textX, y);
+                    y -= lineH;
+                }
             }
         }
     }

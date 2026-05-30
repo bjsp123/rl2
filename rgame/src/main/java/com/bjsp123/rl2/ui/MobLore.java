@@ -56,12 +56,17 @@ public final class MobLore {
         StringBuilder sb = new StringBuilder();
 
         // -- Combat ----------------------------------------------------------
-        flag(sb, TextCatalog.format("mob.stat.maxHp", TextCatalog.vars("value", (int) Math.round(s.maxHp), "perLevel", m.hpPerLevel > 0 ? perLevelInt(m.hpPerLevel) : "")));
-        flag(sb, TextCatalog.format("mob.stat.attack", TextCatalog.vars("value", s.accuracy, "perLevel", m.accuracyPerLevel > 0 ? perLevelInt(m.accuracyPerLevel) : "")));
-        flag(sb, TextCatalog.format("mob.stat.defense", TextCatalog.vars("value", s.evasion, "perLevel", m.evasionPerLevel > 0 ? perLevelInt(m.evasionPerLevel) : "")));
-        flag(sb, TextCatalog.format("mob.stat.damage", TextCatalog.vars("range", range(s.damage), "perLevel", !m.damagePerLevel.isZero() ? perLevelRange(m.damagePerLevel) : "")));
-        flag(sb, TextCatalog.format("mob.stat.armor", TextCatalog.vars("range", range(s.armor), "perLevel", !m.armorPerLevel.isZero() ? perLevelRange(m.armorPerLevel) : "")));
-        if (!s.apDamage.isZero())    flag(sb, TextCatalog.format("mob.stat.apDamage", TextCatalog.vars("range", range(s.apDamage), "perLevel", !m.apPerLevel.isZero() ? perLevelRange(m.apPerLevel) : "")));
+        // Stats shown are the EFFECTIVE values at this mob's character level
+        // (post-AMOUNT-rule scaling). The `perLevel` template variable is
+        // kept as an empty string for now so existing format strings still
+        // render; if you want a "+N per level" line back, derive it from the
+        // base int and the AMOUNT factor.
+        flag(sb, TextCatalog.format("mob.stat.maxHp",   TextCatalog.vars("value", (int) Math.round(s.maxHp), "perLevel", "")));
+        flag(sb, TextCatalog.format("mob.stat.attack",  TextCatalog.vars("value", s.accuracy,                  "perLevel", "")));
+        flag(sb, TextCatalog.format("mob.stat.defense", TextCatalog.vars("value", s.evasion,                   "perLevel", "")));
+        flag(sb, TextCatalog.format("mob.stat.damage",  TextCatalog.vars("range", range(s.damage),             "perLevel", "")));
+        flag(sb, TextCatalog.format("mob.stat.armor",   TextCatalog.vars("range", range(s.armor),              "perLevel", "")));
+        if (!s.apDamage.isZero())    flag(sb, TextCatalog.format("mob.stat.apDamage", TextCatalog.vars("range", range(s.apDamage), "perLevel", "")));
         if (!s.magicResist.isZero()) flag(sb, TextCatalog.format("mob.stat.magicResist", TextCatalog.vars("range", range(s.magicResist))));
         if (s.knockbackSquares > 0)  flag(sb, TextCatalog.format("mob.stat.knockback", TextCatalog.vars("squares", s.knockbackSquares)));
         if (s.healRate > 0)          flag(sb, TextCatalog.format("mob.stat.healRate", TextCatalog.vars("value", trim(s.healRate))));
@@ -118,6 +123,8 @@ public final class MobLore {
         StringBuilder flags = new StringBuilder();
         if (s.flying)             flag(flags, TextCatalog.get("mob.flag.flying"));
         if (s.fireImmune)         flag(flags, TextCatalog.get("mob.flag.fireImmune"));
+        if (s.poisonImmune)       flag(flags, TextCatalog.get("mob.flag.poisonImmune"));
+        if (!s.canPickUp)         flag(flags, TextCatalog.get("mob.flag.noPickup"));
         if (s.fireSpreadOnAttack) flag(flags, TextCatalog.get("mob.flag.fireSpreadOnAttack"));
         if (s.poisonsOnAttack)    flag(flags, TextCatalog.get("mob.flag.poisonsOnAttack"));
         if (s.terrifying)         flag(flags, TextCatalog.get("mob.flag.terrifying"));

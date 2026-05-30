@@ -1,6 +1,9 @@
 package com.bjsp123.rl2.logic;
 
+import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
+import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
 
 import java.util.Random;
@@ -51,12 +54,109 @@ public final class LevelFactoryRooms {
 
     /** Drop a BEACON_INACTIVE tile at (x, y) under the same rules as
      *  {@link #placeStatue}. Beacons activate later, when the player steps
-     *  adjacent. Package-private. */
-    static void placeBeacon(Level level, int x, int y) {
+     *  adjacent. Also drops a TELEPORT_ORB on a nearby floor tile and seeds a
+     *  beacon-room encounter (depth-appropriate WRAITH cluster + a
+     *  mirror-match enemy of a random PLAYER class) so every beacon room
+     *  ships fully populated. Package-private. */
+    static void placeBeacon(Level level, int x, int y, java.util.Random rng) {
         if (!LevelFactoryUtils.inBounds(level, x, y)) return;
         if (!level.tiles[x][y].canHoldItem()) return;
         if (LevelFactoryUtils.adjacentToDoor(level, x, y)) return;
         level.tiles[x][y] = Tile.BEACON_INACTIVE;
+        placeBeaconOrb(level, x, y);
+        spawnBeaconEncounter(level, x, y, rng);
+    }
+
+    /** Drop a TELEPORT_ORB on a floor tile near the beacon at {@code (bx, by)}.
+     *  Scans an expanding ring (radius 1..3); the first FLOOR tile that can
+     *  hold an item and isn't adjacent to a door wins. Silently bails when no
+     *  candidate exists - a beacon crammed into a 1-tile alcove will simply
+     *  ship without an orb. */
+    private static void placeBeaconOrb(Level level, int bx, int by) {
+        Item orb = ItemFactory.build("TELEPORT_ORB");
+        if (orb == null) return;
+        for (int r = 1; r <= 3; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;
+                    int x = bx + dx, y = by + dy;
+                    if (!LevelFactoryUtils.inBounds(level, x, y)) continue;
+                    if (!level.tiles[x][y].canHoldItem()) continue;
+                    if (LevelFactoryUtils.adjacentToDoor(level, x, y)) continue;
+                    orb.location = new Point(x, y);
+                    level.items.add(orb);
+                    return;
+                }
+            }
+        }
+    }
+
+    /** Populate the room around the beacon at {@code (bx, by)} with the boss
+     *  encounter: a cluster of depth-appropriate wraiths plus a single
+     *  mirror-match enemy of a random {@link Mob.CharacterClass}. Wraith
+     *  variant is chosen by depth-fraction band (matching the rows'
+     *  {@code minPowerLevel}/{@code maxPowerLevel} in mobs.csv); the
+     *  cluster size is fixed per variant. The encounter scales with depth
+     *  via the standard {@code 1 + level.depth} spawn-level rule.
+     *
+     *  <p>Spots are picked off the surrounding rings via a BFS-style scan;
+     *  the mirror takes the first valid floor tile (closest to the beacon),
+     *  the wraiths fill the remaining ring positions. Tiles that already
+     *  carry a mob or that fall on a reserved themed-room rect are skipped. */
+    private static void spawnBeaconEncounter(Level level, int bx, int by,
+                                             java.util.Random rng) {
+        double frac = LevelFactoryPopulate.depthFraction(level);
+        String wraithType;
+        int wraithCount;
+        if      (frac < 0.5) { wraithType = "WRAITH";       wraithCount = 4; }
+        else if (frac < 0.8) { wraithType = "LARGE_WRAITH"; wraithCount = 3; }
+        else                 { wraithType = "AWFUL_WRAITH"; wraithCount = 2; }
+        int spawnLevel = 1 + level.depth;
+
+        Mob.CharacterClass[] classes = Mob.CharacterClass.values();
+        String mirrorType = "PLAYER_" + classes[rng.nextInt(classes.length)].name();
+
+        // Gather candidate floor tiles in expanding rings around the beacon.
+        java.util.List<Point> spots = new java.util.ArrayList<>();
+        for (int r = 1; r <= 4 && spots.size() < wraithCount + 1; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;
+                    int x = bx + dx, y = by + dy;
+                    if (!LevelFactoryUtils.inBounds(level, x, y)) continue;
+                    if (level.tiles[x][y] != Tile.FLOOR) continue;
+                    boolean occupied = false;
+                    for (Mob existing : level.mobs) {
+                        if (existing.position == null) continue;
+                        if (existing.position.tileX() == x
+                                && existing.position.tileY() == y) {
+                            occupied = true;
+                            break;
+                        }
+                    }
+                    if (occupied) continue;
+                    spots.add(new Point(x, y));
+                }
+            }
+        }
+        if (spots.isEmpty()) return;
+
+        int idx = 0;
+        Mob mirror = MobFactory.spawnMirror(mirrorType, spots.get(idx++));
+        if (mirror != null) {
+            // Mirror is raised to characterLevel = dungeon depth (not 1 + depth
+            // like the wraith pack) - it's the boss of the encounter and the
+            // user's spec ties its level directly to depth.
+            MobFactory.equipMirrorForDepth(mirror, frac, level.theme,
+                    level.depth, rng);
+            level.mobs.add(mirror);
+        }
+        for (int i = 0; i < wraithCount && idx < spots.size(); i++) {
+            Mob w = MobFactory.spawn(wraithType, spots.get(idx++));
+            if (w == null) continue;
+            MobProgression.setSpawnLevel(w, spawnLevel);
+            level.mobs.add(w);
+        }
     }
 
     // -- ROUND --------------------------------------------------------------

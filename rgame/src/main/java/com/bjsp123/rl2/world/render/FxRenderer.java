@@ -149,6 +149,9 @@ final class FxRenderer {
         } else if (effect.type == EffectType.BUFF_ICON) {
             if (!level.visible[ex][ey]) return;
             drawBuffIcon(effect);
+        } else if (effect.type == EffectType.DAMAGE_FLOATER) {
+            if (!level.visible[ex][ey]) return;
+            drawDamageFloater(effect);
         } else if (effect.type == EffectType.FALLING_ITEM) {
             if (!level.visible[ex][ey]) return;
             drawFallingItem(effect);
@@ -304,6 +307,41 @@ final class FxRenderer {
             batch.draw(whiteRegion, cx - 1f, cy - 1f, 2f, 2f);
         }
         batch.setColor(Color.WHITE);
+    }
+
+    /** Element-aware damage floater - rising icon-then-text pair. Icon comes
+     *  from {@link BuffIcons#regionForAtlasIndex(int)} using the per-element
+     *  atlas slot; text colour is the live {@link Effect#customColor}. When
+     *  {@code iconAtlasIndex < 0} or the sheet failed to load, only the text
+     *  draws (mimicking plain {@link EffectType#FLOATING_TEXT}). */
+    private void drawDamageFloater(Effect e) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float lifeT = Math.min(1f, e.frame / (float) total);
+        float alpha = lifeT < 0.65f ? 1f : Math.max(0f, 1f - (lifeT - 0.65f) / 0.35f);
+        if (alpha <= 0f) return;
+        float baseX  = e.location.tileX() * (float) CELL;
+        float baseY  = e.location.tileY() * (float) CELL;
+        float yOff   = e.frame / 5f;
+        float textY  = baseY + CELL * 2f + yOff;
+        com.badlogic.gdx.graphics.Color c = e.customColor != null
+                ? e.customColor
+                : tintToColor(e.tint, Color.RED);
+        TextureRegion icon = e.iconAtlasIndex >= 0
+                ? BuffIcons.regionForAtlasIndex(e.iconAtlasIndex) : null;
+        float textX = baseX;
+        if (icon != null) {
+            float iconSize = 10f;
+            float ix = baseX;
+            float iy = textY - iconSize + 1f;
+            batch.setColor(1f, 1f, 1f, alpha);
+            batch.draw(icon, ix, iy, iconSize, iconSize);
+            batch.setColor(Color.WHITE);
+            textX = baseX + iconSize + 1f;
+        }
+        font.setColor(c.r, c.g, c.b, alpha);
+        font.draw(batch, e.text == null ? "" : e.text, textX, textY);
+        font.setColor(Color.WHITE);
     }
 
     /** Floating buff-icon - same rising motion as floating text, but renders the buff's

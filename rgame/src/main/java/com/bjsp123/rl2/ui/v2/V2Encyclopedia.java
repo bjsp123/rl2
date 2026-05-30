@@ -776,8 +776,15 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         List<Entry> out = new ArrayList<>();
         for (BuffType t : BuffType.values()) {
             String name = BuffSystem.displayName(t);
-            out.add(new Entry(t, BuffIcons.regionFor(t), name,
-                    BuffSystem.description(t)));
+            StringBuilder body = new StringBuilder(BuffSystem.description(t));
+            // Append a mechanical-details line when one exists for this buff.
+            // Optional - falls back to just the description for buffs that
+            // don't have a details string yet.
+            String details = TextCatalog.getOrDefault("buff." + t.name() + ".details", "");
+            if (!details.isEmpty()) {
+                body.append("\n\n").append(details);
+            }
+            out.add(new Entry(t, BuffIcons.regionFor(t), name, body.toString()));
         }
         for (Perk p : Perk.values()) {
             out.add(new Entry(p, null, p.displayName(), p.description()));
@@ -799,13 +806,42 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         List<Entry> out = new ArrayList<>();
         for (Tile t : Tile.values()) {
             StringBuilder sb = new StringBuilder();
+            // Flavor description first.
+            String desc = TextCatalog.getOrDefault("tile." + t.name() + ".description", "");
+            if (!desc.isEmpty()) sb.append(desc).append("\n\n");
+            // Attribute lines. Each predicate yields a short statement so the
+            // player can scan "blocks movement", "flammable", "see-through"
+            // etc. at a glance.
             sb.append(TextCatalog.get(t.isFloorLike()
-                    ? "ui.encyclopedia.terrain.walkable"
-                    : "ui.encyclopedia.terrain.blocksMovement")).append("\n");
+                    ? "terrain.attribute.walkable"
+                    : "terrain.attribute.blocksMovement")).append("\n");
             sb.append(TextCatalog.get(t.blocksSight()
-                    ? "ui.encyclopedia.terrain.blocksSight"
-                    : "ui.encyclopedia.terrain.seeThrough"));
-            out.add(new Entry(t, null, t.name().toLowerCase(), sb.toString()));
+                    ? "terrain.attribute.blocksSight"
+                    : "terrain.attribute.seeThrough")).append("\n");
+            if (t.blocksProjectile() && !t.blocksMovement()) {
+                sb.append(TextCatalog.get("terrain.attribute.blocksProjectile")).append("\n");
+            }
+            if (t.canHoldItem()) {
+                sb.append(TextCatalog.get("terrain.attribute.canHoldItem")).append("\n");
+            }
+            if (t == Tile.FLOOR_WOOD) {
+                sb.append(TextCatalog.get("terrain.attribute.flammable")).append("\n");
+            }
+            if (t == Tile.LAMP || t == Tile.BEACON_ACTIVE) {
+                sb.append(TextCatalog.get("terrain.attribute.emitsLight")).append("\n");
+            }
+            if (t == Tile.CHASM) {
+                sb.append(TextCatalog.get("terrain.attribute.flyingOnly")).append("\n");
+            }
+            if (t == Tile.ONETIME_DOOR) {
+                sb.append(TextCatalog.get("terrain.attribute.oneWayBreak")).append("\n");
+            }
+            if (t == Tile.BEACON_ACTIVE) {
+                sb.append(TextCatalog.get("terrain.attribute.teleportTarget")).append("\n");
+            }
+            // Localized tile name (falls back to enum-lowercase if absent).
+            String name = TextCatalog.getOrDefault("tile." + t.name(), t.name().toLowerCase());
+            out.add(new Entry(t, null, name, sb.toString().trim()));
         }
         return out;
     }

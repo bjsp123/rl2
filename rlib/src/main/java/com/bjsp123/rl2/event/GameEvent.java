@@ -1,5 +1,6 @@
 package com.bjsp123.rl2.event;
 
+import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
@@ -108,7 +109,7 @@ public sealed interface GameEvent permits
     /** Wand-cast missile carrying an element to apply at impact. Consumer chooses palette
      *  + gravity + brightness from the element. The {@code wand} reference is
      *  carried so the impact site can read per-item scaling columns
-     *  ({@code damage}, {@code damagePerLevel}, {@code tilesAffected}, etc.).
+     *  ({@code damage}, {@code effectSize}, {@code effectDuration}, etc.).
      *  {@code effectiveLevel} is the level used for scaling - typically
      *  {@code wand.level} but bumped by +1 when the caster has the WANDMASTER
      *  perk, captured at fire time so the impact callback sees the right
@@ -127,10 +128,11 @@ public sealed interface GameEvent permits
                       boolean trajectoryVisible) implements GameEvent {}
 
     /** Per-hit damage record (renders floating "5"/"miss"/"blunt" text near {@code target}).
-     *  {@code message} is the renderer-side flavor of the floater; the underlying
-     *  damage element ({@link com.bjsp123.rl2.logic.MobSystem.DamageElement}) is not
-     *  carried in this event because the renderer keys off the floater style alone. */
-    record DamageDealt(Mob target, int amount, DamageMessage message, Mob source) implements GameEvent {}
+     *  {@code message} is the renderer-side flavor of the floater; {@code element}
+     *  selects the colour + buff-icon glyph (PHYSICAL = no icon, the four elemental
+     *  cases use {@link com.bjsp123.rl2.world.render.BuffIcons} glyph slots). */
+    record DamageDealt(Mob target, int amount, DamageMessage message, Mob source,
+                       MobSystem.DamageElement element) implements GameEvent {}
     enum DamageMessage { HIT, MISS, BLUNT, ENVIRONMENTAL }
 
     /** Buff applied / removed (drives floating buff icon or text). */

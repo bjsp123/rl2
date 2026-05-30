@@ -184,19 +184,22 @@ public class MobSystem {
                 TurnSystem.applyActionCost(mob, mob.effectiveStats().attackCost);
                 return;
             }
-            // The player is impassable to any non-hostile mob: even a FLEE / NOTHING swap
-            // is blocked, so friendly critters can never end up shoving the player into a
-            // wall by accident. The mover gives up its step and pays a regular move tick.
-            if (occupant.behavior == Behavior.PLAYER) {
+            // The player (and the SMART autoplay driver standing in for the player) is
+            // impassable to any non-hostile mob: even a FLEE / NOTHING swap is blocked,
+            // so friendly critters can never end up shoving the player into a wall by
+            // accident. The mover gives up its step and pays a regular move tick.
+            if (occupant.behavior == Behavior.PLAYER || occupant.behavior == Behavior.SMART) {
                 mob.targetPosition = null;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
                 return;
             }
             // Non-player movers only displace strictly smaller non-hostile mobs (matches
             // Pathfinder's canEnter gate). Same-size or larger blocks the step entirely
-            // - the mover idles for one tick. The PLAYER ignores the size gate so a
-            // non-hostile critter never blocks the player's intended move.
-            if (mob.behavior != Behavior.PLAYER && mob.effectiveStats().size <= occupant.effectiveStats().size) {
+            // - the mover idles for one tick. PLAYER and SMART (the autoplay/AI driver
+            // for a player-class character) ignore the size gate so a non-hostile
+            // critter never blocks a player-style mover's intended move.
+            if (mob.behavior != Behavior.PLAYER && mob.behavior != Behavior.SMART
+                    && mob.effectiveStats().size <= occupant.effectiveStats().size) {
                 mob.targetPosition = null;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
                 return;
@@ -250,23 +253,19 @@ public class MobSystem {
     private static void onMobLeftTile(Level level, Mob mob, int oldX, int oldY) {
         if (oldX < 0 || oldY < 0 || oldX >= level.width || oldY >= level.height) return;
         Tile t = level.tiles[oldX][oldY];
-        if (t == Tile.DOOR_OPEN){
+        boolean isPlayer = mob.behavior == Behavior.PLAYER;
+        // Auto-close any open-door variant that has a defined closed state.
+        // ONETIME doors don't have a closedVariant so they're naturally
+        // skipped (they don't auto-close - they're already broken to FLOOR).
+        com.bjsp123.rl2.model.DoorBehavior db = t.doorBehavior();
+        if (db != null && db.closedVariant() != null && !t.isClosedDoor()) {
             if (mob.doorClosing == Mob.DoorClosingBehavior.ALWAYS
                     || (mob.doorClosing == Mob.DoorClosingBehavior.ONLY_IF_WAS_CLOSED
                         && mob.lastDoorWasClosed)) {
-                level.tiles[oldX][oldY] = Tile.DOOR;
+                level.tiles[oldX][oldY] = db.closedVariant();
                 if (level.events != null) level.events.add(
                         new com.bjsp123.rl2.event.GameEvent.DoorClosed(new com.bjsp123.rl2.model.Point(oldX, oldY)));
-            }
-        }
-
-        if (t == Tile.CRYSTAL_DOOR_OPEN){
-            if (mob.doorClosing == Mob.DoorClosingBehavior.ALWAYS
-                    || (mob.doorClosing == Mob.DoorClosingBehavior.ONLY_IF_WAS_CLOSED
-                        && mob.lastDoorWasClosed)) {
-                level.tiles[oldX][oldY] = Tile.CRYSTAL_DOOR;
-                if (level.events != null) level.events.add(
-                        new com.bjsp123.rl2.event.GameEvent.DoorClosed(new com.bjsp123.rl2.model.Point(oldX, oldY)));
+                EventLog.add(Messages.doorClosed(nameForLog(level, mob), isPlayer));
             }
         }
     }
@@ -321,24 +320,34 @@ public class MobSystem {
     private static void onMobEnteredTile(Level level, Mob mob, int nx, int ny) {
         if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) return;
         Tile t = level.tiles[nx][ny];
-        if (t == Tile.DOOR) {
-            mob.lastDoorWasClosed = true;
-            level.tiles[nx][ny] = Tile.DOOR_OPEN;
-            if (level.events != null) level.events.add(
-                    new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(nx, ny)));
-        } else if (t == Tile.DOOR_OPEN) {
-            mob.lastDoorWasClosed = false;
-        } else if (t == Tile.CRYSTAL_DOOR) {
-            mob.lastDoorWasClosed = true;
-            level.tiles[nx][ny] = Tile.CRYSTAL_DOOR_OPEN;
-            if (level.events != null) level.events.add(
-                    new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(nx, ny)));
-        } else if (t == Tile.CRYSTAL_DOOR_OPEN) {
-            mob.lastDoorWasClosed = false;
-        } else if (t == Tile.ONETIME_DOOR) {
-            level.tiles[nx][ny] = Tile.FLOOR;
-            if (level.events != null) level.events.add(
-                    new com.bjsp123.rl2.event.GameEvent.OnetimeDoorBroken(new com.bjsp123.rl2.model.Point(nx, ny)));
+        boolean isPlayer = mob.behavior == Behavior.PLAYER;
+        // Door entry - delegate to DoorBehavior. The TileQuery.blocksMovementAt
+        // gate has already verified the mob is allowed to cross (passRule),
+        // so here we just apply the on-cross effect: open, break, or nothing.
+        com.bjsp123.rl2.model.DoorBehavior db = t.doorBehavior();
+        if (db != null) {
+            if (t.isClosedDoor()) {
+                mob.lastDoorWasClosed = true;
+                switch (db.onCross()) {
+                    case OPENS -> {
+                        level.tiles[nx][ny] = db.openVariant();
+                        if (level.events != null) level.events.add(
+                                new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(nx, ny)));
+                        EventLog.add(Messages.doorOpened(nameForLog(level, mob), isPlayer));
+                    }
+                    case BREAKS -> {
+                        level.tiles[nx][ny] = db.brokenVariant();
+                        if (level.events != null) level.events.add(
+                                new com.bjsp123.rl2.event.GameEvent.OnetimeDoorBroken(new com.bjsp123.rl2.model.Point(nx, ny)));
+                        EventLog.add(Messages.doorBroken(nameForLog(level, mob), isPlayer));
+                    }
+                    case NONE -> { /* no-op; locked door handled elsewhere */ }
+                }
+            } else {
+                // Walked through an already-open door variant - record so
+                // doorClosing=ONLY_IF_WAS_CLOSED skips re-closing.
+                mob.lastDoorWasClosed = false;
+            }
         }
         // Beacon activation: the player stepping into any 8-neighbour of an
         // inactive beacon flips it to active and emits a one-shot activation
@@ -354,6 +363,7 @@ public class MobSystem {
                     level.tiles[bx][by] = Tile.BEACON_ACTIVE;
                     if (level.events != null) level.events.add(
                             new com.bjsp123.rl2.event.GameEvent.BeaconActivated(new Point(bx, by)));
+                    EventLog.add(Messages.beaconActivated(nameForLog(level, mob)));
                 }
             }
         }
@@ -399,8 +409,9 @@ public class MobSystem {
         }
         // POWERUP pickup-trigger - stepping onto a tile with a POWERUP
         // item destroys the item and applies its wandEffect to the
-        // stepper. Player-only by spec; other mobs walk over them.
-        if (mob.behavior == Behavior.PLAYER) {
+        // stepper. PLAYER and SMART (autoplay driver standing in for the
+        // player) both trigger; other mobs walk over them.
+        if (mob.behavior == Behavior.PLAYER || mob.behavior == Behavior.SMART) {
             applyPowerupsAt(level, mob, nx, ny);
         }
     }
@@ -597,6 +608,51 @@ public class MobSystem {
      *  the line, etc. Returns {@code to} when the trajectory is clear. */
     public static Point firstMobBlocking(Level level, Point from, Point to, Mob shooter) {
         return MobVisibility.firstMobBlocking(level, from, to, shooter);
+    }
+
+    /** Queue a deferred impact resolution onto the level. The {@code resolve}
+     *  Runnable should invoke the matching {@code apply*Impact} method (which
+     *  in turn decrements {@link Level#pendingImpactCount}). Used by every
+     *  animation-gated action (throws, wand fires, knockback chains, animated
+     *  tool uses) to defer step 4 of the lifecycle until the visual lands.
+     *
+     *  <p>On-screen: the rgame Animator pops these into its PendingImpactQueue
+     *  at consume() time and fires them when the matching projectile arc
+     *  completes. Headless: {@link #drainPendingImpactsImmediate} is called
+     *  by the AI loop between mob brains and fires the queued resolves
+     *  synchronously. */
+    public static void queuePendingImpact(Level level, Runnable resolve) {
+        if (level == null || resolve == null) return;
+        if (level.pendingImpacts == null) {
+            level.pendingImpacts = new java.util.ArrayDeque<>();
+        }
+        level.pendingImpacts.add(resolve);
+        level.pendingImpactCount++;
+    }
+
+    /** Fire all queued pending-impact resolves synchronously, in FIFO order.
+     *  Called between mob brains in headless mode (and by the rgame Animator
+     *  if it ever wants to force-resolve everything immediately, e.g. on
+     *  level transition). On-screen, the Animator normally pulls resolves
+     *  out of the queue one at a time at arc-completion via
+     *  {@link #popNextPendingImpact} so the queue is empty when this is
+     *  called. */
+    public static void drainPendingImpactsImmediate(Level level) {
+        if (level == null || level.pendingImpacts == null) return;
+        while (!level.pendingImpacts.isEmpty()) {
+            Runnable r = level.pendingImpacts.pollFirst();
+            if (r != null) r.run();
+        }
+    }
+
+    /** Pop the next queued pending-impact resolve (FIFO). The rgame Animator
+     *  uses this in {@code onItemThrown}/{@code onWandMissileFired}/etc. to
+     *  fetch the resolve callback whose visual arc it's about to schedule.
+     *  Returns null if the queue is empty (defensive — shouldn't normally
+     *  happen since throwItem queues before emitting the ItemThrown event). */
+    public static Runnable popNextPendingImpact(Level level) {
+        if (level == null || level.pendingImpacts == null) return null;
+        return level.pendingImpacts.pollFirst();
     }
 
     /** Bresenham-walk every tile along the segment from {@code from} to {@code to} and
@@ -862,18 +918,19 @@ public class MobSystem {
         // collision can itself kill the target via environmental damage;
         // we guard the subsequent melee damage so we don't double-kill.
         // Total knockback = stat-based (intrinsic + equipped weapon) plus the
-        // KNOCKBACK perk contribution. The perk's tile contribution caps at 5
-        // (perkLvl 1..5 = 1..5 tiles); levels 6-10 instead each add +1 to the
-        // wall-slam damage bonus dealt when the knockback's flight is blocked
-        // by a wall / chasm / mob.
+        // KNOCKBACK perk contribution. The perk's tile contribution caps at
+        // GameBalance.KNOCKBACK_TILE_CAP (perkLvl 1..cap = +1 tile each); levels
+        // above the cap instead each add +1 to the wall-slam damage bonus dealt
+        // when the knockback's flight is blocked by a wall / chasm / mob.
         if (attacker.position != null) {
             int kb = attacker.effectiveStats().knockbackSquares;
             int wallSlam = 0;
             if (attacker.perks != null) {
                 int p = attacker.perks.getOrDefault(
                         com.bjsp123.rl2.model.Perk.KNOCKBACK, 0);
-                kb       += Math.min(5, p);
-                wallSlam += Math.max(0, p - 5);
+                int cap = GameBalance.KNOCKBACK_TILE_CAP;
+                kb       += Math.min(cap, p);
+                wallSlam += Math.max(0, p - cap);
             }
             if (kb > 0) knockBack(level, target, kb, attacker.position, wallSlam);
         }
@@ -932,8 +989,15 @@ public class MobSystem {
                                         int rawDealt, AttackType type, DamageElement element,
                                         DamageBreakdown breakdown) {
         if (target == null) return false;
+        if (type == AttackType.MELEE) com.bjsp123.rl2.util.ActionTracker.bumpMelee(attacker);
         if (rawDealt < 0) rawDealt = 0;
         if (rawDealt > 0 && BuffSystem.hasBuff(target, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED)) return false;
+        // Stat-based per-element immunity: poisonImmune zeroes incoming POISON
+        // before mitigation. The HIT event still fires below with dealt=0 so the
+        // player sees "-0 poison" floating, signalling the immunity.
+        if (element == DamageElement.POISON && target.effectiveStats().poisonImmune) {
+            rawDealt = 0;
+        }
         // Buff-based mitigation. PROTECTION blunts physical, ANTI_MAGIC blunts magic
         // and fire. Other elements (POISON, SHOCK, STARVATION) ignore both buffs.
         int dealt = switch (element) {
@@ -945,7 +1009,7 @@ public class MobSystem {
         // buff ate part of the hit, so the renderer plays the dim "blunt" first.
         if (dealt < rawDealt && rawDealt > 0 && level != null && level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
-                    target, dealt, com.bjsp123.rl2.event.GameEvent.DamageMessage.BLUNT, attacker));
+                    target, dealt, com.bjsp123.rl2.event.GameEvent.DamageMessage.BLUNT, attacker, element));
         }
         // Damage-roll tuning log. Falls back to a default breakdown when the caller
         // didn't pre-populate one, so every processAttack call still produces a line.
@@ -1000,7 +1064,18 @@ public class MobSystem {
                     dealt > 0
                             ? com.bjsp123.rl2.event.GameEvent.DamageMessage.HIT
                             : com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
-                    attacker));
+                    attacker, element));
+        }
+        // HIGH-priority element-tagged log line for non-PHYSICAL damage. The
+        // PHYSICAL melee path emits its own playerHit/enemyHit/mobHit line via
+        // logAttackOutcome; PHYSICAL throws/wall-slams stay on the LOW-pri
+        // damageRoll line as before. This line is the player-visible "X takes 3
+        // poison damage" feedback for DOT ticks, wand zaps, and starvation.
+        if (dealt > 0 && element != DamageElement.PHYSICAL) {
+            boolean playerInvolved = (attacker != null && attacker.behavior == Behavior.PLAYER)
+                                  || target.behavior == Behavior.PLAYER;
+            EventLog.add(Messages.elementalDamage(
+                    nameForLog(level, target), element, dealt, playerInvolved));
         }
         // Only flinch when real damage lands - a 0-damage blow doesn't visually stagger the
         // target. Environmental damage has no attacker and therefore no direction to recoil
@@ -1023,7 +1098,8 @@ public class MobSystem {
         if (attacker != null
                 && attacker.effectiveStats().poisonsOnAttack
                 && target.hp > 0
-                && element == DamageElement.PHYSICAL) {
+                && element == DamageElement.PHYSICAL
+                && !target.effectiveStats().poisonImmune) {
             int lvl = Math.max(1, attacker.characterLevel);
             BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.POISONED,
                     lvl, lvl * 3 * TurnSystem.STANDARD_TURN_TICKS, attacker);
@@ -1053,7 +1129,7 @@ public class MobSystem {
                 && attacker != null && attacker.inventory != null) {
             com.bjsp123.rl2.model.Item weapon = attacker.inventory.weapon;
             if (weapon != null && weapon.brand != null) {
-                BrandSystem.applyBrandOnHit(level, attacker, target, weapon.brand);
+                BrandSystem.applyBrandOnHit(level, attacker, target, weapon);
             }
         }
         if (target.hp <= 0) {
@@ -1141,6 +1217,7 @@ public class MobSystem {
      *  Returns the number of items actually picked up - callers use this to decide whether
      *  to charge a move tick. */
     public static int pickupAtFeet(Level level, Mob mob) {
+        if (!mob.effectiveStats().canPickUp) return 0;
         int x = mob.position.tileX(), y = mob.position.tileY();
         boolean isPlayer = mob.behavior == Behavior.PLAYER;
         String pickerName = mob.name != null ? mob.name : "?";
@@ -1326,8 +1403,13 @@ public class MobSystem {
             if (tile.blocksMovement()) {
                 mob.position = new Point(cx, cy);
                 emitKnockBack(level, mob, start, true);
-                processAttack(level, null, mob, remaining * 4 + wallSlamBonus,
+                int slamDmg = remaining * 4 + wallSlamBonus;
+                processAttack(level, null, mob, slamDmg,
                         AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+                if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+                    EventLog.add(Messages.knockbackSlam(nameForLog(level, mob), slamDmg,
+                            mob.behavior == Behavior.PLAYER));
+                }
                 return;
             }
 
@@ -1335,8 +1417,13 @@ public class MobSystem {
             if (collided != null) {
                 mob.position = new Point(cx, cy);
                 emitKnockBack(level, mob, start, true);
-                processAttack(level, null, mob, remaining * 4 + wallSlamBonus,
+                int slamDmg = remaining * 4 + wallSlamBonus;
+                processAttack(level, null, mob, slamDmg,
                         AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+                if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+                    EventLog.add(Messages.knockbackSlam(nameForLog(level, mob), slamDmg,
+                            mob.behavior == Behavior.PLAYER));
+                }
                 if (collided.hp > 0) {
                     processAttack(level, null, collided, remaining * 4,
                             AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
@@ -1415,6 +1502,12 @@ public class MobSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobFellThroughChasm(
                     mob, fromPos));
         }
+        // Log the chasm plunge whenever it's visible to the player (or it's
+        // the player themselves).
+        if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+            EventLog.add(Messages.mobFellInChasm(nameForLog(level, mob),
+                    mob.behavior == Behavior.PLAYER));
+        }
 
         if (wouldKill) {
             // Items into the chasm, mob dies on impact.
@@ -1425,15 +1518,7 @@ public class MobSystem {
         }
 
         // Survivor - relocate to the next level + apply impact damage there.
-        level.mobs.remove(mob);
-        mob.position = arrival;
-        mob.targetPosition = null;
-        next.mobs.add(mob);
-        if (mob.behavior == Mob.Behavior.PLAYER) {
-            world.currentLevelIndex = srcIdx >= 0
-                    ? indexOf(world, next) : world.currentLevelIndex;
-            next.visited = true;
-        }
+        transferMobToLevel(level, mob, next, arrival);
         processAttack(next, null, mob, dmg,
                 AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
     }
@@ -1572,6 +1657,32 @@ public class MobSystem {
         return -1;
     }
 
+    /** Move {@code mob} from {@code srcLevel} to {@code dstLevel} at
+     *  {@code arrivalPos}. For PLAYER and SMART mobs, the world's
+     *  {@code currentLevelIndex} follows the mob so {@code World.currentLevel()}
+     *  stays consistent with where the agent actually lives. Same-level moves
+     *  (chasm/teleport landing on the source level) just update position. */
+    public static void transferMobToLevel(Level srcLevel, Mob mob,
+                                          Level dstLevel, Point arrivalPos) {
+        if (srcLevel == null || mob == null || dstLevel == null || arrivalPos == null) return;
+        if (dstLevel != srcLevel) {
+            srcLevel.mobs.remove(mob);
+            dstLevel.mobs.add(mob);
+        }
+        mob.position = arrivalPos;
+        mob.targetPosition = null;
+        if (mob.behavior == Mob.Behavior.PLAYER || mob.behavior == Mob.Behavior.SMART) {
+            com.bjsp123.rl2.model.World world = srcLevel.world;
+            if (world != null) {
+                int idx = indexOf(world, dstLevel);
+                if (idx >= 0) {
+                    world.currentLevelIndex = idx;
+                    dstLevel.visited = true;
+                }
+            }
+        }
+    }
+
     private static void emitFallingItems(Level level, Mob mob) {
         if (mob.inventory == null || level == null || level.events == null) return;
         List<Item> falling = new ArrayList<>();
@@ -1655,7 +1766,14 @@ public class MobSystem {
             return;
         }
 
-        if (mob.behavior == Behavior.MOB) {
+        if (mob.behavior == Behavior.SMART) {
+            MobBrain brain = GameBalance.SMART_AI_ENABLED ? MobBrains.get(Behavior.SMART) : null;
+            if (brain != null) {
+                brain.run(mob, level);
+            } else {
+                processMobAi(mob, level);
+            }
+        } else if (mob.behavior == Behavior.MOB) {
             processMobAi(mob, level);
         } else if (mob.behavior == Behavior.EXPLORE_HIDE) {
             processExploreHideAi(mob, level);
@@ -1679,7 +1797,7 @@ public class MobSystem {
      * abilities the target must be below max HP. Targets are picked nearest-first
      * within the caster's vision radius, friend/foe via {@link Attitude#ALLY}.
      */
-    private static boolean tryCastAbilities(Mob caster, Level level) {
+    public static boolean tryCastAbilities(Mob caster, Level level) {
         if (caster == null || caster.abilities == null || caster.abilities.isEmpty()) return false;
         double vision = caster.effectiveStats().visionRadius;
         for (Mob.MobAbility ab : caster.abilities) {
@@ -1798,12 +1916,25 @@ public class MobSystem {
         boolean alwaysUse = mob.behavior == Behavior.RANGED_MOB_DUMB
                          || mob.behavior == Behavior.RANGED_MOB_STANDOFF;
         // Snapshot the bag so applyAiItemUse can mutate it (heal potions /
-        // bombs are removed on use).
+        // bombs are removed on use). Sort by Item.getValue() desc so within
+        // each kind of item the AI prefers the highest-value instance;
+        // since usability is checked per-item the "kind of item to use"
+        // choice is still driven by isUsableByAi, just biased to good rolls.
         java.util.List<com.bjsp123.rl2.model.Item> snapshot =
                 new java.util.ArrayList<>(mob.inventory.bag);
+        snapshot.sort((a, b) -> Double.compare(
+                b == null ? Double.NEGATIVE_INFINITY : b.getValue(),
+                a == null ? Double.NEGATIVE_INFINITY : a.getValue()));
         for (com.bjsp123.rl2.model.Item item : snapshot) {
             if (!isUsableByAi(mob, item, level)) continue;
-            if (!alwaysUse && RANDOM.nextDouble() >= AI_USE_ITEM_CHANCE) continue;
+            // Wands that pass isWandUsableByAi already represent "best damage
+            // option vs. safe to fire" - skip the chance roll so a mage holding
+            // a viable wand doesn't idle every other turn. Mirrors the always-
+            // use treatment ranged-behavior mobs get above.
+            boolean isUsableWand =
+                    item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.WAND;
+            if (!alwaysUse && !isUsableWand
+                    && RANDOM.nextDouble() >= AI_USE_ITEM_CHANCE) continue;
             if (applyAiItemUse(mob, item, level)) return true;
         }
         return false;
@@ -1827,7 +1958,7 @@ public class MobSystem {
     }
 
     /** AI CHARGE gate. Requires (a) a hostile attack-target within the item's
-     *  {@code abilityPower + effLvl/2} Chebyshev radius, (b) the target is
+     *  {@link ItemStats#effectiveRange} Chebyshev radius, (b) the target is
      *  NOT adjacent (Chebyshev > 1 - melee is cheaper than burning a charge),
      *  (c) line-of-sight from caster to target, and (d) at least one
      *  walkable + unoccupied 8-neighbour of the target for the dash to land
@@ -1842,7 +1973,7 @@ public class MobSystem {
         int cheb = Math.max(dx, dy);
         if (cheb <= 1) return false; // already adjacent - just melee
         int effLvl = ItemStats.effectiveLevel(item, mob);
-        int dashRange = Math.max(1, (int) item.abilityPower + effLvl / 2);
+        int dashRange = Math.max(1, ItemStats.effectiveRange(item, effLvl));
         if (cheb > dashRange) return false;
         if (!LevelUtilities.getLineOfSight(level, mob, target.position)) return false;
         int tx = target.position.tileX(), ty = target.position.tileY();
@@ -1863,21 +1994,39 @@ public class MobSystem {
      *  Damaging potions (non-zero {@code item.damage}, e.g. potion of poison)
      *  are never drunk; buff potions are useful when the buff isn't already
      *  up; the REGENERATION buff additionally requires the mob to actually
-     *  be wounded (drinking a healing potion at full HP wastes the potion). */
+     *  be wounded (drinking a healing potion at full HP wastes the potion).
+     *  Override: a POISONED mob will drink any potion that would cure the
+     *  poison (currently any REGENERATION-applying item), even at full HP. */
     private static boolean wouldDrinkHelp(Mob mob, com.bjsp123.rl2.model.Item item) {
         if (item == null) return false;
-        if (item.damage.max() > 0) return false;
+        if (item.damage > 0) return false;
         // Depleted charged tools (JADE_CRAB, JADE_FISH, FROG, etc.) can't fire;
         // ItemSystem.useChargedBuffTool would short-circuit anyway, but gating
         // here means the AI doesn't burn a per-item roll on an unusable choice.
         if (item.baseChargeMax > 0 && item.charge < 1f) return false;
         com.bjsp123.rl2.model.Buff.BuffType primary = item.primaryBuff();
         if (primary == null) return false;
+        // Cure-poison override: a poisoned mob holding a REGEN-applying item
+        // drinks it to strip POISONED, regardless of HP / existing buffs.
+        if (BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.POISONED)
+                && removesPoison(item)) {
+            return true;
+        }
         if (BuffSystem.hasBuff(mob, primary)) return false;
         if (primary == com.bjsp123.rl2.model.Buff.BuffType.REGENERATION) {
             return mob.hp < mob.effectiveStats().maxHp;
         }
         return true;
+    }
+
+    /** True if using this item applies a buff that strips POISONED. Today
+     *  that's any item whose {@code appliesBuff} list contains REGENERATION
+     *  (per {@link BuffSystem}'s per-turn REGEN dispatch, which removes a
+     *  POISONED stack). Add other cure mechanisms here as they appear. */
+    private static boolean removesPoison(com.bjsp123.rl2.model.Item item) {
+        if (item == null || item.appliesBuff == null) return false;
+        return item.appliesBuff.contains(
+                com.bjsp123.rl2.model.Buff.BuffType.REGENERATION);
     }
 
     private static boolean isGrappleUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
@@ -1886,7 +2035,7 @@ public class MobSystem {
         if (target == null || target.position == null) return false;
         // No point grappling when already adjacent
         if (LevelFactoryUtils.chebyshev(mob.position, target.position) <= 1) return false;
-        int maxSize = Math.max(0, (int) item.abilityPower);
+        int maxSize = Math.max(0, (int) ItemStats.effectivePower(item));
         return target.effectiveStats().size <= maxSize;
     }
 
@@ -1897,13 +2046,29 @@ public class MobSystem {
         return pickBestJumpTile(mob, item, level, threat) != null;
     }
 
-    /** Element-wand AI gate. Only single-target / ally-creating elements pass
-     *  in this first cut - element wands with AOE / friendly-fire risk
-     *  (water, oil, grass, fungus, fire, detonation, banishment) are deferred. */
+    /** Element-wand AI gate. MISSILE / TELEPORT / summon wands always pass
+     *  the gate when their preconditions hold. Direct-damage AoE wands
+     *  (BLAST, DETONATION, FIRE) pass when there's a hostile target AND no
+     *  ally would catch the disc AND the caster's own tile isn't inside the
+     *  disc footprint. Utility AoE wands (WATER / OIL / GRASS / FUNGUS) and
+     *  BANISHMENT remain deferred - the AI has no heuristic for when those
+     *  are useful.
+     *
+     *  <p>Damage-class wands additionally have to beat the caster's melee
+     *  output - "fire a wand only if it's the best damage option this turn"
+     *  per the AI rule. A wand that's strictly weaker than what the caster
+     *  could land in melee is left in the bag so the caster steps into
+     *  melee range and swings instead. */
     private static boolean isWandUsableByAi(Mob mob, com.bjsp123.rl2.model.Item wand, Level level) {
+        // Depleted wands can't fire. Without this gate they pass here and
+        // then ItemSystem.fireWand silently no-ops at its own charge check,
+        // wasting the AI's per-item roll.
+        if (wand.baseChargeMax > 0 && wand.charge < 1f) return false;
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
             Mob target = nearestAttackTarget(mob, level);
-            return target != null;
+            if (target == null) return false;
+            if (expectedWandDamage(wand, mob, target) <= 0) return false;
+            return wandBeatsMelee(mob, wand, target);
         }
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
             return nearestAttackTarget(mob, level) != null
@@ -1912,6 +2077,117 @@ public class MobSystem {
         if (wand.summonsWhenUsed != null) {
             return MobQueries.levelHasRoomForSpawn(level)
                     && MobHooks.freeAdjacentFloor(level, mob.position) != null;
+        }
+        if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.BLAST
+                || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.DETONATION
+                || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.FIRE) {
+            Mob target = nearestAttackTarget(mob, level);
+            if (target == null || target.position == null) return false;
+            int effLvl = ItemStats.effectiveLevel(wand, mob);
+            int effectSize = ItemStats.effectiveSize(wand, effLvl);
+            if (effectSize <= 0) return false;
+            if (hasAllyInDisc(mob, level, target.position, effectSize)) return false;
+            if (casterInDisc(mob, target.position, effectSize)) return false;
+            if (expectedWandDamage(wand, mob, target) <= 0) return false;
+            return wandBeatsMelee(mob, wand, target);
+        }
+        return false;
+    }
+
+    /** Heuristic for "would firing this wand at this target plausibly deal
+     *  damage?". Returns 0 when the target is fundamentally immune to the
+     *  effect (flying / fireImmune vs FIRE, non-banishable vs BANISHMENT)
+     *  and otherwise nets the wand's stat-based damage against the target's
+     *  magic-resist range. AI uses the zero return as an "don't bother
+     *  firing" gate; comparators use the magnitude for melee comparison.
+     *
+     *  <p>Surface contributions (the fire trail WAND_FIRE leaves) are
+     *  approximated as a flat bonus tied to {@code effectSize} when the
+     *  target can actually be ignited - mobs that ignore the surface get
+     *  nothing for it. */
+    private static double expectedWandDamage(com.bjsp123.rl2.model.Item wand,
+                                             Mob caster, Mob target) {
+        if (wand == null || target == null) return 0;
+        com.bjsp123.rl2.model.StatBlock ts = target.effectiveStats();
+        com.bjsp123.rl2.model.Item.ItemEffect eff = wand.wandEffect;
+        if (eff == com.bjsp123.rl2.model.Item.ItemEffect.BANISHMENT) {
+            // Treat as a one-shot kill when applicable; otherwise no effect.
+            return target.banishable ? 999.0 : 0.0;
+        }
+        // FIRE wand vs flying or fireImmune target: the projectile's small
+        // direct damage is far less useful than the lost surface contribution,
+        // and a 3-damage hit isn't enough to chip down anything. Treat the
+        // matchup as "wrong wand for this target" and reject outright.
+        if (eff == com.bjsp123.rl2.model.Item.ItemEffect.FIRE
+                && (ts.flying || ts.fireImmune)) {
+            return 0;
+        }
+        int effLvl = ItemStats.effectiveLevel(wand, caster);
+        double base = wand.damage > 0
+                ? ItemStats.effectiveDamageRange(wand, effLvl).average()
+                : 0;
+        double mr = ts.magicResist.average();
+        double net = Math.max(0, base - mr);
+        if (eff == com.bjsp123.rl2.model.Item.ItemEffect.FIRE) {
+            // Surface bonus: fire wands leave a burning patch worth roughly
+            // {@code effectSize} ticks of fire damage to a stationary target.
+            int effectSize = ItemStats.effectiveSize(wand, effLvl);
+            net += 2.0 * Math.max(1, effectSize);
+        }
+        return net;
+    }
+
+    /** Geometric: would the caster's own tile fall inside the prospective
+     *  AoE disc centred on {@code target}? Uses the same approximate
+     *  Chebyshev radius ({@code ceil(sqrt(effectSize))}) as
+     *  {@link #hasAllyInDisc}, keeping the predictor and the resolver
+     *  consistent. Returning true means "AI would singe itself - skip". */
+    private static boolean casterInDisc(Mob caster, com.bjsp123.rl2.model.Point target,
+                                        int effectSize) {
+        if (caster == null || caster.position == null || target == null
+                || effectSize <= 0) return false;
+        int approxRadius = (int) Math.ceil(Math.sqrt(effectSize));
+        int dx = Math.abs(caster.position.tileX() - target.tileX());
+        int dy = Math.abs(caster.position.tileY() - target.tileY());
+        return Math.max(dx, dy) <= approxRadius;
+    }
+
+    /** True if firing {@code wand} at {@code target} would land at least as
+     *  much damage as the caster's straight-up melee swing. Out-of-melee
+     *  targets (Chebyshev > 1) auto-pass since melee output is 0 from there.
+     *  Uses {@link #expectedWandDamage} so resistances / immunities feed
+     *  into the comparison too: a fire wand against a flying ghost reports
+     *  zero expected damage and loses to even a 1-damage dagger. */
+    private static boolean wandBeatsMelee(Mob caster, com.bjsp123.rl2.model.Item wand,
+                                          Mob target) {
+        if (caster == null || target == null || target.position == null
+                || caster.position == null) return true;
+        int dx = Math.abs(caster.position.tileX() - target.position.tileX());
+        int dy = Math.abs(caster.position.tileY() - target.position.tileY());
+        if (Math.max(dx, dy) > 1) return true;
+        double wandMean = expectedWandDamage(wand, caster, target);
+        double meleeMean = caster.effectiveStats().damage.average();
+        return wandMean >= meleeMean;
+    }
+
+    /** True if any live mob with ALLY attitude to {@code caster} stands
+     *  within the prospective effect disc of an AoE wand centred on
+     *  {@code target}. Used by the AI to skip casting an AoE wand into a
+     *  pack of allies. Disc radius is approximated as
+     *  {@code ceil(sqrt(effectSize))} (Chebyshev) - over-cautious so the
+     *  AI may skip borderline-safe casts, never friendly-fire. */
+    private static boolean hasAllyInDisc(Mob caster, Level level,
+                                         com.bjsp123.rl2.model.Point target,
+                                         int effectSize) {
+        if (level == null || target == null || effectSize <= 0) return false;
+        int approxRadius = (int) Math.ceil(Math.sqrt(effectSize));
+        int tx = target.tileX(), ty = target.tileY();
+        for (Mob m : level.mobs) {
+            if (m == null || m == caster || m.hp <= 0 || m.position == null) continue;
+            int dx = Math.abs(m.position.tileX() - tx);
+            int dy = Math.abs(m.position.tileY() - ty);
+            if (Math.max(dx, dy) > approxRadius) continue;
+            if (getAttitudeToMob(caster, m) == Attitude.ALLY) return true;
         }
         return false;
     }
@@ -1931,7 +2207,7 @@ public class MobSystem {
      *  moment any tile holds a mob the thrower considers ALLY. */
     private static boolean allyInBombAoe(Mob thrower, com.bjsp123.rl2.model.Point centre,
                                          com.bjsp123.rl2.model.Item bomb, Level level) {
-        int radius = ItemStats.effectiveTilesAffected(bomb);
+        int radius = ItemStats.effectiveSize(bomb);
         int r2 = radius * radius;
         int cx = centre.tileX(), cy = centre.tileY();
         for (Mob m : level.mobs) {
@@ -1958,9 +2234,18 @@ public class MobSystem {
         switch (item.useBehavior) {
             case DRINK, APPLYBUFF -> ItemSystem.useItem(level, mob, item);
             case WAND    -> { if (!aiCastWand(mob, item, level)) return false; }
-            case GRAPPLE -> { if (!aiCastGrapple(mob, item, level)) return false; }
-            case JUMP    -> { if (!aiCastJump(mob, item, level)) return false; }
-            case CHARGE  -> { if (!aiCastCharge(mob, item, level)) return false; }
+            case GRAPPLE -> {
+                if (!aiCastGrapple(mob, item, level)) return false;
+                com.bjsp123.rl2.util.ActionTracker.bumpTool(mob);
+            }
+            case JUMP    -> {
+                if (!aiCastJump(mob, item, level)) return false;
+                com.bjsp123.rl2.util.ActionTracker.bumpTool(mob);
+            }
+            case CHARGE  -> {
+                if (!aiCastCharge(mob, item, level)) return false;
+                com.bjsp123.rl2.util.ActionTracker.bumpTool(mob);
+            }
             default      -> { /* unreachable per the gate */ }
         }
         return mob.ticksTillMove != before;
@@ -1986,6 +2271,17 @@ public class MobSystem {
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
             com.bjsp123.rl2.model.Point dest = pickTeleportDestination(caster, level);
             if (dest != null) ItemSystem.fireWand(level, caster, wand, dest);
+            return caster.ticksTillMove != before;
+        }
+        // AoE damage wands: fire at the nearest hostile (gate already verified
+        // no allies in the disc via isWandUsableByAi).
+        if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.BLAST
+                || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.DETONATION
+                || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.FIRE) {
+            Mob target = nearestAttackTarget(caster, level);
+            if (target == null || target.position == null) return false;
+            ItemSystem.fireWand(level, caster, wand, target.position);
+            return caster.ticksTillMove != before;
         }
         return caster.ticksTillMove != before;
     }
@@ -2028,7 +2324,8 @@ public class MobSystem {
     private static com.bjsp123.rl2.model.Point pickBestJumpTile(
             Mob mob, com.bjsp123.rl2.model.Item item, Level level, Mob threat) {
         if (mob.position == null || threat.position == null) return null;
-        int radius = Math.max(0, (int) item.abilityPower);
+        int effLvl = ItemStats.effectiveLevel(item, mob);
+        int radius = Math.max(0, ItemStats.effectiveRange(item, effLvl));
         int mx = mob.position.tileX(), my = mob.position.tileY();
         int tx = threat.position.tileX(), ty = threat.position.tileY();
         int currentDist = LevelFactoryUtils.chebyshev(mob.position, threat.position);
@@ -2764,21 +3061,46 @@ public class MobSystem {
      * mob occupies the target tile, drops the item on the target tile (unless it's chasm),
      * spawns the flying-item visual, and charges the thrower an attack's worth of time.
      */
-    /** Player / AI throw entry point. Removes the item from inventory and
+    /** Player / AI throw entry point. Removes the item from inventory,
      *  emits the {@link com.bjsp123.rl2.event.GameEvent.ItemThrown}
-     *  projectile event immediately so the inventory + the move-cost gate
-     *  reflect the throw, but DEFERS the actual impact (damage, knockback,
-     *  ignition, surface paint, etc.) to the moment the projectile
-     *  visually arrives - see {@link #applyThrowImpact}. The Animator
-     *  wires a {@code PendingImpact} from the {@code ItemThrown} event
-     *  back to {@code applyThrowImpact} so the world only mutates after
-     *  the visual lands. */
+     *  projectile event, AND applies the impact synchronously.
+     *
+     *  <p><b>DO NOT DEFER THE IMPACT.</b> This function MUST call
+     *  {@link #applyThrowImpact} before returning. If you let the Animator's
+     *  PendingImpact / arc-completion callback drive impact instead, the
+     *  defender gets one or more game ticks to step out of the AoE before
+     *  damage lands, and the throw silently misses. This regression has been
+     *  introduced and re-fixed multiple times; if you find this function
+     *  fires {@code ItemThrown} but does NOT call {@code applyThrowImpact},
+     *  you are looking at the regression - re-apply the synchronous call.
+     *
+     *  <p>The core invariant for ALL ranged attacks in this game:
+     *  <b>the attacker must complete the attack and deal damage before the
+     *  defender gets to move.</b> Throws, wand projectiles, charges, and
+     *  every other ranged effect must obey this. The on-screen visual arc
+     *  is cosmetic ONLY; it never drives world-state mutation.
+     *
+     *  <p>Visual presentation: the rgame Animator may schedule a delay on
+     *  damage popups / death fades / knockback frames / ignition flashes so
+     *  they read as "the bomb arc lands, then the target reacts" - but
+     *  that's a renderer-side concern and does NOT change the fact that the
+     *  rlib world state is fully mutated here, synchronously, at throw
+     *  time. */
     public static void throwItem(Level level, Mob thrower, Item it, Point dst) {
         if (thrower == null || it == null || dst == null) return;
+        if (it.inventoryCategory == Item.InventoryCategory.BOMB) {
+            com.bjsp123.rl2.util.ActionTracker.bumpBomb(thrower);
+        } else {
+            com.bjsp123.rl2.util.ActionTracker.bumpThrow(thrower);
+        }
+        // "Adventurer throws the fire bomb." Replaces the previous generic
+        // "uses" wording with a verb that names the action.
+        EventLog.add(Messages.itemThrown(nameForLog(level, thrower),
+                it.name != null ? it.name : it.type,
+                thrower.behavior == Behavior.PLAYER));
         // BOMB_DODGER conservation - bombs occasionally survive the throw.
-        // Save chance scales with perk level: 30% at L1, +12% per level,
-        // capped at saveCap = 0.75 (L<=5) or 0.75 + 0.05*(L-5) (L>5),
-        // reaching 100% at L10. Non-bomb throws always consume; non-perked
+        // Save chance scales with perk level: 50% at L1, +10% per level,
+        // capped at 99% (L10+). Non-bomb throws always consume; non-perked
         // throwers always consume. When the bomb is saved we keep the
         // inventory entry but still emit the projectile (it visually flies
         // out and detonates at the destination, just respawning in the
@@ -2788,8 +3110,7 @@ public class MobSystem {
                 && thrower.perks != null) {
             int lvl = thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0);
             if (lvl > 0) {
-                double saveCap = lvl <= 5 ? 0.75 : 0.75 + (lvl - 5) * 0.05;
-                double chance = Math.min(saveCap, 0.30 + (lvl - 1) * 0.12);
+                double chance = Math.min(0.99, 0.40 + lvl * 0.10);
                 if (RANDOM.nextDouble() < chance) saved = true;
             }
         }
@@ -2817,26 +3138,49 @@ public class MobSystem {
             }
         }
         TurnSystem.applyActionCost(thrower, throwCost);
+        // ANIMATION-GATED LIFECYCLE: defer the world-state mutation (damage,
+        // knockback, ignition, surface paint, item-fate) to step 4 of the
+        // lifecycle - which fires when the projectile arc visually lands.
+        // On-screen the rgame Animator pops this Runnable in onItemThrown
+        // and runs it at arc-completion; headless drains the queue between
+        // mob brains via MobAi.processAllAiTurns. The pending-impact gate
+        // (level.pendingImpactCount > 0) prevents any other mob from acting
+        // before this resolve fires - that's how step 1 "ticking stops" is
+        // enforced.
+        final Item itFinal = it;
+        final Point impactFinal = impact;
+        final Mob throwerFinal = thrower;
+        queuePendingImpact(level, () -> applyThrowImpact(level, throwerFinal, itFinal, impactFinal));
     }
 
     /**
      * Apply the world-state mutations of a throw - door open, damage, bomb /
      * potion / cloud effects, tame-on-throw, knockback, and the
-     * {@link Item.ThrowResult} fate (consume / return / drop). Called from
-     * the Animator's {@code PendingImpact} callback when the projectile
-     * arc finishes so the visual sequence reads cleanly: arc flies ->
-     * impact resolves -> subsequent visual events (ignite tiles, knock
-     * back survivors, drop the item) all play AFTER the projectile lands.
+     * {@link Item.ThrowResult} fate (consume / return / drop).
+     *
+     * <p><b>Must run synchronously from {@link #throwItem}, not from an
+     * Animator PendingImpact / arc-completion callback.</b> If you wire
+     * this through the Animator instead, every defender gets free ticks to
+     * step out of the AoE before damage lands — the warrior-bomb-dud
+     * regression. See the throwItem javadoc for the invariant: ranged
+     * attackers must complete the attack and deal damage before the
+     * defender can move.
+     *
+     * <p>The on-screen visual sequence (arc flies → impact flash → damage
+     * popup) is preserved by the rgame Animator scheduling visual-FX
+     * playback against the arc duration. World-state mutation is decoupled
+     * from that visual delay and happens here.
      */
     /** BOMB_DODGER damage multiplier - when {@code victim} carries the perk
      *  AND {@code thrown} is a BOMB, incoming bomb damage is scaled by
-     *  {@code 0.5^perkLvl} (asymptotic - never zero). Returns 1.0 otherwise. */
+     *  {@code GameBalance.BOMB_DODGER_DAMAGE_BASE^perkLvl} (asymptotic -
+     *  never zero). Returns 1.0 otherwise. */
     static double bombDamageScale(Mob victim, Item thrown) {
         if (victim == null || victim.perks == null || thrown == null) return 1.0;
         if (thrown.inventoryCategory != Item.InventoryCategory.BOMB) return 1.0;
         int lvl = victim.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0);
         if (lvl <= 0) return 1.0;
-        return Math.pow(0.5, lvl);
+        return Math.pow(GameBalance.BOMB_DODGER_DAMAGE_BASE, lvl);
     }
 
     /** BOMB_DODGER buff / knockback gate - true means skip the buff or
@@ -2868,11 +3212,31 @@ public class MobSystem {
         ItemEffect te = it.throwEffect;
         boolean inBounds = tx >= 0 && ty >= 0 && tx < level.width && ty < level.height;
 
-        // A thrown item that lands on a closed door pops it open - works for any throw kind.
-        if (inBounds && level.tiles[tx][ty] == Tile.DOOR) {
-            level.tiles[tx][ty] = Tile.DOOR_OPEN;
-            if (level.events != null) level.events.add(
-                    new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(tx, ty)));
+        // Bomb detonation log - HIGH priority for any bomb that does damage
+        // or applies a cloud. Non-damaging utility throws (CAPTURE / TAME /
+        // RETURN-only items) skip this so the rolling log isn't spammed
+        // with "the empty potion detonates" lines.
+        if (it.inventoryCategory == Item.InventoryCategory.BOMB
+                && te != ItemEffect.CAPTURE && te != ItemEffect.TELEPORT) {
+            EventLog.add(Messages.bombDetonates(it.name != null ? it.name : it.type));
+        }
+
+        // A thrown item landing on a closed door pops it open IF the door
+        // accepts projectile impacts as a cross (DoorBehavior.passRule ==
+        // ANYONE and onCross == OPENS - i.e. today's wooden DOOR). Crystal
+        // and one-time doors stay closed - bombs don't power-open
+        // player-only barriers.
+        if (inBounds) {
+            Tile doorTile = level.tiles[tx][ty];
+            com.bjsp123.rl2.model.DoorBehavior doorDb = doorTile.doorBehavior();
+            if (doorDb != null && doorTile.isClosedDoor()
+                    && doorDb.passRule() == com.bjsp123.rl2.model.DoorBehavior.PassRule.ANYONE
+                    && doorDb.onCross() == com.bjsp123.rl2.model.DoorBehavior.OnCross.OPENS
+                    && doorDb.openVariant() != null) {
+                level.tiles[tx][ty] = doorDb.openVariant();
+                if (level.events != null) level.events.add(
+                        new com.bjsp123.rl2.event.GameEvent.DoorOpened(new com.bjsp123.rl2.model.Point(tx, ty)));
+            }
         }
 
         if (te == ItemEffect.CAPTURE && inBounds) {
@@ -2911,7 +3275,7 @@ public class MobSystem {
             return;
         }
 
-        if (te == ItemEffect.DAMAGE && it.damage.max() > 0) {
+        if (te == ItemEffect.DAMAGE && it.damage > 0) {
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null && getAttitudeToMob(target, thrower) != Attitude.ALLY) {
                 // processAttack records combat memory and floating-text centrally when
@@ -2921,6 +3285,7 @@ public class MobSystem {
                 dmg = applySurpriseIfNeeded(level, thrower, target, dmg,
                         AttackType.THROWN, DamageElement.PHYSICAL);
                 processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL);
+                BrandSystem.applyBrandOnHit(level, thrower, target, it);
             }
         }
         // Tame-on-throw - items list the mob types they tame; throwing one at a
@@ -2948,18 +3313,22 @@ public class MobSystem {
         int lvl = ItemStats.effectiveLevel(it, thrower);
         // Bomb damage and AoE come from ItemSystem so every bomb-class throw shares
         // the same level-scaling formula with the rest of the item-stat math.
-        int bombDamage = rollRange(ItemStats.effectiveDamageRange(it, thrower));
-        int bombTiles  = ItemStats.effectiveTilesAffected(it, thrower);
-        int bombRadius = ItemSystem.radiusForTileCount(bombTiles);
-        int r2 = bombRadius * bombRadius;
+        int bombDamage = rollRange(ItemStats.effectiveDamageRange(it, lvl));
+        int bombTiles  = ItemStats.effectiveSize(it, lvl);
+        // Effect disc: literal effectSize tiles packed closest-first around
+        // the impact point, filtered for projectile-LoS reachability so
+        // walls block coverage but corners spill around freely.
+        java.util.List<Point> disc = inBounds
+                ? ItemSystem.packTilesAround(level, dst, bombTiles)
+                : java.util.Collections.emptyList();
         if (te == ItemEffect.FIRE && inBounds) {
-            // Fire bomb: bomb damage at impact, ignite a Euclidean disc covering
-            // tilesAffected + level * tilesAffectedPerLevel tiles around the impact tile.
+            // Fire bomb: bomb damage at impact, ignite every disc tile.
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
                 processAttack(level, thrower, target,
                         scaledBombDamage(target, it, bombDamage),
                         AttackType.THROWN, DamageElement.PHYSICAL);
+                BrandSystem.applyBrandOnHit(level, thrower, target, it);
                 if (!bombBuffsIgnored(target, it)) {
                     BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE,
                             Math.max(1, lvl),
@@ -2968,34 +3337,23 @@ public class MobSystem {
                             thrower);
                 }
             }
-            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
-                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
-                    if (dx * dx + dy * dy > r2) continue;
-                    FireSystem.ignite(level, tx + dx, ty + dy);
-                }
-            }
+            for (Point p : disc) FireSystem.ignite(level, p.tileX(), p.tileY());
         } else if (te == ItemEffect.WATER && inBounds) {
-            // Water bomb: splashes a larger water disc than ordinary bombs.
-            // Affected mobs are soaked and pushed back by one square per effective level.
+            // Water bomb: WATER surface placed on every disc tile; mobs in
+            // the disc get soaked and shoved back by one square per level.
             java.util.List<Mob> soaked = new ArrayList<>();
-            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
-                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
-                    if (dx * dx + dy * dy > r2) continue;
-                    int x = tx + dx, y = ty + dy;
-                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    Point p = new Point(x, y);
-                    SurfaceSystem.addSurface(level, p, Surface.WATER);
-                    Mob m = MobQueries.mobAt(level, p);
-                    if (m != null && m != thrower) {
-                        if (!bombBuffsIgnored(m, it)) {
-                            BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.WET,
-                                    Math.max(1, lvl),
-                                    Math.max(TurnSystem.STANDARD_TURN_TICKS,
-                                            WATER_STEP_BUFF_TICKS + lvl * TurnSystem.STANDARD_TURN_TICKS),
-                                    thrower);
-                        }
-                        soaked.add(m);
+            for (Point p : disc) {
+                SurfaceSystem.addSurface(level, p, Surface.WATER);
+                Mob m = MobQueries.mobAt(level, p);
+                if (m != null && m != thrower) {
+                    if (!bombBuffsIgnored(m, it)) {
+                        BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.WET,
+                                Math.max(1, lvl),
+                                Math.max(TurnSystem.STANDARD_TURN_TICKS,
+                                        WATER_STEP_BUFF_TICKS + lvl * TurnSystem.STANDARD_TURN_TICKS),
+                                thrower);
                     }
+                    soaked.add(m);
                 }
             }
             int kb = Math.max(0, lvl * it.knockbackSquares);
@@ -3007,61 +3365,41 @@ public class MobSystem {
                 }
             }
         } else if (te == ItemEffect.OIL && inBounds) {
-            // Oil bomb: deals no damage but lays down an oil disc using the bomb area.
-            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
-                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
-                    if (dx * dx + dy * dy > r2) continue;
-                    Point p = new Point(tx + dx, ty + dy);
-                    if (p.tileX() < 0 || p.tileY() < 0
-                            || p.tileX() >= level.width || p.tileY() >= level.height) continue;
-                    for (int i = 0; i < 2; i++) SurfaceSystem.addSurface(level, p, Surface.OIL);
-                }
-            }
-            for (Mob m : level.mobs) {
-                int mx = m.position.tileX(), my = m.position.tileY();
-                int dx = mx - tx, dy = my - ty;
-                if (dx * dx + dy * dy <= r2) {
-                    if (bombBuffsIgnored(m, it)) continue;
-                    BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.OILY,
-                            Math.max(1, lvl),
-                            Math.max(TurnSystem.STANDARD_TURN_TICKS,
-                                    (5 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                            thrower);
-                }
+            // Oil bomb: no damage, but lays down OIL on every disc tile
+            // (twice so the surface is dense) and OILYs mobs on those tiles.
+            for (Point p : disc) {
+                for (int i = 0; i < 2; i++) SurfaceSystem.addSurface(level, p, Surface.OIL);
+                Mob m = MobQueries.mobAt(level, p);
+                if (m == null || bombBuffsIgnored(m, it)) continue;
+                BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.OILY,
+                        Math.max(1, lvl),
+                        Math.max(TurnSystem.STANDARD_TURN_TICKS,
+                                (5 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
+                        thrower);
             }
         } else if (te == ItemEffect.BLAST && inBounds) {
-            // Blast bomb: doubles the bomb-damage constant against everyone in the
-            // blast disc, plus a "blast" particle effect on every affected tile,
-            // plus a 0..3-duration smoke cloud on each tile so the blast leaves
-            // a visible aftermath (also gives smoke blocking a real role in the
-            // post-blast frame or two).
-            int dmg = bombDamage * 2;
+            // Blast bomb: bomb damage to every mob in the blast disc, a
+            // "blast" particle effect on every affected tile, plus a
+            // 0..3-duration smoke cloud on each tile so the blast leaves
+            // an irregular soot pattern.
             List<Mob> blastSurvivors = it.knockbackSquares > 0 ? new ArrayList<>() : null;
-            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
-                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
-                    if (dx * dx + dy * dy > r2) continue;
-                    int x = tx + dx, y = ty + dy;
-                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    Point p = new Point(x, y);
-                    if (level.events != null) {
-                        level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(p));
-                    }
-                    // 0..3-duration smoke per tile - when the roll lands on
-                    // 0 the tile gets no cloud at all, so a blast on open
-                    // floor leaves an irregular soot pattern rather than a
-                    // perfect smoky disc.
-                    int smokeDur = RANDOM.nextInt(4);
-                    if (smokeDur > 0) {
-                        CloudSystem.addCloud(level, x, y,
-                                com.bjsp123.rl2.model.Level.Cloud.SMOKE, smokeDur);
-                    }
-                    Mob m = MobQueries.mobAt(level, p);
-                    if (m != null && m != thrower) {
-                        processAttack(level, thrower, m,
-                                scaledBombDamage(m, it, dmg),
-                                AttackType.THROWN, DamageElement.PHYSICAL);
-                        if (blastSurvivors != null && m.hp > 0) blastSurvivors.add(m);
-                    }
+            for (Point p : disc) {
+                int x = p.tileX(), y = p.tileY();
+                if (level.events != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(p));
+                }
+                int smokeDur = RANDOM.nextInt(4);
+                if (smokeDur > 0) {
+                    CloudSystem.addCloud(level, x, y,
+                            com.bjsp123.rl2.model.Level.Cloud.SMOKE, smokeDur);
+                }
+                Mob m = MobQueries.mobAt(level, p);
+                if (m != null && m != thrower) {
+                    processAttack(level, thrower, m,
+                            scaledBombDamage(m, it, bombDamage),
+                            AttackType.THROWN, DamageElement.PHYSICAL);
+                    BrandSystem.applyBrandOnHit(level, thrower, m, it);
+                    if (blastSurvivors != null && m.hp > 0) blastSurvivors.add(m);
                 }
             }
             if (blastSurvivors != null) {
@@ -3072,17 +3410,13 @@ public class MobSystem {
             }
         } else if (te == ItemEffect.APPLYBUFFS && inBounds
                 && it.appliesBuff != null && !it.appliesBuff.isEmpty()) {
-            // APPLYBUFFS - every buff in the item's pipe-list is applied
-            // to every mob in a Chebyshev radius 1 disc around the impact
-            // tile. Item level + abilityPower scale via the standard
-            // ItemSystem helpers.
+            // APPLYBUFFS - every buff in the item's pipe-list is applied to
+            // every mob in the disc.
             int buffLvl = ItemStats.effectiveBuffLevel(it);
             int buffDur = ItemStats.effectiveBuffDuration(it);
-            for (Mob m : level.mobs) {
-                if (m == null || m.position == null || m.hp <= 0) continue;
-                int d = Math.max(Math.abs(m.position.tileX() - tx),
-                                 Math.abs(m.position.tileY() - ty));
-                if (d > 1) continue;
+            for (Point p : disc) {
+                Mob m = MobQueries.mobAt(level, p);
+                if (m == null || m.hp <= 0) continue;
                 if (bombBuffsIgnored(m, it)) continue;
                 for (com.bjsp123.rl2.model.Buff.BuffType b : it.appliesBuff) {
                     BuffSystem.apply(level, m, b, buffLvl, buffDur, thrower);
@@ -3091,95 +3425,69 @@ public class MobSystem {
         } else if (te == ItemEffect.POISONCLOUD && inBounds) {
             // POISONCLOUD - drop a persistent poison cloud over the disc.
             // The cloud layer (see {@link CloudSystem}) re-applies POISONED
-            // to mobs standing in it on each per-turn pass, so a longer
-            // cloud lifetime keeps poisoning whoever lingers in it. The
-            // cloud's duration is the item's scaled abilityPower.
+            // to mobs standing in it on each per-turn pass.
             int dur = ItemStats.effectiveBuffDuration(it);
-            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
-                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
-                    if (dx * dx + dy * dy > r2) continue;
-                    int x = tx + dx, y = ty + dy;
-                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    if (level.events != null) {
-                        level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(
-                                new Point(x, y)));
-                    }
-                    if (dur > 0) {
-                        CloudSystem.addCloud(level, x, y,
-                                com.bjsp123.rl2.model.Level.Cloud.POISON, dur);
-                    }
+            for (Point p : disc) {
+                if (level.events != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(p));
+                }
+                if (dur > 0) {
+                    CloudSystem.addCloud(level, p.tileX(), p.tileY(),
+                            com.bjsp123.rl2.model.Level.Cloud.POISON, dur);
                 }
             }
         } else if (te == ItemEffect.SMOKE && inBounds) {
-            // SMOKE - drop an opaque cloud over the disc. Smoke blocks sight and
-            // light but not projectiles; duration scales through the same
-            // abilityPower path used by poison-cloud items.
+            // SMOKE - drop an opaque cloud over the disc. Smoke blocks
+            // sight and light but not projectiles.
             int dur = ItemStats.effectiveBuffDuration(it);
-            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
-                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
-                    if (dx * dx + dy * dy > r2) continue;
-                    int x = tx + dx, y = ty + dy;
-                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    if (level.events != null) {
-                        level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(
-                                new Point(x, y)));
-                    }
-                    if (dur > 0) {
-                        CloudSystem.addCloud(level, x, y,
-                                com.bjsp123.rl2.model.Level.Cloud.SMOKE, dur);
-                    }
+            for (Point p : disc) {
+                if (level.events != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.BlastEffect(p));
+                }
+                if (dur > 0) {
+                    CloudSystem.addCloud(level, p.tileX(), p.tileY(),
+                            com.bjsp123.rl2.model.Level.Cloud.SMOKE, dur);
                 }
             }
         } else if (te == ItemEffect.FREEZE && inBounds) {
-            // Freeze bomb: bomb damage to the target, CHILLED applied to every mob in
-            // the freeze disc. Removes fire vegetation in the disc. Water-to-ice
-            // conversion is blocked on a new ICE surface type - TODO.
+            // Freeze bomb: bomb damage to the target, CHILLED applied to
+            // every mob in the disc, FIRE vegetation cleared on every disc
+            // tile.
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
                 processAttack(level, thrower, target,
                         scaledBombDamage(target, it, bombDamage),
                         AttackType.THROWN, DamageElement.PHYSICAL);
+                BrandSystem.applyBrandOnHit(level, thrower, target, it);
             }
-            for (int dx = -bombRadius; dx <= bombRadius; dx++) {
-                for (int dy = -bombRadius; dy <= bombRadius; dy++) {
-                    if (dx * dx + dy * dy > r2) continue;
-                    int x = tx + dx, y = ty + dy;
-                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    if (level.vegetation[x][y] == com.bjsp123.rl2.model.Level.Vegetation.FIRE) {
-                        level.vegetation[x][y] = null;
-                        if (level.fireRemaining     != null) level.fireRemaining[x][y]     = 0;
-                        if (level.fireEmitCountdown != null) level.fireEmitCountdown[x][y] = 0;
-                    }
+            for (Point p : disc) {
+                int x = p.tileX(), y = p.tileY();
+                if (level.vegetation[x][y] == com.bjsp123.rl2.model.Level.Vegetation.FIRE) {
+                    level.vegetation[x][y] = null;
+                    if (level.fireRemaining     != null) level.fireRemaining[x][y]     = 0;
+                    if (level.fireEmitCountdown != null) level.fireEmitCountdown[x][y] = 0;
                 }
-            }
-            for (Mob m : level.mobs) {
-                int mx = m.position.tileX(), my = m.position.tileY();
-                int dx = mx - tx, dy = my - ty;
-                if (dx * dx + dy * dy <= r2) {
-                    if (bombBuffsIgnored(m, it)) continue;
-                    BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.CHILLED,
-                            Math.max(1, lvl),
-                            Math.max(TurnSystem.STANDARD_TURN_TICKS,
-                                    (6 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                            thrower);
-                    if (m != thrower) {
-                        m.ticksTillMove += TurnSystem.STANDARD_TURN_TICKS;
-                    }
+                Mob m = MobQueries.mobAt(level, p);
+                if (m == null || bombBuffsIgnored(m, it)) continue;
+                BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.CHILLED,
+                        Math.max(1, lvl),
+                        Math.max(TurnSystem.STANDARD_TURN_TICKS,
+                                (6 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
+                        thrower);
+                if (m != thrower) {
+                    m.ticksTillMove += TurnSystem.STANDARD_TURN_TICKS;
                 }
             }
         } else if (te == ItemEffect.VOID && inBounds) {
             ItemSystem.applyVoidImpact(level, dst, lvl);
         } else if (te == ItemEffect.TELEPORT && inBounds) {
-            // Teleport orb: every non-thrower mob inside the bomb disc is
+            // Teleport orb: every non-thrower mob inside the disc is
             // scattered to a random walkable tile on a random level. The
-            // thrower stays put - the orb is for displacing enemies, not
-            // accidental self-teleport at point-blank range.
+            // thrower stays put.
             java.util.List<Mob> toScatter = new ArrayList<>();
-            for (Mob m : level.mobs) {
-                if (m == null || m == thrower || m.position == null || m.hp <= 0) continue;
-                int dx = m.position.tileX() - tx;
-                int dy = m.position.tileY() - ty;
-                if (dx * dx + dy * dy > r2) continue;
+            for (Point p : disc) {
+                Mob m = MobQueries.mobAt(level, p);
+                if (m == null || m == thrower || m.hp <= 0) continue;
                 toScatter.add(m);
             }
             for (Mob m : toScatter) scatterMobAcrossWorld(level, m);
@@ -3220,6 +3528,11 @@ public class MobSystem {
         // time, not here - the deferred-impact path keeps the player's
         // turn-cost model unchanged regardless of how long the visual
         // arc takes.
+
+        // Step 4 of the animation-gated lifecycle is now complete: the world
+        // state has fully mutated for this throw. Clear the pending-impact
+        // gate so step 5 (ticking resumes) can begin.
+        if (level.pendingImpactCount > 0) level.pendingImpactCount--;
     }
 
     /** Teleport {@code mob} to a random walkable, unoccupied tile on a
@@ -3256,13 +3569,10 @@ public class MobSystem {
         if (dst == null) return;
 
         Point fromPoint = mob.position;
-        // Cross-level scatter: move the mob between mob lists. Same-level
-        // scatter just updates position.
-        if (dst != srcLevel) {
-            srcLevel.mobs.remove(mob);
-            dst.mobs.add(mob);
-        }
-        mob.position = new Point(dx, dy);
+        // Cross-level scatter goes through the shared mob/level transfer
+        // helper so the World.currentLevelIndex follows PLAYER / SMART agents
+        // and doesn't leave the autoplay looking at an empty source level.
+        transferMobToLevel(srcLevel, mob, dst, new Point(dx, dy));
         if (dst.events != null) {
             dst.events.add(new com.bjsp123.rl2.event.GameEvent.MobTeleported(
                     mob,
@@ -3329,73 +3639,20 @@ public class MobSystem {
         }
     }
 
-    /** Like {@link #igniteDisc} but only sets fire to tiles that are
-     *  intrinsically flammable - oil-coated or grass / mushroom / tree
-     *  vegetation. Bare floor and stone don't catch. Used by the
-     *  wand-of-blast / DETONATION path so a concussive blast only
-     *  spreads fire where there's actually something to burn. */
-    static void igniteFlammableDisc(Level level, int cx, int cy, int radius) {
-        int r2 = radius * radius;
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                if (dx * dx + dy * dy > r2) continue;
-                int x = cx + dx, y = cy + dy;
-                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                Level.Surface s = level.surface[x][y];
-                Level.Vegetation v = level.vegetation[x][y];
-                boolean flammable = (s == Level.Surface.OIL)
-                        || (v == Level.Vegetation.GRASS
-                                || v == Level.Vegetation.MUSHROOMS
-                                || v == Level.Vegetation.TREES);
-                if (flammable) FireSystem.ignite(level, x, y);
-            }
-        }
-    }
-
-    /** Paint {@code v} onto every floor-like, surface-free cell in the Euclidean disc of
-     *  {@code radius} centred on {@code (cx, cy)}. The wand-of-fungus path uses this
-     *  directly with {@link Level.Vegetation#MUSHROOMS}. */
-    static void paintVegetationDisc(Level level, int cx, int cy, int radius,
-                                    Level.Vegetation v) {
-        int r2 = radius * radius;
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                if (dx * dx + dy * dy > r2) continue;
-                int x = cx + dx, y = cy + dy;
-                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                if (!level.tiles[x][y].isFloorLike()) continue;
-                if (level.surface[x][y] != null) continue;
-                Level.Vegetation old = level.vegetation[x][y];
-                level.vegetation[x][y] = v;
-                if (old != v) VegetationSystem.emitVegetationChanged(level, x, y, v);
-            }
-        }
-    }
-
-    /** Wand-of-vegetation paint: each cell of the disc rolls grass-or-tree independently
-     *  so the result reads as a small thicket - usually a tree at the centre with grass
-     *  around it, but occasionally the other way around. The centre cell skews tree-heavy;
-     *  cells further out skew grass-heavy so the player isn't drowning in trunks. */
-    static void paintMixedFloraDisc(Level level, int cx, int cy, int radius) {
-        int r2 = radius * radius;
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                int distSq = dx * dx + dy * dy;
-                if (distSq > r2) continue;
-                int x = cx + dx, y = cy + dy;
-                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                if (!level.tiles[x][y].isFloorLike()) continue;
-                if (level.surface[x][y] != null) continue;
-                // Centre + immediate neighbours skew tree (<=1 tile away); rest skew grass.
-                double treeChance = distSq <= 1 ? 0.6 : 0.25;
-                Level.Vegetation v = RANDOM.nextDouble() < treeChance
-                        ? Level.Vegetation.TREES
-                        : Level.Vegetation.GRASS;
-                Level.Vegetation old = level.vegetation[x][y];
-                level.vegetation[x][y] = v;
-                if (old != v) VegetationSystem.emitVegetationChanged(level, x, y, v);
-            }
-        }
+    /** Ignite a single tile when it carries something flammable - an oil
+     *  surface, or grass / mushroom / tree vegetation. Bare floor and stone
+     *  don't catch. Used by the wand-of-blast / DETONATION path so a
+     *  concussive blast only spreads fire where there's actually something
+     *  to burn. */
+    public static void igniteIfFlammable(Level level, int x, int y) {
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return;
+        Level.Surface s = level.surface[x][y];
+        Level.Vegetation v = level.vegetation[x][y];
+        boolean flammable = (s == Level.Surface.OIL)
+                || (v == Level.Vegetation.GRASS
+                        || v == Level.Vegetation.MUSHROOMS
+                        || v == Level.Vegetation.TREES);
+        if (flammable) FireSystem.ignite(level, x, y);
     }
 
     /** Public re-export of the package-private inventory remove for the wand/potion use

@@ -104,6 +104,15 @@ public final class StatBlock {
     public boolean terrifiable = true;
     /** Mob will not willingly enter a lit tile. OR-merged. */
     public boolean hatesLight = false;
+    /** Mob picks up items it walks over. OR-merged. The intrinsic block defaults
+     *  this to true in {@link com.bjsp123.rl2.logic.MobDefinition} (so the merge
+     *  starts true for normal species); the per-field default here is false so
+     *  item and buff contributions stay merge-neutral unless they explicitly
+     *  grant pickup. Ghosts, mice and other "won't carry loot" species set the
+     *  CSV cell to FALSE, which overrides the intrinsic default. */
+    public boolean canPickUp = false;
+    /** Mob is unaffected by POISON-element damage and the POISONED buff. OR-merged. */
+    public boolean poisonImmune = false;
 
     public StatBlock() {}
 
@@ -139,6 +148,8 @@ public final class StatBlock {
         terrifying  = false;
         terrifiable = false;
         hatesLight  = false;
+        canPickUp    = false;
+        poisonImmune = false;
         return this;
     }
 
@@ -175,6 +186,8 @@ public final class StatBlock {
         terrifying  = src.terrifying;
         terrifiable = src.terrifiable;
         hatesLight  = src.hatesLight;
+        canPickUp    = src.canPickUp;
+        poisonImmune = src.poisonImmune;
         return this;
     }
 
@@ -220,6 +233,8 @@ public final class StatBlock {
         if (other.terrifying)         terrifying         = true;
         if (other.terrifiable)        terrifiable        = true;
         if (other.hatesLight)         hatesLight         = true;
+        if (other.canPickUp)          canPickUp          = true;
+        if (other.poisonImmune)       poisonImmune       = true;
         return this;
     }
 }

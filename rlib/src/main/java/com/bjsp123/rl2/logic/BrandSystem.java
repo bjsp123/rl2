@@ -54,28 +54,35 @@ public final class BrandSystem {
     // -- On-hit dispatch -------------------------------------------------------
 
     /**
-     * Apply the elemental on-hit effect of {@code b} when {@code attacker}
-     * lands a melee blow on {@code target}. No-op for null/non-elemental brands
+     * Apply the elemental on-hit effect of {@code weapon}'s brand when
+     * {@code attacker} lands a melee blow on {@code target}. {@code elementpower}
+     * scales with the weapon's effective level (so a +5 FLAME sword ignites
+     * harder than a +0 one); other brand fields like CHILLED stack count
+     * also pick up the scaled magnitude. No-op for null/non-elemental brands
      * or if target has no position (e.g. already dead and removed).
      */
     public static void applyBrandOnHit(Level level, Mob attacker, Mob target,
-                                       BrandDefinition b) {
-        if (b == null || b.element == null || target.position == null) return;
+                                       Item weapon) {
+        if (weapon == null || weapon.brand == null) return;
+        BrandDefinition b = weapon.brand;
+        if (b.element == null || target.position == null) return;
+        int effLvl = ItemStats.effectiveLevel(weapon, attacker);
+        int power  = ItemStats.scaleAmount(b.elementpower, effLvl);
         int tx = target.position.tileX(), ty = target.position.tileY();
         switch (b.element) {
             case FIRE -> FireSystem.ignite(level, tx, ty);
             case LIGHTNING -> {
                 // Chain lightning from target outward; attacker is excluded
                 // from the chain so a brand can never zap its own wielder.
-                MinMax dmgRange = new MinMax(1, Math.max(1, b.elementpower));
+                MinMax dmgRange = new MinMax(1, Math.max(1, power));
                 ItemSystem.applyLightningChain(level, attacker, target.position,
                         dmgRange, attacker);
             }
             case POISONCLOUD -> {
-                // Drop a single-tile poison cloud lasting elementpower turns.
+                // Drop a single-tile poison cloud lasting `power` turns.
                 if (tx >= 0 && ty >= 0 && tx < level.width && ty < level.height) {
                     CloudSystem.addCloud(level, tx, ty,
-                            Level.Cloud.POISON, b.elementpower);
+                            Level.Cloud.POISON, power);
                     if (level.events != null) {
                         level.events.add(
                                 new com.bjsp123.rl2.event.GameEvent.BlastEffect(
@@ -85,7 +92,7 @@ public final class BrandSystem {
             }
             case FREEZE -> {
                 BuffSystem.apply(level, target, Buff.BuffType.CHILLED,
-                        b.elementpower, 8 * TurnSystem.STANDARD_TURN_TICKS, attacker);
+                        power, 8 * TurnSystem.STANDARD_TURN_TICKS, attacker);
                 if (tx >= 0 && ty >= 0 && tx < level.width && ty < level.height
                         && level.surface[tx][ty] == Level.Surface.WATER) {
                     level.surface[tx][ty] = Level.Surface.ICE;

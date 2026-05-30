@@ -101,6 +101,12 @@ public final class LootSystem {
         // The player's death ends the run; their corpse is never inspected so
         // the inventory dump would be wasted work. Skip.
         if (mob.behavior == Mob.Behavior.PLAYER) return;
+        // Mirror-match enemy players (beacon-room encounter): gear vanishes
+        // with them. The mirror is the only non-PLAYER-behaviour mob in the
+        // game whose {@code characterClass} is set, so the check uniquely
+        // identifies it. Without this gate the encounter would hand the real
+        // player a free arena kit on every beacon clear.
+        if (mob.characterClass != null) return;
 
         Point pos = mob.position;
         List<Item> drops = new ArrayList<>();

@@ -37,14 +37,14 @@ public final class MobDefinition {
     public double healRate;
     public int    accuracy = 10;   // StatBlock default
     public int    evasion  = 5;
-    public MinMax damage      = MinMax.ZERO;
-    public MinMax armor       = MinMax.ZERO;
-    public MinMax apDamage    = MinMax.ZERO;
-    public MinMax magicResist = MinMax.ZERO;
+    public int    damage;
+    public int    armor;
+    public int    apDamage;
+    public int    magicResist;
     public int    size = 4;
     public double visionRadius;
     public double wakeRadius;
-    public MinMax rangedDamage = MinMax.ZERO;
+    public int    rangedDamage;
     public int    rangedDistance;
     public int    rangedCost;
     public int    rangedRateOfFire;
@@ -57,6 +57,12 @@ public final class MobDefinition {
     public boolean terrifying;
     public boolean terrifiable = true;  // StatBlock default
     public boolean hatesLight;
+    /** Default true; mobs that shouldn't be carrying loot (ghosts, mice) set this
+     *  to false via the {@code canPickUp} cell. */
+    public boolean canPickUp = true;
+    /** Default false; mobs immune to POISON damage and the POISONED buff
+     *  (ghosts, spiders) set this true via the {@code poisonImmune} cell. */
+    public boolean poisonImmune;
     public double  eatSpawnChance;
     public double  mushroomEatSpawnChance;
     public double  turnSpawnChance;
@@ -94,11 +100,18 @@ public final class MobDefinition {
      *  fades away at the band's edges. */
     public double powerMin = 0.3;
     public double powerMax = 0.7;
+    /** Spawn-pool weight multiplier. {@code 1.0} = normal weighting; {@code 0}
+     *  removes the species from the spontaneous-spawn pool entirely (used for
+     *  player kits and retainer-only species like KITTEN that should only
+     *  appear via dedicated spawn paths). Composes by product with the
+     *  power-band and theme multipliers in
+     *  {@link LevelFactoryPopulate#eligibleMobs}. */
+    public double rarity = 1.0;
     /** Cluster size when this mob shows up: when picked, the populator spawns
      *  this many of the same species on adjacent floor tiles. {@code 1_1} (or
      *  {@code 1}) is a solo encounter; ant workers, blob spawns, etc. roll
      *  higher ranges. */
-    public MinMax clusterSize = MinMax.of(1);
+    public int clusterSize = 1;
     /** Optional theme gate. When non-null, the species is only eligible on
      *  levels whose {@code theme} matches; null means "any theme". */
     public com.bjsp123.rl2.model.Level.VisualTheme theme;
@@ -111,7 +124,7 @@ public final class MobDefinition {
     /** How many retainers spawn with each instance of this mob (rolled per
      *  spawn). {@code 0_0} = no retainers; cats roll {@code 0_2} kittens, the
      *  kobold general rolls {@code 2_3} fighters/spearmen/cleavers. */
-    public MinMax numRetainers = MinMax.ZERO;
+    public int numRetainers = 0;
     /** Mob types eligible to be picked as retainers; one entry per retainer
      *  is drawn (with replacement) from this list. Empty when
      *  {@link #numRetainers} is zero. */
@@ -120,17 +133,6 @@ public final class MobDefinition {
     // -- Special-case flags (replace hardcoded mob-type checks) --------------
     public boolean banishable;
     public int knockbackSquares;
-
-    // -- Per-level scaling deltas (applied by MobProgression on each level up
-    //    or pre-roll). MinMax columns use the {@code MIN_MAX} cell format.
-    public int    hpPerLevel             = 2;
-    public int    accuracyPerLevel       = 1;
-    public int    evasionPerLevel        = 1;
-    public MinMax damagePerLevel         = new MinMax(1, 2);
-    public MinMax apPerLevel             = MinMax.ZERO;
-    public MinMax rangedDamagePerLevel   = MinMax.ZERO;
-    public int    rangedDistancePerLevel = 0;
-    public MinMax armorPerLevel          = new MinMax(0, 1);
 
     // -- Abilities (single packed cell - only kobold general today) ----------
     public List<AbilityDef> abilities = new ArrayList<>();
@@ -242,16 +244,16 @@ public final class MobDefinition {
 
         d.accuracy    = CsvTable.intCell(row, "accuracy", 10);
         d.evasion     = CsvTable.intCell(row, "evasion", 5);
-        d.damage      = CsvTable.minMaxCell(row, "damage", MinMax.ZERO);
-        d.armor       = CsvTable.minMaxCell(row, "armor", MinMax.ZERO);
-        d.apDamage    = CsvTable.minMaxCell(row, "apDamage", MinMax.ZERO);
-        d.magicResist = CsvTable.minMaxCell(row, "magicResist", MinMax.ZERO);
+        d.damage      = CsvTable.intCell(row, "damage", 0);
+        d.armor       = CsvTable.intCell(row, "armor", 0);
+        d.apDamage    = CsvTable.intCell(row, "apDamage", 0);
+        d.magicResist = CsvTable.intCell(row, "magicResist", 0);
 
         d.size         = CsvTable.intCell(row, "size", 4);
         d.visionRadius = CsvTable.dblCell(row, "visionRadius", 8);
         d.wakeRadius   = CsvTable.dblCell(row, "wakeRadius", 6);
 
-        d.rangedDamage     = CsvTable.minMaxCell(row, "rangedDamage", MinMax.ZERO);
+        d.rangedDamage     = CsvTable.intCell(row, "rangedDamage", 0);
         d.rangedDistance   = CsvTable.intCell(row, "rangedDistance", 0);
         d.rangedCost       = CsvTable.intCell(row, "rangedCost", 0);
         d.rangedRateOfFire = CsvTable.intCell(row, "rangedRateOfFire", 0);
@@ -266,6 +268,8 @@ public final class MobDefinition {
         d.terrifying          = CsvTable.boolCell(row, "terrifying", false);
         d.terrifiable         = CsvTable.boolCell(row, "terrifiable", true);
         d.hatesLight          = CsvTable.boolCell(row, "hatesLight", false);
+        d.canPickUp           = CsvTable.boolCell(row, "canPickUp", true);
+        d.poisonImmune        = CsvTable.boolCell(row, "poisonImmune", false);
 
         d.eatSpawnChance         = CsvTable.dblCell(row, "eatSpawnChance", 0);
         d.mushroomEatSpawnChance = CsvTable.dblCell(row, "mushroomEatSpawnChance", 0);
@@ -286,11 +290,11 @@ public final class MobDefinition {
         d.enemyFactions.addAll(CsvTable.listCell(row, "enemyFactions"));
         d.unique          = CsvTable.boolCell(row, "unique", false);
         d.drops           = com.bjsp123.rl2.util.CsvTable.parseDropSpecList(CsvTable.str(row, "dropQuality", null));
-        double[] power    = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
-        d.powerMin        = power[0];
-        d.powerMax        = power[1];
-        d.clusterSize     = CsvTable.minMaxCell(row, "clusterSize", MinMax.of(1));
-        d.numRetainers    = CsvTable.minMaxCell(row, "numRetainers", MinMax.ZERO);
+        d.powerMin        = CsvTable.dblCell(row, "minPowerLevel", 0.3);
+        d.powerMax        = CsvTable.dblCell(row, "maxPowerLevel", 0.7);
+        d.rarity          = CsvTable.dblCell(row, "rarity", 1.0);
+        d.clusterSize     = CsvTable.intCell(row, "clusterSize", 1);
+        d.numRetainers    = CsvTable.intCell(row, "numRetainers", 0);
         d.retainerTypes   = new ArrayList<>(CsvTable.listCell(row, "retainerTypes"));
         d.theme           = CsvTable.enumCell(row, "theme",
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
@@ -298,15 +302,6 @@ public final class MobDefinition {
 
         d.banishable         = CsvTable.boolCell(row, "banishable", false);
         d.knockbackSquares   = CsvTable.intCell(row, "knockbackSquares", 0);
-
-        d.hpPerLevel             = CsvTable.intCell(row, "hpPerLevel", 2);
-        d.accuracyPerLevel       = CsvTable.intCell(row, "accuracyPerLevel", 1);
-        d.evasionPerLevel        = CsvTable.intCell(row, "evasionPerLevel", 1);
-        d.damagePerLevel         = CsvTable.minMaxCell(row, "damagePerLevel", new MinMax(1, 2));
-        d.apPerLevel             = CsvTable.minMaxCell(row, "apPerLevel", MinMax.ZERO);
-        d.rangedDamagePerLevel   = CsvTable.minMaxCell(row, "rangedDamagePerLevel", MinMax.ZERO);
-        d.rangedDistancePerLevel = CsvTable.intCell(row, "rangedDistancePerLevel", 0);
-        d.armorPerLevel          = CsvTable.minMaxCell(row, "armorPerLevel", new MinMax(0, 1));
 
         d.abilities = parseAbilities(CsvTable.str(row, "abilities", null));
         d.initialBuffs = parseInitialBuffs(CsvTable.str(row, "initialBuffs", null));
@@ -452,16 +447,19 @@ public final class MobDefinition {
 
         m.intrinsic.accuracy    = accuracy;
         m.intrinsic.evasion     = evasion;
-        m.intrinsic.damage      = damage;
-        m.intrinsic.armor       = armor;
-        m.intrinsic.apDamage    = apDamage;
-        m.intrinsic.magicResist = magicResist;
+        // Combat-range stats are stored as single-int bases on the Mob; the
+        // effective StatBlock derives [N/2, N] ranges (scaled by character
+        // level) in MobStats.writeEffectiveStats.
+        m.baseDamage       = damage;
+        m.baseArmor        = armor;
+        m.baseApDamage     = apDamage;
+        m.baseMagicResist  = magicResist;
+        m.baseRangedDamage = rangedDamage;
 
         m.intrinsic.size         = size;
         m.intrinsic.visionRadius = visionRadius;
         m.intrinsic.wakeRadius   = wakeRadius;
 
-        m.intrinsic.rangedDamage     = rangedDamage;
         m.intrinsic.rangedDistance   = rangedDistance;
         m.intrinsic.rangedCost       = rangedCost;
         m.intrinsic.rangedRateOfFire = rangedRateOfFire;
@@ -474,6 +472,8 @@ public final class MobDefinition {
         m.intrinsic.terrifying         = terrifying;
         m.intrinsic.terrifiable        = terrifiable;
         m.intrinsic.hatesLight         = hatesLight;
+        m.intrinsic.canPickUp          = canPickUp;
+        m.intrinsic.poisonImmune       = poisonImmune;
 
         m.intrinsic.eatSpawnChance         = eatSpawnChance;
         m.intrinsic.mushroomEatSpawnChance = mushroomEatSpawnChance;
@@ -487,15 +487,6 @@ public final class MobDefinition {
         m.banishable              = banishable;
         m.unique                  = unique;
         m.intrinsic.knockbackSquares = knockbackSquares;
-
-        m.hpPerLevel             = hpPerLevel;
-        m.accuracyPerLevel       = accuracyPerLevel;
-        m.evasionPerLevel        = evasionPerLevel;
-        m.damagePerLevel         = damagePerLevel;
-        m.apPerLevel             = apPerLevel;
-        m.rangedDamagePerLevel   = rangedDamagePerLevel;
-        m.rangedDistancePerLevel = rangedDistancePerLevel;
-        m.armorPerLevel          = armorPerLevel;
 
         // AI sets - copy directly, then expand the attackAllExcept shorthand.
         m.attackTypes.addAll(attackTypes);

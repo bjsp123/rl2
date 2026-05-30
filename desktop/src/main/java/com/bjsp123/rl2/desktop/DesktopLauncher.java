@@ -15,6 +15,9 @@ public class DesktopLauncher {
         DesktopPersistence persistence = new DesktopPersistence();
         int[] size = readWindowSize(persistence);
 
+        // Register the SMART mob brain before Rl2Game.create() finishes loading mobs.
+        com.bjsp123.rl2.ai.RaiBootstrap.init();
+
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
         config.setForegroundFPS(60);
         config.setTitle("rl2");

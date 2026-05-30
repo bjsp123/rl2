@@ -15,6 +15,8 @@ public final class ItemSystem {
 
     private ItemSystem() {}
 
+    private static final java.util.Random RANDOM = new java.util.Random();
+
     private static String actorName(Mob mob) {
         return mob != null && mob.name != null
                 ? mob.name
@@ -44,6 +46,7 @@ public final class ItemSystem {
      */
     public static void eat(Level level, Mob eater, Item item) {
         if (eater == null || item == null || item.foodValue <= 0) return;
+        com.bjsp123.rl2.util.ActionTracker.bumpEat(eater);
         eater.satiety = Math.min(GameBalance.STARTING_SATIETY, eater.satiety + item.foodValue);
         applyConsumableBuff(level, eater, item);
         applyManaFountRecharge(level, eater);
@@ -56,22 +59,30 @@ public final class ItemSystem {
     }
 
     /** MANA_FOUNT perk hook - on food / potion consumption, every wand in the
-     *  user's bag + equipped slots gains {@code perkLvl} charges, clamped at
-     *  each wand's effective max charge. No-op when the user doesn't carry
-     *  the perk. Called from {@link #eat} and {@link #drinkPotion}. */
+     *  user's bag + equipped slots gains {@code perkLvl / 2} charges,
+     *  clamped at each wand's effective max charge. No-op when the user doesn't
+     *  carry the perk. Called from {@link #eat} and {@link #drinkPotion}.
+     *
+     *  <p>Half-charges are resolved probabilistically: odd levels grant a
+     *  50% chance of one extra charge on top of the integer half. So L1 is
+     *  a coinflip for +1 charge, L2 = +1 always, L3 = +1 always plus a
+     *  coinflip for +2, ..., L10 = +5 always. */
     private static void applyManaFountRecharge(Level level, Mob user) {
         if (user == null || user.perks == null || user.inventory == null) return;
         int lvl = user.perks.getOrDefault(com.bjsp123.rl2.model.Perk.MANA_FOUNT, 0);
         if (lvl <= 0) return;
+        int recharge = lvl / 2;
+        if ((lvl & 1) == 1 && RANDOM.nextBoolean()) recharge++;
+        if (recharge <= 0) return;
         boolean topped = false;
         if (user.inventory.bag != null) {
             for (Item bagItem : user.inventory.bag) {
                 if (bagItem == null) continue;
                 if (bagItem.useBehavior != Item.UseBehavior.WAND) continue;
                 if (bagItem.baseChargeMax <= 0) continue;
-                float max = ItemStats.effectiveMaxCharge(bagItem, user);
+                float max = ItemStats.effectiveMaxCharge(bagItem, ItemStats.effectiveLevel(bagItem, user));
                 float before = bagItem.charge;
-                bagItem.charge = Math.min(max, bagItem.charge + lvl);
+                bagItem.charge = Math.min(max, bagItem.charge + recharge);
                 if (bagItem.charge > before) topped = true;
             }
         }
@@ -79,14 +90,14 @@ public final class ItemSystem {
             if (eq == null) continue;
             if (eq.useBehavior != Item.UseBehavior.WAND) continue;
             if (eq.baseChargeMax <= 0) continue;
-            float max = ItemStats.effectiveMaxCharge(eq, user);
+            float max = ItemStats.effectiveMaxCharge(eq, ItemStats.effectiveLevel(eq, user));
             float before = eq.charge;
-            eq.charge = Math.min(max, eq.charge + lvl);
+            eq.charge = Math.min(max, eq.charge + recharge);
             if (eq.charge > before) topped = true;
         }
         if (topped && level != null && level.events != null && user.position != null) {
             // Reuse the heal-applied floater as a "+N mana" visual cue.
-            level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(user, lvl));
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(user, recharge));
         }
     }
 
@@ -96,7 +107,7 @@ public final class ItemSystem {
      * <ul>
      *   <li>{@code LEVEL_UP} - bumps the picker's character level by one
      *       (delegated to {@link MobProgression#applyLevelUp}).</li>
-     *   <li>{@code HP_UP} - restores {@code maxHp * abilityPower} HP,
+     *   <li>{@code HP_UP} - restores {@code maxHp * effectPower} HP,
      *       clamped at the picker's max.</li>
      *   <li>{@code MANA_UP} - every wand-bearing item in the picker's
      *       inventory gains its own {@code chargeGain} of charge,
@@ -112,9 +123,9 @@ public final class ItemSystem {
         if (eff == null) return;
         switch (eff) {
             case LEVEL_UP -> {
-                if(item.abilityPower >0){
+                if(item.effectPower >0){
                     com.bjsp123.rl2.logic.MobProgression.awardXp(level, picker,
-                        (int) (item.abilityPower * GameBalance.XP_PER_POWER_ORB));
+                        (int) (item.effectPower * GameBalance.XP_PER_POWER_ORB));
                 } else {
                     com.bjsp123.rl2.logic.MobProgression.awardXp(level, picker,
                         GameBalance.XP_PER_POWER_ORB);
@@ -129,7 +140,7 @@ public final class ItemSystem {
             }
             case HP_UP -> {
                 double maxHp = picker.effectiveStats().maxHp;
-                double healed = Math.max(1.0, maxHp * item.abilityPower);
+                double healed = Math.max(1.0, maxHp * item.effectPower);
                 double newHp = Math.min(maxHp, picker.hp + healed);
                 int delta = (int) Math.round(newHp - picker.hp);
                 picker.hp = newHp;
@@ -142,12 +153,14 @@ public final class ItemSystem {
                 if (picker.inventory == null) break;
                 for (Item bagItem : picker.inventory.bag) {
                     if (bagItem == null || bagItem.baseChargeMax <= 0) continue;
-                    bagItem.charge = Math.min(ItemStats.effectiveMaxCharge(bagItem, picker),
+                    bagItem.charge = Math.min(
+                            ItemStats.effectiveMaxCharge(bagItem, ItemStats.effectiveLevel(bagItem, picker)),
                             bagItem.charge + (bagItem.chargeGain*GameBalance.MANA_PER_PILL));
                 }
                 for (Item eq : picker.inventory.allEquipped()) {
                     if (eq == null || eq.baseChargeMax <= 0) continue;
-                    eq.charge = Math.min(ItemStats.effectiveMaxCharge(eq, picker),
+                    eq.charge = Math.min(
+                            ItemStats.effectiveMaxCharge(eq, ItemStats.effectiveLevel(eq, picker)),
                             eq.charge + (eq.chargeGain*GameBalance.MANA_PER_PILL));
                 }
             }
@@ -176,6 +189,7 @@ public final class ItemSystem {
      */
     public static void drinkPotion(Level level, Mob drinker, Item item) {
         if (drinker == null || item == null) return;
+        com.bjsp123.rl2.util.ActionTracker.bumpPotion(drinker);
         applyPotionEffect(level, drinker, item, drinker);
         applyManaFountRecharge(level, drinker);
         emitPotionBurst(level, drinker.position, item);
@@ -229,7 +243,7 @@ public final class ItemSystem {
     private static void applyPotionEffect(Level level, Mob mob, Item item, Mob source) {
         if (mob == null || item == null) return;
         applyConsumableBuff(level, mob, item);
-        if (item.damage.max() > 0) {
+        if (item.damage > 0) {
             int dmg = MobSystem.rollRange(ItemStats.effectiveDamageRange(item));
             if (dmg > 0) {
                 MobSystem.processAttack(level, source, mob, dmg,
@@ -250,13 +264,14 @@ public final class ItemSystem {
 
     /** Apply the item's CSV-declared {@link Item#appliesBuff} to the user, with
      *  level / duration scaled by the standard item-level helpers. No-op when the
-     *  item carries no buff. Holder-aware so a scaling jade item's buff picks
-     *  up the {@code scalesWithUser} character-level bonus. */
+     *  item carries no buff. Uses the holder-aware {@code effectiveLevel} so
+     *  perks / SORCERY / sorcery brands shape the applied buff. */
     private static void applyConsumableBuff(Level level, Mob user, Item item) {
         if (item == null || item.appliesBuff == null
                 || item.appliesBuff.isEmpty()) return;
-        int lvl = ItemStats.effectiveBuffLevel(item, user);
-        int dur = ItemStats.effectiveBuffDuration(item, user);
+        int effLvl = ItemStats.effectiveLevel(item, user);
+        int lvl = ItemStats.effectiveBuffLevel(item, effLvl);
+        int dur = ItemStats.effectiveBuffDuration(item, effLvl);
         for (com.bjsp123.rl2.model.Buff.BuffType b : item.appliesBuff) {
             BuffSystem.apply(level, user, b, lvl, dur, user);
         }
@@ -295,13 +310,20 @@ public final class ItemSystem {
     }
     /**
      * Apply a wand's element to a target tile. Effect strength scales with
-     * the wand's own per-item columns ({@link Item#tilesAffected},
-     * {@link Item#damage}, plus their per-level increments). Called from
-     * rgame's {@code Animator} as the {@code PendingImpact} callback once the
-     * wand-missile or ray visual completes - the wand instance is carried
-     * through the event so the impact site has access to its data-driven
-     * scaling. {@code wand} may be {@code null} (defensive); element only
-     * dispatches that need its damage / AOE columns then short-circuit.
+     * the wand's own per-item columns ({@link Item#effectSize},
+     * {@link Item#damage}, plus their per-level increments).
+     *
+     * <p><b>Must run synchronously from {@link #fireWand}, not from an
+     * Animator PendingImpact callback.</b> See the fireWand and
+     * {@link com.bjsp123.rl2.logic.MobSystem#throwItem} javadocs for the
+     * core invariant: a ranged attack must complete and deal damage before
+     * the defender gets to move. Letting the Animator drive impact gives
+     * the target ticks to escape the missile / ray's path - the wand-fizzle
+     * regression. Visual delay of damage popups / death fades is a
+     * renderer-side concern, decoupled from this mutation.
+     *
+     * <p>{@code wand} may be {@code null} (defensive); elements that need
+     * its damage / AOE columns then short-circuit.
      */
     public static void applyWandImpact(Level level, Mob caster, Point target,
                                        Item.ItemEffect element, Item wand,
@@ -309,8 +331,7 @@ public final class ItemSystem {
         if (level == null || target == null || element == null) return;
         int tx = target.tileX(), ty = target.tileY();
         if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
-        int targetTiles = ItemStats.effectiveTilesAffected(wand, effectiveLevel);
-        int areaRadius  = radiusForTileCount(targetTiles);
+        int targetTiles = ItemStats.effectiveSize(wand, effectiveLevel);
         switch (element) {
             case WATER -> {
                 for (int i = 0; i < targetTiles; i++)
@@ -320,30 +341,64 @@ public final class ItemSystem {
                 for (int i = 0; i < targetTiles; i++)
                     SurfaceSystem.addSurface(level, target, Level.Surface.OIL);
             }
-            case GRASS    -> MobSystem.paintMixedFloraDisc(level, tx, ty, areaRadius);
-            case FUNGUS   -> MobSystem.paintVegetationDisc(level, tx, ty, areaRadius, Level.Vegetation.MUSHROOMS);
-            case FIRE     -> MobSystem.igniteDisc(level, tx, ty, areaRadius);
+            case GRASS -> {
+                // Mix of grass and trees - per-drop coin flip; cascade outward
+                // from the target as each drop fills its cell.
+                for (int i = 0; i < targetTiles; i++) {
+                    Level.Vegetation v = RANDOM.nextDouble() < 0.4
+                            ? Level.Vegetation.TREES
+                            : Level.Vegetation.GRASS;
+                    VegetationSystem.addVegetation(level, target, v);
+                }
+            }
+            case FUNGUS -> {
+                for (int i = 0; i < targetTiles; i++)
+                    VegetationSystem.addVegetation(level, target, Level.Vegetation.MUSHROOMS);
+            }
+            case FIRE -> {
+                // Bomb-style packing: ignite the closest-to-target unblocked
+                // tiles, capped at effectSize.
+                for (Point p : packTilesAround(level, target, targetTiles)) {
+                    FireSystem.ignite(level, p.tileX(), p.tileY());
+                }
+            }
             case DETONATION -> {
-                int radius = areaRadius + 1;
+                java.util.List<Point> disc = packTilesAround(level, target, targetTiles);
                 // Concussive blast - only sets fire to tiles that are
                 // intrinsically flammable (grass / mushrooms / trees /
                 // oil). Bare stone is left intact.
-                MobSystem.igniteFlammableDisc(level, tx, ty, radius);
+                for (Point p : disc) {
+                    MobSystem.igniteIfFlammable(level, p.tileX(), p.tileY());
+                }
                 if (level.events != null) {
+                    int radius = radiusForTileCount(targetTiles);
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.ExplosionEffect(target, radius));
                 }
+                // 1. Damage first. Roll once and apply to every mob in the
+                //    disc; collect survivors so we don't knockback corpses.
+                java.util.List<Mob> survivors = new java.util.ArrayList<>();
+                if (wand != null && wand.damage > 0) {
+                    int dmg = MobSystem.rollRange(
+                            ItemStats.effectiveDamageRange(wand, effectiveLevel));
+                    for (Point p : disc) {
+                        Mob m = MobQueries.mobAt(level, p);
+                        if (m == null || m == caster) continue;
+                        MobSystem.processAttack(level, caster, m, dmg,
+                                MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
+                        BrandSystem.applyBrandOnHit(level, caster, m, wand);
+                        if (m.hp > 0) survivors.add(m);
+                    }
+                } else {
+                    for (Point p : disc) {
+                        Mob m = MobQueries.mobAt(level, p);
+                        if (m != null && m != caster && m.hp > 0) survivors.add(m);
+                    }
+                }
+                // 2. Knockback survivors only.
                 int kb = wand != null ? wand.knockbackSquares : 0;
                 if (kb > 0) {
-                    int r2det = radius * radius;
-                    java.util.List<com.bjsp123.rl2.model.Mob> inBlast =
-                            new java.util.ArrayList<>(level.mobs);
-                    for (com.bjsp123.rl2.model.Mob m : inBlast) {
-                        if (m == caster || m.position == null) continue;
-                        int mdx = m.position.tileX() - tx;
-                        int mdy = m.position.tileY() - ty;
-                        if (mdx * mdx + mdy * mdy <= r2det) {
-                            MobSystem.knockBack(level, m, kb, target);
-                        }
+                    for (Mob m : survivors) {
+                        MobSystem.knockBack(level, m, kb, target);
                     }
                 }
             }
@@ -351,6 +406,29 @@ public final class ItemSystem {
                 Mob victim = MobQueries.mobAt(level, target);
                 if (victim != null && victim.banishable) {
                     MobSystem.killMob(level, victim, caster);
+                }
+            }
+            case BLAST -> {
+                // Mirror of the bomb BLAST branch in MobSystem.applyThrowImpact,
+                // adapted as a wand: damage to every mob in the disc, blast
+                // particle effect on each tile. No knockback, no smoke clouds
+                // (this is the lighter wand variant).
+                java.util.List<Point> blastDisc = packTilesAround(level, target, targetTiles);
+                int dmg = wand != null && wand.damage > 0
+                        ? MobSystem.rollRange(
+                                ItemStats.effectiveDamageRange(wand, effectiveLevel))
+                        : 0;
+                for (Point p : blastDisc) {
+                    if (level.events != null) {
+                        level.events.add(
+                                new com.bjsp123.rl2.event.GameEvent.BlastEffect(p));
+                    }
+                    if (dmg <= 0) continue;
+                    Mob m = MobQueries.mobAt(level, p);
+                    if (m == null || m == caster) continue;
+                    MobSystem.processAttack(level, caster, m, dmg,
+                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
+                    BrandSystem.applyBrandOnHit(level, caster, m, wand);
                 }
             }
             case LIGHTNING -> applyLightningChain(level, caster, target, wand, effectiveLevel);
@@ -362,10 +440,11 @@ public final class ItemSystem {
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
                     MobSystem.processAttack(level, caster, victim, dmg,
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
+                    BrandSystem.applyBrandOnHit(level, caster, victim, wand);
                 }
             }
             case VOID -> applyVoidImpact(level, target, effectiveLevel);
-            case POLYMORPH -> applyPolymorphImpact(level, target, areaRadius);
+            case POLYMORPH -> applyPolymorphImpact(level, target, radiusForTileCount(targetTiles));
         }
         if (element != Item.ItemEffect.DETONATION
                 && element != Item.ItemEffect.BANISHMENT
@@ -373,6 +452,8 @@ public final class ItemSystem {
                 && level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(target, element));
         }
+        // Step 4 complete - clear the pending-impact gate so step 5 begins.
+        if (level.pendingImpactCount > 0) level.pendingImpactCount--;
     }
 
     /**
@@ -597,6 +678,22 @@ public final class ItemSystem {
         if (fresh == null) return;
         int idx = level.mobs.indexOf(old);
         if (idx < 0) return;
+        // Attitude survives the shape change. AI mode (behavior), HP, stats,
+        // inventory and perks all reset to the new species' defaults, but
+        // every field read by MobSystem.getAttitudeToMob is inherited - so a
+        // tamed dog stays loyal, a kobold-vs-orc faction war keeps warring,
+        // and a flee-from-cats kitten still flees cats even as a bat.
+        fresh.owner         = old.owner;
+        fresh.faction       = old.faction;
+        fresh.enemyFactions = old.enemyFactions != null
+                ? new java.util.HashSet<>(old.enemyFactions)
+                : null;
+        fresh.attackTypes   = old.attackTypes != null
+                ? new java.util.HashSet<>(old.attackTypes)
+                : null;
+        fresh.fleeTypes     = old.fleeTypes != null
+                ? new java.util.HashSet<>(old.fleeTypes)
+                : null;
         level.mobs.set(idx, fresh);
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(fresh, pos));
@@ -605,7 +702,14 @@ public final class ItemSystem {
 
     private static void applyLightningChain(Level level, Mob caster, Point target,
                                             Item wand, int effectiveLevel) {
+        // Capture the primary target before the chain runs - it may die mid-
+        // chain, after which BrandSystem can't apply ON_FIRE / POISONCLOUD
+        // etc. to its tile. The brand fires only on the FIRST hit (the wand
+        // launches at one mob; the lightning JUMPS to others, but the brand
+        // tag is conceptually carried by the launch).
+        Mob primary = MobQueries.mobAt(level, target);
         applyLightningChain(level, caster, target, ItemStats.effectiveDamageRange(wand, effectiveLevel), null);
+        if (primary != null) BrandSystem.applyBrandOnHit(level, caster, primary, wand);
     }
 
     /** Package-private overload for brand-triggered lightning - caller supplies
@@ -706,6 +810,21 @@ public final class ItemSystem {
      * a wand fired past an enemy resolves on that enemy. Caster always pays
      * {@code attackCost}, even if the summon spawn was gated out - keeps the move
      * cost identical between player and AI paths.
+     *
+     * <p><b>DO NOT DEFER THE IMPACT.</b> This function MUST call
+     * {@link #applyWandImpact} synchronously before returning - same invariant
+     * as {@link com.bjsp123.rl2.logic.MobSystem#throwItem}. A ranged attack
+     * in this game must complete and deal damage BEFORE the defender gets a
+     * chance to move; if the rgame Animator's PendingImpact / arc-completion
+     * callback drives wand impact, the target steps out of the missile / ray
+     * during the visual flight and the wand silently misses. This regression
+     * has been introduced and re-fixed multiple times - if you see this
+     * function emit {@code WandMissileFired} / {@code WandRayFired} but NOT
+     * call {@code applyWandImpact}, you're looking at the regression.
+     *
+     * <p>The rgame Animator may delay damage popups / impact flashes / death
+     * fades to align with the missile / ray visual arrival - that's a
+     * renderer-side concern. World state is mutated synchronously here.
      */
     public static void fireWand(Level level, Mob caster, Item wand, Point target) {
         if (level == null || caster == null || wand == null) return;
@@ -722,6 +841,8 @@ public final class ItemSystem {
             }
             return;
         }
+        // Counted past the fizzle gate so only successful zaps tally.
+        com.bjsp123.rl2.util.ActionTracker.bumpWand(caster);
         if (wand.summonsWhenUsed != null) {
             castSummonWand(level, caster, wand);
             wand.charge = Math.max(0f, wand.charge - 1f);
@@ -780,6 +901,18 @@ public final class ItemSystem {
             EventLog.add(Messages.mobUsesItem(caster.name, wand.name, false));
         }
         TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
+        // ANIMATION-GATED LIFECYCLE: defer world-state mutation to step 4 of
+        // the lifecycle - fires when the missile / ray visual lands. The
+        // pending-impact gate prevents any other mob from acting until the
+        // resolve callback runs. See MobSystem.throwItem javadoc for the
+        // full 5-step model.
+        final Mob casterFinal = caster;
+        final Point impactFinal = impact;
+        final Item.ItemEffect element = wand.wandEffect;
+        final Item wandFinal = wand;
+        final int effLvlFinal = effLvl;
+        MobSystem.queuePendingImpact(level,
+                () -> applyWandImpact(level, casterFinal, impactFinal, element, wandFinal, effLvlFinal));
     }
 
     /**
@@ -814,6 +947,7 @@ public final class ItemSystem {
             return false;
         }
         applyConsumableBuff(level, user, item);
+        com.bjsp123.rl2.util.ActionTracker.bumpTool(user);
         if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
         if (level != null && level.events != null && user.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(user.position, item));
@@ -836,8 +970,8 @@ public final class ItemSystem {
      *       chasms count as valid landings (the grappled subject just
      *       falls in).</li>
      *   <li>Mob on the target tile: if its {@code size} exceeds the item's
-     *       {@code abilityPower} (overloaded as the max-size cap for GRAPPLE
-     *       items) the rope flashes and fades - emit a {@code GrappleFired}
+     *       {@code effectPower} (max-size cap for GRAPPLE items) the rope
+     *       flashes and fades - emit a {@code GrappleFired}
      *       with {@code success = false} and no movement events. Otherwise
      *       the mob is moved to the landing tile (chasm-fall handled).</li>
      *   <li>Floor items on the target tile: relocated to the landing tile,
@@ -861,7 +995,7 @@ public final class ItemSystem {
         }
         Mob targetMob = MobQueries.mobAt(level,target);
         if (targetMob != null) {
-            int maxSize = Math.max(0, (int) item.abilityPower);
+            int maxSize = Math.max(0, (int) ItemStats.effectivePower(item));
             if (targetMob.effectiveStats().size > maxSize) {
                 if (level.events != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
@@ -946,7 +1080,7 @@ public final class ItemSystem {
         if (victim == null || victim == user || victim.hp <= 0) return;
 
         int effLvl = ItemStats.effectiveLevel(item, user);
-        int dashRange = Math.max(1, (int) item.abilityPower + effLvl / 2);
+        int dashRange = Math.max(1, ItemStats.effectiveRange(item, effLvl));
         int dx = Math.abs(target.tileX() - user.position.tileX());
         int dy = Math.abs(target.tileY() - user.position.tileY());
         if (Math.max(dx, dy) > dashRange) return;
@@ -973,13 +1107,11 @@ public final class ItemSystem {
         MobSystem.processAttack(level, user, victim, total,
                 MobSystem.AttackType.MELEE, MobSystem.DamageElement.PHYSICAL);
 
-        // Knockback - jade bull's intrinsic knockbackSquares plus its
-        // scalesWithUser bonus (+effLvl when flagged), then the standard
-        // KNOCKBACK-perk contribution (capped at 5 tiles; levels 6-10 add
-        // wall-slam damage instead).
+        // Knockback - jade bull's intrinsic knockbackSquares scaled by Rule A
+        // (additive half-level) then the standard KNOCKBACK-perk contribution
+        // (capped at 5 tiles; levels 6-10 add wall-slam damage instead).
         if (victim.hp > 0) {
-            int kb = item.knockbackSquares
-                    + (item.scalesWithUser ? effLvl : 0);
+            int kb = ItemStats.effectiveKnockback(item);
             int perkLvl = user.perks != null
                     ? user.perks.getOrDefault(com.bjsp123.rl2.model.Perk.KNOCKBACK, 0)
                     : 0;
@@ -1025,8 +1157,9 @@ public final class ItemSystem {
     }
 
     /** JUMP-behavior use: teleport the jumper to {@code target} within Chebyshev
-     *  radius {@code item.abilityPower}. The target must be a passable, unoccupied tile.
-     *  Costs one {@code moveCost}. Emits {@link com.bjsp123.rl2.event.GameEvent.MobJumped}. */
+     *  radius {@link ItemStats#effectiveRange}. The target must be a passable,
+     *  unoccupied tile. Costs one {@code moveCost}. Emits
+     *  {@link com.bjsp123.rl2.event.GameEvent.MobJumped}. */
     public static void castJump(Level level, Mob jumper, Item item, Point target) {
         if (level == null || jumper == null || item == null || target == null) return;
         if (jumper.position == null) return;
@@ -1040,12 +1173,11 @@ public final class ItemSystem {
             }
             return;
         }
-        // JUMP perk scales the item's effective level - radius picks up
-        // {@code +perkLvl} tiles when the jumper has the perk. Charge regen
-        // / max charge already flow through ItemStats.effectiveMaxCharge,
-        // so the perk improves both axes for any JUMP-behavior item.
-        int radius = Math.max(0, (int) item.abilityPower
-                + ItemStats.effectiveLevel(item, jumper));
+        // JUMP perk scales the item's effective level via effectiveRange,
+        // so the perk improves jump distance and charge regen / max charge
+        // (the latter via ItemStats.effectiveMaxCharge).
+        int effLvl = ItemStats.effectiveLevel(item, jumper);
+        int radius = Math.max(0, ItemStats.effectiveRange(item, effLvl));
         int dx = Math.abs(target.tileX() - jumper.position.tileX());
         int dy = Math.abs(target.tileY() - jumper.position.tileY());
         if (Math.max(dx, dy) > radius) return;
@@ -1175,7 +1307,11 @@ public final class ItemSystem {
         if (pet == null) return false;
         pet.owner = caster;
         if (caster != null) caster.beastsTamed++;
-        int petLevel = 1 + Math.max(0, wand.level);
+        // Pet spawn level = ceil(effLvl / 2). Effective level includes
+        // WANDMASTER perk + sorcery brand / buff bonuses, so a Mage's pet
+        // strengthens with their casting build.
+        int effLvl = ItemStats.effectiveLevel(wand, caster);
+        int petLevel = (Math.max(0, effLvl) + 1) / 2;
         MobProgression.setSpawnLevel(pet, petLevel);
         level.mobs.add(pet);
         if (level.events != null) {
@@ -1192,6 +1328,57 @@ public final class ItemSystem {
         if (tiles <= 5) return 1;
         int r = (int) Math.ceil(Math.sqrt(tiles / Math.PI));
         return Math.max(1, r);
+    }
+
+    /** Pack {@code count} tiles around {@code centre}, "closest first" by
+     *  (Chebyshev distance, then Manhattan distance, then random). Only
+     *  returns tiles that have a clear projectile path from the centre
+     *  (no walls or closed doors in the way) — tiles in line-of-sight
+     *  shadow are skipped, so a bomb behind a corner doesn't wrap around.
+     *
+     *  <p>Centre tile itself is always first if it's in-bounds. Each
+     *  Chebyshev ring fills cardinal-extreme tiles first (manhattan = R),
+     *  then intermediate edges, then pure diagonals (manhattan = 2R);
+     *  within each band the order is randomised. If a ring can't fully
+     *  fill from the remaining count budget, that ring's selection is
+     *  randomly truncated — so a partial outer ring reads as scattered
+     *  affected tiles rather than a clean arc.
+     *
+     *  <p>Hard cap of 16 rings (a 33×33 area, ~1000 tiles) so a malformed
+     *  effectSize doesn't iterate forever. Returns fewer than
+     *  {@code count} tiles when the reachable area can't supply that many. */
+    public static java.util.List<Point> packTilesAround(Level level, Point centre, int count) {
+        java.util.List<Point> out = new java.util.ArrayList<>();
+        if (level == null || centre == null || count <= 0) return out;
+        int cx = centre.tileX(), cy = centre.tileY();
+        if (cx < 0 || cy < 0 || cx >= level.width || cy >= level.height) return out;
+        out.add(centre);
+        if (out.size() >= count) return out;
+        for (int r = 1; r <= 16 && out.size() < count; r++) {
+            java.util.List<Point> cardinals = new java.util.ArrayList<>();
+            java.util.List<Point> edges     = new java.util.ArrayList<>();
+            java.util.List<Point> diagonals = new java.util.ArrayList<>();
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;
+                    int nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                    Point p = new Point(nx, ny);
+                    if (!MobVisibility.jumpPathClear(level, centre, p)) continue;
+                    int m = Math.abs(dx) + Math.abs(dy);
+                    if (m == r)            cardinals.add(p);
+                    else if (m == 2 * r)   diagonals.add(p);
+                    else                   edges.add(p);
+                }
+            }
+            java.util.Collections.shuffle(cardinals, RANDOM);
+            java.util.Collections.shuffle(edges,     RANDOM);
+            java.util.Collections.shuffle(diagonals, RANDOM);
+            for (Point p : cardinals) { if (out.size() >= count) return out; out.add(p); }
+            for (Point p : edges)     { if (out.size() >= count) return out; out.add(p); }
+            for (Point p : diagonals) { if (out.size() >= count) return out; out.add(p); }
+        }
+        return out;
     }
 
 }

@@ -54,7 +54,14 @@ public class Mob {
          * getting close - kites away if within 2 tiles of the player. Otherwise paths
          * toward LOS-but-not-adjacent. Used by the horrible mask imp.
          */
-        RANGED_MOB_STANDOFF
+        RANGED_MOB_STANDOFF,
+        /**
+         * Rules-based GOAP planner mob. Dispatched via {@link com.bjsp123.rl2.logic.MobBrains}
+         * registry to a brain implementation in the {@code rai} module. When no brain is
+         * registered (or {@code GameBalance.smartAiEnabled} is false), falls back to
+         * {@link #MOB}.
+         */
+        SMART
     }
 
     /** Kind of ranged attack a mob fires. Currently the only option is a magic missile;
@@ -433,6 +440,10 @@ public class Mob {
      *  on every tick; default {@link Intent#IDLE} for spawn / ASLEEP / freshly-loaded
      *  mobs. */
     public Intent intent = Intent.IDLE;
+    /** Optional human-readable detail label set by the SMART AI ({@code rai} module) to
+     *  surface its current goal + action, e.g. {@code "SURVIVE: drink Lesser Healing"}.
+     *  UI falls back to {@link #intent} when null. Transient: not persisted, set per tick. */
+    public transient String intentDetail;
 
     // -- Status effects ------------------------------------------------------
     /** Active buffs and debuffs. Managed exclusively by
@@ -482,17 +493,16 @@ public class Mob {
     /** Unspent perk points awarded on level-up. */
     public int perkPoints;
 
-    // -- Per-level scaling deltas (set by MobDefinition.apply from mobs.csv) -
-    // Applied by MobProgression once per character level - both at spawn time
-    // (depth-based pre-roll) and on XP-driven level-up.
-    public int    hpPerLevel             = 2;
-    public int    accuracyPerLevel       = 1;
-    public int    evasionPerLevel        = 1;
-    public MinMax damagePerLevel         = new MinMax(1, 2);
-    public MinMax apPerLevel             = MinMax.ZERO;
-    public MinMax rangedDamagePerLevel   = MinMax.ZERO;
-    public int    rangedDistancePerLevel = 0;
-    public MinMax armorPerLevel          = new MinMax(0, 1);
+    // -- Base combat stats (set by MobDefinition.apply from mobs.csv) ----
+    // Each is a single int N; effective combat range is derived as [N/2, N]
+    // and scaled by character level in MobStats.writeEffectiveStats via the
+    // shared AMOUNT rule. The PerLevel deltas of the prior model are gone -
+    // growth flows through the rule instead.
+    public int baseDamage;
+    public int baseArmor;
+    public int baseApDamage;
+    public int baseMagicResist;
+    public int baseRangedDamage;
     /** Player's perk levels - perk -> level (>=1 = taken). Absence means perk not taken.
      *  Each entry consumed one perk point at acquisition. */
     public java.util.EnumMap<Perk, Integer> perks = new java.util.EnumMap<>(Perk.class);

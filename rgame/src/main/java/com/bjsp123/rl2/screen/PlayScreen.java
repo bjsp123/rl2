@@ -119,6 +119,23 @@ public class PlayScreen implements Screen {
      *  impacts remain. */
     private boolean deathTransitionPending;
 
+    /** Slow-mo factor for the killing-blow animation. The Animator's
+     *  {@code framesPerRender} is transiently overridden to this value when
+     *  the player dies, so the ghost flicker / fade plays in slow motion.
+     *  Cleared on transition to the death screen. */
+    private static final float DEATH_SLOWMO_FACTOR = 0.30f;
+
+    /** Number of render frames over which the post-death screen-fade ramps
+     *  from transparent to fully black. Starts only once the slow-mo death
+     *  animation has fully drained. */
+    private static final int DEATH_FADE_FRAMES = 60;
+
+    /** Counts up each render frame AFTER the in-world death animation has
+     *  completed (ghost faded, freeze frames drained). When this reaches
+     *  {@link #DEATH_FADE_FRAMES} the V2GameOver transition fires. The fade
+     *  overlay's alpha is {@code deathFadeFrame / DEATH_FADE_FRAMES}. */
+    private int deathFadeFrame;
+
     /** Shared cursor-memory for Look and targeting. Records the most recent mob and the
      *  most recent non-mob tile the player interacted with; {@link TargetHistory#pickInitial}
      *  turns that into a "best guess" starting cell for every new cursor-picking flow. */
@@ -683,10 +700,27 @@ public class PlayScreen implements Screen {
         // finish - see deathTransitionPending javadoc.
         if (player != null && playerAfter == null && lastSnapshot != null
                 && !deathTransitionPending) {
+            // Walk the rolling event log oldest -> newest and pull the last
+            // five player-involved entries. The very last one is the cause
+            // of death; the four before it are the lead-up (incoming hits,
+            // missed potions, walked-into-chasm, etc.). The V2GameOver
+            // screen renders the whole sequence so the player sees how the
+            // run actually ended, not just one cryptic line.
             java.util.List<com.bjsp123.rl2.model.LogEvent> logEntries = com.bjsp123.rl2.logic.EventLog.all();
-            for (int i = logEntries.size() - 1; i >= 0; i--) {
+            java.util.ArrayList<String> recent = new java.util.ArrayList<>();
+            for (int i = logEntries.size() - 1; i >= 0 && recent.size() < 5; i--) {
                 com.bjsp123.rl2.model.LogEvent le = logEntries.get(i);
-                if (le.involvesPlayer) { lastSnapshot.deathMessage = le.text; break; }
+                if (le == null || le.text == null) continue;
+                if (!le.involvesPlayer) continue;
+                recent.add(le.text);
+            }
+            java.util.Collections.reverse(recent);
+            lastSnapshot.deathLog = recent;
+            // Keep the legacy single-line field populated as a fallback for
+            // any UI / save reader that still reads it; equals the last
+            // entry of deathLog (the cause).
+            if (!recent.isEmpty()) {
+                lastSnapshot.deathMessage = recent.get(recent.size() - 1);
             }
             game.hallOfFame.add(lastSnapshot);
             com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
@@ -696,12 +730,26 @@ public class PlayScreen implements Screen {
             game.saveSystem.clear(saveSlot);
             game.currentPlay = null;
             deathTransitionPending = true;
+            deathFadeFrame = 0;
+            // Killing-blow cinematic: drop the animation speed for the next
+            // few seconds so the player's ghost flicker / fade plays in slow
+            // motion. Cleared just before the V2GameOver transition fires.
+            com.bjsp123.rl2.ui.skin.Settings.setAnimationTransientOverride(DEATH_SLOWMO_FACTOR);
         }
-        // Latched: wait for the death animation to drain, then transition.
-        if (deathTransitionPending
+        // Latched: wait for the death animation to drain, then ramp the
+        // black fade overlay, then transition. The fade frame counter only
+        // increments AFTER the in-world death visuals (slide, ghost
+        // flicker, fade) have settled, so the player sees their character
+        // die in slow motion before the screen fades to black.
+        boolean deathAnimDone = deathTransitionPending
                 && animator.queue.freezeFrames == 0
                 && !animator.hasPendingImpacts()
-                && animator.playerDeathAnimComplete()) {
+                && animator.playerDeathAnimComplete();
+        if (deathAnimDone) {
+            deathFadeFrame++;
+        }
+        if (deathTransitionPending && deathFadeFrame >= DEATH_FADE_FRAMES) {
+            com.bjsp123.rl2.ui.skin.Settings.setAnimationTransientOverride(0f);
             dispose();
             // Game over is terminal - clear the back-stack so the user can't
             // pop back into a disposed PlayScreen.
@@ -781,8 +829,33 @@ public class PlayScreen implements Screen {
         span = frameProfiler.start();
         game.ui.v2Stage.draw();
         frameProfiler.add("stageDraw", span);
+
+        // Death cinematic - opaque-ramping black overlay over the entire
+        // viewport once the in-world death anim has finished. Drawn AFTER
+        // the v2Stage so it covers HUD + popups, BEFORE the perf overlay
+        // so debug text stays readable through the fade.
+        if (deathTransitionPending && deathFadeFrame > 0) {
+            float alpha = Math.min(1f, deathFadeFrame / (float) DEATH_FADE_FRAMES);
+            drawDeathFadeOverlay(alpha);
+        }
+
         if (com.bjsp123.rl2.ui.skin.Settings.showPerfOverlay()) renderPerfOverlay();
         frameProfiler.finish(ticked, overlayOpen);
+    }
+
+    private void drawDeathFadeOverlay(float alpha) {
+        if (alpha <= 0f) return;
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
+        s.setProjectionMatrix(game.ui.camera.combined);
+        com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        com.badlogic.gdx.Gdx.gl.glBlendFunc(
+                com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(0f, 0f, 0f, alpha);
+        s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
+        s.end();
+        com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
     }
 
     /** True iff any modal popup or input-claiming overlay is currently open.

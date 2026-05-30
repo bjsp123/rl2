@@ -172,6 +172,10 @@ public final class GameBalance {
     public static int AI_GUARDRAIL_COST = 150;
     /** Maximum game-clock catch-up work to do in one render frame before yielding. */
     public static double TURN_LOOP_FRAME_BUDGET_MS = 8.0;
+    /** Master switch for the SMART mob brain (registered by the {@code rai} module via
+     *  {@link MobBrains}). When false, mobs tagged {@link Mob.Behavior#SMART} fall back
+     *  to {@link Mob.Behavior#MOB} behaviour. Default true. */
+    public static boolean SMART_AI_ENABLED = true;
 
     // ------------------------- Profiling ------------------------------------
     /** Emit one logcat line for slow PlayScreen render frames. */
@@ -194,6 +198,57 @@ public final class GameBalance {
 
     public static int MANA_PER_PILL = 2;
 
+    // ------------------------- Item-stat scaling factors --------------------
+    // Universal per-level increment formula for stats that grow with item
+    // level: `scaled = base + N × max(1, base/FACTOR)`. The factor controls
+    // how aggressively the increment scales with the base value. Smaller
+    // factor → bigger per-level jumps for high-base items.
+
+    /** Divisor for the per-level increment of "amount" stats (damage,
+     *  armor, apDamage, magicResist, accuracy, evasion, foodValue,
+     *  knockbackSquares, lightRadius, effectDuration, effectRange). At
+     *  factor=3 a base-3 stat grows +1/level, a base-6 stat +2/level,
+     *  a base-9 stat +3/level. */
+    public static int AMOUNT_LEVEL_SCALE_FACTOR = 5;
+
+    /** Divisor for wand / tool {@code baseChargeMax} per-level growth. */
+    public static int CHARGEMAX_LEVEL_SCALE_FACTOR = 2;
+
+    /** Divisor for {@code effectSize} per-level growth (bomb / wand AoE,
+     *  cloud disc). At factor=3 an effectSize=9 bomb grows +3 tiles per
+     *  item level. */
+    public static int TILECOUNT_LEVEL_SCALE_FACTOR = 3;
+
+    /** Divisor for damage on BOMB and WAND items: per-effective-level inc =
+     *  {@code max(1, damage / BOMB_WAND_DAMAGE_FACTOR)}. Smaller than
+     *  {@link #AMOUNT_LEVEL_SCALE_FACTOR} so wand / bomb damage scales harder
+     *  with level - they need it to keep up with melee weapons at depth.
+     *  Only the damage stat on these categories uses this factor; armor,
+     *  accuracy, etc. still flow through the AMOUNT factor. */
+    public static int BOMB_WAND_DAMAGE_FACTOR = 3;
+
+    /** Fudge term added per dungeon depth to the cumulative XP estimate
+     *  used by the arena gear-picker (and any future depth ↔ character-
+     *  level calculator). Covers un-modelled sources: themed-room rewards,
+     *  future drop tables, etc. Default 0 — bump if measured-XP per depth
+     *  ends up too conservative versus typical playthroughs. */
+    public static int MISC_XP_PER_DEPTH = 0;
+
+    /** Maximum per-character-level HP increment for mobs. Caps the
+     *  {@code base/AMOUNT_FACTOR} inc so a high-HP boss (e.g. ORC_PRESIDENT
+     *  base 53, raw inc 10) doesn't gain absurd HP per level: actual
+     *  per-level inc = {@code min(MOB_HP_INC_CAP, max(1, base/factor))}. */
+    public static int MOB_HP_INC_CAP = 5;
+
+    /** Sharper {@code effectSize} divisor for the cascade wands
+     *  (WAND_WATER / WAND_OIL / WAND_GRASS / WAND_FUNGUS). Factor 2 gives
+     *  base=5 → 5+2×lvl, so +0=5 / +5=15 / +10=25 cascade drops. */
+    public static int TILECOUNT_CASCADE_FACTOR = 2;
+
+    /** Divisor for {@code knockbackSquares} per-level growth. Larger value
+     *  = slower knockback growth than damage / armor. */
+    public static int KNOCKBACK_LEVEL_SCALE_FACTOR = 5;
+
     /** Maximum bag slots for equipment items (WEAPON, OFFHAND, ARMOR, AMULET) not
      *  yet placed in an equipment slot. Each item occupies exactly one slot (equipment
      *  never stacks). */
@@ -210,9 +265,8 @@ public final class GameBalance {
 
     // ------------------------- Item-level scaling ----------------------------
     // Items carry a {@code level} field. Level 0 is baseline; every level above adds
-    // a fixed increment to the relevant stat. Per-level scaling values are now per-item
-    // ({@code damagePerLevel}, {@code armorPerLevel}, {@code tilesAffectedPerLevel} columns
-    // on items.csv) - there are no kind-wide scaling globals here.
+    // a fixed increment to the relevant stat via the universal rules above
+    // (AMOUNT / TILECOUNT / CHARGEMAX / KNOCKBACK scale factors).
 
     /** Baseline food value of a level-0 food item. Food doesn't scale with level - it's
      *  always level 0 - so this is the only food number that matters. */
@@ -292,7 +346,29 @@ public final class GameBalance {
 
     // ------------------------- Throw range -----------------------------------
     /** Default Chebyshev throw range for the player targeting overlay. */
-    public static int DEFAULT_THROW_RANGE = 10;
+    public static int DEFAULT_THROW_RANGE = 6;
     /** Throw range bonus granted per level of the HURLER perk. */
     public static int HURLER_RANGE_PER_LEVEL = 2;
+
+    // ------------------------- Buff / perk tunables --------------------------
+    // These knobs used to live as hardcoded constants inside MobSystem and
+    // BuffSystem. Moved here so that designers can iterate on balance without
+    // recompiling rlib (just edit config.csv). The Java field's baseline
+    // value matches the previous hardcoded number exactly - changing the CSV
+    // value is the only way to drift balance.
+
+    /** ON_FIRE direct hp damage per standard turn (before magic-resist and
+     *  OILY-doubling). Previously a private constant inside BuffSystem. */
+    public static int FIRE_DAMAGE_PER_TURN = 8;
+
+    /** BOMB_DODGER perk: incoming bomb damage is multiplied by
+     *  {@code BOMB_DODGER_DAMAGE_BASE^perkLevel} (asymptotic - lvl=1 → 0.5,
+     *  lvl=2 → 0.25, ... lvl=10 → ~0.001). 1.0 disables the reduction. */
+    public static double BOMB_DODGER_DAMAGE_BASE = 0.5;
+
+    /** KNOCKBACK perk: maximum direct tile contribution to the knockback
+     *  distance. Perk levels at or below this value add 1 tile each; levels
+     *  above add a wall-slam damage bonus instead. Previously a magic 5 in
+     *  MobSystem.attack. */
+    public static int KNOCKBACK_TILE_CAP = 5;
 }

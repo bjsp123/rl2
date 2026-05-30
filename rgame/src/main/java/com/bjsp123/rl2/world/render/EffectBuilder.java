@@ -431,6 +431,21 @@ public final class EffectBuilder {
         return e;
     }
 
+    /** Element-aware damage floater - buff-icon glyph to the left, colored
+     *  text to the right, both rising in lockstep. Pass {@code iconAtlasIndex
+     *  < 0} to suppress the icon (PHYSICAL uses {@link #hoverText} instead,
+     *  but the field is here for any future no-icon element). */
+    public static Effect damageFloater(Point at, String text,
+                                       com.badlogic.gdx.graphics.Color color,
+                                       int iconAtlasIndex, int durationFrames) {
+        Effect e = new Effect(at, EffectType.DAMAGE_FLOATER);
+        e.text            = text;
+        e.customColor     = color;
+        e.iconAtlasIndex  = iconAtlasIndex;
+        e.frameCount      = durationFrames;
+        return e;
+    }
+
     /** Buff icon sprite with text fallback when the sprite isn't loaded. */
     public static Effect hoverSprite(Point at, Buff.BuffType buffSprite,
                                      String fallbackText, int durationFrames) {

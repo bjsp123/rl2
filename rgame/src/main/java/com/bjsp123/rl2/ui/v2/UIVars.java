@@ -58,6 +58,13 @@ public final class UIVars {
     public static Color BAR_XP          = hex(0xffe848);
     public static Color BAR_SATIETY     = hex(0xa08858);
 
+    // -- Damage floater tints (per DamageElement) -----------------------------
+    public static Color DAMAGE_PHYSICAL = hex(0xc04040);  // red
+    public static Color DAMAGE_SHOCK    = hex(0x66e0ff);  // cyan
+    public static Color DAMAGE_POISON   = hex(0xa8e070);  // pale green
+    public static Color DAMAGE_FIRE     = hex(0xff9040);  // orange
+    public static Color DAMAGE_MAGIC    = hex(0x99c8ff);  // pale blue
+
     // -- Charge bar (item cells) -----------------------------------------------
     /** Semi-transparent black backdrop behind the charge bar. */
     public static Color BAR_CHARGE_BACKDROP = new Color(0f, 0f, 0f, 0.85f);

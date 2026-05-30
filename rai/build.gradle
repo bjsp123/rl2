@@ -1,0 +1,54 @@
+apply plugin: 'java-library'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    api project(':rlib')
+}
+
+// =============================================================================
+// DIAGNOSTIC / DEV-ONLY TASKS
+// =============================================================================
+
+// [DEV] Headless smart-agent run. Builds a real World, drops a SMART-behaviour
+// agent in, drives ticks until death/timeout/win. Writes per-run rows to
+// smart_agent_run.csv. Override seed count: ./gradlew :rai:runSmartAgent --args="50"
+tasks.register('runSmartAgent', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Run the SMART AI agent through a full World and log outcomes'
+    mainClass   = 'com.bjsp123.rl2.ai.util.SmartAgentRunMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}
+
+// [DEV] Full-game autoplay harness. Drops a SMART-piloted player at level 1
+// of a generated dungeon and lets the AI play through; records items found,
+// mobs killed, stairs used, depth reached, outcome. Writes one row per run
+// to autoplay.csv plus a per-class aggregate summary to stdout.
+// Override runs per class: ./gradlew :rai:autoplay --args="20"
+tasks.register('autoplay', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Full-game autoplay: SMART agent plays a generated dungeon'
+    mainClass   = 'com.bjsp123.rl2.ai.game.AutoplayRunMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}
+
+// [DEV] Arena ranker that pits each player class against every NPC at
+// character levels 1 and 10, running each pair under both the baseline MOB
+// brain and the new SMART brain. Reports win-rate deltas so we can see what
+// the rules-based planner is worth.
+// Override trial count: ./gradlew :rai:rankSmartArena --args="3"
+tasks.register('rankSmartArena', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Compare PLAYER win rate as MOB vs. SMART across the NPC field'
+    mainClass   = 'com.bjsp123.rl2.ai.util.SmartArenaRankMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}

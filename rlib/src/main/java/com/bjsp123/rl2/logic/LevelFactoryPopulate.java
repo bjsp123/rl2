@@ -123,6 +123,8 @@ public final class LevelFactoryPopulate {
             double w = powerWeight(def.powerMin, def.powerMax, f);
             if (w <= 0) continue;
             w *= themeMultiplier(def.theme, level.theme);
+            w *= def.rarity;
+            if (w <= 0) continue;
             keys.add(type);
             ws.add(w);
         }
@@ -264,7 +266,7 @@ public final class LevelFactoryPopulate {
             Point seed = nonReservedInnerTile(level, rng);
             if (seed == null) return;
             ItemDefinition def = Registries.item(template.type);
-            int n = rollMinMax(def == null ? null : def.clusterSize, rng);
+            int n = rollClusterSize(def == null ? 0 : def.clusterSize, rng);
             List<Point> spots = adjacentFloorTiles(level, seed, n);
             // First placement uses the freshly-rolled template; subsequent
             // cluster copies are independent objects of the same type at the
@@ -298,9 +300,18 @@ public final class LevelFactoryPopulate {
 
     /** Drop an already-built item onto a tile and append to {@code level.items}.
      *  Item construction (type pick, plusses) is the {@link ItemGenerator}'s
-     *  job; this method is the placement-only side of the pipeline. */
+     *  job; this method is the placement-only side of the pipeline. Silently
+     *  skips placement when the tile is already occupied by another item -
+     *  the random tile samplers above are independent across callers and
+     *  can collide; rejecting overlaps keeps every floor item visible and
+     *  individually pick-up-able. */
     static void placeItem(Level level, Item item, Point spot) {
         if (item == null || spot == null || level == null) return;
+        int sx = spot.tileX(), sy = spot.tileY();
+        for (Item existing : level.items) {
+            if (existing == null || existing.location == null) continue;
+            if (existing.location.tileX() == sx && existing.location.tileY() == sy) return;
+        }
         item.location = spot;
         level.items.add(item);
     }
@@ -367,12 +378,17 @@ public final class LevelFactoryPopulate {
                 String type = pickWeighted(pool, weightHolder[0], rng);
                 if (type == null) break;
                 MobDefinition def = Registries.mob(type);
-                int n = Math.max(1, rollMinMax(def == null ? null : def.clusterSize, rng));
+                int n = Math.max(1, rollClusterSize(def == null ? 0 : def.clusterSize, rng));
                 List<Point> spots = adjacentFloorTiles(level, seed, n);
                 int before = level.mobs.size();
                 Mob first = null;
                 for (Point p : spots) {
                     if (level.isReserved(p.tileX(), p.tileY())) continue;
+                    // The seed tile passed the stairs-up room filter above,
+                    // but cluster spots can straddle a room boundary - re-
+                    // check each spot so the safe room stays empty even
+                    // when the cluster spills toward it.
+                    if (inStairsUpRoom(level, p.tileX(), p.tileY())) continue;
                     Mob m = spawnMobAt(level, type, p, spawnLevel, rng,
                                        /* withRetainers= */ first == null);
                     if (m == null) continue;
@@ -468,7 +484,7 @@ public final class LevelFactoryPopulate {
     static void placeRetainers(Level level, Mob parent, MobDefinition def,
                                Random rng, int spawnLevel) {
         if (def == null || def.retainerTypes == null || def.retainerTypes.isEmpty()) return;
-        int n = rollMinMax(def.numRetainers, rng);
+        int n = rollClusterSize(def.numRetainers, rng);
         if (n <= 0) return;
         List<Point> spots = adjacentFloorTiles(level, parent.position, n + 1);
         // First slot in adjacentFloorTiles is the parent's own tile - skip it.
@@ -476,6 +492,10 @@ public final class LevelFactoryPopulate {
         for (int i = 1; i < spots.size() && placed < n; i++) {
             Point p = spots.get(i);
             if (mobAt(level, p.tileX(), p.tileY())) continue;
+            // Same rule as the cluster scatter: retainers can spill onto
+            // the stairs-up room if the parent was placed adjacent to it.
+            // Reject those slots so the safe room stays clean.
+            if (inStairsUpRoom(level, p.tileX(), p.tileY())) continue;
             String t = def.retainerTypes.get(rng.nextInt(def.retainerTypes.size()));
             Mob r = MobFactory.spawn(t, p);
             if (r == null) continue;
@@ -504,6 +524,16 @@ public final class LevelFactoryPopulate {
         int lo = mm.min(), hi = mm.max();
         if (hi <= lo) return Math.max(0, lo);
         return lo + rng.nextInt(hi - lo + 1);
+    }
+
+    /** Roll a count from a single-int cluster size N: returns a value in
+     *  {@code [ceil(N/2), N]} inclusive. Per the simplified item-stat model:
+     *  a clusterSize column of 5 yields 3..5 items. */
+    static int rollClusterSize(int n, Random rng) {
+        if (n <= 0) return 0;
+        int lo = (n + 1) / 2; // ceil(N/2)
+        if (n <= lo) return n;
+        return lo + rng.nextInt(n - lo + 1);
     }
 
     /** BFS outward from {@code seed}, returning up to {@code count} reachable

@@ -51,6 +51,69 @@ public final class VegetationSystem {
     /** Display copy of {@link #OIL_DECAY_CHANCE} for the class Javadoc. */
     private static final int OIL_DECAY_CHANCE_PCT = 5;
 
+    /**
+     * Try to place {@code v} at {@code p}. If the target cell already holds
+     * vegetation, BFS outward through the saturated patch (cardinally) and
+     * place on a random cell in the nearest ring of floor-like, vegetation-
+     * empty cells. No-op when {@code p} is unsuitable (wall, chasm, holds a
+     * surface) or when the entire reachable region is full of vegetation.
+     */
+    public static void addVegetation(Level level, com.bjsp123.rl2.model.Point p, Vegetation v) {
+        if (p == null || v == null) return;
+        int x = p.tileX(), y = p.tileY();
+        if (!canHoldVegetation(level, x, y)) return;
+
+        if (level.vegetation[x][y] == null) {
+            level.vegetation[x][y] = v;
+            emitVegetationChanged(level, x, y, v);
+            return;
+        }
+
+        // Saturated. BFS through neighbouring veg-holding cells, collecting
+        // ring-by-ring candidates that are floor-like AND empty.
+        int w = level.width, h = level.height;
+        boolean[][] visited = new boolean[w][h];
+        java.util.ArrayDeque<int[]> frontier = new java.util.ArrayDeque<>();
+        frontier.addLast(new int[]{x, y});
+        visited[x][y] = true;
+        java.util.List<int[]> candidates = new java.util.ArrayList<>();
+        while (!frontier.isEmpty()) {
+            int ringSize = frontier.size();
+            candidates.clear();
+            for (int i = 0; i < ringSize; i++) {
+                int[] cur = frontier.pollFirst();
+                for (int[] d : DIRS) {
+                    int nx = cur[0] + d[0], ny = cur[1] + d[1];
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                    if (visited[nx][ny]) continue;
+                    visited[nx][ny] = true;
+                    if (!canHoldVegetation(level, nx, ny)) continue;
+                    if (level.vegetation[nx][ny] != null) {
+                        frontier.addLast(new int[]{nx, ny});
+                    } else {
+                        candidates.add(new int[]{nx, ny});
+                    }
+                }
+            }
+            if (!candidates.isEmpty()) {
+                int[] chosen = candidates.get(RANDOM.nextInt(candidates.size()));
+                level.vegetation[chosen[0]][chosen[1]] = v;
+                emitVegetationChanged(level, chosen[0], chosen[1], v);
+                return;
+            }
+        }
+    }
+
+    /** A cell can hold (newly placed) vegetation if it's floor-like and free
+     *  of any surface (water / oil / blood / ice). Wall, chasm, and surface-
+     *  covered tiles all reject the placement. */
+    private static boolean canHoldVegetation(Level level, int x, int y) {
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        if (!level.tiles[x][y].isFloorLike()) return false;
+        if (level.surface[x][y] != null) return false;
+        return true;
+    }
+
     public static void tickPerTurn(Level level) {
         int w = level.width, h = level.height;
         Vegetation[][] snap = new Vegetation[w][h];

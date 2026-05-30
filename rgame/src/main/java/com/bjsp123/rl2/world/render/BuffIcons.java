@@ -48,6 +48,21 @@ public final class BuffIcons {
         return sheet != null;
     }
 
+    /** Texture-region for the buff-icon cell at flat atlas index {@code idx}
+     *  (col + row * {@link #COLS_PER_ROW}). Lets non-{@link BuffType} callers
+     *  (e.g. element-aware damage floaters) reach atlas slots that aren't
+     *  bound to a real buff - SHOCK uses slot 23. Returns {@code null} on
+     *  load failure or out-of-bounds. */
+    public static TextureRegion regionForAtlasIndex(int idx) {
+        if (cache == null) load();
+        if (sheet == null || idx < 0) return null;
+        int sx = (idx % COLS_PER_ROW) * BUFF_CELL;
+        int sy = SpriteAtlas.buffsY() + (idx / COLS_PER_ROW) * BUFF_CELL;
+        int sw = sheet.getWidth(), sh = sheet.getHeight();
+        if (sx + BUFF_CELL > sw || sy + BUFF_CELL > sh) return null;
+        return new TextureRegion(sheet, sx, sy, BUFF_CELL, BUFF_CELL);
+    }
+
     /** Attack-flash sprite from {@code buffs16.png}'s slash band. Player
      *  slash at col 0 -> source (0, 32, 32, 32); mob slash at col 1 -> (32, 32,
      *  32, 32). Returns {@code null} if the sheet failed to load or doesn't

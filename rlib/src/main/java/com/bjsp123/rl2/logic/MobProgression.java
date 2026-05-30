@@ -3,38 +3,43 @@ package com.bjsp123.rl2.logic;
 import com.bjsp123.rl2.model.HistoricalRecord;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Perk;
+
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 /**
  * Character progression - XP accumulation and level-ups. The XP cost schedule
- * and global cap come from {@link GameBalance}; per-level stat deltas are
- * carried per-mob on the {@link Mob} itself (set from
- * {@code assets/data/mobs.csv}'s {@code *PerLevel} columns by
- * {@link MobDefinition#apply}).
+ * and global cap come from {@link GameBalance}; stat growth flows through the
+ * shared {@code scaleAmount} rule in {@link MobStats#writeEffectiveStats},
+ * driven by the mob's {@code characterLevel}. No per-level deltas live on the
+ * Mob anymore - {@code setSpawnLevel} / {@code applyLevelUp} just bump the
+ * level number and mark effective stats dirty.
  *
  * <p><b>XP cost schedule.</b> Advancing from level {@code N} to {@code N+1} costs
- * {@code N x GameBalance.XP_PER_LEVEL_STEP} XP - 10/20/30/... by default. Cumulative XP
- * to <i>reach</i> level {@code L} from level 1 is {@code STEP x (L-1) x L / 2} - level 2 at
- * 10 XP, level 3 at 30, level 4 at 60, level 5 at 100, and so on.
+ * {@code N x GameBalance.XP_PER_LEVEL_STEP} XP. Cumulative XP to reach level
+ * {@code L} from level 1 is {@code STEP x (L-1) x L / 2}.
  *
  * <p><b>Level-up effects</b> (applied once per level gained):
  * <ul>
  *   <li>+{@link GameBalance#PERK_POINTS_PER_LEVEL} perk point.</li>
- *   <li>+{@link Mob#accuracyPerLevel} accuracy.</li>
- *   <li>+{@link Mob#evasionPerLevel} evasion.</li>
- *   <li>+{@link Mob#hpPerLevel} max HP (and current HP bumped by the same amount).</li>
- *   <li>+ damage / AP / ranged-damage / ranged-distance / armour ranges per the
- *       matching {@code *PerLevel} fields (defaults: dmg 1-2, armour 0-1, others 0).</li>
+ *   <li>Effective stats recomputed at the new level via the AMOUNT rule
+ *       (damage / armour / accuracy / evasion / maxHp / etc).</li>
+ *   <li>Current HP bumped by the {@code maxHp} delta so a full-HP character
+ *       stays at full HP across the level-up.</li>
  * </ul>
  *
- * <p><b>XP never resets</b>; it's a lifetime counter, so surplus rolls over toward the next
- * threshold and a big kill can push a low-level mob through multiple tiers at once.
- *
- * <p>Applies to ALL mobs, not just the player - any mob that accrues XP can level up, up
- * to {@link GameBalance#MAX_CHARACTER_LEVEL}.
+ * <p>Applies to ALL mobs, not just the player.
  */
 public final class MobProgression {
 
     private MobProgression() {}
+
+    /** Hard cap on per-perk level used by {@link #autoLevelUpPerks}. */
+    private static final int PERK_LEVEL_CAP = 10;
 
     /** XP cost to advance from {@code fromLevel} to {@code fromLevel + 1}. */
     public static int xpToAdvanceFrom(int fromLevel) {
@@ -71,18 +76,17 @@ public final class MobProgression {
     }
 
     /**
-     * Spawn-time level setter for fresh mobs. Bumps {@code mob.characterLevel} from its
-     * current value (typically 1) up to {@code targetLevel}, applying the per-mob
-     * stat deltas cumulatively. No XP / history / level-up message - this is a quiet
-     * "born at level N" assignment.
+     * Spawn-time level setter for fresh mobs. Sets {@code mob.characterLevel}
+     * to {@code targetLevel} and re-seats HP at the new effective max. No
+     * XP / history / level-up message - this is a quiet "born at level N"
+     * assignment. Stat growth is computed lazily in MobStats.
      */
     public static void setSpawnLevel(Mob mob, int targetLevel) {
         if (mob == null) return;
         int target = Math.min(GameBalance.MAX_CHARACTER_LEVEL, Math.max(1, targetLevel));
-        while (mob.characterLevel < target) {
-            mob.characterLevel++;
-            applyPerLevelDeltas(mob);
-        }
+        mob.characterLevel = target;
+        mob.statsDirty = true;
+        mob.hp = mob.effectiveStats().maxHp;
     }
 
     /** Bump the mob one level and apply the level-up bonuses. Honors the
@@ -98,9 +102,14 @@ public final class MobProgression {
      *  so the caller's own composite visual is the only one shown. */
     public static void applyLevelUp(Level level, Mob mob, boolean emitRainbow) {
         if (mob.characterLevel >= GameBalance.MAX_CHARACTER_LEVEL) return;
+        // Snapshot the pre-bump effective maxHp so we can carry the same
+        // amount onto current HP (full-HP characters stay full).
+        double oldMaxHp = mob.effectiveStats().maxHp;
         mob.characterLevel++;
         mob.perkPoints++;
-        applyPerLevelDeltas(mob);
+        mob.statsDirty = true;
+        double newMaxHp = mob.effectiveStats().maxHp;
+        mob.hp = Math.min(newMaxHp, mob.hp + Math.max(0, newMaxHp - oldMaxHp));
 
         if (level != null && mob.history != null) {
             mob.history.add(HistoricalRecord.levelUp(
@@ -111,19 +120,44 @@ public final class MobProgression {
         }
     }
 
-    /** Add one tier's worth of {@code *PerLevel} deltas to the mob's intrinsic stats.
-     *  Current HP grows by the same amount as max HP, so a full-HP character stays at
-     *  full HP right after the bump. */
-    private static void applyPerLevelDeltas(Mob mob) {
-        mob.intrinsic.accuracy += mob.accuracyPerLevel;
-        mob.intrinsic.evasion  += mob.evasionPerLevel;
-        mob.intrinsic.maxHp    += mob.hpPerLevel;
-        mob.hp                 += mob.hpPerLevel;
-        mob.intrinsic.damage         = mob.intrinsic.damage      .plus(mob.damagePerLevel);
-        mob.intrinsic.apDamage       = mob.intrinsic.apDamage    .plus(mob.apPerLevel);
-        mob.intrinsic.rangedDamage   = mob.intrinsic.rangedDamage.plus(mob.rangedDamagePerLevel);
-        mob.intrinsic.rangedDistance += mob.rangedDistancePerLevel;
-        mob.intrinsic.armor          = mob.intrinsic.armor       .plus(mob.armorPerLevel);
-        mob.statsDirty = true;
+    /** Auto-spend perk points appropriate to {@code mob.characterLevel} for
+     *  AI-controlled players (arena, attract). Computes target
+     *  {@code perkPoints = (charLvl - 1) * PERK_POINTS_PER_LEVEL}, then spends
+     *  them: first across the mob's signature perks (those already at level
+     *  >= 1 from {@code MobDefinition.apply}) until each hits the
+     *  {@link #PERK_LEVEL_CAP}, then across any remaining perks at random.
+     *  No-op on null mobs or those with a null {@code perks} map. */
+    public static void autoLevelUpPerks(Mob mob, Random rng) {
+        if (mob == null || mob.perks == null) return;
+        int target = Math.max(0,
+                (mob.characterLevel - 1) * GameBalance.PERK_POINTS_PER_LEVEL);
+        mob.perkPoints = target;
+
+        // Snapshot signature perks (currently at level >= 1).
+        EnumSet<Perk> signatures = EnumSet.noneOf(Perk.class);
+        for (Map.Entry<Perk, Integer> e : mob.perks.entrySet()) {
+            if (e.getValue() != null && e.getValue() >= 1) signatures.add(e.getKey());
+        }
+
+        Perk[] all = Perk.values();
+        List<Perk> candidates = new ArrayList<>(all.length);
+
+        while (mob.perkPoints > 0) {
+            candidates.clear();
+            // Phase 1: signature perks below cap.
+            for (Perk p : signatures) {
+                if (mob.perks.getOrDefault(p, 0) < PERK_LEVEL_CAP) candidates.add(p);
+            }
+            // Phase 2: any perk below cap.
+            if (candidates.isEmpty()) {
+                for (Perk p : all) {
+                    if (mob.perks.getOrDefault(p, 0) < PERK_LEVEL_CAP) candidates.add(p);
+                }
+            }
+            if (candidates.isEmpty()) break;
+            Perk chosen = candidates.get(rng.nextInt(candidates.size()));
+            mob.perks.merge(chosen, 1, Integer::sum);
+            mob.perkPoints--;
+        }
     }
 }

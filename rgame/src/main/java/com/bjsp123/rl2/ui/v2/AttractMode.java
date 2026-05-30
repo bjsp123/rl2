@@ -11,7 +11,9 @@ import com.bjsp123.rl2.logic.LevelFactory;
 import com.bjsp123.rl2.logic.LevelFactoryPopulate;
 import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.MobFactory;
+import com.bjsp123.rl2.logic.MobProgression;
 import com.bjsp123.rl2.logic.TurnSystem;
+import com.bjsp123.rl2.util.PlayerGearProvider;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
@@ -40,6 +42,10 @@ final class AttractMode {
     private final DefaultLevelRenderer renderer = new DefaultLevelRenderer();
     private final Animator animator = new Animator();
     private final UniqueTracker unique = new UniqueTracker();
+    /** One gear catalogue for the lifetime of attract mode. Non-deterministic
+     *  seed so each launch's demo visuals vary. */
+    private final PlayerGearProvider gear =
+            new PlayerGearProvider(System.nanoTime());
 
     private World world;
     private Level level;
@@ -139,6 +145,13 @@ final class AttractMode {
         attractPlayer = MobFactory.player(p, classes[rng.nextInt(classes.length)]);
         attractPlayer.behavior = Mob.Behavior.MOB;
         attractPlayer.stateOfMind = Mob.StateOfMind.AWAKE;
+        // Scale player's intrinsic stats AND equip depth-appropriate gear so
+        // a deep-dungeon demo doesn't show the player swinging the L1 starter
+        // kit at deep-tier enemies.
+        int depth = Math.max(1, level.depth);
+        MobProgression.setSpawnLevel(attractPlayer, depth);
+        gear.applyKit(attractPlayer, gear.kitForDepth(depth));
+        MobProgression.autoLevelUpPerks(attractPlayer, rng);
         level.mobs.add(attractPlayer);
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(attractPlayer, p));

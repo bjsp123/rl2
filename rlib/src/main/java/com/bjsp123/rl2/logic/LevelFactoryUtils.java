@@ -329,12 +329,31 @@ public final class LevelFactoryUtils {
         }
     }
 
-    /** Pick a random FLOOR tile uniformly. Returns null if there are none. */
+    /** Pick a random FLOOR tile uniformly. Returns null if there are none.
+     *  On VILLAGE layouts the sample is restricted to building interiors
+     *  ({@link Level#rooms} indices 1..N - index 0 is the village green) so
+     *  mobs and items spawn inside huts rather than scattered across the
+     *  open exterior. A degenerate village with no buildings falls through
+     *  to a whole-level sample so the caller still gets a tile. */
     public static Point randomFloorTile(Level level, Random rng) {
         List<Point> candidates = new ArrayList<>();
-        for (int x = 0; x < level.width; x++)
-            for (int y = 0; y < level.height; y++)
-                if (level.tiles[x][y] == Tile.FLOOR) candidates.add(new Point(x, y));
+        if (level.layout == LevelFactory.Layout.VILLAGE
+                && level.rooms != null && level.rooms.size() > 1) {
+            for (int i = 1; i < level.rooms.size(); i++) {
+                Level.RoomSnapshot r = level.rooms.get(i);
+                for (int x = r.x; x < r.x + r.w; x++) {
+                    for (int y = r.y; y < r.y + r.h; y++) {
+                        if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                        if (level.tiles[x][y] == Tile.FLOOR) candidates.add(new Point(x, y));
+                    }
+                }
+            }
+        }
+        if (candidates.isEmpty()) {
+            for (int x = 0; x < level.width; x++)
+                for (int y = 0; y < level.height; y++)
+                    if (level.tiles[x][y] == Tile.FLOOR) candidates.add(new Point(x, y));
+        }
         if (candidates.isEmpty()) return null;
         return candidates.get(rng.nextInt(candidates.size()));
     }

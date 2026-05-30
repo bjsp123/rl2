@@ -32,17 +32,14 @@ public final class ItemDefinition {
      *  {@code "description 2"} (with a space). Mirrors {@link Item#description2}. */
     public String   description2;
 
-    public MinMax damage = MinMax.ZERO;
-    public MinMax damagePerLevel = MinMax.ZERO;
-    public MinMax armor  = MinMax.ZERO;
-    public MinMax armorPerLevel  = MinMax.ZERO;
-    /** AP damage range - see {@link Item#apDamage}. */
-    public MinMax apDamage = MinMax.ZERO;
-    public MinMax apDamagePerLevel = MinMax.ZERO;
-    /** Magic-resistance range - see {@link Item#magicResist}.
-     *  CSV column is {@code antiMagic}. */
-    public MinMax magicResist = MinMax.ZERO;
-    public MinMax magicResistPerLevel = MinMax.ZERO;
+    /** Max damage - range is {@code [damage/2, damage]} scaled by item level. */
+    public int damage;
+    /** Max armor - range {@code [armor/2, armor]} scaled by item level. */
+    public int armor;
+    /** Max AP damage - see {@link Item#apDamage}. */
+    public int apDamage;
+    /** Max magic resistance - CSV column {@code antiMagic}. */
+    public int magicResist;
     /** Flat accuracy / evasion bonuses - see {@link Item#accuracy} /
      *  {@link Item#evasion}. */
     public int accuracy;
@@ -52,9 +49,8 @@ public final class ItemDefinition {
     public double moveSpeed   = Item.MOVE_SPEED_DEFAULT;
     public double lightRadius;
     public int    foodValue;
-    /** Base AOE tile count for wands and bombs. See {@link Item#tilesAffected}. */
-    public int    tilesAffected;
-    public int    tilesAffectedPerLevel;
+    /** Base AOE tile count for wands and bombs. See {@link Item#effectSize}. */
+    public int    effectSize;
 
     /** What happens when this item is thrown; null means it just lands on the floor. */
     public ItemEffect throwEffect;
@@ -76,9 +72,12 @@ public final class ItemDefinition {
      *  means the item has no buff component. */
     public java.util.List<Buff.BuffType> appliesBuff = new java.util.ArrayList<>();
 
-    /** Generic magnitude knob - see {@link Item#abilityPower} for the
-     *  per-useBehavior interpretation. Float so fractional powers fit. */
-    public float abilityPower;
+    /** Base buff / cloud duration in standard turns. See {@link Item#effectDuration}. */
+    public int   effectDuration;
+    /** Base range for JUMP / CHARGE tools. See {@link Item#effectRange}. */
+    public int   effectRange;
+    /** Flat magnitude knob (GRAPPLE size cap, POWERUP fractions). See {@link Item#effectPower}. */
+    public float effectPower;
 
     /** Wand-only: charge regenerated per game-tick (or per MANA_UP
      *  pickup application). Read from the {@code chargeGain} CSV column. */
@@ -105,11 +104,9 @@ public final class ItemDefinition {
      *  fades away at the band's edges. */
     public double powerMin = 0.3;
     public double powerMax = 0.7;
-    /** Cluster size when this item shows up: when picked, the populator drops
-     *  this many copies on adjacent floor tiles. {@code 1_1} (or {@code 1}) is
-     *  a single-item placement; bombs / oil flasks tend to cluster, so they
-     *  use higher ranges. */
-    public MinMax clusterSize = MinMax.of(1);
+    /** Cluster size N when this item shows up: when picked, the populator
+     *  scatters {@code ceil(N/2)..N} copies on adjacent floor tiles. */
+    public int clusterSize = 1;
     /** Optional theme gate. When non-null, the item is only eligible on levels
      *  whose {@code theme} matches; null means "any theme". */
     public com.bjsp123.rl2.model.Level.VisualTheme theme;
@@ -120,10 +117,6 @@ public final class ItemDefinition {
      *  means "not guaranteed" (the default); {@code 1+} forces that
      *  many copies to be placed before random clusters are rolled. */
     public int guaranteedPerLevel;
-
-    /** Signature-item flag - see {@link Item#scalesWithUser}. CSV column
-     *  {@code scalesWithUser}; blank/FALSE everywhere except jade items. */
-    public boolean scalesWithUser;
 
     /** When TRUE, this item is excluded from the random-generator pool
      *  used by mob loot drops and the random-scatter pass on level
@@ -157,22 +150,17 @@ public final class ItemDefinition {
         d.description2 = TextCatalog.itemDescription2(d.type, CsvTable.str(row, "description 2", ""));
         d.material    = CsvTable.enumCell(row, "material", Material.class, Material.MAGIC);
 
-        d.damage         = CsvTable.minMaxCell(row, "damage", MinMax.ZERO);
-        d.damagePerLevel = CsvTable.minMaxCell(row, "damagePerLevel", MinMax.ZERO);
-        d.armor          = CsvTable.minMaxCell(row, "armor", MinMax.ZERO);
-        d.armorPerLevel  = CsvTable.minMaxCell(row, "armorPerLevel", MinMax.ZERO);
-        d.apDamage          = CsvTable.minMaxCell(row, "apDamage", MinMax.ZERO);
-        d.apDamagePerLevel  = CsvTable.minMaxCell(row, "apDamagePerLevel", MinMax.ZERO);
-        d.magicResist          = CsvTable.minMaxCell(row, "antiMagic", MinMax.ZERO);
-        d.magicResistPerLevel  = CsvTable.minMaxCell(row, "antiMagicPerLevel", MinMax.ZERO);
-        d.accuracy       = CsvTable.intCell(row, "accuracy", 0);
-        d.evasion        = CsvTable.intCell(row, "evasion", 0);
-        d.attackSpeed    = CsvTable.dblCell(row, "attackSpeed", Item.ATTACK_SPEED_DEFAULT);
-        d.moveSpeed      = CsvTable.dblCell(row, "moveSpeed",   Item.MOVE_SPEED_DEFAULT);
-        d.lightRadius    = CsvTable.dblCell(row, "lightRadius", 0);
-        d.foodValue      = CsvTable.intCell(row, "foodValue", 0);
-        d.tilesAffected         = CsvTable.intCell(row, "tilesAffected", 0);
-        d.tilesAffectedPerLevel = CsvTable.intCell(row, "tilesAffectedPerLevel", 0);
+        d.damage      = CsvTable.intCell(row, "damage", 0);
+        d.armor       = CsvTable.intCell(row, "armor", 0);
+        d.apDamage    = CsvTable.intCell(row, "apDamage", 0);
+        d.magicResist = CsvTable.intCell(row, "antiMagic", 0);
+        d.accuracy    = CsvTable.intCell(row, "accuracy", 0);
+        d.evasion     = CsvTable.intCell(row, "evasion", 0);
+        d.attackSpeed = CsvTable.dblCell(row, "attackSpeed", Item.ATTACK_SPEED_DEFAULT);
+        d.moveSpeed   = CsvTable.dblCell(row, "moveSpeed",   Item.MOVE_SPEED_DEFAULT);
+        d.lightRadius = CsvTable.dblCell(row, "lightRadius", 0);
+        d.foodValue   = CsvTable.intCell(row, "foodValue", 0);
+        d.effectSize  = CsvTable.intCell(row, "effectSize", 0);
 
         d.throwEffect = CsvTable.enumCell(row, "throwEffect", ItemEffect.class, null);
         d.throwResult = CsvTable.enumCell(row, "throwResult",
@@ -191,7 +179,9 @@ public final class ItemDefinition {
                 d.appliesBuff.add(Buff.BuffType.valueOf(name.trim()));
             } catch (IllegalArgumentException ignored) { /* skip bad name */ }
         }
-        d.abilityPower  = (float) CsvTable.dblCell(row, "abilityPower",  0.0);
+        d.effectDuration = CsvTable.intCell(row, "effectDuration", 0);
+        d.effectRange    = CsvTable.intCell(row, "effectRange",    0);
+        d.effectPower    = (float) CsvTable.dblCell(row, "effectPower", 0.0);
         d.chargeGain    = (float) CsvTable.dblCell(row, "chargeGain",    0.0);
         d.baseChargeMax =         CsvTable.intCell(row, "baseChargeMax", 0);
 
@@ -199,15 +189,13 @@ public final class ItemDefinition {
         d.glows                 = CsvTable.boolCell(row, "glows", false);
         d.inventoryCategory     = CsvTable.enumCell(row, "inventoryCategory",
                 InventoryCategory.class, null);
-        double[] power      = CsvTable.dblRangeCell(row, "powerLevel", 0.3, 0.7);
-        d.powerMin          = power[0];
-        d.powerMax          = power[1];
-        d.clusterSize       = CsvTable.minMaxCell(row, "clusterSize", MinMax.of(1));
+        d.powerMin          = CsvTable.dblCell(row, "minPowerLevel", 0.3);
+        d.powerMax          = CsvTable.dblCell(row, "maxPowerLevel", 0.7);
+        d.clusterSize       = CsvTable.intCell(row, "clusterSize", 1);
         d.theme             = CsvTable.enumCell(row, "theme",
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
         d.guaranteedPerLevel = CsvTable.intCell(row, "guaranteedPerLevel", 0);
         d.restrictedDrop     = CsvTable.boolCell(row, "restrictedDrop", false);
-        d.scalesWithUser     = CsvTable.boolCell(row, "scalesWithUser", false);
 
         d.spriteCol     = CsvTable.intCell(row, "spriteCol", 0);
         d.spriteRow     = CsvTable.intCell(row, "spriteRow", 0);
@@ -223,22 +211,17 @@ public final class ItemDefinition {
         it.description  = description  == null ? "" : description;
         it.description2 = description2 == null ? "" : description2;
 
-        it.damage         = damage;
-        it.damagePerLevel = damagePerLevel;
-        it.armor          = armor;
-        it.armorPerLevel  = armorPerLevel;
-        it.apDamage           = apDamage;
-        it.apDamagePerLevel   = apDamagePerLevel;
-        it.magicResist        = magicResist;
-        it.magicResistPerLevel = magicResistPerLevel;
-        it.accuracy       = accuracy;
-        it.evasion        = evasion;
-        it.attackSpeed    = attackSpeed;
-        it.moveSpeed      = moveSpeed;
-        it.lightRadius    = lightRadius;
-        it.foodValue      = foodValue;
-        it.tilesAffected         = tilesAffected;
-        it.tilesAffectedPerLevel = tilesAffectedPerLevel;
+        it.damage       = damage;
+        it.armor        = armor;
+        it.apDamage     = apDamage;
+        it.magicResist  = magicResist;
+        it.accuracy     = accuracy;
+        it.evasion      = evasion;
+        it.attackSpeed  = attackSpeed;
+        it.moveSpeed    = moveSpeed;
+        it.lightRadius  = lightRadius;
+        it.foodValue    = foodValue;
+        it.effectSize    = effectSize;
 
         it.throwEffect    = throwEffect;
         it.throwResult    = throwResult != null ? throwResult : Item.ThrowResult.NOTHING;
@@ -249,13 +232,15 @@ public final class ItemDefinition {
         it.summonsWhenUsed = summonsWhenUsed;
 
         it.appliesBuff    = new java.util.ArrayList<>(appliesBuff);
-        it.abilityPower   = abilityPower;
+        it.effectDuration = effectDuration;
+        it.effectRange    = effectRange;
+        it.effectPower    = effectPower;
         it.chargeGain     = chargeGain;
         it.baseChargeMax  = baseChargeMax;
         it.knockbackSquares = knockbackSquares;
         it.glows                 = glows;
         it.inventoryCategory     = inventoryCategory;
-        it.scalesWithUser        = scalesWithUser;
+        it.minPowerLevel         = powerMin;
         if (it.baseChargeMax > 0) {
             it.charge = it.maxCharge();
         }

@@ -148,8 +148,14 @@ public final class CombatArena {
         TurnSystem.tick(level);
         FireSystem.tickRealTime(level, dtMs);
         LevelSystem.tickLightMotesRealTime(level, dtMs);
-        // Headless callers drop the event log; visual callers consume it from
-        // the Animator before this method returns.
+        // Pending-impact drain: the animation-gated lifecycle defers
+        // applyThrowImpact / applyWandImpact resolves into a per-level
+        // queue. MobAi.processAllAiTurns drains between mob brains and at
+        // end-of-loop so each AI mob sees post-impact state. This belt-
+        // and-braces drain catches any resolves left over from non-AI
+        // paths (e.g. a player-throw in mixed-mode arenas). Safe to call
+        // when the queue is empty.
+        MobSystem.drainPendingImpactsImmediate(level);
     }
 
     // -- Internals ------------------------------------------------------------

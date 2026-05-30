@@ -60,23 +60,61 @@ public final class MobStats {
     }
 
     /**
-     * Single rollup for a mob's effective stats. Copies the intrinsic block, then folds
-     * in every contributor in declaration order: character-level bonus, equipped items,
-     * active buffs.
+     * Single rollup for a mob's effective stats. Copies the intrinsic block,
+     * applies character-level scaling (AMOUNT rule for most stats; +1/3 levels
+     * for knockback; proportional-to-maxHp for healRate), then folds in
+     * equipped items and active buffs.
      */
     public static void writeEffectiveStats(Mob mob, StatBlock dst) {
         dst.copyFrom(mob.intrinsic);
-        characterLevelBonusInto(dst, mob);
-        ItemStats.contributeInto(dst, mob.inventory.weapon);
-        ItemStats.contributeInto(dst, mob.inventory.offhand);
-        ItemStats.contributeInto(dst, mob.inventory.armor);
-        for (Item eq : mob.inventory.amulets) ItemStats.contributeInto(dst, eq);
-        for (Item eq : mob.inventory.gems)    ItemStats.contributeInto(dst, eq);
+
+        // Character-level baseline: charLvl=1 is the intrinsic ("L=0" in
+        // scaleAmount terms). Everything past that grows via the AMOUNT rule.
+        int L = Math.max(0, mob.characterLevel - 1);
+
+        // Scaled scalars (AMOUNT rule via ItemStats.scaleAmount).
+        double baseMaxHp = mob.intrinsic.maxHp;
+        // HP per-level inc is capped at MOB_HP_INC_CAP so high-base bosses
+        // (ORC_PRESIDENT etc) don't accumulate absurd HP at depth.
+        int baseHp = (int) baseMaxHp;
+        int incHp = baseHp > 0
+                ? Math.min(GameBalance.MOB_HP_INC_CAP,
+                        Math.max(1, baseHp / GameBalance.AMOUNT_LEVEL_SCALE_FACTOR))
+                : 0;
+        dst.maxHp          = baseHp + (long) L * incHp;
+        dst.accuracy       = ItemStats.scaleAmount(mob.intrinsic.accuracy, L);
+        dst.evasion        = ItemStats.scaleAmount(mob.intrinsic.evasion,  L);
+        dst.rangedDistance = ItemStats.scaleAmount(mob.intrinsic.rangedDistance, L);
+
+        // healRate scales proportionally to maxHp so %-healed-per-turn stays flat.
+        dst.healRate = baseMaxHp > 0
+                ? mob.intrinsic.healRate * (dst.maxHp / baseMaxHp)
+                : mob.intrinsic.healRate;
+
+        // Knockback: +1 tile every 3 character levels (own rule).
+        dst.knockbackSquares = mob.intrinsic.knockbackSquares + L / 3;
+
+        // Range stats: scale the single-int base, expose as [N/2, N] MinMax.
+        dst.damage       = rangeFromBase(mob.baseDamage,       L);
+        dst.armor        = rangeFromBase(mob.baseArmor,        L);
+        dst.apDamage     = rangeFromBase(mob.baseApDamage,     L);
+        dst.magicResist  = rangeFromBase(mob.baseMagicResist,  L);
+        dst.rangedDamage = rangeFromBase(mob.baseRangedDamage, L);
+
+        // Equipped items + active buffs add on top of the scaled baseline.
+        ItemStats.contributeInto(dst, mob.inventory.weapon, mob);
+        ItemStats.contributeInto(dst, mob.inventory.offhand, mob);
+        ItemStats.contributeInto(dst, mob.inventory.armor, mob);
+        for (Item eq : mob.inventory.amulets) ItemStats.contributeInto(dst, eq, mob);
+        for (Item eq : mob.inventory.gems)    ItemStats.contributeInto(dst, eq, mob);
         BuffSystem.contributeInto(dst, mob);
     }
 
-    /** Placeholder hook for future MobProgression stat contributors. */
-    private static void characterLevelBonusInto(StatBlock dst, Mob mob) {
-        // Intentionally empty.
+    /** Derive a combat range [N/2, N] from a single-int base, scaled by
+     *  character level under the AMOUNT rule. Zero base returns MinMax.ZERO. */
+    private static MinMax rangeFromBase(int base, int level) {
+        if (base <= 0) return MinMax.ZERO;
+        int scaled = ItemStats.scaleAmount(base, level);
+        return new MinMax(Math.max(0, scaled / 2), scaled);
     }
 }
