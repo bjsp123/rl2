@@ -2,6 +2,7 @@ package com.bjsp123.rl2.ui.skin;
 
 import com.badlogic.gdx.Gdx;
 import com.bjsp123.rl2.persistence.Persistence;
+import com.bjsp123.rl2.ui.v2.UIVars;
 
 /** Persistent user settings and their defaults. */
 public final class Settings {
@@ -27,6 +28,12 @@ public final class Settings {
     private static final String KEY_SFX_VOLUME      = "rl2-sfx-volume";
     private static final String KEY_MUSIC_ENABLED   = "rl2-music-enabled";
     private static final String KEY_MUSIC_VOLUME    = "rl2-music-volume";
+    private static final String KEY_TIPS_ENABLED    = "rl2-tips-enabled";
+    private static final String KEY_MELEE_PREVIEW   = "rl2-melee-preview";
+    private static final String KEY_COLORBLIND      = "rl2-colorblind-preset";
+
+    /** Colorblind palette presets for the {@code UIVars.DAMAGE_*} colors. */
+    public enum ColorblindPreset { NONE, DEUTER, PROTAN, TRITAN }
 
     public static final float UI_SCALE_DEFAULT = 1.0f;
     public static final float[] UI_SCALE_CHOICES = { 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 3.5f };
@@ -84,6 +91,9 @@ public final class Settings {
     private static float   sfxVolume     = SFX_VOLUME_DEFAULT;
     private static boolean musicEnabled  = true;
     private static float   musicVolume   = MUSIC_VOLUME_DEFAULT;
+    private static boolean tipsEnabled   = true;
+    private static boolean meleePreview  = true;
+    private static ColorblindPreset colorblindPreset = ColorblindPreset.NONE;
 
     private Settings() {}
 
@@ -111,6 +121,18 @@ public final class Settings {
         sfxVolume     = loadChoiceFloat(KEY_SFX_VOLUME, SFX_VOLUME_DEFAULT, VOLUME_CHOICES);
         musicEnabled  = loadBoolean(KEY_MUSIC_ENABLED, true);
         musicVolume   = loadChoiceFloat(KEY_MUSIC_VOLUME, MUSIC_VOLUME_DEFAULT, VOLUME_CHOICES);
+        tipsEnabled   = loadBoolean(KEY_TIPS_ENABLED, true);
+        meleePreview  = loadBoolean(KEY_MELEE_PREVIEW, true);
+        colorblindPreset = loadColorblindPreset();
+        UIVars.applyColorblindPalette(colorblindPreset);
+    }
+
+    private static ColorblindPreset loadColorblindPreset() {
+        if (persistence == null) return ColorblindPreset.NONE;
+        String raw = persistence.load(KEY_COLORBLIND);
+        if (raw == null) return ColorblindPreset.NONE;
+        try { return ColorblindPreset.valueOf(raw); }
+        catch (IllegalArgumentException ignored) { return ColorblindPreset.NONE; }
     }
 
     public static float uiScale() { return uiScale; }
@@ -135,6 +157,9 @@ public final class Settings {
     public static float   sfxVolume()      { return sfxVolume; }
     public static boolean musicEnabled()   { return musicEnabled; }
     public static float   musicVolume()    { return musicVolume; }
+    public static boolean tipsEnabled()    { return tipsEnabled; }
+    public static boolean meleePreview()   { return meleePreview; }
+    public static ColorblindPreset colorblindPreset() { return colorblindPreset; }
 
     public static void setUiScale(float v) { uiScale = v; save(KEY_UI_SCALE, v); }
     public static void setUiPixelScale(int v) { uiPixelScale = Math.max(1, v); save(KEY_UI_PIXEL_SCALE, uiPixelScale); }
@@ -159,6 +184,13 @@ public final class Settings {
     public static void setSfxVolume(float v)       { sfxVolume = v;     save(KEY_SFX_VOLUME, v); }
     public static void setMusicEnabled(boolean v)  { musicEnabled = v;  save(KEY_MUSIC_ENABLED, v); }
     public static void setMusicVolume(float v)     { musicVolume = v;   save(KEY_MUSIC_VOLUME, v); }
+    public static void setTipsEnabled(boolean v)   { tipsEnabled = v;   save(KEY_TIPS_ENABLED, v); }
+    public static void setMeleePreview(boolean v)  { meleePreview = v;  save(KEY_MELEE_PREVIEW, v); }
+    public static void setColorblindPreset(ColorblindPreset v) {
+        colorblindPreset = v == null ? ColorblindPreset.NONE : v;
+        if (persistence != null) persistence.save(KEY_COLORBLIND, colorblindPreset.name());
+        UIVars.applyColorblindPalette(colorblindPreset);
+    }
 
     private static float detectUiScaleDefault() {
         if (Gdx.graphics == null) return UI_SCALE_DEFAULT;

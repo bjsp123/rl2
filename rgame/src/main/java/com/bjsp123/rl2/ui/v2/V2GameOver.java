@@ -145,12 +145,30 @@ public final class V2GameOver extends V2Screen {
             lines = new ArrayList<>();
             lines.add(record.deathMessage);
         }
+        // Headline ("what killed you") at the top of the death-log frame,
+        // bright + warning-tinted. Composed by PlayScreen from the last
+        // fatal DamageCause captured by MobSystem.processAttack. Empty for
+        // legacy saves - in which case the log lines pack to the top.
+        float inset = 8f;
+        float maxW = deathLogFrame.w - 2f * inset;
+        float headerEndY = deathLogFrame.y + deathLogFrame.h - inset;
+        if (record.deathHeadline != null && !record.deathHeadline.isEmpty()) {
+            List<String> hwrapped = new ArrayList<>();
+            TextDraw.wrap(ctx.fontRegular, record.deathHeadline, maxW, 3, hwrapped);
+            float headLineH = ctx.fontRegular.getLineHeight() + 2f;
+            float hy = headerEndY;
+            for (String line : hwrapped) {
+                TextDraw.centre(ctx, ctx.fontRegular, UIVars.WARN_HL,
+                        line, deathLogFrame.cx(), hy);
+                hy -= headLineH;
+            }
+            // Reserve the headline band; the log starts one extra line below.
+            headerEndY = hy - 4f;
+        }
         if (lines != null && !lines.isEmpty()) {
-            float inset = 8f;
-            float maxW = deathLogFrame.w - 2f * inset;
             float lineH = ctx.fontRegular.getLineHeight() + 2f;
             float textX = deathLogFrame.x + inset;
-            float y = deathLogFrame.y + deathLogFrame.h - inset;
+            float y = headerEndY;
             int n = lines.size();
             Color tmp = new Color();
             for (int idx = 0; idx < n; idx++) {

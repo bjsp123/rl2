@@ -103,7 +103,6 @@ public final class V2Hud {
     private final Rect portraitRect = new Rect();
     private final Rect hpBarRect    = new Rect();
     private final Rect xpBarRect    = new Rect();
-    private final Rect satBarRect   = new Rect();
     private final Rect clockRect    = new Rect();
     private final Rect[] actionRects = new Rect[ActionBar.SLOTS];
     private final Rect invRect      = new Rect();
@@ -160,6 +159,8 @@ public final class V2Hud {
     public void setOnReturnToTitle(Runnable fn)     { this.onReturnToTitle = fn; }
     public void setOnOpenMap(Runnable fn)           { this.onOpenMap = fn; }
     public void setOnOpenLog(Runnable fn)           { this.onOpenLog = fn; }
+    public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
+    private com.bjsp123.rl2.audio.SoundManager sounds;
 
     /** Frame state - depth and game tick for the status line / turn clock;
      *  player read via {@link #playerSupplier}. */
@@ -176,9 +177,83 @@ public final class V2Hud {
     public void render() {
         layoutRects();
         ctx.applyProjection();
-        renderShapesPass();
-        renderTextPass();
-        renderBurgerGlyph();   // tiny shapes pass at the end for the menu lines
+        // Compute low-HP factor once per frame so the chrome tint + the hit
+        // flash overlay both read from the same value. 0 above 25% HP, 1 at
+        // 1% HP. Linear ramp; clamped.
+        Mob p = currentPlayer();
+        float hpPct = 100f;
+        if (p != null) {
+            double maxHp = p.effectiveStats().maxHp;
+            if (maxHp > 0) hpPct = (float) (p.hp / maxHp * 100.0);
+        }
+        lowHpFactor = Math.max(0f, Math.min(1f, (25f - hpPct) / 24f));
+        pushLowHpChromeTint();
+        try {
+            renderShapesPass();
+            renderTextPass();
+            renderBurgerGlyph();   // tiny shapes pass at the end for the menu lines
+        } finally {
+            popLowHpChromeTint();
+        }
+        renderHitFlash();
+        if (hitFlashFrames > 0) hitFlashFrames--;
+    }
+
+    /** Flash the screen red + play a warning sfx. PlayScreen's animator hook
+     *  calls this when the player takes damage while HP <=20%. */
+    public void triggerLowHpHitFlash() {
+        hitFlashFrames = HIT_FLASH_DURATION;
+        if (sounds != null) sounds.play("sfx.player.combat.lowHpWarn");
+    }
+
+    /** Below 25% HP the HUD chrome reddens linearly; full red at 1%. */
+    private float lowHpFactor;
+    private int   hitFlashFrames;
+    private static final int HIT_FLASH_DURATION = 18;
+
+    /** Saved chrome colors so the low-HP tint can be reverted after the HUD
+     *  render. UIVars stores live Color instances - we lerp them toward red
+     *  in place, then restore from these snapshots. */
+    private final com.badlogic.gdx.graphics.Color savedBorderOuter = new com.badlogic.gdx.graphics.Color();
+    private final com.badlogic.gdx.graphics.Color savedBorderMid   = new com.badlogic.gdx.graphics.Color();
+    private final com.badlogic.gdx.graphics.Color savedBorderInner = new com.badlogic.gdx.graphics.Color();
+    private boolean chromeRedded;
+
+    private void pushLowHpChromeTint() {
+        if (lowHpFactor <= 0f) { chromeRedded = false; return; }
+        savedBorderOuter.set(UIVars.BORDER_OUTER);
+        savedBorderMid  .set(UIVars.BORDER_MID);
+        savedBorderInner.set(UIVars.BORDER_INNER);
+        com.badlogic.gdx.graphics.Color warn = UIVars.TEXT_WARN;
+        UIVars.BORDER_OUTER.set(savedBorderOuter).lerp(warn, lowHpFactor);
+        UIVars.BORDER_MID  .set(savedBorderMid)  .lerp(warn, lowHpFactor);
+        UIVars.BORDER_INNER.set(savedBorderInner).lerp(warn, lowHpFactor);
+        chromeRedded = true;
+    }
+
+    private void popLowHpChromeTint() {
+        if (!chromeRedded) return;
+        UIVars.BORDER_OUTER.set(savedBorderOuter);
+        UIVars.BORDER_MID  .set(savedBorderMid);
+        UIVars.BORDER_INNER.set(savedBorderInner);
+        chromeRedded = false;
+    }
+
+    /** Brief red overlay on top of the HUD whenever the player just took a
+     *  damaging hit while already below 20% HP. Triggered by
+     *  {@link #triggerLowHpHitFlash}; rendered every frame the counter is
+     *  positive. */
+    private void renderHitFlash() {
+        if (hitFlashFrames <= 0) return;
+        float t = hitFlashFrames / (float) HIT_FLASH_DURATION;
+        float alpha = 0.45f * t;
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
+        ctx.shapes.setColor(1f, 0.1f, 0.1f, alpha);
+        ctx.shapes.rect(0, 0, ctx.worldW(), ctx.worldH());
+        ctx.shapes.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     // -- Layout --------------------------------------------------------------
@@ -196,9 +271,10 @@ public final class V2Hud {
         hpBarRect.set(barX, by, BAR_W, BAR_H);
         by -= BAR_H + BAR_GAP;
         xpBarRect.set(barX, by, BAR_W, BAR_H);
-        by -= BAR_H + BAR_GAP;
-        satBarRect.set(barX, by, BAR_W, BAR_H);
-        clockRect.set(MARGIN, satBarRect.y - CLOCK_SIZE - 8f, CLOCK_SIZE, CLOCK_SIZE);
+        // Satiety bar removed - field stays on Mob for save back-compat
+        // but the meter isn't drawn or tapped. Clock anchors to xpBarRect
+        // now since there's no satiety bar beneath it.
+        clockRect.set(MARGIN, xpBarRect.y - CLOCK_SIZE - 8f, CLOCK_SIZE, CLOCK_SIZE);
 
         // Burger at top-right.
         burgerRect.set(w - MARGIN - ACTION_BTN, h - MARGIN - ACTION_BTN,
@@ -275,7 +351,7 @@ public final class V2Hud {
 
         Mob player = currentPlayer();
 
-        // Status bars.
+        // Status bars (HP + XP only - satiety was removed from the game).
         if (player != null) {
             double maxHp = player.effectiveStats().maxHp;
             float hpFrac = maxHp > 0 ? (float) (player.hp / maxHp) : 0f;
@@ -285,14 +361,9 @@ public final class V2Hud {
             int xpStep = com.bjsp123.rl2.logic.MobProgression.xpToAdvanceFrom(player.characterLevel);
             float xpFrac = xpStep > 0 ? (float)(player.xp - xpBase) / xpStep : 1f;
             drawBar(s, xpBarRect, Math.max(0f, Math.min(1f, xpFrac)), UIVars.BAR_XP);
-
-            int satMax = com.bjsp123.rl2.logic.GameBalance.STARTING_SATIETY;
-            float satFrac = satMax > 0 ? (float) player.satiety / satMax : 0f;
-            drawBar(s, satBarRect, satFrac, UIVars.BORDER_OUTER);
         } else {
-            drawBar(s, hpBarRect,  0f, UIVars.TEXT_WARN);
-            drawBar(s, xpBarRect,  0f, UIVars.ACCENT);
-            drawBar(s, satBarRect, 0f, UIVars.BORDER_OUTER);
+            drawBar(s, hpBarRect, 0f, UIVars.TEXT_WARN);
+            drawBar(s, xpBarRect, 0f, UIVars.ACCENT);
         }
         drawTurnClock(s);
 
@@ -331,7 +402,7 @@ public final class V2Hud {
             float iconSz = 16f * HUD_SCALE;
             float iconGap = 2f * HUD_SCALE;
             float bx = MARGIN;
-            float by = satBarRect.y - 30f * HUD_SCALE;
+            float by = xpBarRect.y - 30f * HUD_SCALE;
             int max = Math.min(dotPlayer.buffs.size(), 8);
             s.setColor(UIVars.TEXT_DIM);
             for (int i = 0; i < max; i++) {
@@ -432,6 +503,24 @@ public final class V2Hud {
                 Rect r = actionRects[i];
                 ItemCell.draw(ctx, it, currentPlayer(), r.x, r.y, r.w, r.h, true);
             }
+            // Hotkey numbers in the top-left corner of each slot, rendered at
+            // ~70% of the regular font so they sit underneath the item +level
+            // badge (which uses the full font height). Bound to keys 1..9.
+            com.badlogic.gdx.graphics.g2d.BitmapFont f = ctx.fontRegular;
+            float prevScale = f.getScaleX();
+            f.getData().setScale(prevScale * 0.7f);
+            f.setColor(UIVars.TEXT_DIM);
+            int n = com.bjsp123.rl2.ui.skin.Settings.quickslotCount();
+            for (int i = 0; i < n && i < 9; i++) {
+                Rect r = actionRects[i];
+                String label = Integer.toString(i + 1);
+                ctx.layout.setText(f, label);
+                float lx = r.x + 3f;
+                float ly = r.y + r.h - 2f;
+                f.draw(ctx.batch, label, lx, ly);
+            }
+            f.getData().setScale(prevScale);
+            f.setColor(com.badlogic.gdx.graphics.Color.WHITE);
             // Mana-gain flash - detect charge increase, then draw additive overlay.
             for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) {
                 Item it = actionBar.get(i);
@@ -493,7 +582,7 @@ public final class V2Hud {
             float iconSz = 16f * HUD_SCALE;
             float iconGap = 2f * HUD_SCALE;
             float bx = MARGIN;
-            float by = satBarRect.y - 30f * HUD_SCALE;
+            float by = xpBarRect.y - 30f * HUD_SCALE;
             int max = Math.min(p.buffs.size(), 8);
             for (int i = 0; i < max; i++) {
                 Buff b = p.buffs.get(i);
@@ -628,8 +717,7 @@ public final class V2Hud {
                 // Tap on portrait OR status-bar cluster opens character stats.
                 if (portraitRect.contains(vx, vy)
                         || hpBarRect.contains(vx, vy)
-                        || xpBarRect.contains(vx, vy)
-                        || satBarRect.contains(vx, vy)) {
+                        || xpBarRect.contains(vx, vy)) {
                     if (onPortraitTap != null) onPortraitTap.run();
                     return true;
                 }

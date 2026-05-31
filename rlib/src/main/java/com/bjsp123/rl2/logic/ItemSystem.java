@@ -247,7 +247,8 @@ public final class ItemSystem {
             int dmg = MobSystem.rollRange(ItemStats.effectiveDamageRange(item));
             if (dmg > 0) {
                 MobSystem.processAttack(level, source, mob, dmg,
-                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON);
+                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON,
+                        null, new MobSystem.DamageCause(source, item, "potion"));
             }
         }
     }
@@ -273,7 +274,7 @@ public final class ItemSystem {
         int lvl = ItemStats.effectiveBuffLevel(item, effLvl);
         int dur = ItemStats.effectiveBuffDuration(item, effLvl);
         for (com.bjsp123.rl2.model.Buff.BuffType b : item.appliesBuff) {
-            BuffSystem.apply(level, user, b, lvl, dur, user);
+            BuffSystem.apply(level, user, b, lvl, dur, user, item);
         }
     }
 
@@ -384,7 +385,8 @@ public final class ItemSystem {
                         Mob m = MobQueries.mobAt(level, p);
                         if (m == null || m == caster) continue;
                         MobSystem.processAttack(level, caster, m, dmg,
-                                MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
+                                MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC, null,
+                                new MobSystem.DamageCause(caster, wand, "magic"));
                         BrandSystem.applyBrandOnHit(level, caster, m, wand);
                         if (m.hp > 0) survivors.add(m);
                     }
@@ -397,8 +399,9 @@ public final class ItemSystem {
                 // 2. Knockback survivors only.
                 int kb = wand != null ? wand.knockbackSquares : 0;
                 if (kb > 0) {
+                    MobSystem.DamageCause kbCause = new MobSystem.DamageCause(caster, wand, "wall-slam");
                     for (Mob m : survivors) {
-                        MobSystem.knockBack(level, m, kb, target);
+                        MobSystem.knockBack(level, m, kb, target, 0, kbCause);
                     }
                 }
             }
@@ -427,7 +430,8 @@ public final class ItemSystem {
                     Mob m = MobQueries.mobAt(level, p);
                     if (m == null || m == caster) continue;
                     MobSystem.processAttack(level, caster, m, dmg,
-                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
+                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC, null,
+                            new MobSystem.DamageCause(caster, wand, "blast"));
                     BrandSystem.applyBrandOnHit(level, caster, m, wand);
                 }
             }
@@ -439,7 +443,8 @@ public final class ItemSystem {
                     dmg = MobSystem.applySurpriseIfNeeded(level, caster, victim, dmg,
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
                     MobSystem.processAttack(level, caster, victim, dmg,
-                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
+                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC, null,
+                            new MobSystem.DamageCause(caster, wand, "missile"));
                     BrandSystem.applyBrandOnHit(level, caster, victim, wand);
                 }
             }
@@ -708,16 +713,19 @@ public final class ItemSystem {
         // launches at one mob; the lightning JUMPS to others, but the brand
         // tag is conceptually carried by the launch).
         Mob primary = MobQueries.mobAt(level, target);
-        applyLightningChain(level, caster, target, ItemStats.effectiveDamageRange(wand, effectiveLevel), null);
+        applyLightningChain(level, caster, target, ItemStats.effectiveDamageRange(wand, effectiveLevel),
+                wand, null);
         if (primary != null) BrandSystem.applyBrandOnHit(level, caster, primary, wand);
     }
 
     /** Package-private overload for brand-triggered lightning - caller supplies
-     *  the damage range directly (no wand item required). {@code excluded}, when
-     *  non-null, is added to the hit-set before the chain starts so it can never
-     *  be targeted (used by brands to protect the attacker from self-damage). */
+     *  the damage range directly (no wand item required) and the originating
+     *  item (the brand-carrying weapon, or the wand for direct wand fire).
+     *  {@code excluded}, when non-null, is added to the hit-set before the
+     *  chain starts so it can never be targeted (used by brands to protect
+     *  the attacker from self-damage). */
     static void applyLightningChain(Level level, Mob caster, Point target,
-                                    MinMax dmgRange, Mob excluded) {
+                                    MinMax dmgRange, Item originItem, Mob excluded) {
         int tx = target.tileX(), ty = target.tileY();
         Mob first = MobQueries.mobAt(level, target);
         if (first == null) return;
@@ -737,7 +745,8 @@ public final class ItemSystem {
             int dmg = MobSystem.rollRange(dmgRange);
             if (isWet(level, v)) dmg *= 2;
             MobSystem.processAttack(level, caster, v, dmg,
-                    MobSystem.AttackType.MAGIC, MobSystem.DamageElement.SHOCK);
+                    MobSystem.AttackType.MAGIC, MobSystem.DamageElement.SHOCK, null,
+                    new MobSystem.DamageCause(caster, originItem, "lightning"));
             // Per-victim arc burst so the renderer marks every hit, not just
             // the original target tile.
             if (level.events != null && v.position != null) {
@@ -1118,7 +1127,8 @@ public final class ItemSystem {
             kb += Math.min(5, perkLvl);
             int wallSlam = Math.max(0, perkLvl - 5);
             if (kb > 0) {
-                MobSystem.knockBack(level, victim, kb, arrival, wallSlam);
+                MobSystem.knockBack(level, victim, kb, arrival, wallSlam,
+                        new MobSystem.DamageCause(user, item, "wall-slam"));
             }
         }
 
@@ -1262,12 +1272,18 @@ public final class ItemSystem {
                 moved.add(it);
             }
         }
+        boolean landingVisible = landingIsChasm
+                && MobSystem.tileVisibleToPlayer(level, landing);
         for (Item it : moved) {
             if (landingIsChasm) {
                 level.items.remove(it);
                 if (level.events != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
                             it, landing));
+                }
+                if (landingVisible) {
+                    com.bjsp123.rl2.logic.EventLog.add(
+                            com.bjsp123.rl2.logic.Messages.itemFellInChasm(it.name, true));
                 }
             } else {
                 it.location = landing;
@@ -1288,10 +1304,16 @@ public final class ItemSystem {
         mob.inventory.armor   = null;
         java.util.Arrays.fill(mob.inventory.amulets, null);
         java.util.Arrays.fill(mob.inventory.gems,    null);
+        boolean tileVisible = MobSystem.tileVisibleToPlayer(level, mob.position);
+        boolean involvesPlayer = mob.behavior == Mob.Behavior.PLAYER;
         if (level.events != null) {
             for (Item it : falling) {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
                         it, mob.position));
+                if (tileVisible) {
+                    com.bjsp123.rl2.logic.EventLog.add(
+                            com.bjsp123.rl2.logic.Messages.itemFellInChasm(it.name, involvesPlayer));
+                }
             }
         }
     }

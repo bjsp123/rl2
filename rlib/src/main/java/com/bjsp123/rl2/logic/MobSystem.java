@@ -84,6 +84,23 @@ public class MobSystem {
         public final int rolled;
         /** Ordered list of "label: -N" deductions, in the order they were applied. */
         public final java.util.List<String> mitigations = new java.util.ArrayList<>();
+        /** Knockback distance applied alongside this damage roll. Drives the
+         *  ", knocking the {target} back N" suffix on the damageRoll log line.
+         *  Zero = no annotation. Set by melee callers in {@link #attack}
+         *  before {@link #processAttack} runs. */
+        public int kbSquares = 0;
+        /** Mechanism of the attack. Drives the damageRoll log line's voice:
+         *  MELEE → "X hits Y for N damage"; RANGED/THROWN/MAGIC → "X's <item>
+         *  does N damage to Y"; ENVIRONMENTAL (no attacker) → "Y takes N
+         *  damage" (passive). Defaults to null; {@link #processAttack} fills
+         *  it from its own {@code type} parameter so non-melee callers don't
+         *  have to remember to set it. */
+        public AttackType type;
+        /** Causal chain, used to pull the originating item name for the
+         *  "X's <item> does N damage" form on ranged/thrown/magic hits.
+         *  Defaults to null; {@link #processAttack} fills it from the cause
+         *  it computed (synthesised or caller-supplied). */
+        public DamageCause cause;
 
         public DamageBreakdown(DamageElement element, int rolled) {
             this.element = element;
@@ -95,6 +112,50 @@ public class MobSystem {
             if (amount > 0) mitigations.add(label + " -" + amount);
             return this;
         }
+    }
+
+    /** Causal chain for a single damage event. {@code origin} is the root
+     *  attacker (the mob whose action ultimately caused this damage even if
+     *  the damage is being applied indirectly via a fire DOT, a wall-slam,
+     *  etc.). {@code originItem} is the wand / bomb / weapon that *originated*
+     *  the chain (the fire wand that lit the fire, the blast bomb that
+     *  knocked the victim into a wall). {@code medium} names the indirect
+     *  mechanism: {@code "blow"}, {@code "wall-slam"}, {@code "fall"},
+     *  {@code "fire-dot"}, {@code "poison-dot"}, {@code "burst"}, etc.
+     *
+     *  <p>For direct hits the cause is just {@code (attacker,
+     *  attacker.equippedWeapon, "blow")} — equivalent to passing null, since
+     *  {@link #processAttack(Level, Mob, Mob, int, AttackType, DamageElement,
+     *  DamageBreakdown, DamageCause)} fills that default when {@code cause}
+     *  is null. Indirect damage paths construct a {@code DamageCause} at
+     *  the originating site (fire-tile damage, knockback wall-slam, chasm
+     *  fall) so the death screen + log messages can name the root cause. */
+    public record DamageCause(Mob origin, Item originItem, String medium) {
+        /** Cause for an environmental hit with no attribution
+         *  (e.g. chasm fall, ambient fire that's been burning since level
+         *  gen). */
+        public static final DamageCause NONE = new DamageCause(null, null, null);
+    }
+
+    /** Most recent {@link DamageCause} that landed a damaging blow on a
+     *  PLAYER-behaviour mob. Updated inside {@link #processAttack} whenever
+     *  {@code target.behavior == PLAYER && dealt > 0}. Read by the
+     *  death-screen path on PlayerScreen to surface the cause as the death
+     *  headline. {@code element} and {@code dealt} are stashed alongside so
+     *  the headline can phrase the verb ("burned", "shoved", "bled out")
+     *  without re-walking the log. Cleared by {@link #resetLastPlayerHit}
+     *  when a new run begins. */
+    private static volatile DamageCause lastPlayerCause;
+    private static volatile DamageElement lastPlayerElement;
+    private static volatile int lastPlayerHitDealt;
+
+    public static DamageCause lastPlayerCause()        { return lastPlayerCause; }
+    public static DamageElement lastPlayerElement()    { return lastPlayerElement; }
+    public static int lastPlayerHitDealt()             { return lastPlayerHitDealt; }
+    public static void resetLastPlayerHit() {
+        lastPlayerCause = null;
+        lastPlayerElement = null;
+        lastPlayerHitDealt = 0;
     }
 
     private static final Random RANDOM = new Random();
@@ -577,23 +638,74 @@ public class MobSystem {
         if (a.fleeTypes   == null) a.fleeTypes   = new java.util.HashSet<>();
         if (b.attackTypes == null) b.attackTypes = new java.util.HashSet<>();
         if (b.fleeTypes   == null) b.fleeTypes   = new java.util.HashSet<>();
+        // Capture the prior attitude BEFORE we mutate attackTypes so the
+        // "becomes hostile" log only fires when the relationship actually
+        // changes. A roach whose CSV enemyFactions includes PLAYER was
+        // already going to attack; adding ROACH -> WARRIOR to the player's
+        // attackTypes set is bookkeeping, not news.
+        Attitude aPriorAttitude = getAttitudeToMob(a, b);
+        Attitude bPriorAttitude = getAttitudeToMob(b, a);
         boolean aLearned = a.attackTypes.add(b.mobType);
         a.fleeTypes.remove(b.mobType);
         boolean bLearned = b.attackTypes.add(a.mobType);
         b.fleeTypes.remove(a.mobType);
 
-        if (!aLearned && !bLearned) return;
+        boolean aBecameHostile = aLearned && aPriorAttitude != Attitude.ATTACK;
+        boolean bBecameHostile = bLearned && bPriorAttitude != Attitude.ATTACK;
+        if (!aBecameHostile && !bBecameHostile) return;
         boolean aPlayer = a.behavior == Behavior.PLAYER;
         boolean bPlayer = b.behavior == Behavior.PLAYER;
         String aName = nameForLog(level, a);
         String bName = nameForLog(level, b);
-        if (!aPlayer && bPlayer && aLearned) {
+        if (!aPlayer && bPlayer && aBecameHostile) {
             EventLog.add(Messages.attitudeTurnsOnPlayer(aName, reason));
-        } else if (!bPlayer && aPlayer && bLearned) {
+        } else if (!bPlayer && aPlayer && bBecameHostile) {
             EventLog.add(Messages.attitudeTurnsOnPlayer(bName, reason));
         } else if (!aPlayer && !bPlayer) {
-            if (aLearned) EventLog.add(Messages.attitudeMobOnMob(aName, bName, reason));
-            else          EventLog.add(Messages.attitudeMobOnMob(bName, aName, reason));
+            if (aBecameHostile) EventLog.add(Messages.attitudeMobOnMob(aName, bName, reason));
+            else                EventLog.add(Messages.attitudeMobOnMob(bName, aName, reason));
+        }
+
+        // Kin propagation: same-species mobs within their own wake radius of
+        // the attacked one also learn to attack the player. A pack of mice
+        // turns en masse when one of them is hit, even though they're all
+        // factionless individuals. Only fires when the attacker is the
+        // player and the victim genuinely became hostile (so we don't
+        // re-log for mobs that were already attacking via faction rules).
+        if (aPlayer && bBecameHostile) propagateHostilityToKin(level, a, b, reason);
+        if (bPlayer && aBecameHostile) propagateHostilityToKin(level, b, a, reason);
+    }
+
+    /** Spread the {@code attacker -> attackTypes} entry to every same-species
+     *  mob within its own {@code wakeRadius} of the original {@code victim}.
+     *  Each newly-hostile kin emits a "becomes hostile" log line, gated by
+     *  the same prior-attitude check as {@link #recordCombatMemory} so kin
+     *  that were already attacking (via faction or earlier combat memory)
+     *  don't re-log. The flee set is also cleared on each affected mob so
+     *  a "fled in fright" entry doesn't override the new hostility. */
+    private static void propagateHostilityToKin(Level level, Mob attacker, Mob victim, String reason) {
+        if (level == null || level.mobs == null) return;
+        if (attacker == null || victim == null) return;
+        if (attacker.mobType == null || victim.mobType == null) return;
+        if (victim.position == null) return;
+        int ox = victim.position.tileX(), oy = victim.position.tileY();
+        for (Mob m : level.mobs) {
+            if (m == attacker || m == victim) continue;
+            if (m.mobType == null || !m.mobType.equals(victim.mobType)) continue;
+            if (m.position == null || m.hp <= 0) continue;
+            int d = Math.max(Math.abs(m.position.tileX() - ox),
+                             Math.abs(m.position.tileY() - oy));
+            int range = (int) Math.max(1.0, m.effectiveStats().wakeRadius);
+            if (d > range) continue;
+            if (m.attackTypes == null) m.attackTypes = new java.util.HashSet<>();
+            if (m.fleeTypes   == null) m.fleeTypes   = new java.util.HashSet<>();
+            Attitude prior = getAttitudeToMob(m, attacker);
+            boolean learned = m.attackTypes.add(attacker.mobType);
+            m.fleeTypes.remove(attacker.mobType);
+            if (learned && prior != Attitude.ATTACK) {
+                EventLog.add(Messages.attitudeTurnsOnPlayer(
+                        nameForLog(level, m), reason));
+            }
         }
     }
 
@@ -668,6 +780,34 @@ public class MobSystem {
      *  redacted to "something". */
     public static boolean isVisibleToPlayer(Level level, Mob mob) {
         return MobVisibility.isVisibleToPlayer(level, mob);
+    }
+
+    /** Transition {@code mob} to AWAKE and emit a "wakes up" log entry when
+     *  the tile is visible to the player. Centralises the
+     *  {@code ASLEEP -> AWAKE} log so every AI dispatcher that checks the
+     *  wake gate emits consistent messaging. No-op when {@code mob} is null
+     *  or already AWAKE; player and off-screen wakes are silent. {@code
+     *  reason} is the parenthetical (e.g. "sensing something nearby",
+     *  "damaged by fire") - same wording as the existing Messages helper. */
+    public static void wakeMob(Level level, Mob mob, String reason) {
+        if (mob == null) return;
+        StateOfMind prev = mob.stateOfMind;
+        if (prev == StateOfMind.AWAKE) return;
+        mob.stateOfMind = StateOfMind.AWAKE;
+        if (mob.behavior == Behavior.PLAYER) return;
+        if (prev != StateOfMind.ASLEEP) return;
+        if (!isVisibleToPlayer(level, mob)) return;
+        EventLog.add(Messages.mobWakesUp(nameForLog(level, mob), reason));
+    }
+
+    /** True if the tile at {@code pos} is currently lit + in the player's
+     *  FOV. Defensive against null {@code level.visible} (transient field
+     *  reset on load) and out-of-bounds positions. */
+    public static boolean tileVisibleToPlayer(Level level, Point pos) {
+        if (level == null || pos == null || level.visible == null) return false;
+        int x = pos.tileX(), y = pos.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        return level.visible[x][y];
     }
 
     /** Display name for a mob in the event log. The player is always shown by name; any
@@ -885,9 +1025,16 @@ public class MobSystem {
             if (level.events != null) {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.MobMeleeAttacked(
                         attacker, target, /*hit=*/false, /*dealt=*/0));
+                // Yellow "miss" floater + miss sfx are bound to the DamageDealt
+                // MISS branch in the Animator; emit one here too so a melee
+                // miss has the same visual/audio cue as a ranged miss.
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
+                        target, 0,
+                        com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
+                        attacker, DamageElement.PHYSICAL, null));
             }
-            logAttackOutcome(level, attacker, target, 0, /*miss*/ true, /*killed*/ false);
-            // Tuning log for the missed swing - rolled=0 collapses the body to "miss".
+            // Single miss line via the damageRoll path; the older
+            // logAttackOutcome miss emission was a duplicate.
             emitDamageRollLog(level, attacker, target,
                     new DamageBreakdown(DamageElement.PHYSICAL, 0), 0);
             return;
@@ -912,19 +1059,21 @@ public class MobSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobMeleeAttacked(
                     attacker, target, /*hit=*/true, rawDealt));
         }
-        // Knockback fires BEFORE the melee damage so even a killing blow
-        // shows the shove - the slide animation queues sequentially and
-        // the death-fade plays at the destination tile. A knockback
-        // collision can itself kill the target via environmental damage;
-        // we guard the subsequent melee damage so we don't double-kill.
+        // Compute knockback up front so the hit line can be annotated with
+        // the push distance ("knocking the roach back 3") before the slam
+        // log lines start. Knockback then runs - emits its slam logs in
+        // narrative order - then the melee damage applies. The kill log
+        // line is held back until the end so the death message reads as a
+        // consequence of the full chain rather than the only signal.
         // Total knockback = stat-based (intrinsic + equipped weapon) plus the
         // KNOCKBACK perk contribution. The perk's tile contribution caps at
         // GameBalance.KNOCKBACK_TILE_CAP (perkLvl 1..cap = +1 tile each); levels
         // above the cap instead each add +1 to the wall-slam damage bonus dealt
         // when the knockback's flight is blocked by a wall / chasm / mob.
+        int kb = 0;
+        int wallSlam = 0;
         if (attacker.position != null) {
-            int kb = attacker.effectiveStats().knockbackSquares;
-            int wallSlam = 0;
+            kb = attacker.effectiveStats().knockbackSquares;
             if (attacker.perks != null) {
                 int p = attacker.perks.getOrDefault(
                         com.bjsp123.rl2.model.Perk.KNOCKBACK, 0);
@@ -932,20 +1081,47 @@ public class MobSystem {
                 kb       += Math.min(cap, p);
                 wallSlam += Math.max(0, p - cap);
             }
-            if (kb > 0) knockBack(level, target, kb, attacker.position, wallSlam);
+        }
+        // Pre-mitigate so we can emit the damageRoll log line FIRST (with kb
+        // annotation) before knockback's slam logs follow. The mitigation
+        // math is duplicated between here and processAttack, but processAttack
+        // is invoked with suppressLog=true so the damageRoll only fires once.
+        // SHIELDED short-circuits both: dealt=0 and no damage applied below.
+        boolean shielded = BuffSystem.hasBuff(target, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED);
+        int previewDealt;
+        if (shielded) {
+            previewDealt = 0;
+        } else {
+            previewDealt = BuffSystem.mitigatePhysicalDamage(target, rawDealt);
+        }
+        if (previewDealt < rawDealt && rawDealt > 0) {
+            bk.add("PROTECTION", rawDealt - previewDealt);
+        }
+        bk.kbSquares = kb;
+        bk.type      = AttackType.MELEE;
+        bk.cause     = new DamageCause(attacker,
+                attacker.inventory != null ? attacker.inventory.weapon : null, "blow");
+        emitDamageRollLog(level, attacker, target, bk, previewDealt);
+
+        if (attacker.position != null && kb > 0) {
+            DamageCause kbCause = new DamageCause(attacker,
+                    attacker.inventory != null ? attacker.inventory.weapon : null,
+                    "wall-slam");
+            knockBack(level, target, kb, attacker.position, wallSlam, kbCause);
         }
         boolean killed;
-        int dealt;
         if (target.hp <= 0) {
             killed = true;
-            dealt  = 0;
+        } else if (shielded) {
+            // SHIELDED still consumed the swing; no damage to apply but the
+            // attacker's combat memory shouldn't fire (no damage = no
+            // memory). Skip processAttack entirely.
+            killed = false;
         } else {
-            double hpBefore = target.hp;
             killed = processAttack(level, attacker, target, rawDealt,
-                    AttackType.MELEE, DamageElement.PHYSICAL, bk);
-            dealt = Math.max(0, (int) Math.round(hpBefore - target.hp));
+                    AttackType.MELEE, DamageElement.PHYSICAL, bk, null, true /*suppressLog*/);
         }
-        logAttackOutcome(level, attacker, target, dealt, /*miss*/ false, killed);
+        if (killed) emitKillLog(level, attacker, target);
     }
 
     /**
@@ -976,7 +1152,7 @@ public class MobSystem {
      */
     public static boolean processAttack(Level level, Mob attacker, Mob target,
                                         int rawDealt, AttackType type, DamageElement element) {
-        return processAttack(level, attacker, target, rawDealt, type, element, null);
+        return processAttack(level, attacker, target, rawDealt, type, element, null, null);
     }
 
     /** Variant that accepts a {@link DamageBreakdown} pre-populated with the caller's
@@ -988,7 +1164,42 @@ public class MobSystem {
     public static boolean processAttack(Level level, Mob attacker, Mob target,
                                         int rawDealt, AttackType type, DamageElement element,
                                         DamageBreakdown breakdown) {
+        return processAttack(level, attacker, target, rawDealt, type, element, breakdown, null);
+    }
+
+    /** Full variant carrying an explicit {@link DamageCause} chain for causal
+     *  attribution in the death screen + log messages. Indirect damage paths
+     *  (fire DOT, wall-slam, chasm fall) build a cause at the originating
+     *  site and pass it here; direct hits can leave {@code cause = null},
+     *  in which case the method synthesises a "blow" cause from the
+     *  attacker + their equipped weapon. */
+    public static boolean processAttack(Level level, Mob attacker, Mob target,
+                                        int rawDealt, AttackType type, DamageElement element,
+                                        DamageBreakdown breakdown, DamageCause cause) {
+        return processAttack(level, attacker, target, rawDealt, type, element, breakdown, cause, false);
+    }
+
+    /** Full variant with a {@code suppressLog} flag. When true, the canonical
+     *  damageRoll log line is NOT emitted from inside this method - the
+     *  caller is responsible for emitting it (e.g. {@link #attack} pre-emits
+     *  it with the knockback annotation BEFORE the knockback slam logs
+     *  follow, so the narrative reads top-to-bottom). Everything else (HP
+     *  application, floaters, combat memory, flinch, brand-on-hit) still
+     *  fires as before. */
+    public static boolean processAttack(Level level, Mob attacker, Mob target,
+                                        int rawDealt, AttackType type, DamageElement element,
+                                        DamageBreakdown breakdown, DamageCause cause,
+                                        boolean suppressLog) {
         if (target == null) return false;
+        // Synthesise a default cause for direct hits from {@code attacker}.
+        // The attacker's currently-equipped weapon is the most common
+        // originating item; melee callers and ranged-weapon callers rely on
+        // this default. Indirect damage paths (fire DOT, knockback wall-slam,
+        // chasm fall) pass an explicit DamageCause and don't hit this branch.
+        final DamageCause effectiveCause = cause != null ? cause : new DamageCause(
+                attacker,
+                attacker != null && attacker.inventory != null ? attacker.inventory.weapon : null,
+                "blow");
         if (type == AttackType.MELEE) com.bjsp123.rl2.util.ActionTracker.bumpMelee(attacker);
         if (rawDealt < 0) rawDealt = 0;
         if (rawDealt > 0 && BuffSystem.hasBuff(target, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED)) return false;
@@ -1009,17 +1220,34 @@ public class MobSystem {
         // buff ate part of the hit, so the renderer plays the dim "blunt" first.
         if (dealt < rawDealt && rawDealt > 0 && level != null && level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
-                    target, dealt, com.bjsp123.rl2.event.GameEvent.DamageMessage.BLUNT, attacker, element));
+                    target, dealt, com.bjsp123.rl2.event.GameEvent.DamageMessage.BLUNT,
+                    attacker, element, effectiveCause));
         }
         // Damage-roll tuning log. Falls back to a default breakdown when the caller
         // didn't pre-populate one, so every processAttack call still produces a line.
         DamageBreakdown bk = breakdown != null ? breakdown : new DamageBreakdown(element, rawDealt);
-        if (dealt < rawDealt && rawDealt > 0) {
+        if (bk.type  == null) bk.type  = type;
+        if (bk.cause == null) bk.cause = effectiveCause;
+        // Only add PROTECTION when the breakdown doesn't already carry one
+        // (the pre-mitigation path in {@link #attack} adds PROTECTION
+        // itself before suppressLog=true, so re-adding would duplicate
+        // the entry in the parenthetical).
+        if (dealt < rawDealt && rawDealt > 0
+                && !breakdownAlreadyHas(bk, "PROTECTION")
+                && !breakdownAlreadyHas(bk, "ANTI_MAGIC")) {
             bk.add(element == DamageElement.PHYSICAL ? "PROTECTION" : "ANTI_MAGIC",
                     rawDealt - dealt);
         }
-        emitDamageRollLog(level, attacker, target, bk, dealt);
+        if (!suppressLog) emitDamageRollLog(level, attacker, target, bk, dealt);
         target.hp -= dealt;
+        // Capture the most recent damaging hit on the player for the death
+        // screen headline (E1). Cleared via {@link #resetLastPlayerHit} on
+        // new run.
+        if (dealt > 0 && target.behavior == Behavior.PLAYER) {
+            lastPlayerCause     = effectiveCause;
+            lastPlayerElement   = element;
+            lastPlayerHitDealt  = dealt;
+        }
         // PHASE ends the moment the mob takes or deals damage.
         if (dealt > 0) {
             BuffSystem.removeBuff(target,   com.bjsp123.rl2.model.Buff.BuffType.PHASE);
@@ -1038,12 +1266,14 @@ public class MobSystem {
         if (target.stateOfMind == Mob.StateOfMind.ASLEEP
                 || target.stateOfMind == Mob.StateOfMind.HIDING
                 || target.stateOfMind == Mob.StateOfMind.SEEKING_HIDING) {
-            target.stateOfMind = Mob.StateOfMind.AWAKE;
-            BuffSystem.removeBuff(target, com.bjsp123.rl2.model.Buff.BuffType.HIDING);
-            if (target.behavior != Behavior.PLAYER && isVisibleToPlayer(level, target)) {
-                EventLog.add(Messages.mobWakesUp(nameForLog(level, target),
-                        "damaged by " + element.name().toLowerCase()));
+            // wakeMob only logs the ASLEEP -> AWAKE case (the user-visible
+            // "wakes up" beat); HIDING / SEEKING_HIDING transitions still
+            // flip silently to AWAKE here.
+            wakeMob(level, target, "damaged by " + element.name().toLowerCase());
+            if (target.stateOfMind != Mob.StateOfMind.AWAKE) {
+                target.stateOfMind = Mob.StateOfMind.AWAKE;
             }
+            BuffSystem.removeBuff(target, com.bjsp123.rl2.model.Buff.BuffType.HIDING);
         }
         // Hostility from damage: a mob that takes real damage from an attacker promotes
         // that attacker into its attackTypes (and recordCombatMemory's reciprocal does the
@@ -1064,7 +1294,7 @@ public class MobSystem {
                     dealt > 0
                             ? com.bjsp123.rl2.event.GameEvent.DamageMessage.HIT
                             : com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
-                    attacker, element));
+                    attacker, element, effectiveCause));
         }
         // HIGH-priority element-tagged log line for non-PHYSICAL damage. The
         // PHYSICAL melee path emits its own playerHit/enemyHit/mobHit line via
@@ -1074,8 +1304,9 @@ public class MobSystem {
         if (dealt > 0 && element != DamageElement.PHYSICAL) {
             boolean playerInvolved = (attacker != null && attacker.behavior == Behavior.PLAYER)
                                   || target.behavior == Behavior.PLAYER;
+            String originName = Messages.formatCauseOrigin(level, effectiveCause);
             EventLog.add(Messages.elementalDamage(
-                    nameForLog(level, target), element, dealt, playerInvolved));
+                    nameForLog(level, target), element, dealt, originName, playerInvolved));
         }
         // Only flinch when real damage lands - a 0-damage blow doesn't visually stagger the
         // target. Environmental damage has no attacker and therefore no direction to recoil
@@ -1174,43 +1405,67 @@ public class MobSystem {
         }
     }
 
-    /**
-     * Translate the raw attack result into the correct {@link Messages} template and push
-     * it to {@link EventLog}. Three axes: which side is the player, hit/miss, killed-or-not.
-     */
-    private static void logAttackOutcome(Level level, Mob attacker, Mob target, int dmg, boolean miss, boolean killed) {
-        boolean attackerIsPlayer = attacker.behavior == Behavior.PLAYER;
-        boolean targetIsPlayer   = target.behavior   == Behavior.PLAYER;
+    /** Emit the kill line for a fatal blow. Called from {@link #attack}
+     *  after the full melee chain resolves (damage + knockback chain).
+     *  Selects the right Messages factory by player-involvement. */
+    private static void emitKillLog(Level level, Mob attacker, Mob target) {
         String atkName = nameForLog(level, attacker);
         String tgtName = nameForLog(level, target);
-
-        if (attackerIsPlayer) {
-            if (killed)      EventLog.add(Messages.playerKill(atkName, tgtName));
-            else if (miss)   EventLog.add(Messages.playerMiss(atkName, tgtName));
-            else             EventLog.add(Messages.playerHit (atkName, tgtName, dmg));
-        } else if (targetIsPlayer) {
-            if (killed)      EventLog.add(Messages.enemyKill(atkName, tgtName));
-            else if (miss)   EventLog.add(Messages.enemyMiss(atkName, tgtName));
-            else             EventLog.add(Messages.enemyHit (atkName, tgtName, dmg));
+        if (attacker.behavior == Behavior.PLAYER) {
+            EventLog.add(Messages.playerKill(atkName, tgtName));
+        } else if (target.behavior == Behavior.PLAYER) {
+            EventLog.add(Messages.enemyKill(atkName, tgtName));
         } else {
-            if (killed)      EventLog.add(Messages.mobKill(atkName, tgtName));
-            else if (miss)   EventLog.add(Messages.mobMiss(atkName, tgtName));
-            else             EventLog.add(Messages.mobHit (atkName, tgtName, dmg));
+            EventLog.add(Messages.mobKill(atkName, tgtName));
         }
     }
 
-    /** Push the per-attack {@link DamageBreakdown} to the LOW-priority event log.
-     *  Called from {@link #processAttack} after final {@code dealt} is known and from
-     *  the melee-miss path before it returns. */
+    /** Push the per-attack {@link DamageBreakdown} to the event log. This is
+     *  the canonical "X hits Y for N damage" line - priority is HIGH when
+     *  the player is involved (the previous separate playerHit / enemyHit /
+     *  mobHit emissions are gone because they were duplicates of this line
+     *  without the mitigation suffix). Called from {@link #processAttack}
+     *  for non-melee paths, and from {@link #attack} for melee (which
+     *  passes {@code kbSquares} for the knockback annotation and suppresses
+     *  the processAttack emission to avoid a dupe). */
+    /** True if {@code bk}'s mitigations list already carries an entry
+     *  starting with {@code label} (e.g. "PROTECTION -3" matches "PROTECTION").
+     *  Used by {@link #processAttack} to skip re-adding the same mitigation
+     *  entry when {@link #attack} pre-mitigated and pre-emitted the
+     *  damageRoll log line. */
+    private static boolean breakdownAlreadyHas(DamageBreakdown bk, String label) {
+        if (bk == null || bk.mitigations == null) return false;
+        for (String e : bk.mitigations) {
+            if (e != null && e.startsWith(label)) return true;
+        }
+        return false;
+    }
+
     static void emitDamageRollLog(Level level, Mob attacker, Mob target,
                                   DamageBreakdown bk, int dealt) {
         if (bk == null) return;
-        String atk = attacker == null ? "(env)" : nameForLog(level, attacker);
-        String tgt = target   == null ? "?"     : nameForLog(level, target);
-        boolean playerInv = (attacker != null && attacker.behavior == Behavior.PLAYER)
-                          || (target   != null && target  .behavior == Behavior.PLAYER);
-        EventLog.add(Messages.damageRoll(atk, tgt, bk.element.name(),
-                bk.rolled, dealt, bk.mitigations, playerInv));
+        // Attacker may be the {@code cause.origin()} for indirect damage
+        // (a fire DOT carries the wand's caster on the cause; the direct
+        // {@code attacker} arg is null). Prefer the cause's origin when the
+        // direct attacker is missing so the log line still attributes.
+        Mob effectiveAttacker = attacker;
+        if (effectiveAttacker == null && bk.cause != null) {
+            effectiveAttacker = bk.cause.origin();
+        }
+        String atk = effectiveAttacker == null ? null : nameForLog(level, effectiveAttacker);
+        String tgt = target == null ? "?" : nameForLog(level, target);
+        boolean attackerIsPlayer = effectiveAttacker != null
+                && effectiveAttacker.behavior == Behavior.PLAYER;
+        boolean targetIsPlayer = target != null && target.behavior == Behavior.PLAYER;
+        boolean playerInv = attackerIsPlayer || targetIsPlayer;
+        String itemName = (bk.cause != null && bk.cause.originItem() != null
+                && bk.cause.originItem().name != null)
+                ? bk.cause.originItem().name : null;
+        EventLog.add(Messages.damageRoll(atk, attackerIsPlayer,
+                tgt, targetIsPlayer,
+                bk.type, itemName,
+                bk.element.name(),
+                bk.rolled, dealt, bk.mitigations, bk.kbSquares, playerInv));
     }
 
     /** Move every item under the mob's feet from the ground into its bag (until the bag is full).
@@ -1355,7 +1610,7 @@ public class MobSystem {
      * </ul>
      */
     public static void knockBack(Level level, Mob mob, int numSquares, Point from) {
-        knockBackInternal(level, mob, numSquares, from, 0, 0);
+        knockBackInternal(level, mob, numSquares, from, 0, 0, null);
     }
 
     /** Knockback overload with a wall-slam damage bonus. The bonus is added to
@@ -1366,11 +1621,25 @@ public class MobSystem {
      *  overload behave identically to before. */
     public static void knockBack(Level level, Mob mob, int numSquares, Point from,
                                  int wallSlamBonus) {
-        knockBackInternal(level, mob, numSquares, from, 0, wallSlamBonus);
+        knockBackInternal(level, mob, numSquares, from, 0, wallSlamBonus, null);
+    }
+
+    /** Full knockback variant carrying a {@link DamageCause} for attribution
+     *  on the wall-slam / collision damage event. The cause's medium is
+     *  overridden to {@code "wall-slam"} or {@code "fall"} inside; callers
+     *  pass the originating attacker + item (e.g. the bomb thrower + bomb)
+     *  so the death-screen + log messages can name the root cause. */
+    public static void knockBack(Level level, Mob mob, int numSquares, Point from,
+                                 int wallSlamBonus, DamageCause cause) {
+        knockBackInternal(level, mob, numSquares, from, 0, wallSlamBonus, cause);
     }
 
     private static void knockBackInternal(Level level, Mob mob, int numSquares,
-                                          Point from, int depth, int wallSlamBonus) {
+                                          Point from, int depth, int wallSlamBonus,
+                                          DamageCause cause) {
+        DamageCause slamCause = cause != null
+                ? new DamageCause(cause.origin(), cause.originItem(), "wall-slam")
+                : null;
         if (depth >= 3 || mob == null || mob.position == null) return;
         int dx = Integer.signum(mob.position.tileX() - from.tileX());
         int dy = Integer.signum(mob.position.tileY() - from.tileY());
@@ -1387,7 +1656,7 @@ public class MobSystem {
                 mob.position = new Point(cx, cy);
                 emitKnockBack(level, mob, start, true);
                 processAttack(level, null, mob, remaining * 4 + wallSlamBonus,
-                        AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+                        AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL, null, slamCause);
                 return;
             }
 
@@ -1405,9 +1674,14 @@ public class MobSystem {
                 emitKnockBack(level, mob, start, true);
                 int slamDmg = remaining * 4 + wallSlamBonus;
                 processAttack(level, null, mob, slamDmg,
-                        AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+                        AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL, null, slamCause);
                 if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+                    // No {@code intoName} - picks the "wall" variant.
+                    // Origin only shows on attributable (non-melee) chains
+                    // since the melee chain's preceding hit line already
+                    // attributes the push.
                     EventLog.add(Messages.knockbackSlam(nameForLog(level, mob), slamDmg,
+                            Messages.formatCauseOrigin(level, slamCause), null, 0,
                             mob.behavior == Behavior.PLAYER));
                 }
                 return;
@@ -1419,16 +1693,21 @@ public class MobSystem {
                 emitKnockBack(level, mob, start, true);
                 int slamDmg = remaining * 4 + wallSlamBonus;
                 processAttack(level, null, mob, slamDmg,
-                        AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+                        AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL, null, slamCause);
                 if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+                    // Cascade kb = the {@code remaining} push that the
+                    // collided mob will inherit. Reads as "...knocking the
+                    // rat back 2" in the slam log.
+                    int cascadeKb = (collided.hp > 0) ? remaining : 0;
                     EventLog.add(Messages.knockbackSlam(nameForLog(level, mob), slamDmg,
+                            null, nameForLog(level, collided), cascadeKb,
                             mob.behavior == Behavior.PLAYER));
                 }
                 if (collided.hp > 0) {
                     processAttack(level, null, collided, remaining * 4,
-                            AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+                            AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL, null, slamCause);
                     if (collided.hp > 0) {
-                        knockBackInternal(level, collided, remaining, mob.position, depth + 1, 0);
+                        knockBackInternal(level, collided, remaining, mob.position, depth + 1, 0, cause);
                     }
                 }
                 return;
@@ -1535,6 +1814,12 @@ public class MobSystem {
         if (srcLevel.events != null) {
             srcLevel.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
                     it, fromPos));
+        }
+        // Log when the source tile is in the player's FOV - items vanishing
+        // off-screen don't need spam, but anything the player saw on the
+        // floor warrants a "the X falls into the chasm." line.
+        if (tileVisibleToPlayer(srcLevel, fromPos)) {
+            EventLog.add(Messages.itemFellInChasm(it.name, true));
         }
         srcLevel.items.remove(it);
 
@@ -1696,9 +1981,14 @@ public class MobSystem {
         mob.inventory.armor   = null;
         java.util.Arrays.fill(mob.inventory.amulets, null);
         java.util.Arrays.fill(mob.inventory.gems,    null);
+        boolean tileVisible = tileVisibleToPlayer(level, mob.position);
+        boolean involvesPlayer = mob.behavior == Behavior.PLAYER;
         for (Item item : falling) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
                     item, mob.position));
+            if (tileVisible) {
+                EventLog.add(Messages.itemFellInChasm(item.name, involvesPlayer));
+            }
         }
     }
 
@@ -1724,11 +2014,7 @@ public class MobSystem {
                     ? hasIncomingAttackerWithin(mob, level, mob.effectiveStats().wakeRadius)
                     : hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius);
             if (wakeUp) {
-                mob.stateOfMind = StateOfMind.AWAKE;
-                if (isVisibleToPlayer(level, mob)) {
-                    EventLog.add(Messages.mobWakesUp(nameForLog(level, mob),
-                            "sensing something nearby"));
-                }
+                wakeMob(level, mob, "sensing something nearby");
             } else {
                 mob.intent = Mob.Intent.IDLE;
                 // Only mobile mobs need a sleep cooldown - INANIMATE never has its
@@ -2381,7 +2667,7 @@ public class MobSystem {
     private static void processRangedMobDumbAi(Mob mob, Level level) {
         if (mob.stateOfMind == StateOfMind.ASLEEP) {
             if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
-                mob.stateOfMind = StateOfMind.AWAKE;
+                wakeMob(level, mob, "sensing something nearby");
             } else {
                 mob.intent = Mob.Intent.IDLE;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
@@ -2439,7 +2725,7 @@ public class MobSystem {
     private static void processRangedMobStandoffAi(Mob mob, Level level) {
         if (mob.stateOfMind == StateOfMind.ASLEEP) {
             if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
-                mob.stateOfMind = StateOfMind.AWAKE;
+                wakeMob(level, mob, "sensing something nearby");
             } else {
                 mob.intent = Mob.Intent.IDLE;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
@@ -2584,7 +2870,7 @@ public class MobSystem {
         // one has an attitude toward counts, so dogs wake the cat sleeping in the next room.
         if (mob.stateOfMind == StateOfMind.ASLEEP) {
             if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
-                mob.stateOfMind = StateOfMind.AWAKE;
+                wakeMob(level, mob, "sensing something nearby");
             } else {
                 mob.intent = Mob.Intent.IDLE;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
@@ -3278,14 +3564,43 @@ public class MobSystem {
         if (te == ItemEffect.DAMAGE && it.damage > 0) {
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null && getAttitudeToMob(target, thrower) != Attitude.ALLY) {
-                // processAttack records combat memory and floating-text centrally when
-                // damage actually lands. Damage range comes from ItemSystem so the
-                // weapon's level increment lands on thrown impact too.
-                int dmg = rollRange(ItemStats.effectiveDamageRange(it));
-                dmg = applySurpriseIfNeeded(level, thrower, target, dmg,
-                        AttackType.THROWN, DamageElement.PHYSICAL);
-                processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL);
-                BrandSystem.applyBrandOnHit(level, thrower, target, it);
+                // Single-target throws (throwing knives, javelins) roll-to-hit using
+                // the same accuracy-vs-evasion math as melee. AOE bombs and wands
+                // never roll - they always land at the target tile. A miss emits a
+                // log line + yellow "miss" floater via the standard DamageDealt(MISS)
+                // animator path; the item still lands on the tile (handled outside
+                // this branch).
+                if (!rollRangedHit(thrower, target, 0)) {
+                    String cn = thrower != null && thrower.name != null
+                            ? thrower.name
+                            : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
+                    String vn = nameForLog(level, target);
+                    boolean attackerIsPlayer = thrower != null
+                            && thrower.behavior == Behavior.PLAYER;
+                    boolean victimIsPlayer   = target.behavior  == Behavior.PLAYER;
+                    EventLog.add(attackerIsPlayer
+                            ? Messages.playerMiss(cn, vn)
+                            : (victimIsPlayer
+                               ? Messages.enemyMiss(cn, vn)
+                               : Messages.mobMiss(cn, vn)));
+                    if (level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
+                                target, 0,
+                                com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
+                                thrower, DamageElement.PHYSICAL,
+                                new DamageCause(thrower, it, "throw")));
+                    }
+                } else {
+                    // processAttack records combat memory and floating-text centrally when
+                    // damage actually lands. Damage range comes from ItemSystem so the
+                    // weapon's level increment lands on thrown impact too.
+                    int dmg = rollRange(ItemStats.effectiveDamageRange(it));
+                    dmg = applySurpriseIfNeeded(level, thrower, target, dmg,
+                            AttackType.THROWN, DamageElement.PHYSICAL);
+                    processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL,
+                            null, new DamageCause(thrower, it, "throw"));
+                    BrandSystem.applyBrandOnHit(level, thrower, target, it);
+                }
             }
         }
         // Tame-on-throw - items list the mob types they tame; throwing one at a
@@ -3327,14 +3642,15 @@ public class MobSystem {
             if (target != null) {
                 processAttack(level, thrower, target,
                         scaledBombDamage(target, it, bombDamage),
-                        AttackType.THROWN, DamageElement.PHYSICAL);
+                        AttackType.THROWN, DamageElement.PHYSICAL,
+                        null, new DamageCause(thrower, it, "throw"));
                 BrandSystem.applyBrandOnHit(level, thrower, target, it);
                 if (!bombBuffsIgnored(target, it)) {
                     BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE,
                             Math.max(1, lvl),
                             Math.max(TurnSystem.STANDARD_TURN_TICKS,
                                     (3 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                            thrower);
+                            thrower, it);
                 }
             }
             for (Point p : disc) FireSystem.ignite(level, p.tileX(), p.tileY());
@@ -3351,17 +3667,18 @@ public class MobSystem {
                                 Math.max(1, lvl),
                                 Math.max(TurnSystem.STANDARD_TURN_TICKS,
                                         WATER_STEP_BUFF_TICKS + lvl * TurnSystem.STANDARD_TURN_TICKS),
-                                thrower);
+                                thrower, it);
                     }
                     soaked.add(m);
                 }
             }
             int kb = Math.max(0, lvl * it.knockbackSquares);
             if (kb > 0) {
+                DamageCause kbCause = new DamageCause(thrower, it, "wall-slam");
                 for (Mob m : soaked) {
                     if (m.hp <= 0) continue;
                     if (bombBuffsIgnored(m, it)) continue;
-                    knockBack(level, m, kb, dst);
+                    knockBack(level, m, kb, dst, 0, kbCause);
                 }
             }
         } else if (te == ItemEffect.OIL && inBounds) {
@@ -3375,7 +3692,7 @@ public class MobSystem {
                         Math.max(1, lvl),
                         Math.max(TurnSystem.STANDARD_TURN_TICKS,
                                 (5 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                        thrower);
+                        thrower, it);
             }
         } else if (te == ItemEffect.BLAST && inBounds) {
             // Blast bomb: bomb damage to every mob in the blast disc, a
@@ -3397,15 +3714,17 @@ public class MobSystem {
                 if (m != null && m != thrower) {
                     processAttack(level, thrower, m,
                             scaledBombDamage(m, it, bombDamage),
-                            AttackType.THROWN, DamageElement.PHYSICAL);
+                            AttackType.THROWN, DamageElement.PHYSICAL,
+                            null, new DamageCause(thrower, it, "throw"));
                     BrandSystem.applyBrandOnHit(level, thrower, m, it);
                     if (blastSurvivors != null && m.hp > 0) blastSurvivors.add(m);
                 }
             }
             if (blastSurvivors != null) {
+                DamageCause kbCause = new DamageCause(thrower, it, "wall-slam");
                 for (Mob m : blastSurvivors) {
                     if (bombBuffsIgnored(m, it)) continue;
-                    knockBack(level, m, it.knockbackSquares, dst);
+                    knockBack(level, m, it.knockbackSquares, dst, 0, kbCause);
                 }
             }
         } else if (te == ItemEffect.APPLYBUFFS && inBounds
@@ -3419,7 +3738,7 @@ public class MobSystem {
                 if (m == null || m.hp <= 0) continue;
                 if (bombBuffsIgnored(m, it)) continue;
                 for (com.bjsp123.rl2.model.Buff.BuffType b : it.appliesBuff) {
-                    BuffSystem.apply(level, m, b, buffLvl, buffDur, thrower);
+                    BuffSystem.apply(level, m, b, buffLvl, buffDur, thrower, it);
                 }
             }
         } else if (te == ItemEffect.POISONCLOUD && inBounds) {
@@ -3457,7 +3776,8 @@ public class MobSystem {
             if (target != null) {
                 processAttack(level, thrower, target,
                         scaledBombDamage(target, it, bombDamage),
-                        AttackType.THROWN, DamageElement.PHYSICAL);
+                        AttackType.THROWN, DamageElement.PHYSICAL,
+                        null, new DamageCause(thrower, it, "throw"));
                 BrandSystem.applyBrandOnHit(level, thrower, target, it);
             }
             for (Point p : disc) {
@@ -3473,7 +3793,7 @@ public class MobSystem {
                         Math.max(1, lvl),
                         Math.max(TurnSystem.STANDARD_TURN_TICKS,
                                 (6 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                        thrower);
+                        thrower, it);
                 if (m != thrower) {
                     m.ticksTillMove += TurnSystem.STANDARD_TURN_TICKS;
                 }

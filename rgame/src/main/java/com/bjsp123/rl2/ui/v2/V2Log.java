@@ -358,7 +358,7 @@ public final class V2Log extends BasePopup {
             @Override
             public boolean scrolled(float amountX, float amountY) {
                 if (!isOpen()) return false;
-                bodyBand.scrolled(amountY, ctx.lineH());
+                bodyBand.scrolled(amountY);
                 return true;
             }
 

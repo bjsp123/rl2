@@ -45,14 +45,38 @@ public final class V2Map extends V2Screen {
      *  visited level is selected. */
     private static final float INFO_PANE_H = 96f;
 
-    /** Tile palette for the mini-map fill. Floor-like is a light warm
-     *  grey; wall / blocker is a darker neutral; chasm is near-black so
-     *  void tiles read as missing. Unexplored tiles draw at FOG. */
-    private static final Color FLOOR_TINT = new Color(0.78f, 0.74f, 0.62f, 1f);
-    private static final Color WALL_TINT  = new Color(0.30f, 0.30f, 0.32f, 1f);
+    /** Chasm + fog tints don't vary by theme - voids and unexplored regions
+     *  read the same regardless of the surrounding biome. The wall/floor
+     *  tints are per-{@link Level.VisualTheme} via {@link #themePalette}. */
     private static final Color CHASM_TINT = new Color(0.08f, 0.08f, 0.10f, 1f);
     private static final Color FOG_TINT   = new Color(0.18f, 0.18f, 0.20f, 1f);
     private static final Color ARROW_TINT = new Color(1f, 0.82f, 0.40f, 1f);
+
+    /** Per-theme (floor, wall) tints. Floor is the lighter, more saturated
+     *  half so the room outlines pop; wall is the darker neutral. Picked
+     *  by reading the level's {@link Level#theme} field when a mini-map
+     *  cell is painted. */
+    private static Color[] themePalette(Level.VisualTheme t) {
+        if (t == null) t = Level.VisualTheme.CRYSTAL;
+        return switch (t) {
+            case CRYSTAL  -> new Color[] {
+                    new Color(0.78f, 0.74f, 0.62f, 1f),  // floor: warm sand
+                    new Color(0.36f, 0.32f, 0.30f, 1f)   // wall:  dark warm grey
+            };
+            case CONCRETE -> new Color[] {
+                    new Color(0.70f, 0.72f, 0.74f, 1f),  // floor: pale slate
+                    new Color(0.28f, 0.30f, 0.34f, 1f)   // wall:  cool dark grey
+            };
+            case SHINY    -> new Color[] {
+                    new Color(0.62f, 0.78f, 0.82f, 1f),  // floor: pale teal
+                    new Color(0.22f, 0.40f, 0.52f, 1f)   // wall:  deep teal
+            };
+            case GOTHIC   -> new Color[] {
+                    new Color(0.52f, 0.44f, 0.50f, 1f),  // floor: dusty mauve
+                    new Color(0.22f, 0.16f, 0.22f, 1f)   // wall:  near-black violet
+            };
+        };
+    }
 
     /** World index of the currently-selected level, or -1 for none. */
     private int selected = -1;
@@ -71,6 +95,11 @@ public final class V2Map extends V2Screen {
     private final List<Rect> beaconRects = new ArrayList<>();
     private final List<int[]> beaconRefs = new ArrayList<>();   // {levelIdx, tileX, tileY}
     private final List<Boolean> beaconActive = new ArrayList<>();
+
+    /** Centre (x, y) of every unvisited-level box, populated by
+     *  {@link #drawBodyShape} so {@link #drawBodyText} can paint a "?" glyph
+     *  on top without re-walking the graph layout. */
+    private final List<float[]> unvisitedCenters = new ArrayList<>();
 
     /** Wall-clock accumulator for the pulsing-plus-sign animation. Driven
      *  by {@code Gdx.graphics.getDeltaTime()} in {@link #drawBodyShape}. */
@@ -100,13 +129,14 @@ public final class V2Map extends V2Screen {
     /** Pan offset applied to the level graph (post-zoom). Drag-in-body
      *  shifts these. Zero by default - graph centred on the window. */
     private float panX, panY;
-    /** Zoom factor for the level graph. 1.0 is the design size; the
-     *  mouse wheel multiplies / divides this. Clamped to {@link #ZOOM_MIN}
-     *  / {@link #ZOOM_MAX}. */
+    /** Zoom factor for the level graph. Snapped to one of {@link #ZOOM_STEPS}
+     *  so the map jumps cleanly between four well-defined sizes instead of
+     *  drifting through continuous factors. */
     private float zoom = 1.0f;
-    private static final float ZOOM_MIN = 0.4f;
-    private static final float ZOOM_MAX = 2.5f;
-    private static final float ZOOM_STEP = 1.15f;
+    /** Discrete zoom steps the wheel/pinch cycles through. Indexed by
+     *  {@link #zoomIndex}; defaults to index 1 (1x). */
+    private static final float[] ZOOM_STEPS = { 0.5f, 1.0f, 2.0f, 3.0f };
+    private int zoomIndex = 1;
     /** Last known cursor / finger position; updated on touchDown so
      *  drag-pan can compute deltas without losing the anchor across
      *  release-then-redrag pairs. */
@@ -224,17 +254,16 @@ public final class V2Map extends V2Screen {
 
     @Override
     protected boolean onScrolled(float amountY) {
-        // Mouse-wheel zoom - zoom out when scrolled down, in when up. A
-        // multiplicative step keeps the feel symmetric near zoom=1.
-        float prevZoom = zoom;
-        if (amountY > 0) zoom /= ZOOM_STEP;
-        else             zoom *= ZOOM_STEP;
-        if (zoom < ZOOM_MIN) zoom = ZOOM_MIN;
-        if (zoom > ZOOM_MAX) zoom = ZOOM_MAX;
-        // Anchor the zoom on the graph centre - pan stays the same in
-        // logical coords across the change. Good enough; zoom-toward-cursor
-        // is a refinement we can add later if it matters.
-        if (zoom != prevZoom) clampPan();
+        // Mouse-wheel zoom - jump to the next discrete step in or out. Wheel
+        // up (negative amountY) -> larger; down -> smaller. Pan anchored on
+        // the graph centre after the step lands.
+        int prev = zoomIndex;
+        if (amountY > 0) zoomIndex = Math.max(0, zoomIndex - 1);
+        else             zoomIndex = Math.min(ZOOM_STEPS.length - 1, zoomIndex + 1);
+        if (zoomIndex != prev) {
+            zoom = ZOOM_STEPS[zoomIndex];
+            clampPan();
+        }
         return true;
     }
 
@@ -246,6 +275,7 @@ public final class V2Map extends V2Screen {
         beaconRects.clear();
         beaconRefs.clear();
         beaconActive.clear();
+        unvisitedCenters.clear();
         float dt = Gdx.graphics.getDeltaTime();
         beaconPulseT += dt;
         bgSwirlT     += dt;
@@ -316,15 +346,24 @@ public final class V2Map extends V2Screen {
             boolean current = i == world.currentLevelIndex;
             boolean isSel   = i == selected;
 
+            // Unvisited levels read as "unknown" - dimmer border so they
+            // don't compete with visited boxes for the eye, and a "?" glyph
+            // painted on top later in drawBodyText.
+            boolean unvisited = !lvl.visited;
             Color border = current ? UIVars.ACCENT
                           : isSel  ? UIVars.TEXT_WARN
-                          : UIVars.BORDER_MID;
+                          : unvisited ? UIVars.BORDER_INNER
+                                      : UIVars.BORDER_MID;
             drawTrapezoidBorder(s, bx, by, bw, bh, ti, border);
 
             if (lvl.visited && lvl.tiles != null) {
                 drawMiniMap(s, lvl, bx, by, bw, bh, ti);
             } else {
                 fillTrapezoid(s, bx, by, bw, bh, ti, FOG_TINT);
+                // Stash this box's centre for the "?" glyph painted in the
+                // text pass (drawBodyText) so we don't have to re-walk the
+                // graph layout.
+                unvisitedCenters.add(new float[] { bx + bw * 0.5f, by + bh * 0.5f });
             }
 
             boxRects.add(new Rect(bx, by, bw, bh));
@@ -469,6 +508,7 @@ public final class V2Map extends V2Screen {
         boolean[][] explored = lvl.explored;
         int lw = lvl.width, lh = lvl.height;
         if (lh <= 0 || lw <= 0) return;
+        Color[] palette = themePalette(lvl.theme);
         // Step values - cellH is constant, cellW shrinks with row.
         float cellH = h / (float) lh;
         for (int ty = 0; ty < lh; ty++) {
@@ -488,7 +528,7 @@ public final class V2Map extends V2Screen {
                 float xL  = rowLeftX  + (rowRightX  - rowLeftX)  * u;
                 float xLN = rowLeftXN + (rowRightXN - rowLeftXN) * u;
                 Color tint = tileTint(tiles[tx][ty],
-                        explored != null && explored[tx][ty]);
+                        explored != null && explored[tx][ty], palette);
                 s.setColor(tint);
                 // Quadrilateral cell - bottom edge wider than top, matching
                 // the trapezoid. Two triangles approximate the cell.
@@ -663,7 +703,8 @@ public final class V2Map extends V2Screen {
             depth = world.levels[pendingDestLevel].depth;
         }
         String prompt = TextCatalog.format("ui.map.teleportConfirm",
-                TextCatalog.vars("depth", depth));
+                TextCatalog.vars("depth", depth,
+                        "orbs", teleportOrbCount()));
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 prompt, window.cx(), confirmPanel.y + confirmPanel.h - 14f);
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
@@ -731,16 +772,18 @@ public final class V2Map extends V2Screen {
         }
     }
 
-    /** Tint for one mini-map cell. Floor-like -> warm grey; chasm ->
-     *  near-black; wall / blocking -> mid grey; unexplored -> fog. */
-    private static Color tileTint(Tile t, boolean explored) {
+    /** Tint for one mini-map cell. Floor + wall come from {@link #themePalette},
+     *  chasm is always near-black, unexplored is fog. {@code palette} is the
+     *  level's pre-resolved (floor, wall) pair so the caller doesn't redo the
+     *  theme lookup per-cell. */
+    private static Color tileTint(Tile t, boolean explored, Color[] palette) {
         if (!explored) return FOG_TINT;
         if (t == null) return CHASM_TINT;
         if (t == Tile.CHASM)         return CHASM_TINT;
-        if (t.isFloorLike())         return FLOOR_TINT;
-        if (t.blocksMovement())      return WALL_TINT;
+        if (t.isFloorLike())         return palette[0];
+        if (t.blocksMovement())      return palette[1];
         // Doors, statues etc - treat as wall-equivalent for the mini-map.
-        return WALL_TINT;
+        return palette[1];
     }
 
     /** Fill the trapezoid uniformly with {@code colour}. Two triangles. */
@@ -772,6 +815,13 @@ public final class V2Map extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                 TextCatalog.get("ui.map.title"),
                 window.cx(), window.top() - ctx.headerLineH());
+        // "?" glyphs on every unvisited level box - reads as "you haven't
+        // been here yet" so the player doesn't mistake an empty fog tile
+        // for an explored-but-empty one. Centred over the box's centre.
+        for (float[] cxy : unvisitedCenters) {
+            TextDraw.centre(ctx, ctx.fontHeader, UIVars.BORDER_MID,
+                    "?", cxy[0], cxy[1] + ctx.headerLineH() * 0.35f);
+        }
         // Orb counter sits in its own strip BELOW the scrollable graph and
         // ABOVE the info pane. Painted by drawBodyText since it's text.
         float orbY = window.y + INFO_PANE_H + 16f + ORB_STRIP_H * 0.5f + 4f;

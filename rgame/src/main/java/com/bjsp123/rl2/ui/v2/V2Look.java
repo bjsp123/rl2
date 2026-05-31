@@ -37,6 +37,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private static final float DETAIL_INDENT = 12f;
     private static final float BUFF_ICON_SZ = 14f;
     private static final float BUFF_ICON_GAP = 2f;
+    /** Height of the mob HP bar drawn in the look popup - chunky so the
+     *  current/max numeric reads at a glance. */
+    private static final float HP_BAR_H   = 18f;
+    private static final float HP_BAR_GAP = 4f;
     private static final int INFO_TERRAIN = 1;
     private static final int INFO_ITEM = 2;
     private static final int INFO_MOB = 3;
@@ -143,6 +147,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         if (lookedMob != null) {
             Section mob = new Section(mobName(lookedMob), INFO_MOB);
+            // Mob HP - prominent bar + "23 / 64" numeric, shown for every
+            // looked mob (including the player themselves when looking at
+            // their own tile).
+            double maxHp = lookedMob.effectiveStats().maxHp;
+            int curHp = (int) Math.round(lookedMob.hp);
+            int maxHpInt = (int) Math.round(maxHp);
+            mob.hasHpBar = true;
+            mob.hpFrac = maxHp > 0 ? (float) (lookedMob.hp / maxHp) : 0f;
+            mob.hpText = curHp + " / " + maxHpInt;
             Mob player = TurnSystem.findPlayer(level);
             if (player != null && player != lookedMob) {
                 mob.details.add(TextCatalog.format("ui.look.mobHitRates",
@@ -262,6 +275,33 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     false, false, UIVars.BTN_BG);
         }
 
+        // HP bars - walk sections in the same order as the text pass so the
+        // bar lands between the title and the first detail line.
+        float y = window.top() - HEADER_H - PAD;
+        float textLeft  = window.x + PAD;
+        float textRight = window.right() - PAD - INFO - 4f;
+        for (int i = 0; i < sections.size(); i++) {
+            Section sec = sections.get(i);
+            if (sec.titleBlock != null) y -= sec.titleBlock.height();
+            if (sec.hasHpBar) {
+                float barX = textLeft + DETAIL_INDENT;
+                float barW = Math.max(20f, textRight - barX);
+                float barY = y - HP_BAR_H;
+                Edges.drawTriLine(s, barX, barY, barW, HP_BAR_H, 1f);
+                s.setColor(UIVars.HUD_BG);
+                s.rect(barX + 3, barY + 3, barW - 6, HP_BAR_H - 6);
+                float frac = Math.max(0f, Math.min(1f, sec.hpFrac));
+                if (frac > 0f) {
+                    s.setColor(UIVars.TEXT_WARN);
+                    s.rect(barX + 3, barY + 3, (barW - 6) * frac, HP_BAR_H - 6);
+                }
+                y -= HP_BAR_H + HP_BAR_GAP;
+            }
+            for (TextDraw.TextBlock detail : sec.detailBlocks) y -= detail.height();
+            y -= sec.iconRowH();
+            if (i < sections.size() - 1) y -= SECTION_GAP;
+        }
+
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
@@ -288,6 +328,16 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
             y -= sec.titleBlock.height();
             float detailX = textLeft + DETAIL_INDENT;
+            if (sec.hasHpBar) {
+                float barX = detailX;
+                float barW = Math.max(20f, textRight - barX);
+                float barY = y - HP_BAR_H;
+                TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                        sec.hpText,
+                        barX + barW * 0.5f,
+                        barY + (HP_BAR_H + ctx.lineH() * 0.6f) * 0.5f);
+                y -= HP_BAR_H + HP_BAR_GAP;
+            }
             for (TextDraw.TextBlock detail : sec.detailBlocks) {
                 TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         detail, detailX, y);
@@ -577,6 +627,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         final List<TextureRegion> icons = new ArrayList<>();
         final List<Buff.BuffType> iconTypes = new ArrayList<>();
         TextDraw.TextBlock titleBlock;
+        /** Optional HP bar painted between the title and the details. Set
+         *  for mob sections so the player can read the looked mob's HP at
+         *  a glance instead of parsing a stat line. */
+        boolean hasHpBar;
+        float   hpFrac;
+        String  hpText;
 
         private Section(String title, int infoKind) {
             this.title = title == null ? "" : title;
@@ -587,8 +643,13 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             return icons.isEmpty() ? 0f : BUFF_ICON_SZ + BUFF_ICON_GAP;
         }
 
+        float hpBarRowH() {
+            return hasHpBar ? HP_BAR_H + HP_BAR_GAP : 0f;
+        }
+
         float height() {
             float h = titleBlock == null ? 0f : titleBlock.height();
+            h += hpBarRowH();
             for (TextDraw.TextBlock block : detailBlocks) h += block.height();
             h += iconRowH();
             return h;

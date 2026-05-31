@@ -87,6 +87,71 @@ public class PlayScreen implements Screen {
     private com.bjsp123.rl2.ui.v2.V2Encyclopedia v2Encyclopedia;
     private com.bjsp123.rl2.ui.v2.V2BuffInfo v2BuffInfo;
     private com.bjsp123.rl2.ui.v2.V2Log v2Log;
+    private com.bjsp123.rl2.ui.v2.V2TipPopup v2TipPopup;
+
+    /** Input adapter slotted FIRST in the multiplexer (right after the
+     *  camera controller). Consumes a tap when the tip popup is showing,
+     *  dismissing it before the tap reaches the world / HUD layers. Lets
+     *  through normally otherwise. */
+    private com.badlogic.gdx.InputAdapter tipPopupDismissInput() {
+        return new com.badlogic.gdx.InputAdapter() {
+            @Override
+            public boolean touchDown(int sx, int sy, int pointer, int button) {
+                if (v2TipPopup == null) return false;
+                float vx = game.ui.unprojectX(sx, sy);
+                float vy = game.ui.unprojectY(sx, sy);
+                return v2TipPopup.handleClick(vx, vy);
+            }
+        };
+    }
+
+    /** Walk {@link com.bjsp123.rl2.model.Level#mobs} once per frame and
+     *  trigger the first-encounter tip for every mob whose tile is in the
+     *  player's FOV. The tip-system's dedupe set ensures each species fires
+     *  at most once per character; faster than caching state per-mob here. */
+    private void scanForMobTips(com.bjsp123.rl2.model.Level level) {
+        if (level == null || level.mobs == null) return;
+        for (com.bjsp123.rl2.model.Mob mob : level.mobs) {
+            if (mob == null || mob.position == null || mob.mobType == null) continue;
+            if (mob.behavior == com.bjsp123.rl2.model.Mob.Behavior.PLAYER) continue;
+            if (!com.bjsp123.rl2.logic.MobSystem.tileVisibleToPlayer(level, mob.position)) continue;
+            com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                    "mob:" + mob.mobType,
+                    "mob." + mob.mobType + ".tip",
+                    "mob." + mob.mobType + ".name",
+                    com.bjsp123.rl2.world.render.MobSprites.regionFor(mob));
+        }
+        // Concept tips for adjacency: walk the 8 neighbours of the player
+        // tile (plus the player's own tile for stair-adjacency where the
+        // player IS on the stair). Once per concept per run.
+        scanForAdjacencyTips(level);
+    }
+
+    /** Fire stairs / beacon concept tips when the player stands on or next
+     *  to those tiles for the first time this run. */
+    private void scanForAdjacencyTips(com.bjsp123.rl2.model.Level level) {
+        com.bjsp123.rl2.model.Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
+        if (player == null || player.position == null) return;
+        int px = player.position.tileX(), py = player.position.tileY();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int x = px + dx, y = py + dy;
+                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                com.bjsp123.rl2.model.Tile t = level.tiles[x][y];
+                if (t == com.bjsp123.rl2.model.Tile.STAIRS_UP
+                        || t == com.bjsp123.rl2.model.Tile.STAIRS_DOWN) {
+                    com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                            "concept:stairs", "concept.stairs.tip",
+                            "concept.stairs.name", null);
+                } else if (t == com.bjsp123.rl2.model.Tile.BEACON_INACTIVE
+                        || t == com.bjsp123.rl2.model.Tile.BEACON_ACTIVE) {
+                    com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                            "concept:beacon", "concept.beacon.tip",
+                            "concept.beacon.name", null);
+                }
+            }
+        }
+    }
     /** Transient unlock-toast banner. Lives across the screen's lifetime;
      *  rendered above the HUD on every frame; advances its countdown via
      *  the same {@code dt} the animator consumes. */
@@ -232,6 +297,7 @@ public class PlayScreen implements Screen {
         // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
                 cameraController,
+                tipPopupDismissInput(),
                 v2BuffInfo.input(),
                 v2Inventory.input(),
                 v2CharacterStats.input(),
@@ -420,13 +486,19 @@ public class PlayScreen implements Screen {
         v2Hud.setActionBar(actionBar);
         v2Hud.setOnOpenInventory(() -> {
             if (v2Inventory != null) v2Inventory.toggle();
+            com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                    "concept:inventory", "concept.inventory.tip",
+                    "concept.inventory.name", null);
         });
         v2Hud.setOnLook(() -> {
             if (lookMode != null) lookMode.toggle();
         });
-        v2Hud.setOnOpenMap(() ->
-                game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
-                        game, game.ui, game::popScreen, world)));
+        v2Hud.setOnOpenMap(() -> {
+            game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
+                    game, game.ui, game::popScreen, world));
+            com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                    "concept:map", "concept.map.tip", "concept.map.name", null);
+        });
 
         v2CharacterStats = new V2CharacterStats(game.ui);
         v2CharacterStats.setPlayer(player);
@@ -434,6 +506,8 @@ public class PlayScreen implements Screen {
             Mob cur = TurnSystem.findPlayer(world.currentLevel());
             if (cur != null) v2CharacterStats.setPlayer(cur);
             v2CharacterStats.toggle();
+            com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                    "concept:perks", "concept.perks.tip", "concept.perks.name", null);
         });
 
         v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui);
@@ -442,7 +516,18 @@ public class PlayScreen implements Screen {
         v2Hud.setOnBuffTap(buff -> { if (buff != null) v2BuffInfo.open(buff); });
         v2Log = new com.bjsp123.rl2.ui.v2.V2Log(game.ui);
         v2Log.setSounds(game.sounds);
+        v2Hud.setSounds(game.sounds);
+        // Animator → HUD callback: when the player takes a damaging hit while
+        // already below 20% HP, flash the HUD red and play the low-HP warn
+        // sfx. Threshold is computed POST-hit, so a blow that drops the
+        // player from 22% → 18% triggers.
+        animator.setOnPlayerLowHpHit(() -> v2Hud.triggerLowHpHitFlash());
         v2Hud.setOnOpenLog(() -> v2Log.toggle());
+        // Tip popup - non-blocking first-encounter overlay. Renders over the
+        // world, ticks its own auto-fade timer, dismisses on click anywhere.
+        v2TipPopup = new com.bjsp123.rl2.ui.v2.V2TipPopup(game.ui);
+        com.bjsp123.rl2.ui.v2.TipSystem.setPopup(v2TipPopup);
+        com.bjsp123.rl2.ui.v2.TipSystem.reset();
         v2CharacterStats.setBuffInfo(v2BuffInfo);
         v2Look.setBuffInfo(v2BuffInfo);
         // Inventory's item-detail info button jumps to the encyclopaedia
@@ -470,6 +555,7 @@ public class PlayScreen implements Screen {
         targetingOverlay.setLevel(world.currentLevel());
         targetingOverlay.setWorldCamera(camera);
         targetingOverlay.setHistory(targetHistory);
+        targetingOverlay.setUiCtx(game.ui);
 
         // Build the action / firing / auto-move dispatcher now that every UI piece it
         // talks to (action bar, targeting, level renderer) is wired up. PlayController
@@ -682,6 +768,10 @@ public class PlayScreen implements Screen {
             if (controller != null) controller.afterMove(level);
             frameProfiler.add("impactAfterMove", span);
         }
+        // First-encounter tips: scan visible mobs each frame and queue a
+        // tip for any new species the player can see (or is adjacent to).
+        // Same dedupe applies via TipSystem - one tip per species per run.
+        scanForMobTips(level);
         span = frameProfiler.start();
         com.bjsp123.rl2.logic.FireSystem.tickRealTime(level, dtMs);
         com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
@@ -722,6 +812,16 @@ public class PlayScreen implements Screen {
             if (!recent.isEmpty()) {
                 lastSnapshot.deathMessage = recent.get(recent.size() - 1);
             }
+            // Compose the "what killed you" headline from the last fatal
+            // DamageCause captured by MobSystem.processAttack; rendered as
+            // the top frame on V2GameOver.
+            String headlineClass = player.characterClass != null
+                    ? player.characterClass.displayName() : "Adventurer";
+            lastSnapshot.deathHeadline = com.bjsp123.rl2.logic.Messages.deathHeadline(
+                    level, headlineClass,
+                    com.bjsp123.rl2.logic.MobSystem.lastPlayerCause(),
+                    com.bjsp123.rl2.logic.MobSystem.lastPlayerElement());
+            com.bjsp123.rl2.logic.MobSystem.resetLastPlayerHit();
             game.hallOfFame.add(lastSnapshot);
             com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
             if (game.achievementSystem != null) {
@@ -809,6 +909,14 @@ public class PlayScreen implements Screen {
         span = frameProfiler.start();
         v2Hud.render();
         frameProfiler.add("hudRender", span);
+
+        // Tip popup - ticks its own 5-second fade timer in real-time, renders
+        // centred above the middle of the screen. Non-blocking: world + HUD
+        // stay live underneath.
+        if (v2TipPopup != null) {
+            v2TipPopup.tick(com.badlogic.gdx.Gdx.graphics.getDeltaTime());
+            v2TipPopup.renderSelf();
+        }
 
         // Achievement toast - sits above the HUD strip and below modal
         // popups. Renders nothing when no unlock is active.

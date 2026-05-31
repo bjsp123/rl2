@@ -74,9 +74,13 @@ public final class BrandSystem {
             case LIGHTNING -> {
                 // Chain lightning from target outward; attacker is excluded
                 // from the chain so a brand can never zap its own wielder.
+                // The brand fires from {@code weapon} (the weapon swinging
+                // the blow) so the attribution log line reads "Warrior's
+                // sword does N shock damage to..." rather than naming the
+                // wand.
                 MinMax dmgRange = new MinMax(1, Math.max(1, power));
                 ItemSystem.applyLightningChain(level, attacker, target.position,
-                        dmgRange, attacker);
+                        dmgRange, weapon, attacker);
             }
             case POISONCLOUD -> {
                 // Drop a single-tile poison cloud lasting `power` turns.

@@ -670,10 +670,10 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             public boolean scrolled(float amountX, float amountY) {
                 if (!open) return false;
                 if (selected != null) {
-                    detailScroller.onScrolled(amountY, 36f);
+                    detailScroller.onScrolled(amountY);
                     return true;
                 }
-                scroller.onScrolled(amountY, 36f);
+                scroller.onScrolled(amountY);
                 return true;
             }
 

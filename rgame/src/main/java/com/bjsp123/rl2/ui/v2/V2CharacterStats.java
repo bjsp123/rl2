@@ -321,8 +321,6 @@ public final class V2CharacterStats extends BasePopup {
         top = row(left, top, TextCatalog.get("ui.characterStats.moveCost"), Integer.toString(st.moveCost));
         top = row(left, top, TextCatalog.get("ui.characterStats.attackCost"),  Integer.toString(st.attackCost));
         top = row(left, top, TextCatalog.get("ui.characterStats.light"),     Integer.toString((int) st.lightRadius));
-        top = row(left, top, TextCatalog.get("ui.characterStats.satiety"),   player.satiety
-                + " / " + com.bjsp123.rl2.logic.GameBalance.STARTING_SATIETY);
 
         // Buff list - section heading + per-buff icon + name + duration.
         // Each row is a hit target that opens the encyclopedia at the
@@ -538,6 +536,14 @@ public final class V2CharacterStats extends BasePopup {
                         if (cur >= 5) return true;
                         player.perks.put(perk, cur + 1);
                         player.perkPoints--;
+                        // First-encounter tip: fires the first time the
+                        // player adds a point in this perk. The
+                        // strings.csv convention uses Perk.key() (camelCase)
+                        // not the enum name, hence the call below.
+                        TipSystem.maybeShow(
+                                "perk:" + perk.key(),
+                                "perk." + perk.key() + ".tip",
+                                "perk." + perk.key() + ".name", null);
                     }
                     return true;
                 }

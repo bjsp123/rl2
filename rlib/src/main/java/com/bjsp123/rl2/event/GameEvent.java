@@ -130,9 +130,16 @@ public sealed interface GameEvent permits
     /** Per-hit damage record (renders floating "5"/"miss"/"blunt" text near {@code target}).
      *  {@code message} is the renderer-side flavor of the floater; {@code element}
      *  selects the colour + buff-icon glyph (PHYSICAL = no icon, the four elemental
-     *  cases use {@link com.bjsp123.rl2.world.render.BuffIcons} glyph slots). */
+     *  cases use {@link com.bjsp123.rl2.world.render.BuffIcons} glyph slots).
+     *  {@code cause} carries the causal chain (root attacker + originating item
+     *  + indirect-mechanism label) so death-screen + log-message consumers can
+     *  attribute the damage even when it's applied indirectly via a fire DOT,
+     *  wall-slam, etc. Always non-null after the engine emits the event;
+     *  {@link MobSystem.DamageCause#NONE} is used for truly environmental
+     *  damage with no attribution. */
     record DamageDealt(Mob target, int amount, DamageMessage message, Mob source,
-                       MobSystem.DamageElement element) implements GameEvent {}
+                       MobSystem.DamageElement element,
+                       MobSystem.DamageCause cause) implements GameEvent {}
     enum DamageMessage { HIT, MISS, BLUNT, ENVIRONMENTAL }
 
     /** Buff applied / removed (drives floating buff icon or text). */

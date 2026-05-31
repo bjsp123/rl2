@@ -329,6 +329,16 @@ public class Effect {
                 EffectType.DAMAGE_FLOATER.frameCount);
     }
 
+    /** Physical-damage floater with an explicit buff-atlas icon - used for
+     *  knockback wall-slam (slot 24) and chasm fall (slot 25). Same red
+     *  text colour as the plain physical floater; the icon distinguishes
+     *  the cause from a generic melee hit. */
+    public static Effect damageFloaterPhysical(Point location, int amount, int iconAtlasIndex) {
+        return EffectBuilder.damageFloater(location, "-" + amount,
+                com.bjsp123.rl2.ui.v2.UIVars.DAMAGE_PHYSICAL, iconAtlasIndex,
+                EffectType.DAMAGE_FLOATER.frameCount);
+    }
+
     public static Effect thrownItem(Point from, Point to, Item item) {
         return EffectBuilder.arcItem(from, to, item, /*spinDeg*/ 360f, /*endScale*/ 1f,
                 /*arcHeightPx*/ CELL * 0.5f, /*blocking*/ true,
@@ -486,6 +496,22 @@ public class Effect {
     public static Effect buffIcon(Point location, Buff.BuffType type, String fallbackText) {
         return EffectBuilder.hoverSprite(location, type, fallbackText,
                 EffectType.BUFF_ICON.frameCount);
+    }
+
+    /** Buff-expired floater: the dying buff's own icon on the left and the
+     *  CANCELLED glyph (atlas slot 26) on the right - reuses the damage-
+     *  floater renderer (icon + text-as-icon) by passing the buff's icon
+     *  index for the left slot and a "x" text. The buff's icon makes which
+     *  buff ended obvious; the CANCELLED feel comes from the "x" + the
+     *  greyed text colour. ~30 frames, no sound. */
+    public static Effect buffExpiredIcon(Point location, Buff.BuffType type) {
+        int iconIdx = com.bjsp123.rl2.world.render.BuffIcons.iconIndexFor(type);
+        if (iconIdx < 0) iconIdx = 26;     // fall back to CANCELLED-only
+        // Use a shorter frame count than the standard damage-floater so the
+        // "buff faded" beat reads as a quick acknowledgement, not a hit.
+        return EffectBuilder.damageFloater(location, "x",
+                com.bjsp123.rl2.ui.v2.UIVars.TEXT_DIM, iconIdx,
+                30);
     }
 
     /** Powerup-pickup particle cloud — 64-frame spawn spread, wide initial X jitter. */

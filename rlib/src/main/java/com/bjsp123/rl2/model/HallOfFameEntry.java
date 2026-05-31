@@ -19,6 +19,11 @@ public class HallOfFameEntry {
      *  the V2GameOver screen so the player can see the lead-up to their death.
      *  Populated by PlayScreen when the death snapshot is captured. */
     public List<String> deathLog = new ArrayList<>();
+    /** Single-line "what killed you" headline composed from the last fatal
+     *  {@link com.bjsp123.rl2.logic.MobSystem.DamageCause} - e.g. "Rogue
+     *  burned to death in a fire caused by Kobold's fire wand." Rendered as
+     *  the large top frame on V2GameOver; empty for older save records. */
+    public String deathHeadline = "";
     public int    totalTurns   = 0;
     public int    beastsTamed  = 0;
     /** Perk.name() of the perk with the highest level at run-end, or "" if none. */

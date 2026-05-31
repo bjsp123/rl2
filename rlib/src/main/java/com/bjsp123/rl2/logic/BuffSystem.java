@@ -69,6 +69,19 @@ public final class BuffSystem {
      */
     public static Buff apply(Level level, Mob target, BuffType type,
                              int buffLevel, int durationTicks, Mob source) {
+        return apply(level, target, type, buffLevel, durationTicks, source, null);
+    }
+
+    /** Full apply overload that records the originating {@link Item} on the
+     *  buff (the wand of fire, bomb, potion, etc.). The item is preserved
+     *  for downstream attribution: fire / poison DOT ticks build a
+     *  {@code DamageCause} from {@code source} + {@code sourceItem} so the
+     *  death screen + log messages can name the root cause ("burned to death
+     *  in a fire caused by Kobold's fire wand"). Pass {@code null} for
+     *  {@code sourceItem} when the buff origin item isn't meaningful. */
+    public static Buff apply(Level level, Mob target, BuffType type,
+                             int buffLevel, int durationTicks, Mob source,
+                             com.bjsp123.rl2.model.Item sourceItem) {
         if (target == null || type == null) return null;
         if (target.buffs == null) target.buffs = new java.util.ArrayList<>();
         // Hope grants immunity to FRIGHTENED - silently swallow incoming fear while
@@ -103,11 +116,12 @@ public final class BuffSystem {
                 existing.durationTicks = Math.max(existing.durationTicks, newDuration);
             }
             if (source != null) existing.source = source;
+            if (sourceItem != null) existing.sourceItem = sourceItem;
             target.statsDirty = true;
             maybeFreeze(level, target, type, source);
             return existing;
         }
-        Buff buff = new Buff(type, newLevel, newDuration, source);
+        Buff buff = new Buff(type, newLevel, newDuration, source, sourceItem);
         target.buffs.add(buff);
         target.statsDirty = true;
         spawnApplyVfx(level, target, type);
@@ -263,6 +277,12 @@ public final class BuffSystem {
                         String name = MobSystem.nameForLog(level, m);
                         EventLog.add(Messages.buffExpired(name, displayName(b.type),
                                 m.behavior == Mob.Behavior.PLAYER));
+                        // Emit a BuffRemoved event so the renderer can show
+                        // a brief "buff faded" floater above the mob.
+                        if (level != null && level.events != null) {
+                            level.events.add(new com.bjsp123.rl2.event.GameEvent.BuffRemoved(
+                                    m, b.type, displayName(b.type)));
+                        }
                     }
                 }
             }
@@ -305,8 +325,10 @@ public final class BuffSystem {
                     MobSystem.DamageBreakdown bk =
                             new MobSystem.DamageBreakdown(MobSystem.DamageElement.FIRE, raw)
                                     .add("magicResist", Math.min(magicResist, raw));
+                    MobSystem.DamageCause cause = new MobSystem.DamageCause(
+                            b.source, b.sourceItem, "fire-dot");
                     boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
-                            MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.FIRE, bk);
+                            MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.FIRE, bk, cause);
                     if (killed) logDotDeath(m, "burns to a cinder");
                 }
             }
@@ -314,8 +336,10 @@ public final class BuffSystem {
                 // +50% rebalance: was 1 + level. Now 2 + (3*level)/2 (integer).
                 int dmg = 2 + (3 * b.level) / 2;
                 emitPeriodicDamage(level, m, BuffType.POISONED, dmg);
+                MobSystem.DamageCause cause = new MobSystem.DamageCause(
+                        b.source, b.sourceItem, "poison-dot");
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
-                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON);
+                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON, null, cause);
                 if (killed) logDotDeath(m, "succumbs to poison");
             }
             case BLEEDING -> {
@@ -329,8 +353,10 @@ public final class BuffSystem {
                 // +50% rebalance: was (level * turnsLeft) / 2. Now ×3/4.
                 int dmg = Math.max(1, (3 * b.level * turnsLeft) / 4);
                 emitPeriodicDamage(level, m, BuffType.BLEEDING, dmg);
+                MobSystem.DamageCause cause = new MobSystem.DamageCause(
+                        b.source, b.sourceItem, "bleed");
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
-                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL);
+                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL, null, cause);
                 if (killed) logDotDeath(m, "bleeds out");
             }
             case REGENERATION -> {

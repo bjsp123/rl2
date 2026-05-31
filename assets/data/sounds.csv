@@ -95,6 +95,7 @@ sfx.combat.result.  miss,sfx/combat_whoosh_01.wav
 sfx.combat.result.hit,sfx/t_hit_blood_flesh_gore_01.wav
 sfx.combat.result.block,sfx/t_shield_wood_deflect.wav
 sfx.player.combat.hit,sfx/t_hit_blood_flesh_gore_03.wav
+sfx.player.combat.lowHpWarn,
 sfx.player.combat.die,
 sfx.mob.combat.die,sfx/bone_flesh_crunch_01.wav
 sfx.player.action.eat,

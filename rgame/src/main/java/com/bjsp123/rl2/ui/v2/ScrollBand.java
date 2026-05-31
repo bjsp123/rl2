@@ -46,6 +46,13 @@ public final class ScrollBand {
         scroller.onScrolled(amountY, pixelsPerTick);
     }
 
+    /** Mouse-wheel scroll using {@link Scroller#DEFAULT_WHEEL_STEP_PX}.
+     *  Every list in the app should call this unless it has a real reason
+     *  to use a custom step (e.g. a log that wants one-line-per-tick). */
+    public void scrolled(float amountY) {
+        scroller.onScrolled(amountY);
+    }
+
     public void clip(UiCtx ctx, Runnable body) {
         ctx.batch.flush();
         com.badlogic.gdx.math.Rectangle worldRect =

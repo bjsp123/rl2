@@ -160,6 +160,15 @@ public final class ConfirmPopup extends BasePopup {
                     cancel();
                     return true;
                 }
+                // Enter / Space fires the primary action - desktop muscle
+                // memory expects this on any confirmation dialog.
+                if (keycode == Input.Keys.ENTER
+                        || keycode == Input.Keys.NUMPAD_ENTER
+                        || keycode == Input.Keys.SPACE) {
+                    close();
+                    if (onConfirm != null) onConfirm.run();
+                    return true;
+                }
                 return true;
             }
         };

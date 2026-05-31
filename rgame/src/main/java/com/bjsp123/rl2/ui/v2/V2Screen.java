@@ -157,6 +157,10 @@ public abstract class V2Screen extends ScreenAdapter {
                     return true;
                 }
             }
+            // Body-owned controls (sliders, custom toggles) get a release
+            // hook so they can clear drag state without redefining the
+            // whole input adapter.
+            if (onTouchUpInBody(vx, vy)) return true;
             return false;
         }
 
@@ -201,6 +205,11 @@ public abstract class V2Screen extends ScreenAdapter {
      *  consume the drag (suppressing the V2Screen tap-detection state).
      *  Default: ignore. */
     protected boolean onTouchDragged(float vx, float vy) { return false; }
+
+    /** Optional touch-up hook for body-owned controls that capture a drag
+     *  (sliders, custom toggles). Returning {@code true} signals the touch
+     *  was consumed. Default: ignore. */
+    protected boolean onTouchUpInBody(float vx, float vy) { return false; }
 
     /** Optional mouse-wheel hook. Returns true to consume. Default: ignore. */
     protected boolean onScrolled(float amountY) { return false; }

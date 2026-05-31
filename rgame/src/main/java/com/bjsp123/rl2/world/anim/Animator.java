@@ -47,6 +47,12 @@ public final class Animator {
     public void setSounds(SoundManager s) { this.sounds = s; }
     private int footstepStep = 1;
 
+    /** Fired when the player takes damage and their POST-hit HP is at or
+     *  below 20% of max. The HUD uses this to play a warning sfx + flash.
+     *  No-op when null. */
+    private Runnable onPlayerLowHpHit;
+    public void setOnPlayerLowHpHit(Runnable r) { this.onPlayerLowHpHit = r; }
+
     private final IdentityHashMap<Mob, MobAnimState> states = new IdentityHashMap<>();
     private final List<Ghost> ghosts = new ArrayList<>();
     private final PendingImpactQueue pendingImpacts = new PendingImpactQueue();
@@ -632,6 +638,17 @@ public final class Animator {
 
     void onDoorOpened(Level level, GameEvent.DoorOpened m) {
         if (sounds != null) sounds.playAt("sfx.world.door.open", level, m.pos());
+        // Crystal-door concept tip: fires the first time the player opens a
+        // door whose post-open tile is CRYSTAL_DOOR_OPEN. The plain DOOR
+        // path stays silent - crystal doors are the noteworthy variant.
+        if (m.pos() != null) {
+            int dx = m.pos().tileX(), dy = m.pos().tileY();
+            if (dx >= 0 && dy >= 0 && dx < level.width && dy < level.height
+                    && level.tiles[dx][dy] == com.bjsp123.rl2.model.Tile.CRYSTAL_DOOR_OPEN) {
+                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                        "concept:crystal", "concept.crystal.tip", "concept.crystal.name", null);
+            }
+        }
     }
 
     void onDoorClosed(Level level, GameEvent.DoorClosed m) {
@@ -640,10 +657,14 @@ public final class Animator {
 
     void onOnetimeDoorBroken(Level level, GameEvent.OnetimeDoorBroken m) {
         Effect.doorBreakEffect(stage, sounds, level, m.pos(), RNG);
+        com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                "concept:onetime", "concept.onetime.tip", "concept.onetime.name", null);
     }
 
     void onBeaconActivated(GameEvent.BeaconActivated m) {
         Effect.beaconActivation(stage, m.pos(), RNG);
+        com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                "concept:beacon", "concept.beacon.tip", "concept.beacon.name", null);
     }
 
     void onPlayerTeleportOut(GameEvent.PlayerTeleportOut m) {
@@ -700,6 +721,17 @@ public final class Animator {
             } else {
                 sounds.playAt("sfx.mob.action.pickup", level, m.from());
             }
+        }
+        // First-encounter tip: when the PLAYER picks up an item type for
+        // the first time this run, queue its tip. TipSystem.maybeShow
+        // dedupes by key so repeat pickups are silent.
+        if (m.picker() != null && m.picker().behavior == Mob.Behavior.PLAYER
+                && m.item() != null && m.item().type != null) {
+            com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                    "item:" + m.item().type,
+                    "item." + m.item().type + ".tip",
+                    "item." + m.item().type + ".name",
+                    com.bjsp123.rl2.world.render.ItemSprites.regionFor(m.item()));
         }
     }
 
@@ -824,6 +856,15 @@ public final class Animator {
         Mob target = m.target();
         if (target == null || target.position == null) return;
         if (!MobSystem.isVisibleToPlayer(level, target)) return;
+        // Low-HP hit warning: when the player takes any damaging blow and their
+        // POST-hit HP is at or below 20% of max, fire the HUD's hit-flash
+        // hook. Threshold is a snapshot - a blow that drops them through the
+        // line trips it; a blow taken while already below it also trips.
+        if (target.behavior == Mob.Behavior.PLAYER && m.amount() > 0
+                && onPlayerLowHpHit != null) {
+            double maxHp = target.effectiveStats().maxHp;
+            if (maxHp > 0 && target.hp <= maxHp * 0.20) onPlayerLowHpHit.run();
+        }
         switch (m.message()) {
             case HIT   -> {
                 // Element-aware floater: PHYSICAL keeps the plain red "-N"
@@ -831,8 +872,18 @@ public final class Animator {
                 // get a coloured number with a buff-icon glyph to its left.
                 // STARVATION also routes to the plain red "-N" - the hunger UI
                 // already carries the explanation and an icon would be noise.
+                // PHYSICAL knockback wall-slam and chasm fall get their own
+                // buff-icon glyphs (slots 24 / 25) so the player can tell
+                // a wall-slam apart from a sword swing at a glance.
                 MobSystem.DamageElement el = m.element();
-                if (el == null || el == MobSystem.DamageElement.PHYSICAL
+                String medium = m.cause() != null ? m.cause().medium() : null;
+                if (el == MobSystem.DamageElement.PHYSICAL && "wall-slam".equals(medium)) {
+                    stage.add(Effect.damageFloaterPhysical(target.position, m.amount(),
+                            /*iconAtlasIndex=*/24));
+                } else if (el == MobSystem.DamageElement.PHYSICAL && "fall".equals(medium)) {
+                    stage.add(Effect.damageFloaterPhysical(target.position, m.amount(),
+                            /*iconAtlasIndex=*/25));
+                } else if (el == null || el == MobSystem.DamageElement.PHYSICAL
                         || el == MobSystem.DamageElement.STARVATION) {
                     stage.add(Effect.floatingText(target.position,
                             "-" + m.amount(), Effect.EffectTint.RED));
@@ -873,6 +924,20 @@ public final class Animator {
         if (sounds != null) sounds.playAt("sfx.mob.action.tame", level, mob.position);
     }
 
+    /** Buff just expired (natural decrement to zero). Renders a brief
+     *  "buff fade" floater above the mob: the dying buff's icon side-by-
+     *  side with the CANCELLED glyph at atlas slot 26. Silent for cooldown
+     *  buffs (already filtered upstream in
+     *  {@link com.bjsp123.rl2.logic.BuffSystem#tickEveryGameTick} so the
+     *  rolling log doesn't fill with "no longer on teleport cooldown"
+     *  lines). Off-screen expiries are suppressed. */
+    void onBuffRemoved(Level level, GameEvent.BuffRemoved m) {
+        Mob mob = m.mob();
+        if (mob == null || mob.position == null) return;
+        if (!MobSystem.isVisibleToPlayer(level, mob)) return;
+        stage.add(Effect.buffExpiredIcon(mob.position, m.type()));
+    }
+
     void onBuffApplied(Level level, GameEvent.BuffApplied m) {
         Mob mob = m.mob();
         if (mob == null || mob.position == null) return;
@@ -883,6 +948,16 @@ public final class Animator {
         } else {
             stage.add(Effect.floatingText(mob.position, m.displayName(), Effect.EffectTint.YELLOW));
         }
+        // First-encounter tip: buffs trigger their tip the first time the
+        // player is on the receiving end. Other-mob buff applications stay
+        // silent (would spam the popup in busy rooms).
+        if (mob.behavior == Mob.Behavior.PLAYER && m.type() != null) {
+            com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                    "buff:" + m.type().name(),
+                    "buff." + m.type().name() + ".tip",
+                    "buff." + m.type().name() + ".name",
+                    com.bjsp123.rl2.world.render.BuffIcons.regionFor(m.type()));
+        }
     }
 
     void onWandImpactBurst(Level level, GameEvent.WandImpactBurst m) {
@@ -892,10 +967,15 @@ public final class Animator {
             case LEVEL_UP -> { spawnLevelUpVisual(level, m.pos()); return; }
             case HP_UP    -> {
                 if (sounds != null) sounds.playAt("sfx.player.pickup.healthpill", level, m.pos());
+                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                        "concept:hp", "concept.hp.tip", "concept.hp.name", null);
                 spawnHpUpVisual(level, m.pos()); return;
             }
             case MANA_UP  -> {
                 if (sounds != null) sounds.playAt("sfx.player.pickup.chargepill", level, m.pos());
+                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                        "concept:charges", "concept.charges.tip",
+                        "concept.charges.name", null);
                 spawnManaUpVisual(level, m.pos()); return;
             }
             default -> { /* fall through to the generic-burst path */ }
@@ -1158,11 +1238,14 @@ public final class Animator {
     private static void applyMissileImpact(Level level, Mob caster, Point target, int damage) {
         Mob victim = MobQueries.mobAt(level, target);
         if (victim == null) return;
-        // Adjacent ranged penalty: -50 accuracy for point-blank shots.
+        // Hit-roll for ranged attacks (crossbowmen, imps, etc.). Adjacent shots
+        // suffer a -50 accuracy penalty (point-blank); normal range uses the
+        // straight accuracy-vs-evasion roll, same denominator as melee.
         if (caster != null && caster.position != null) {
             int cdx = Math.abs(caster.position.tileX() - target.tileX());
             int cdy = Math.abs(caster.position.tileY() - target.tileY());
-            if (Math.max(cdx, cdy) == 1 && !MobSystem.rollRangedHit(caster, victim, -50)) {
+            int accuracyMod = (Math.max(cdx, cdy) == 1) ? -50 : 0;
+            if (!MobSystem.rollRangedHit(caster, victim, accuracyMod)) {
                 String cn = caster.name != null ? caster.name
                         : TextCatalog.get("eventlog.fallback.adventurer");
                 String vn = MobSystem.nameForLog(level, victim);
@@ -1173,6 +1256,16 @@ public final class Animator {
                         : (victimIsPlayer
                            ? com.bjsp123.rl2.logic.Messages.enemyMiss(cn, vn)
                            : com.bjsp123.rl2.logic.Messages.mobMiss(cn, vn)));
+                // Yellow "miss" floater + miss sfx via the standard MISS path.
+                if (level.events != null) {
+                    boolean physical = caster.rangedDamageType == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL;
+                    MobSystem.DamageElement element = physical
+                            ? MobSystem.DamageElement.PHYSICAL : MobSystem.DamageElement.MAGIC;
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
+                            victim, 0,
+                            com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
+                            caster, element, null));
+                }
                 return;
             }
         }

@@ -234,37 +234,12 @@ public class TurnSystem {
         BuffSystem.tickPerTurn(level);
     }
 
-    /**
-     * Count down the mob's {@code satiety} by {@code gameTicks} <b>game ticks</b>.
-     * Non-players are unaffected once satiety hits 0 - the counter just sits there. The
-     * player, once starving, accumulates ticks and loses 1 HP for every
-     * {@link GameBalance#STARVATION_TICKS_PER_HP} ticks elapsed; the death is credited to
-     * no one (environmental damage, no XP).
-     */
-    private static void advanceSatiety(Level level, Mob mob, int gameTicks) {
-        if (mob.satiety > 0) {
-            int drop = Math.min(mob.satiety, gameTicks);
-            mob.satiety -= drop;
-            // Eating something between turns clears the starving buff immediately.
-            if (mob.satiety > 0
-                    && BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.STARVING)) {
-                BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.STARVING);
-            }
-            if (mob.satiety == 0 && mob.behavior == Behavior.PLAYER) {
-                String name = mob.name != null ? mob.name : "Adventurer";
-                EventLog.add(Messages.playerStarves(name));
-            }
-        }
-        if (mob.satiety > 0) return;
-        // Hit zero - apply STARVING (player only). NPCs sit at zero harmlessly.
-        // STARVING blocks heal regen but doesn't drain HP; it stays on until satiety
-        // ticks back up. Re-apply each turn so it doesn't expire under the per-turn
-        // duration drain in BuffSystem.tickPerTurn.
-        if (mob.behavior == Behavior.PLAYER) {
-            BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.STARVING,
-                    1, 999_999, mob);
-        }
-    }
+    /** Satiety / starvation was removed from the game. Field stays on
+     *  {@link Mob} for save back-compat but never decreases. This no-op
+     *  is the single neutering point; food items still bump the satiety
+     *  field harmlessly, the STARVING buff is never applied, and the
+     *  satiety bar / character-stats row are hidden in rgame. */
+    private static void advanceSatiety(Level level, Mob mob, int gameTicks) { }
 
     public static boolean isPlayerTurn(Level level) {
         for (Mob mob : level.mobs) {

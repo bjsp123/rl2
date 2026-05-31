@@ -65,7 +65,12 @@ public enum Perk {
         return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".description");
     }
 
-    private String key() {
+    /** Lowercase / camelCase string key for this perk, matching the
+     *  {@code perk.<key>.name} / {@code .description} / {@code .tip}
+     *  convention in {@code assets/data/strings.csv}. Public so tip
+     *  triggers in the UI layer compose the right key without
+     *  duplicating the enum-to-key switch. */
+    public String key() {
         return switch (this) {
             case KILLER      -> "killer";
             case STEALTH     -> "stealth";

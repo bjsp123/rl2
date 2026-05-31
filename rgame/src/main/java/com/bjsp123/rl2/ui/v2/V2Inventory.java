@@ -414,7 +414,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private List<Item> filteredBag() {
         List<Item> out = new ArrayList<>();
         if (player == null || player.inventory == null) return out;
-        for (Item it : player.inventory.bag) {
+        // Bag is appended-to on pickup, so iteration order = acquisition
+        // order. Walk in reverse so the most-recently-acquired item appears
+        // at the top-left of the grid - matches the user's expectation
+        // that the freshest loot is the first thing they see.
+        java.util.List<Item> raw = player.inventory.bag;
+        for (int i = raw.size() - 1; i >= 0; i--) {
+            Item it = raw.get(i);
             if (it != null && categorize(it) == currentTab) out.add(it);
         }
         return out;
@@ -884,7 +890,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             @Override
             public boolean scrolled(float amountX, float amountY) {
                 if (!open || selectedItem != null) return false;
-                bagScroller.onScrolled(amountY, 40f);
+                bagScroller.onScrolled(amountY);
                 return true;
             }
 

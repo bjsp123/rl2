@@ -23,7 +23,7 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.HealApplied m)           animator.onHealApplied(level, m);
         else if (ev instanceof GameEvent.MobTamed m)              animator.onMobTamed(level, m);
         else if (ev instanceof GameEvent.BuffApplied m)           animator.onBuffApplied(level, m);
-        else if (ev instanceof GameEvent.BuffRemoved m)           { /* no visual */ }
+        else if (ev instanceof GameEvent.BuffRemoved m)           animator.onBuffRemoved(level, m);
         else if (ev instanceof GameEvent.BlastEffect m)           animator.onBlastEffect(level, m);
         else if (ev instanceof GameEvent.ExplosionEffect m)       animator.onExplosionEffect(level, m);
         else if (ev instanceof GameEvent.LightMoteSpawn m)        {

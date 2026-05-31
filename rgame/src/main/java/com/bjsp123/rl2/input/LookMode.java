@@ -66,7 +66,11 @@ public class LookMode extends InputAdapter {
         active = true;
         // Panel hidden until first user input - auto-pick is a preview, not a commit.
         hasChosen = false;
-        Mob nearest = nearestVisibleMob(player, level);
+        // Prefer the nearest *hostile* mob - a friendly kitten or tame pet
+        // standing 3 tiles away shouldn't steal focus from a wraith 5 tiles
+        // away. Fall back to any visible mob, then to the player's own tile.
+        Mob nearest = com.bjsp123.rl2.logic.MobTargeting.nearestHostile(player, level);
+        if (nearest == null) nearest = nearestVisibleMob(player, level);
         cursor = (nearest != null) ? nearest.position : player.position;
         if (history != null && cursor != null) history.record(level, cursor);
     }

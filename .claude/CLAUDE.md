@@ -105,7 +105,7 @@ The popup's `input()` returns false when closed, so events fall through to the s
 - **Burger menu is always present**, top-right corner, every screen. It always opens to the same three destinations: title screen, settings, encyclopedia.
 - **Non-game screens are vertical lists of large buttons.** No dense layouts, no side-by-side panels. One column, one button per row, big tap targets. Title, save list, hall of fame, settings, credits, arena setup all follow this shape.
 - **Every window is fully modal.** When a popup is open, only that popup receives input — the world, the HUD, and any windows behind it are inert. Stacked popups are forbidden; close-then-open or replace-in-place.
-- **Windows are either lists OR info, never both.** A list shows many items so the user can pick one; an info window shows the details of one thing. Tapping a list entry replaces the list with the info window for that entry; the info window's back button returns to the list. The encyclopedia today violates this (list + detail side-by-side) and needs to be split.
+- **Windows are either lists OR info, never both.** A list shows many items so the user can pick one; an info window shows the details of one thing. Tapping a list entry replaces the list with the info window for that entry; the info window's back button returns to the list.
 - **The map counts as a "list" too.** The whole UX is a single pattern: user picks from a grid, a list, or the map → next screen is an info window about whatever was picked.
 - **Lists of "a few" items → vertical button list** (tabs of a popup, menu screens — column of full-width buttons).
 - **Lists of "many" items → grid** (inventory bag, encyclopedia entries — uniform cells laid out in a grid).

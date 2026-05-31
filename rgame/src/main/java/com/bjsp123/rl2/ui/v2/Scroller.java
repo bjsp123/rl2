@@ -24,6 +24,13 @@ public final class Scroller {
      *  flips into dragging mode and starts consuming events. */
     private static final float DRAG_THRESHOLD = 6f;
 
+    /** Shared wheel-tick step (virtual px) so every list in the app scrolls
+     *  at the same speed in response to one mouse-wheel notch. Callers use
+     *  the no-arg {@link #onScrolled(float)} to inherit it; the explicit
+     *  {@link #onScrolled(float, float)} stays for the rare list that wants
+     *  a tailored step (e.g. one-line-per-tick logs). */
+    public static final float DEFAULT_WHEEL_STEP_PX = 36f;
+
     private float scrollY;
     private float maxScrollY;
     private boolean dragging;
@@ -80,5 +87,12 @@ public final class Scroller {
         scrollY += amountY * pixelsPerTick;
         if (scrollY < 0f)         scrollY = 0f;
         if (scrollY > maxScrollY) scrollY = maxScrollY;
+    }
+
+    /** Mouse-wheel scroll using {@link #DEFAULT_WHEEL_STEP_PX}. Every list
+     *  in the app should call this overload unless it has a real reason to
+     *  use a custom step - keeps wheel feel uniform across screens. */
+    public void onScrolled(float amountY) {
+        onScrolled(amountY, DEFAULT_WHEEL_STEP_PX);
     }
 }

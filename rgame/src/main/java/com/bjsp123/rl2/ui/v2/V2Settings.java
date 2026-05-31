@@ -22,7 +22,7 @@ import java.util.List;
  */
 public final class V2Settings extends V2Screen {
 
-    private enum Tab { GAMEPLAY, GRAPHICS, LOG, AUDIO }
+    private enum Tab { GAMEPLAY, GRAPHICS, LOG, AUDIO, ACCESS }
     private static Tab currentTab = Tab.GRAPHICS;
 
     private final Rl2Game game;
@@ -52,6 +52,17 @@ public final class V2Settings extends V2Screen {
      *  highlight the active tab without iterating. */
     private final List<Btn> tabBtns = new ArrayList<>();
 
+    /** Toggle widgets for boolean settings. Iterated alongside {@link #buttons}
+     *  in the input handlers so a tap on a pill flips the value. */
+    private final List<Toggle> toggles = new ArrayList<>();
+
+    /** Slider widgets for discrete-choice scalar settings. */
+    private final List<Slider> sliders = new ArrayList<>();
+
+    /** Slider currently capturing pointer drag, or {@code null}. Set on
+     *  touchDown-in-track, cleared on touchUp. */
+    private Slider activeSlider;
+
     public V2Settings(Rl2Game game, UiCtx ctx) {
         super(ctx);
         this.game = game;
@@ -66,6 +77,9 @@ public final class V2Settings extends V2Screen {
     protected void buildLayout() {
         rowLabels.clear();
         tabBtns.clear();
+        toggles.clear();
+        sliders.clear();
+        activeSlider = null;
 
         // Outer window - caps at the design width so the panel doesn't
         // stretch into a wide letterbox on widescreen displays. Centred
@@ -87,7 +101,7 @@ public final class V2Settings extends V2Screen {
         // n*tabW + (n-1)*TAB_GAP = innerW; solve for tabW.
         float tabsY = winY + winH - WIN_PAD - TAB_H;
         float tabsX = winX + WIN_PAD;
-        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.AUDIO };
+        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.AUDIO, Tab.ACCESS };
         float innerW = winW - 2 * WIN_PAD;
         float tabW   = (innerW - (tabs.length - 1) * TAB_GAP) / tabs.length;
         for (int i = 0; i < tabs.length; i++) {
@@ -110,41 +124,55 @@ public final class V2Settings extends V2Screen {
         // libGDX is y-up, "top" is high y and we decrement.
         float contentTop = tabsY - ROW_GAP;
         float yCursor    = contentTop;
+        float rowX = winX + WIN_PAD;
         switch (currentTab) {
             case GRAPHICS -> {
-                yCursor = addUiScaleRow(winX + WIN_PAD, yCursor);
-                yCursor = addUiFontScaleRow(winX + WIN_PAD, yCursor);
-                yCursor = addOutlineWidthRow(winX + WIN_PAD, yCursor);
-                yCursor = addOutlineDarknessRow(winX + WIN_PAD, yCursor);
-                yCursor = addOutlineSmoothRow(winX + WIN_PAD, yCursor);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.lowResRender"),
+                yCursor = addUiScaleRow(rowX, yCursor);
+                yCursor = addUiFontScaleRow(rowX, yCursor);
+                yCursor = addOutlineWidthRow(rowX, yCursor);
+                yCursor = addOutlineDarknessRow(rowX, yCursor);
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.outlineSmoothing"),
+                        Settings::mobOutlineSmooth, Settings::setMobOutlineSmooth);
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.lowResRender"),
                         Settings::lowResRender, Settings::setLowResRender);
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.perfOverlay"),
+                        Settings::showPerfOverlay, Settings::setShowPerfOverlay);
             }
             case GAMEPLAY -> {
-                yCursor = addAnimationSpeedRow(winX + WIN_PAD, yCursor);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.instantActions"),
+                yCursor = addAnimationSpeedRow(rowX, yCursor);
+                yCursor = addQuickslotCountRow(rowX, yCursor);
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.instantActions"),
                         Settings::instantActions, Settings::setInstantActions);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
                         Settings::queueAccelEnabled, Settings::setQueueAccelEnabled);
-                yCursor = addQuickslotCountRow(winX + WIN_PAD, yCursor);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.perfOverlay"),
-                        Settings::showPerfOverlay, Settings::setShowPerfOverlay);
-                yCursor = addButtonRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.clearHall"));
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.tipsEnabled"),
+                        Settings::tipsEnabled, Settings::setTipsEnabled);
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.meleePreview"),
+                        Settings::meleePreview, Settings::setMeleePreview);
+                // Destructive actions live at the bottom of the tab so the
+                // settings flow always reads "set values, then take any
+                // one-shot action".
+                yCursor = addButtonRow(rowX, yCursor, TextCatalog.get("ui.settings.eraseTips"),
+                        com.bjsp123.rl2.ui.v2.TipSystem::reset, /*warn=*/false);
+                yCursor = addButtonRow(rowX, yCursor, TextCatalog.get("ui.settings.clearHall"));
             }
             case LOG -> {
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.showEventLog"),
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.showEventLog"),
                         Settings::logOn, Settings::setLogOn);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.lowPriorityLines"),
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.lowPriorityLines"),
                         Settings::showLowPriority, Settings::setShowLowPriority);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.mobVsMobLines"),
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.mobVsMobLines"),
                         Settings::showNonPlayer, Settings::setShowNonPlayer);
-                yCursor = addBoolRow(winX + WIN_PAD, yCursor, TextCatalog.get("ui.settings.expandedLog"),
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.expandedLog"),
                         Settings::logExpanded, Settings::setLogExpanded);
-                yCursor = addLogFontScaleRow(winX + WIN_PAD, yCursor);
+                yCursor = addLogFontScaleRow(rowX, yCursor);
             }
             case AUDIO -> {
-                yCursor = addSfxVolumeRow(winX + WIN_PAD, yCursor);
-                yCursor = addMusicVolumeRow(winX + WIN_PAD, yCursor);
+                yCursor = addSfxVolumeRow(rowX, yCursor);
+                yCursor = addMusicVolumeRow(rowX, yCursor);
+            }
+            case ACCESS -> {
+                yCursor = addColorblindRow(rowX, yCursor);
             }
         }
 
@@ -178,150 +206,147 @@ public final class V2Settings extends V2Screen {
     }
 
     private float addButtonRow(float x, float yTop, String label) {
+        return addButtonRow(x, yTop, label, this::openClearHallPopup, /*warn=*/true);
+    }
+
+    private float addButtonRow(float x, float yTop, String label, Runnable onClick,
+                               boolean warn) {
         float winW = Math.min(UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
                 ctx.worldW() - 2 * SCREEN_MARGIN);
         float innerW = winW - 2 * WIN_PAD;
-        Btn b = new Btn(label, x, yTop - CHOOSER_H, innerW, CHOOSER_H,
-                this::openClearHallPopup);
-        b.warn = true;
+        Btn b = new Btn(label, x, yTop - CHOOSER_H, innerW, CHOOSER_H, onClick);
+        b.warn = warn;
         buttons.add(b);
         return yTop - CHOOSER_H - ROW_GAP;
     }
 
     private float addUiScaleRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float s : Settings.UI_SCALE_CHOICES) {
-            final float chosen = s;
-            choices.add(new ChoiceSpec(formatNumber(s) + "x", 50f,
-                    Math.abs(Settings.uiScale() - s) < 0.001f,
-                    () -> {
-                        Settings.setUiScale(chosen);
-                        ctx.applyUiScale();
-                        show();
-                    }));
-        }
-        return addRow(TextCatalog.get("ui.settings.uiScale"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.uiScale"),
+                Settings.UI_SCALE_CHOICES, Settings.uiScale(),
+                v -> { Settings.setUiScale(v); ctx.applyUiScale(); },
+                v -> formatNumber(v) + "x");
     }
 
     private float addUiFontScaleRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float s : Settings.UI_FONT_SCALE_CHOICES) {
-            final float chosen = s;
-            choices.add(new ChoiceSpec(formatNumber(s) + "x", 56f,
-                    Math.abs(Settings.uiFontScale() - s) < 0.001f,
-                    () -> {
-                        Settings.setUiFontScale(chosen);
-                        ctx.applyFontScale();
-                        show();
-                    }));
-        }
-        return addRow(TextCatalog.get("ui.settings.uiFontSize"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.uiFontSize"),
+                Settings.UI_FONT_SCALE_CHOICES, Settings.uiFontScale(),
+                v -> { Settings.setUiFontScale(v); ctx.applyFontScale(); },
+                v -> formatNumber(v) + "x");
     }
 
     private float addOutlineWidthRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float w : Settings.MOB_OUTLINE_WIDTH_CHOICES) {
-            final float chosen = w;
-            choices.add(new ChoiceSpec(formatNumber(w), 50f,
-                    Math.abs(Settings.mobOutlineWidth() - w) < 0.0001f,
-                    () -> { Settings.setMobOutlineWidth(chosen); show(); }));
-        }
-        return addRow(TextCatalog.get("ui.settings.outlineWidth"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.outlineWidth"),
+                Settings.MOB_OUTLINE_WIDTH_CHOICES, Settings.mobOutlineWidth(),
+                Settings::setMobOutlineWidth,
+                V2Settings::formatNumber);
     }
 
     private float addOutlineDarknessRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float a : Settings.MOB_OUTLINE_DARKNESS_CHOICES) {
-            final float chosen = a;
-            choices.add(new ChoiceSpec(formatNumber(a), 50f,
-                    Math.abs(Settings.mobOutlineDarkness() - a) < 0.0001f,
-                    () -> { Settings.setMobOutlineDarkness(chosen); show(); }));
-        }
-        return addRow(TextCatalog.get("ui.settings.outlineDarkness"), x, yTop, choices);
-    }
-
-    private float addOutlineSmoothRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.smooth"), 88f, Settings.mobOutlineSmooth(),
-                () -> { Settings.setMobOutlineSmooth(true);  show(); }));
-        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.pixel"),  88f, !Settings.mobOutlineSmooth(),
-                () -> { Settings.setMobOutlineSmooth(false); show(); }));
-        return addRow(TextCatalog.get("ui.settings.outlineSmoothing"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.outlineDarkness"),
+                Settings.MOB_OUTLINE_DARKNESS_CHOICES, Settings.mobOutlineDarkness(),
+                Settings::setMobOutlineDarkness,
+                V2Settings::formatNumber);
     }
 
     private float addAnimationSpeedRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float n : Settings.ANIMATION_SPEED_CHOICES) {
-            final float chosen = n;
-            choices.add(new ChoiceSpec(n + "x", 56f,
-                    Settings.framesPerRender() == n,
-                    () -> { Settings.setFramesPerRender(chosen); show(); }));
-        }
-        return addRow(TextCatalog.get("ui.settings.animationSpeed"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.animationSpeed"),
+                Settings.ANIMATION_SPEED_CHOICES, Settings.framesPerRender(),
+                Settings::setFramesPerRender,
+                v -> formatNumber(v) + "x");
     }
 
     private float addQuickslotCountRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (int n : Settings.QUICKSLOT_COUNT_CHOICES) {
-            final int chosen = n;
-            choices.add(new ChoiceSpec(String.valueOf(n), 56f,
-                    Settings.quickslotCount() == n,
-                    () -> { Settings.setQuickslotCount(chosen); show(); }));
-        }
-        return addRow(TextCatalog.get("ui.settings.quickslots"), x, yTop, choices);
+        // Int choices threaded through the float slider - values are whole
+        // numbers so the cast is exact.
+        float[] ticks = new float[Settings.QUICKSLOT_COUNT_CHOICES.length];
+        for (int i = 0; i < ticks.length; i++) ticks[i] = Settings.QUICKSLOT_COUNT_CHOICES[i];
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.quickslots"),
+                ticks, Settings.quickslotCount(),
+                v -> Settings.setQuickslotCount(Math.round(v)),
+                v -> Integer.toString(Math.round(v)));
     }
 
     private float addSfxVolumeRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float v : Settings.VOLUME_CHOICES) {
-            final float chosen = v;
-            choices.add(new ChoiceSpec(formatNumber(v * 100f) + "%", 52f,
-                    Math.abs(Settings.sfxVolume() - v) < 0.001f,
-                    () -> { Settings.setSfxVolume(chosen); show(); }));
-        }
-        return addRow(TextCatalog.get("ui.settings.sfxVolume"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.sfxVolume"),
+                Settings.VOLUME_CHOICES, Settings.sfxVolume(),
+                Settings::setSfxVolume,
+                v -> formatNumber(v * 100f) + "%");
     }
 
     private float addMusicVolumeRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float v : Settings.VOLUME_CHOICES) {
-            final float chosen = v;
-            choices.add(new ChoiceSpec(formatNumber(v * 100f) + "%", 52f,
-                    Math.abs(Settings.musicVolume() - v) < 0.001f,
-                    () -> {
-                        Settings.setMusicVolume(chosen);
-                        if (game.music != null) game.music.applyVolume();
-                        show();
-                    }));
-        }
-        return addRow(TextCatalog.get("ui.settings.musicVolume"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.musicVolume"),
+                Settings.VOLUME_CHOICES, Settings.musicVolume(),
+                v -> {
+                    Settings.setMusicVolume(v);
+                    if (game.music != null) game.music.applyVolume();
+                },
+                v -> formatNumber(v * 100f) + "%");
     }
 
     private float addLogFontScaleRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        for (float f : Settings.LOG_FONT_SCALE_CHOICES) {
-            final float chosen = f;
-            choices.add(new ChoiceSpec(formatNumber(f) + "x", 50f,
-                    Math.abs(Settings.logFontScale() - f) < 0.001f,
-                    () -> { Settings.setLogFontScale(chosen); show(); }));
-        }
-        return addRow(TextCatalog.get("ui.settings.logFontSize"), x, yTop, choices);
+        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.logFontSize"),
+                Settings.LOG_FONT_SCALE_CHOICES, Settings.logFontScale(),
+                Settings::setLogFontScale,
+                v -> formatNumber(v) + "x");
     }
 
-    private float addBoolRow(float x, float yTop, String label,
-                             java.util.function.BooleanSupplier getter,
-                             java.util.function.Consumer<Boolean> setter) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.on"), 70f, getter.getAsBoolean(),
-                () -> { setter.accept(true);  show(); }));
-        choices.add(new ChoiceSpec(TextCatalog.get("ui.settings.off"), 70f, !getter.getAsBoolean(),
-                () -> { setter.accept(false); show(); }));
-        return addRow(label, x, yTop, choices);
+    /** Build a snap-to-tick {@link Slider} row. The slider sits below the
+     *  section label, spans the full inner row width minus the value-label
+     *  gutter the slider draws internally, and lives in {@link #sliders}
+     *  for input + render iteration. */
+    private float addSliderRow(float x, float yTop, String label,
+                               float[] ticks, float currentValue,
+                               java.util.function.Consumer<Float> setter,
+                               java.util.function.Function<Float, String> fmt) {
+        rowLabels.add(new RowLabel(label, x, yTop));
+        float winW = Math.min(UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
+                ctx.worldW() - 2 * SCREEN_MARGIN);
+        float innerW = winW - 2 * WIN_PAD;
+        float by = yTop - ROW_LABEL_H - CHOOSER_H;
+        int initialIdx = Slider.nearestIndex(ticks, currentValue);
+        Slider sl = new Slider(x, by, innerW, CHOOSER_H,
+                ticks, initialIdx,
+                idx -> setter.accept(ticks[idx]),
+                fmt);
+        sliders.add(sl);
+        return by - ROW_GAP;
     }
+
+    /** Build a single-{@link Toggle} row - caption on the LEFT, oval pill
+     *  on the right edge, both on the same baseline. Toggle reads its
+     *  value live from the supplier, so no rebuild is needed when the
+     *  value flips. Row consumes ~{@link #TOGGLE_ROW_H} of vertical space
+     *  vs. the ~58 px a slider row needs - sliders draw on their own line
+     *  because the value label needs the horizontal real estate. */
+    private float addToggleRow(float x, float yTop, String label,
+                               java.util.function.BooleanSupplier getter,
+                               java.util.function.Consumer<Boolean> setter) {
+        float winW = Math.min(UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
+                ctx.worldW() - 2 * SCREEN_MARGIN);
+        float innerW = winW - 2 * WIN_PAD;
+        float toggleW = 44f;
+        float toggleH = 20f;
+        float tx = x + innerW - toggleW;
+        float ty = yTop - TOGGLE_ROW_H + (TOGGLE_ROW_H - toggleH) * 0.5f;
+        // Label baseline sits inside the row, vertically aligned with the
+        // pill's centre.
+        float labelY = yTop - (TOGGLE_ROW_H - ctx.lineH()) * 0.5f;
+        rowLabels.add(new RowLabel(label, x, labelY));
+        Toggle t = new Toggle(tx, ty, toggleW, toggleH, getter, setter);
+        toggles.add(t);
+        return yTop - TOGGLE_ROW_H - ROW_GAP;
+    }
+
+    /** Vertical band consumed by one toggle row (caption + pill on the
+     *  same baseline). Smaller than the {@code CHOOSER_H + ROW_LABEL_H}
+     *  used by sliders. */
+    private static final float TOGGLE_ROW_H = 28f;
 
     @Override
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        for (Toggle t : toggles) t.drawShape(ctx);
+        for (Slider s : sliders) s.drawShape(ctx);
     }
 
     @Override
@@ -334,6 +359,56 @@ public final class V2Settings extends V2Screen {
         for (RowLabel rl : rowLabels) {
             TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, rl.text, rl.x, rl.y);
         }
+        for (Toggle t : toggles) t.drawText(ctx);
+        for (Slider s : sliders) s.drawText(ctx);
+    }
+
+    @Override
+    protected boolean onTouchDownInBody(float vx, float vy) {
+        // Toggles fire on tap-down release; we mark pressed here so the
+        // pill highlights while held.
+        for (Toggle t : toggles) {
+            if (t.hit(vx, vy)) { t.pressed = true; return true; }
+        }
+        // Sliders: tap on the track snaps to the nearest tick immediately
+        // AND captures the drag, so a tap-then-drag works without a touchUp
+        // round-trip.
+        for (Slider s : sliders) {
+            if (s.hitTrack(vx, vy)) {
+                s.dragging = true;
+                s.updateFromPointer(vx);
+                activeSlider = s;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    protected boolean onTouchDragged(float vx, float vy) {
+        if (activeSlider != null) {
+            activeSlider.updateFromPointer(vx);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    protected boolean onTouchUpInBody(float vx, float vy) {
+        boolean consumed = false;
+        if (activeSlider != null) {
+            activeSlider.dragging = false;
+            activeSlider = null;
+            consumed = true;
+        }
+        for (Toggle t : toggles) {
+            if (t.pressed) {
+                t.pressed = false;
+                if (t.hit(vx, vy)) t.click();
+                consumed = true;
+            }
+        }
+        return consumed;
     }
 
     private void openClearHallPopup() {
@@ -372,6 +447,7 @@ public final class V2Settings extends V2Screen {
             case GRAPHICS -> TextCatalog.get("ui.settings.tab.graphics");
             case LOG      -> TextCatalog.get("ui.settings.tab.log");
             case AUDIO    -> TextCatalog.get("ui.settings.tab.audio");
+            case ACCESS   -> TextCatalog.get("ui.settings.tab.access");
         };
     }
 
@@ -382,6 +458,28 @@ public final class V2Settings extends V2Screen {
             case GRAPHICS -> IconSprites.Icon.VIDEO;
             case LOG      -> IconSprites.Icon.BOOK;
             case AUDIO    -> IconSprites.Icon.SOUND;
+            case ACCESS   -> IconSprites.Icon.GAME;
+        };
+    }
+
+    private float addColorblindRow(float x, float yTop) {
+        List<ChoiceSpec> choices = new ArrayList<>();
+        Settings.ColorblindPreset current = Settings.colorblindPreset();
+        for (Settings.ColorblindPreset p : Settings.ColorblindPreset.values()) {
+            final Settings.ColorblindPreset chosen = p;
+            choices.add(new ChoiceSpec(colorblindLabel(p), 80f,
+                    current == p,
+                    () -> { Settings.setColorblindPreset(chosen); show(); }));
+        }
+        return addRow(TextCatalog.get("ui.settings.colorblind"), x, yTop, choices);
+    }
+
+    private static String colorblindLabel(Settings.ColorblindPreset p) {
+        return switch (p) {
+            case NONE   -> TextCatalog.get("ui.settings.colorblind.none");
+            case DEUTER -> TextCatalog.get("ui.settings.colorblind.deuter");
+            case PROTAN -> TextCatalog.get("ui.settings.colorblind.protan");
+            case TRITAN -> TextCatalog.get("ui.settings.colorblind.tritan");
         };
     }
 

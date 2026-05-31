@@ -126,12 +126,25 @@ public class Buff {
      *  history logs for attribution. Transient - references aren't persisted on save. */
     public transient Mob source;
 
+    /** Item that originally caused this buff (the wand of fire that ignited
+     *  the player, the bomb that left an oily floor, the potion that was
+     *  drunk). Null for buffs whose origin item isn't meaningful (intrinsic
+     *  PHASE on a wraith, etc.). Combines with {@link #source} into the
+     *  {@code DamageCause} that fire / poison DOT ticks pass to
+     *  {@code MobSystem.processAttack}. Transient. */
+    public transient Item sourceItem;
+
     public Buff() {}
 
     public Buff(BuffType type, int level, int durationTicks, Mob source) {
+        this(type, level, durationTicks, source, null);
+    }
+
+    public Buff(BuffType type, int level, int durationTicks, Mob source, Item sourceItem) {
         this.type          = type;
         this.level         = Math.max(1, level);
         this.durationTicks = Math.max(1, durationTicks);
         this.source        = source;
+        this.sourceItem    = sourceItem;
     }
 }

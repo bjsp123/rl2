@@ -52,10 +52,11 @@ public final class ItemCell {
                     "+" + lvl, x + w - 2f, y + h - 4f);
         }
 
-        // Stack count - bottom-right
+        // Stack count - bottom-right, prefixed with "x" so a "3" doesn't
+        // get mis-read as another +level badge or an icon overlay.
         if (item.count > 1) {
             TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    Integer.toString(item.count), x + w - 2f, y + ctx.lineH());
+                    "x" + item.count, x + w - 2f, y + ctx.lineH());
         }
 
         // Charge bar - bottom strip via whitePixel tinting

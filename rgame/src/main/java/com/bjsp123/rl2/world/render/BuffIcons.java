@@ -182,6 +182,11 @@ public final class BuffIcons {
      * (cooldown), killer, wet, bleeding.
      * <p>Row 1: phase (col 0), frozen (col 1).
      */
+    /** Flat atlas index for {@code type}, or -1 when the buff has no mapped
+     *  cell. Public so non-cache consumers (e.g. the buff-expired floater)
+     *  can compose composite effects without duplicating the switch. */
+    public static int iconIndexFor(BuffType type) { return iconIndex(type); }
+
     private static int iconIndex(BuffType type) {
         return switch (type) {
             case ON_FIRE      -> 0;

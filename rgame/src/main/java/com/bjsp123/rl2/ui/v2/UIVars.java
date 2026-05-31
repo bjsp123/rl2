@@ -65,6 +65,43 @@ public final class UIVars {
     public static Color DAMAGE_FIRE     = hex(0xff9040);  // orange
     public static Color DAMAGE_MAGIC    = hex(0x99c8ff);  // pale blue
 
+    /** Colorblind-aware palette swap for the {@code DAMAGE_*} colors.
+     *  Mutates the existing {@link Color} instances in-place so cached
+     *  field references stay valid. Wong-style palettes for the red-green
+     *  variants; a blue-yellow recolor for tritan. */
+    public static void applyColorblindPalette(com.bjsp123.rl2.ui.skin.Settings.ColorblindPreset p) {
+        switch (p) {
+            case DEUTER, PROTAN -> {
+                setRgb(DAMAGE_PHYSICAL, 0xe69f00); // orange (red is hard to see)
+                setRgb(DAMAGE_SHOCK,    0x56b4e9); // sky blue
+                setRgb(DAMAGE_POISON,   0xf0e442); // yellow (green is hard to see)
+                setRgb(DAMAGE_FIRE,     0xd55e00); // vermillion
+                setRgb(DAMAGE_MAGIC,    0xcc79a7); // reddish purple
+            }
+            case TRITAN -> {
+                setRgb(DAMAGE_PHYSICAL, 0xd62728); // red stays
+                setRgb(DAMAGE_SHOCK,    0xff7b00); // orange (was cyan - blue is hard)
+                setRgb(DAMAGE_POISON,   0x2ca02c); // deeper green
+                setRgb(DAMAGE_FIRE,     0xe377c2); // pink (avoid confusion w/ SHOCK orange)
+                setRgb(DAMAGE_MAGIC,    0x9467bd); // purple
+            }
+            case NONE -> {
+                setRgb(DAMAGE_PHYSICAL, 0xc04040);
+                setRgb(DAMAGE_SHOCK,    0x66e0ff);
+                setRgb(DAMAGE_POISON,   0xa8e070);
+                setRgb(DAMAGE_FIRE,     0xff9040);
+                setRgb(DAMAGE_MAGIC,    0x99c8ff);
+            }
+        }
+    }
+
+    private static void setRgb(Color c, int rgb) {
+        c.r = ((rgb >> 16) & 0xFF) / 255f;
+        c.g = ((rgb >>  8) & 0xFF) / 255f;
+        c.b = ( rgb        & 0xFF) / 255f;
+        c.a = 1f;
+    }
+
     // -- Charge bar (item cells) -----------------------------------------------
     /** Semi-transparent black backdrop behind the charge bar. */
     public static Color BAR_CHARGE_BACKDROP = new Color(0f, 0f, 0f, 0.85f);
