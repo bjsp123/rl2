@@ -1369,7 +1369,51 @@ public final class ItemSystem {
      *  <p>Hard cap of 16 rings (a 33×33 area, ~1000 tiles) so a malformed
      *  effectSize doesn't iterate forever. Returns fewer than
      *  {@code count} tiles when the reachable area can't supply that many. */
+
+    /**
+     * Tiles a thrown {@code item} will affect when it lands on {@code impact}.
+     * Mirrors the per-category branches in {@link MobSystem#applyThrowImpact}
+     * so AI prediction and any UI preview agree with the actual resolution.
+     *
+     * <ul>
+     *   <li>{@link com.bjsp123.rl2.model.Item.UseBehavior#DRINK} potions
+     *       splash onto a chebyshev-1 disc (3x3).</li>
+     *   <li>Items with positive {@link ItemStats#effectiveSize} (bombs) pack
+     *       that many tiles outward via {@link #packTilesAround}.</li>
+     *   <li>Single-target throws (effectSize 0, non-potion) hit only the
+     *       impact tile.</li>
+     * </ul>
+     */
+    public static java.util.List<Point> tilesAffectedByThrow(
+            Level level, Point impact, com.bjsp123.rl2.model.Item item, com.bjsp123.rl2.model.Mob thrower) {
+        if (level == null || impact == null || item == null) return java.util.Collections.emptyList();
+        if (item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.DRINK) {
+            java.util.List<Point> out = new java.util.ArrayList<>(9);
+            int cx = impact.tileX(), cy = impact.tileY();
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    int x = cx + dx, y = cy + dy;
+                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                    out.add(new Point(x, y));
+                }
+            }
+            return out;
+        }
+        int effLvl = ItemStats.effectiveLevel(item, thrower);
+        int size = ItemStats.effectiveSize(item, effLvl);
+        if (size >= 1) return packTilesAround(level, impact, size);
+        return java.util.Collections.singletonList(impact);
+    }
+
     public static java.util.List<Point> packTilesAround(Level level, Point centre, int count) {
+        return packTilesAround(level, centre, count, RANDOM);
+    }
+
+    /** Variant that takes an explicit Random source. Used by render-frame
+     *  previews (targeting AoE disc) which need a deterministic, stable
+     *  layout - reseeding from the centre tile each frame keeps the preview
+     *  from shimmering between frames AND from consuming the global RNG. */
+    public static java.util.List<Point> packTilesAround(Level level, Point centre, int count, java.util.Random rng) {
         java.util.List<Point> out = new java.util.ArrayList<>();
         if (level == null || centre == null || count <= 0) return out;
         int cx = centre.tileX(), cy = centre.tileY();
@@ -1393,9 +1437,9 @@ public final class ItemSystem {
                     else                   edges.add(p);
                 }
             }
-            java.util.Collections.shuffle(cardinals, RANDOM);
-            java.util.Collections.shuffle(edges,     RANDOM);
-            java.util.Collections.shuffle(diagonals, RANDOM);
+            java.util.Collections.shuffle(cardinals, rng);
+            java.util.Collections.shuffle(edges,     rng);
+            java.util.Collections.shuffle(diagonals, rng);
             for (Point p : cardinals) { if (out.size() >= count) return out; out.add(p); }
             for (Point p : edges)     { if (out.size() >= count) return out; out.add(p); }
             for (Point p : diagonals) { if (out.size() >= count) return out; out.add(p); }

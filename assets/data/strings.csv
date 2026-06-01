@@ -97,7 +97,7 @@ buff.HOPE.name,Blessed
 buff.ON_FIRE.details,Loses HP each turn (scales with level). Doubled if also oily. Cleared by being chilled or stepping into water.
 buff.POISONED.details,Loses HP each turn. Cured by regeneration.
 buff.BLEEDING.details,Loses HP each turn; bleed-rate tapers down as the duration shortens.
-buff.REGENERATION.details,Heals HP each turn. Also cures poison on apply.
+buff.REGENERATION.details,"Heals HP each turn while below max HP. Each turn it also strips any active POISONED buff, even at full HP."
 buff.HASTED.details,Move and attack costs reduced by 20% per level (compounding).
 buff.CHILLED.details,Move and attack costs increased substantially. Combine with wet to freeze.
 buff.FROZEN.details,Skips every action until the buff ends. Taking damage shortens the freeze.
@@ -155,7 +155,7 @@ buff.OILY.tip,"You're *oiled*. Take *2x damage from fire*.\nStep in water to was
 buff.WET.tip,"You're *wet*. Take *2x damage from lightning*.\nDry out by waiting or stepping over a heat source."
 buff.CHILLED.tip,"You're *chilled* - slowed down for a few turns.\nFire warms you up; otherwise wait it out."
 buff.FROZEN.tip,"You're *frozen solid* - you can't act.\nA hit will shorten it; otherwise sit out a few turns."
-buff.FRIGHTENED.tip,"You're *frightened*.\nThe HOPE buff (or standing on a lit tile) blocks fear."
+buff.FRIGHTENED.tip,"You're *frightened*: you'll flee from the source of the fear.\nStanding on a *lit tile* strips the fear off; the *HOPE* buff grants full immunity."
 buff.HASTED.tip,"You're *hasted*.\nMoves and attacks cost less time - capitalise on it."
 buff.PROTECTION.tip,"*Halves incoming physical damage* (more at higher levels).\nKey survival buff against melee."
 buff.ANTI_MAGIC.tip,"*Halves incoming magic and fire damage* (more at higher levels).\nKey survival buff against wand-using mobs."
@@ -168,6 +168,7 @@ buff.PHASE.tip,"You're *phasing* - moving very fast.\nEnds the moment you take o
 buff.HIDING.tip,"You're *hiding*.\nEnemies can't see you until you act or the buff wears off."
 buff.death.ON_FIRE, burns to a cinder
 buff.death.POISONED, succumbs to poison
+buff.info.effect,Effect: {effect}
 buff.info.level,Level {level}
 buff.info.permanent,Permanent
 buff.info.turns,{turns} turns
@@ -885,7 +886,7 @@ perk.jump.description,Jump-tools (frog) gain +1 effective level per perk level -
 perk.jump.name,Jump
 perk.killer.description,"On kill: stacking KILLER buff (x0.85 attack/move cost per stack). Each kill adds ceil(L/2) stacks and refreshes duration to 8 + 2*ceil(L/2) turns."
 perk.killer.name,Killer
-perk.knockback.description,+1 square of melee knockback per level (capped at 5). Levels beyond 5 add wall-slam damage when the target is pinned.
+perk.knockback.description,"Levels 1-5: +1 tile of melee knockback per level (max 5 extra tiles). Levels 6-10: each additional level adds +1 wall-slam damage when the knocked-back target is pinned by a wall, chasm, or another mob."
 perk.knockback.name,Knockback
 perk.stealth.description,Enemy wake / vision radius vs you is scaled by 1/(L+1). L1 halves; L10 reduces to one-eleventh.
 perk.stealth.name,Stealth
@@ -922,6 +923,10 @@ concept.onetime.name,One-Time Door
 concept.onetime.tip,"You broke through a *one-time door*.\nThese doors shatter under you and can never be re-opened from the other side."
 concept.crystal.name,Crystal Door
 concept.crystal.tip,"Crystal doors *only open for you*.\nMonsters can't push through. Useful for breaking line of sight or stalling a chase."
+concept.surprise.name,Surprise Attack
+concept.surprise.tip,"A *surprise attack* just landed.\nAttacking an enemy that can't see you - out of line-of-sight, invisible, or hidden - deals *1.5x damage*."
+concept.pointBlank.name,Point-Blank Shot
+concept.pointBlank.tip,"Firing a bow or wand at an *adjacent* target suffers a *-50 accuracy penalty*.\nStep back a tile before shooting, or just swing in melee."
 tile.ALTAR,altar
 tile.CHASM,chasm
 tile.DOOR,door
@@ -1027,7 +1032,7 @@ ui.characterSelect.title,Choose Class
 ui.characterStats.accuracy,Accuracy
 ui.characterStats.armor,Armor
 ui.characterStats.attack,Attack
-ui.characterStats.attackCost,Atk cost
+ui.characterStats.attackCost,Attack speed
 ui.characterStats.available,Available
 ui.characterStats.buffLevel,{name} (lvl {level})
 ui.characterStats.buffs,Buffs
@@ -1035,7 +1040,7 @@ ui.characterStats.evasion,Evasion
 ui.characterStats.hero,Hero
 ui.characterStats.hp,HP
 ui.characterStats.light,Light
-ui.characterStats.moveCost,Move cost
+ui.characterStats.moveCost,Move speed
 ui.characterStats.satiety,Satiety
 ui.characterStats.tab.perks,Perks
 ui.characterStats.tab.stats,Stats
@@ -1144,7 +1149,7 @@ ui.look.mobFallback,mob
 ui.look.mobLevel,{name} (lvl {level})
 ui.look.mobLevelPlain,{name} level {level}
 ui.look.mobMelee,melee damage {damage}
-ui.look.mobRanged,ranged {type} damage {damage}
+ui.look.mobRanged,"{type} ranged: {damage} dmg, range {range}"
 ui.look.noTile,(no tile)
 ui.look.owner.unknown,unknown
 ui.look.owner.you,you
@@ -1176,6 +1181,7 @@ ui.look.terrain.fire,fire
 ui.look.terrain.grass,grass
 ui.look.terrain.mushrooms,mushrooms
 ui.look.terrain.trees,trees
+ui.look.terrainMoveCost,Move cost: {mult}x
 ui.look.title,Look
 ui.list.finalSep,", and "
 ui.list.sep,", "

@@ -32,6 +32,7 @@ final class SpriteAtlas {
     private static int mobsOffsetY, itemsOffsetY, gemsOffsetY, buffsOffsetY;
     private static int terrainCrystalOffsetY, terrainConcreteOffsetY, terrainShinyOffsetY, terrainGothicOffsetY;
     private static int surfacesOffsetY, shadowOvalOffsetY, lampShadowOvalOffsetY;
+    private static int playerOffsetY;
 
     private SpriteAtlas() {}
 
@@ -39,6 +40,7 @@ final class SpriteAtlas {
         if (atlas != null) return;
         try {
             Pixmap mobs     = new Pixmap(Gdx.files.internal("sprites/mobs_simple.png"));
+            Pixmap player   = new Pixmap(Gdx.files.internal("sprites/player.png"));
             Pixmap items    = new Pixmap(Gdx.files.internal("sprites/items.png"));
             Pixmap gems     = new Pixmap(Gdx.files.internal("sprites/gems.png"));
             Pixmap buffs    = new Pixmap(Gdx.files.internal("sprites/buffs16.png"));
@@ -55,10 +57,11 @@ final class SpriteAtlas {
                              Math.max(gems.getWidth(),  buffs.getWidth())),
                     Math.max(Math.max(crystal.getWidth(), concrete.getWidth()),
                              Math.max(Math.max(shiny.getWidth(), gothic.getWidth()),
-                                      surfaces.getWidth())));
+                                      Math.max(surfaces.getWidth(), player.getWidth()))));
 
             mobsOffsetY            = 0;
-            itemsOffsetY           = mobsOffsetY            + mobs.getHeight();
+            playerOffsetY          = mobsOffsetY            + mobs.getHeight();
+            itemsOffsetY           = playerOffsetY          + player.getHeight();
             gemsOffsetY            = itemsOffsetY           + items.getHeight();
             buffsOffsetY           = gemsOffsetY            + gems.getHeight();
             terrainCrystalOffsetY  = buffsOffsetY           + buffs.getHeight();
@@ -74,6 +77,7 @@ final class SpriteAtlas {
             combined.setBlending(Pixmap.Blending.None);
 
             combined.drawPixmap(mobs,     0, mobsOffsetY);
+            combined.drawPixmap(player,   0, playerOffsetY);
             combined.drawPixmap(items,    0, itemsOffsetY);
             combined.drawPixmap(gems,     0, gemsOffsetY);
             combined.drawPixmap(buffs,    0, buffsOffsetY);
@@ -85,7 +89,7 @@ final class SpriteAtlas {
             combined.drawPixmap(shadow,   0, shadowOvalOffsetY);
             combined.drawPixmap(lamp,     0, lampShadowOvalOffsetY);
 
-            mobs.dispose();   items.dispose();
+            mobs.dispose();   player.dispose();   items.dispose();
             gems.dispose();   buffs.dispose();
             crystal.dispose();concrete.dispose();
             shiny.dispose();  gothic.dispose();
@@ -102,6 +106,7 @@ final class SpriteAtlas {
 
     static Texture       texture()          { return atlas;                   }
     static int           mobsY()            { return mobsOffsetY;             }
+    static int           playerY()          { return playerOffsetY;           }
     static int           itemsY()           { return itemsOffsetY;            }
     static int           gemsY()            { return gemsOffsetY;             }
     static int           buffsY()           { return buffsOffsetY;            }
@@ -136,7 +141,7 @@ final class SpriteAtlas {
 
     static void dispose() {
         if (atlas != null) { atlas.dispose(); atlas = null; }
-        mobsOffsetY = itemsOffsetY = gemsOffsetY = buffsOffsetY = 0;
+        mobsOffsetY = playerOffsetY = itemsOffsetY = gemsOffsetY = buffsOffsetY = 0;
         terrainCrystalOffsetY = terrainConcreteOffsetY = terrainShinyOffsetY = 0;
         surfacesOffsetY = shadowOvalOffsetY = lampShadowOvalOffsetY = 0;
     }

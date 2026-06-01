@@ -42,18 +42,18 @@ public final class ItemCell {
 
         BrandFx.drawItemSparks(ctx.batch, ctx.whitePixel, x, y, w, h, item);
 
-        // Level badge - top-right; green when a buff/perk/gear is boosting above base
-        int lvl     = ItemStats.effectiveLevel(item, holder);
-        int baseLvl = Math.max(0, item.level);
+        // Level badge - top-right, always yellow (ACCENT). The earlier
+        // green-when-boosted variant collided visually with the white "xN"
+        // stack badge in the opposite corner; sticking to yellow for level
+        // and white for count keeps the two badges immediately distinct.
+        int lvl = ItemStats.effectiveLevel(item, holder);
         if (lvl > 0) {
-            com.badlogic.gdx.graphics.Color badgeColor =
-                    (lvl > baseLvl) ? UIVars.BOOST : UIVars.ACCENT;
-            TextDraw.right(ctx, ctx.fontRegular, badgeColor,
+            TextDraw.right(ctx, ctx.fontRegular, UIVars.ACCENT,
                     "+" + lvl, x + w - 2f, y + h - 4f);
         }
 
-        // Stack count - bottom-right, prefixed with "x" so a "3" doesn't
-        // get mis-read as another +level badge or an icon overlay.
+        // Stack count - bottom-right, white. The "x" prefix prevents a "3"
+        // from being misread as a tiny level badge.
         if (item.count > 1) {
             TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                     "x" + item.count, x + w - 2f, y + ctx.lineH());

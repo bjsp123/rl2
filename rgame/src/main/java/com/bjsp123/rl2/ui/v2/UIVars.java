@@ -145,6 +145,29 @@ public final class UIVars {
     public static int FONT_REGULAR_PX   = 16;
     public static int FONT_HEADER_PX    = 32;
 
+    // -- Targeting / hit-chance chip styling ----------------------------------
+    /** Font scale factor for the cursor-anchored hit-chance / damage chip,
+     *  applied on top of the regular font. */
+    public static float CHIP_SCALE              = 0.62f;
+    /** Pixels the chip's baseline rises above the target tile's top edge. */
+    public static float CHIP_LIFT               = 6f;
+    /** Horizontal + vertical padding between chip text and its background rect. */
+    public static float CHIP_PAD                = 3f;
+    /** Alpha of the dark pill behind chip text. */
+    public static float CHIP_BG_ALPHA           = 0.78f;
+    /** Font scale factor for the "you just tab-cycled to this target" name
+     *  floater - slightly larger than the chip so the name reads. */
+    public static float CYCLE_HIGHLIGHT_SCALE   = 0.72f;
+    /** Vertical lift of the cycle-highlight floater above the target tile. */
+    public static float CYCLE_HIGHLIGHT_LIFT    = 22f;
+    /** Frame count the cycle-highlight floater stays on screen. */
+    public static int   CYCLE_HIGHLIGHT_FRAMES  = 24;
+
+    // -- Shadows --------------------------------------------------------------
+    /** Default alpha for tile drop-shadows (entities, fog). Per-biome tints
+     *  pull this; tweak in one place to dim/brighten every shadow at once. */
+    public static float SHADOW_ALPHA            = 0.65f;
+
     // -- Derived (recomputed by applyDerived after every load) ----------------
     /** Total border width of a window's 3-line chrome: 3 x WIN_LINE_W. */
     public static float WIN_BORDER;

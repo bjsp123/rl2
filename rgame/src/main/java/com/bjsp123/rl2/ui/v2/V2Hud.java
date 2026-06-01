@@ -186,7 +186,8 @@ public final class V2Hud {
             double maxHp = p.effectiveStats().maxHp;
             if (maxHp > 0) hpPct = (float) (p.hp / maxHp * 100.0);
         }
-        lowHpFactor = Math.max(0f, Math.min(1f, (25f - hpPct) / 24f));
+        float rampStartPct = (float) (com.bjsp123.rl2.logic.GameBalance.LOW_HP_RAMP_START * 100.0);
+        lowHpFactor = Math.max(0f, Math.min(1f, (rampStartPct - hpPct) / Math.max(1f, rampStartPct - 1f)));
         pushLowHpChromeTint();
         try {
             renderShapesPass();

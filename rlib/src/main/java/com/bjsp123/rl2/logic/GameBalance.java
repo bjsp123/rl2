@@ -167,6 +167,15 @@ public final class GameBalance {
     /** If true, every targeted attack type can surprise; otherwise only physical attacks can. */
     public static boolean RULES_SURPRISE_ALLOW_ALL_TARGETED_ATTACK_TYPES = false;
 
+    // ------------------------- Low-HP warning thresholds --------------------
+    /** HP fraction at which the HUD chrome starts tinting red. Linear ramp
+     *  from this value down to 0.01 (fully red). Read by both rgame's HUD
+     *  and the player-damage hook in Animator. */
+    public static double LOW_HP_RAMP_START = 0.25;
+    /** HP fraction at which a damaging hit on the player fires the
+     *  full-screen flash + warning sfx. Computed POST-hit. */
+    public static double LOW_HP_HIT_FLASH_THRESHOLD = 0.20;
+
     // ------------------------- AI safety ------------------------------------
     /** Delay charged when an AI turn returns without paying any action or move cost. */
     public static int AI_GUARDRAIL_COST = 150;

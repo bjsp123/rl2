@@ -24,11 +24,25 @@ import java.util.Map;
 public final class MobSprites {
 
     private static final int CELL = 32;
+    /** Cell dimensions for {@code sprites/player.png}: 32 wide, 64 tall.
+     *  Row = class (0=ROGUE, 1=WARRIOR, 2=MAGE). Col = variant
+     *  (0=regular player, 1=enemy player, 2=ghost player). */
+    private static final int PLAYER_CELL_W = 32;
+    private static final int PLAYER_CELL_H = 64;
+
+    /** Column index in {@code sprites/player.png} used for enemy-player
+     *  mobs while the dedicated "enemy" art (col 1) is unfinished. Set to
+     *  {@code 2} (ghost variant) so enemy players read as visibly distinct
+     *  from the real player. */
+    private static final int ENEMY_PLAYER_VARIANT_COL = 2;
 
     private static Texture mobsTex;
     private static final Map<String, int[]> coords = new HashMap<>();
     private static final Map<String, TextureRegion> regions = new HashMap<>();
+    /** Per-class regions for real player mobs. Lazily built in {@link #ensureLoaded}. */
     private static Map<CharacterClass, TextureRegion> playerRegions;
+    /** Per-class regions for enemy-player mobs (ghost variant for now). */
+    private static Map<CharacterClass, TextureRegion> enemyPlayerRegions;
 
     private MobSprites() {}
 
@@ -53,11 +67,21 @@ public final class MobSprites {
     }
 
     /** Region for the given mob - players (any {@link Mob#characterClass}) get the
-     *  per-class sprite; everything else looks up its row in {@code mobs.csv}.
-     *  Returns {@code null} if the texture didn't load or the mob's type has no mapping. */
+     *  per-class sprite; enemy-player mobs ({@code mobType} prefix
+     *  {@code ENEMY_PLAYER_}) use the same per-class atlas but with the
+     *  "ghost" variant column. Everything else looks up its row in
+     *  {@code mobs.csv}. Returns {@code null} if the texture didn't load
+     *  or the mob's type has no mapping. */
     public static TextureRegion regionFor(Mob mob) {
         if (mob == null) return null;
-        if (mob.characterClass != null) return regionFor(mob.characterClass);
+        if (mob.characterClass != null) {
+            if (mob.mobType != null && mob.mobType.startsWith("ENEMY_PLAYER_")) {
+                ensureLoaded();
+                return enemyPlayerRegions == null
+                        ? null : enemyPlayerRegions.get(mob.characterClass);
+            }
+            return regionFor(mob.characterClass);
+        }
         return regionFor(mob.mobType);
     }
 
@@ -84,6 +108,15 @@ public final class MobSprites {
         return playerRegions == null ? null : playerRegions.get(cls);
     }
 
+    /** Region for an enemy-player class pose. Uses the ghost-variant column
+     *  in {@code sprites/player.png} so the silhouette still reads as a
+     *  member of that class but visibly differs from the real player. */
+    public static TextureRegion enemyPlayerRegion(CharacterClass cls) {
+        if (cls == null) return null;
+        ensureLoaded();
+        return enemyPlayerRegions == null ? null : enemyPlayerRegions.get(cls);
+    }
+
     /** Source-of-truth atlas Texture. {@code DefaultLevelRenderer} and the HUD
      *  portrait helper share this same instance - there's no benefit to loading the
      *  ~150 KB sheet several times. Returns {@code null} if the asset didn't load. */
@@ -101,14 +134,36 @@ public final class MobSprites {
         SpriteAtlas.load();
         mobsTex = SpriteAtlas.texture();
         if (mobsTex == null) return;
+        // Player + enemy-player atlas: sprites/player.png. Row = class
+        // (0=ROGUE, 1=WARRIOR, 2=MAGE); col = variant
+        // (0=regular, 1=enemy art, 2=ghost). Real players use col 0;
+        // enemy players use the ghost col for now.
         playerRegions = new EnumMap<>(CharacterClass.class);
-        playerRegions.put(CharacterClass.WARRIOR, mobRegion(3, 0, 1, 2));
-        playerRegions.put(CharacterClass.MAGE,    mobRegion(4, 0, 1, 2));
-        playerRegions.put(CharacterClass.ROGUE,   mobRegion(0, 0, 1, 2));
+        playerRegions.put(CharacterClass.ROGUE,   playerRegion(0, 0));
+        playerRegions.put(CharacterClass.WARRIOR, playerRegion(1, 0));
+        playerRegions.put(CharacterClass.MAGE,    playerRegion(2, 0));
+        enemyPlayerRegions = new EnumMap<>(CharacterClass.class);
+        enemyPlayerRegions.put(CharacterClass.ROGUE,
+                playerRegion(0, ENEMY_PLAYER_VARIANT_COL));
+        enemyPlayerRegions.put(CharacterClass.WARRIOR,
+                playerRegion(1, ENEMY_PLAYER_VARIANT_COL));
+        enemyPlayerRegions.put(CharacterClass.MAGE,
+                playerRegion(2, ENEMY_PLAYER_VARIANT_COL));
     }
 
     private static TextureRegion mobRegion(int col, int row, int w, int h) {
         return new TextureRegion(mobsTex, col * CELL, SpriteAtlas.mobsY() + row * CELL, w * CELL, h * CELL);
+    }
+
+    /** Build a region pointing at one cell of {@code sprites/player.png}.
+     *  {@code classRow} 0..2 = ROGUE / WARRIOR / MAGE; {@code variantCol}
+     *  0..2 = regular / enemy / ghost. Cell pitch is
+     *  {@value #PLAYER_CELL_W} x {@value #PLAYER_CELL_H} px. */
+    private static TextureRegion playerRegion(int classRow, int variantCol) {
+        return new TextureRegion(mobsTex,
+                variantCol * PLAYER_CELL_W,
+                SpriteAtlas.playerY() + classRow * PLAYER_CELL_H,
+                PLAYER_CELL_W, PLAYER_CELL_H);
     }
 
     /** Release cached regions. Texture is owned by {@link SpriteAtlas}; call
@@ -117,5 +172,6 @@ public final class MobSprites {
         mobsTex = null;
         regions.clear();
         playerRegions = null;
+        enemyPlayerRegions = null;
     }
 }

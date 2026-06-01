@@ -8,8 +8,10 @@ android {
         applicationId "com.bjsp123.rl2"
         minSdk androidMinSdkVersion.toInteger()
         targetSdk androidTargetSdkVersion.toInteger()
-        versionCode 1
-        versionName "0.1"
+        // Version sourced from root gradle.properties so a single bump
+        // covers every release target. See rl2VersionName / rl2VersionCode.
+        versionCode rl2VersionCode.toInteger()
+        versionName rl2VersionName
     }
 
     compileOptions {
@@ -18,10 +20,33 @@ android {
         coreLibraryDesugaringEnabled true
     }
 
+    // Release signing config - keystore path + passwords read from env so the
+    // secrets never enter git. Set RL2_KEYSTORE_PATH / RL2_KEYSTORE_PASSWORD /
+    // RL2_KEY_ALIAS / RL2_KEY_PASSWORD before running :android:bundleRelease.
+    // When the env vars are absent (the common dev case) the release signing
+    // config is simply not added, so debug builds + ./gradlew :android:deploy
+    // still work without any setup.
+    signingConfigs {
+        if (System.getenv("RL2_KEYSTORE_PATH")) {
+            release {
+                storeFile      file(System.getenv("RL2_KEYSTORE_PATH"))
+                storePassword  System.getenv("RL2_KEYSTORE_PASSWORD")
+                keyAlias       System.getenv("RL2_KEY_ALIAS") ?: "rl2"
+                keyPassword    System.getenv("RL2_KEY_PASSWORD") ?: System.getenv("RL2_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Only attach the signing config when the env vars wired it up.
+            // Lets local debug-style release builds still run unsigned for
+            // smoke testing on a hardware device.
+            if (signingConfigs.findByName('release') != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
@@ -43,6 +68,11 @@ dependencies {
     implementation project(':rgame')
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
     implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
+    // Play Billing - dependency only; the BillingService wrapper that uses
+    // it lands in Phase B.2 once the trial-gate boundary is decided. Adding
+    // the dep up front means the AAR is in the merged APK and the wrapper
+    // can be wired without another build-file touch.
+    implementation "com.android.billingclient:billing:$playBillingVersion"
     natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
     natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
     natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86"

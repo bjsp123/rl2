@@ -13,10 +13,7 @@ public final class MobTargeting {
         int bestD = Integer.MAX_VALUE;
         int ax = around.position.tileX(), ay = around.position.tileY();
         for (Mob m : level.mobs) {
-            if (m == around
-                    || MobSystem.getAttitudeToMob(m, around) == MobSystem.Attitude.ALLY) {
-                continue;
-            }
+            if (m == around || MobSystem.isAlly(m, around)) continue;
             if (m.behavior == Mob.Behavior.INANIMATE) continue;
             int mx = m.position.tileX(), my = m.position.tileY();
             if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;

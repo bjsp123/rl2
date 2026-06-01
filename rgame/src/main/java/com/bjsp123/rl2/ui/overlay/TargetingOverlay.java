@@ -174,6 +174,20 @@ public class TargetingOverlay extends InputAdapter {
             Gdx.gl.glDisable(GL20.GL_BLEND);
         }
 
+        // Trajectory preview - straight line from caster to where the actual
+        // projectile would land. Drawn below the reticle so the reticle stays
+        // on top. Surfaces LOS feedback: a clear yellow line means the shot
+        // reaches the target; a red line clipped short with an X marker means
+        // a wall or mob intercepts before the target tile.
+        renderTrajectory();
+
+        // AoE blast disc preview - the set of tiles a bomb or AoE wand will
+        // actually affect, centred on the real impact tile (NOT the user-
+        // aimed tile, which may be past a wall). Same packTilesAround call
+        // the action uses at fire-time, with a deterministic seed so the
+        // disc doesn't shimmer between frames.
+        renderBlastDisc();
+
         // Reticle for the currently-aimed tile - four corner brackets with
         // a subtle pulse instead of a solid square. Reads as a target
         // marker without obscuring the tile contents.
@@ -210,6 +224,126 @@ public class TargetingOverlay extends InputAdapter {
         renderCycleHighlight();
     }
 
+    /** True when the active source action travels along a line that can be
+     *  intercepted by a wall or a body in the way - i.e. drawing a trajectory
+     *  preview is meaningful. WAND-TELEPORT, JUMP and CHARGE all bypass
+     *  intermediate tiles in different ways, so they get no preview. */
+    private boolean shouldShowTrajectory() {
+        if (!(sourceKey instanceof Item it)) return false;
+        if (it.useBehavior == null) return false;
+        return switch (it.useBehavior) {
+            case WAND -> it.wandEffect != Item.ItemEffect.TELEPORT;
+            case GRAPPLE, NONE -> true;
+            default -> false;
+        };
+    }
+
+    /** Where the projectile actually lands - same call fireWand / throwItem
+     *  make at fire-time. Returns the target tile unchanged for non-projectile
+     *  sources (jumps, teleports) which arrive at the aimed tile directly. */
+    private Point resolveImpact() {
+        if (player == null || player.position == null || target == null) return target;
+        if (!shouldShowTrajectory()) return target;
+        Point impact = com.bjsp123.rl2.logic.MobSystem.firstMobBlocking(
+                level, player.position, target, player);
+        return impact != null ? impact : target;
+    }
+
+    /** AoE radius of the current source action measured as a tile-count
+     *  (matches packTilesAround's "size" semantics). Zero when the action
+     *  has no AoE or no current source. */
+    private int effectiveAoeSize() {
+        if (!(sourceKey instanceof Item it) || player == null) return 0;
+        return com.bjsp123.rl2.logic.ItemStats.effectiveSize(it,
+                com.bjsp123.rl2.logic.ItemStats.effectiveLevel(it, player));
+    }
+
+    /** Draw the world-space trajectory from caster to the actual impact tile.
+     *  Impact is computed via {@link com.bjsp123.rl2.logic.MobSystem#firstMobBlocking}
+     *  - the exact routine fireWand / throwItem use - so the preview is
+     *  pixel-faithful to where the projectile will really land. */
+    private void renderTrajectory() {
+        if (!shouldShowTrajectory()) return;
+        if (player == null || player.position == null || target == null || level == null) return;
+        Point from = player.position;
+        if (from.tileX() == target.tileX() && from.tileY() == target.tileY()) return;
+        Point impact = com.bjsp123.rl2.logic.MobSystem.firstMobBlocking(level, from, target, player);
+        if (impact == null) return;
+        boolean clipped = !(impact.tileX() == target.tileX()
+                         && impact.tileY() == target.tileY());
+
+        final float T = LevelRenderer.TILE_SIZE;
+        float x0 = from.tileX()   * T + T * 0.5f;
+        float y0 = from.tileY()   * T + T * 0.5f;
+        float x1 = impact.tileX() * T + T * 0.5f;
+        float y1 = impact.tileY() * T + T * 0.5f;
+
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        shapes.begin(ShapeRenderer.ShapeType.Filled);
+        if (clipped) shapes.setColor(1f, 0.35f, 0.2f, 0.55f);
+        else         shapes.setColor(1f, 1f,    0.3f, 0.45f);
+        shapes.rectLine(x0, y0, x1, y1, 1.5f);
+        // Small + marker at the clipped impact tile so the eye lands on
+        // "stops here" rather than just "shorter line".
+        if (clipped) {
+            float s = T * 0.18f;
+            shapes.rect(x1 - s,      y1 - 0.75f, 2 * s, 1.5f);
+            shapes.rect(x1 - 0.75f,  y1 - s,     1.5f,  2 * s);
+        }
+        shapes.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    /** Render the union of tiles an AoE source (bomb / AoE wand, size >= 2)
+     *  will affect. Centred on the resolved impact tile so the preview is
+     *  honest when LOS clips the throw against a wall. Translucent orange
+     *  fill + 1-px outer border on edges that face non-disc tiles. */
+    private void renderBlastDisc() {
+        int aoeSize = effectiveAoeSize();
+        if (aoeSize < 2) return;
+        if (player == null || target == null || level == null) return;
+        Point centre = resolveImpact();
+        if (centre == null) return;
+        // Deterministic per-impact seed - same packTilesAround the action
+        // uses at fire-time, but stable from frame to frame and not pulling
+        // from the global RNG that gameplay rolls share.
+        long seed = ((long) centre.tileX() * 73856093L) ^ ((long) centre.tileY() * 19349663L);
+        java.util.List<Point> disc = com.bjsp123.rl2.logic.ItemSystem.packTilesAround(
+                level, centre, aoeSize, new java.util.Random(seed));
+        if (disc.isEmpty()) return;
+
+        // O(1) membership for the border pass via packed (x,y) keys.
+        java.util.Set<Long> inDisc = new java.util.HashSet<>(disc.size() * 2);
+        for (Point p : disc) inDisc.add(packXY(p.tileX(), p.tileY()));
+
+        final float T = LevelRenderer.TILE_SIZE;
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
+        // Translucent orange fill on each disc tile.
+        shapes.begin(ShapeRenderer.ShapeType.Filled);
+        shapes.setColor(1f, 0.45f, 0.1f, 0.18f);
+        for (Point p : disc) shapes.rect(p.tileX() * T, p.tileY() * T, T, T);
+        shapes.end();
+
+        // Outer border: one segment per edge that faces a non-disc neighbour.
+        shapes.begin(ShapeRenderer.ShapeType.Line);
+        shapes.setColor(1f, 0.55f, 0.1f, 0.85f);
+        for (Point p : disc) {
+            int x = p.tileX(), y = p.tileY();
+            float px = x * T, py = y * T;
+            if (!inDisc.contains(packXY(x,     y - 1))) shapes.line(px,     py,     px + T, py);
+            if (!inDisc.contains(packXY(x,     y + 1))) shapes.line(px,     py + T, px + T, py + T);
+            if (!inDisc.contains(packXY(x - 1, y    ))) shapes.line(px,     py,     px,     py + T);
+            if (!inDisc.contains(packXY(x + 1, y    ))) shapes.line(px + T, py,     px + T, py + T);
+        }
+        shapes.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private static long packXY(int x, int y) { return ((long) x << 32) | (y & 0xffffffffL); }
+
     /** Render the small "85% · ~6 dmg" chip(s) near the target tile, in V2
      *  virtual coordinates so the font scales with the UI not the world
      *  camera. Modes:
@@ -226,10 +360,7 @@ public class TargetingOverlay extends InputAdapter {
         if (worldCamera == null) return;
         Item sourceItem = (sourceKey instanceof Item) ? (Item) sourceKey : null;
 
-        int aoeSize = sourceItem != null
-                ? ItemStats.effectiveSize(sourceItem,
-                        ItemStats.effectiveLevel(sourceItem, player))
-                : 0;
+        int aoeSize = effectiveAoeSize();
         // Wands always land at the target tile. AOE bombs (effectSize >= 2)
         // also always land. Single-target throws (throwing knives, etc.) now
         // roll-to-hit using the same accuracy-vs-evasion math as melee, so
@@ -237,14 +368,20 @@ public class TargetingOverlay extends InputAdapter {
         boolean isWand = sourceItem != null
                 && sourceItem.useBehavior == Item.UseBehavior.WAND;
         boolean alwaysHits = isWand || aoeSize >= 2;
+        // AoE chips centre on the resolved impact (matches the disc and the
+        // actual blast); single-target chips stay on the aimed tile.
+        Point chipCentre = aoeSize >= 2 ? resolveImpact() : target;
 
         List<ChipPlacement> chips = new ArrayList<>();
         if (aoeSize >= 2) {
             // AoE: chip per affected mob in the disc.
-            for (Point p : ItemSystem.packTilesAround(level, target, aoeSize)) {
+            long discSeed = ((long) chipCentre.tileX() * 73856093L)
+                          ^ ((long) chipCentre.tileY() * 19349663L);
+            for (Point p : ItemSystem.packTilesAround(level, chipCentre, aoeSize,
+                    new java.util.Random(discSeed))) {
                 Mob m = MobQueries.mobAt(level, p);
                 if (m == null || m == player) continue;
-                if (MobSystem_isAlly(player, m)) continue;
+                if (com.bjsp123.rl2.logic.MobSystem.isAlly(player, m)) continue;
                 String chip = composeDamageOnly(player, m, sourceItem);
                 if (chip == null) continue;
                 chips.add(new ChipPlacement(p, chip));
@@ -252,7 +389,7 @@ public class TargetingOverlay extends InputAdapter {
         } else {
             Mob victim = MobQueries.mobAt(level, target);
             if (victim == null || victim == player) return;
-            if (MobSystem_isAlly(player, victim)) return;
+            if (com.bjsp123.rl2.logic.MobSystem.isAlly(player, victim)) return;
             String chip = alwaysHits
                     ? composeDamageOnly(player, victim, sourceItem)
                     : composeHitAndDamage(player, victim);
@@ -267,8 +404,7 @@ public class TargetingOverlay extends InputAdapter {
         uiCtx.applyProjection();
         BitmapFont font = uiCtx.fontRegular;
         float prevScale = font.getScaleX();
-        float chipScale = prevScale * 0.62f;
-        font.getData().setScale(chipScale);
+        font.getData().setScale(prevScale * UIVars.CHIP_SCALE);
 
         // Compute positions and per-chip rects from the world tile centres.
         float[][] geom = new float[chips.size()][];
@@ -290,20 +426,18 @@ public class TargetingOverlay extends InputAdapter {
             // baseline sits at vy + lift; the visible glyph rises ABOVE that
             // baseline by `h` (cap-height in libGDX), so the background rect
             // ranges [baseline-1, baseline+h+1] vertically.
-            float lift = 6f;
-            float pad  = 3f;
-            float baselineY = vy + lift;
-            float bgX = vx - w * 0.5f - pad;
+            float baselineY = vy + UIVars.CHIP_LIFT;
+            float bgX = vx - w * 0.5f - UIVars.CHIP_PAD;
             float bgY = baselineY - 2f;
-            float bgW = w + 2 * pad;
-            float bgH = h + 2 * pad;
+            float bgW = w + 2 * UIVars.CHIP_PAD;
+            float bgH = h + 2 * UIVars.CHIP_PAD;
             geom[i] = new float[] { vx - w * 0.5f, baselineY, bgX, bgY, bgW, bgH };
         }
 
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         uiCtx.shapes.begin(ShapeRenderer.ShapeType.Filled);
-        uiCtx.shapes.setColor(0f, 0f, 0f, 0.78f);
+        uiCtx.shapes.setColor(0f, 0f, 0f, UIVars.CHIP_BG_ALPHA);
         for (float[] g : geom) uiCtx.shapes.rect(g[2], g[3], g[4], g[5]);
         uiCtx.shapes.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
@@ -323,17 +457,7 @@ public class TargetingOverlay extends InputAdapter {
     /** One chip ready to render - tile in world space, text already formatted. */
     private record ChipPlacement(Point tile, String text) {}
 
-    /** Quick same-team check that avoids a hard import dependency on
-     *  MobSystem.getAttitudeToMob from this file. Returns true when {@code
-     *  victim} shares the player's faction (so the chip doesn't show over
-     *  pets and allies). */
-    private static boolean MobSystem_isAlly(Mob player, Mob victim) {
-        if (player == null || victim == null) return false;
-        return com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(player, victim)
-                == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY;
-    }
-
-    /** Hit% + damage chip. Used for ranged single-target attacks (wand
+/** Hit% + damage chip. Used for ranged single-target attacks (wand
      *  MISSILE, melee) where the hit-roll matters. */
     private static String composeHitAndDamage(Mob player, Mob victim) {
         int hitPct = (int) Math.round(MobStats.hitChance(player, victim) * 100.0);
@@ -351,7 +475,9 @@ public class TargetingOverlay extends InputAdapter {
 
     /** Build the "~6-3=~3 dmg" / "~6 dmg" half of a chip. When {@code source}
      *  is non-null, uses the source item's damage range; otherwise falls
-     *  back to the attacker's equipped raw range (melee / generic). */
+     *  back to the attacker's equipped raw range (melee / generic). Routes
+     *  through {@link MobStats#netDamageRange(MinMax, MinMax, MinMax)} so
+     *  the chip and the actual combat resolution use the identical formula. */
     private static String damageString(Mob player, Mob victim, Item source) {
         MinMax raw = source != null
                 ? ItemStats.effectiveDamageRange(source,
@@ -359,10 +485,10 @@ public class TargetingOverlay extends InputAdapter {
                 : MobStats.rawDamageRange(player);
         MinMax armor = MobStats.resistRange(victim);
         MinMax ap = MobStats.apDamageRange(player);
+        MinMax net = MobStats.netDamageRange(raw, armor, ap);
+        int netMid = (net.min() + net.max()) / 2;
         int rawMid = (raw.min() + raw.max()) / 2;
         int armorMid = (armor.min() + armor.max()) / 2;
-        int apMid = (ap.min() + ap.max()) / 2;
-        int netMid = Math.max(0, rawMid - armorMid) + apMid;
         if (armorMid > 0 && rawMid > 0) {
             return "~" + rawMid + "-" + armorMid + "=~" + netMid + " dmg";
         }
@@ -430,10 +556,9 @@ public class TargetingOverlay extends InputAdapter {
 
     /** Frames remaining on the "you just cycled" cue: the reticle pulses
      *  brighter and the new target's name floats above the tile. Bumped by
-     *  {@link #cycleNextHostile}. */
+     *  {@link #cycleNextHostile}; duration sourced from {@link UIVars#CYCLE_HIGHLIGHT_FRAMES}. */
     private int cycleHighlightFrames;
     private String cycleHighlightName;
-    private static final int CYCLE_HIGHLIGHT_DURATION = 24;
 
     /** Cycle through visible hostiles so the user can re-aim with a single
      *  keystroke. Iterates in Chebyshev-distance order and picks the entry
@@ -442,12 +567,10 @@ public class TargetingOverlay extends InputAdapter {
     private void cycleNextHostile() {
         if (player == null || level == null) return;
         java.util.List<Mob> sorted = new ArrayList<>();
-        int ax = player.position.tileX(), ay = player.position.tileY();
         for (Mob m : level.mobs) {
             if (m == player) continue;
             if (m.position == null) continue;
-            if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(m, player)
-                    == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) continue;
+            if (com.bjsp123.rl2.logic.MobSystem.isAlly(m, player)) continue;
             if (m.behavior == Mob.Behavior.INANIMATE) continue;
             int mx = m.position.tileX(), my = m.position.tileY();
             if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
@@ -455,13 +578,10 @@ public class TargetingOverlay extends InputAdapter {
             sorted.add(m);
         }
         if (sorted.isEmpty()) return;
-        sorted.sort((a, b) -> {
-            int da = Math.max(Math.abs(a.position.tileX() - ax),
-                              Math.abs(a.position.tileY() - ay));
-            int db = Math.max(Math.abs(b.position.tileX() - ax),
-                              Math.abs(b.position.tileY() - ay));
-            return Integer.compare(da, db);
-        });
+        final Point origin = player.position;
+        sorted.sort((a, b) -> Integer.compare(
+                com.bjsp123.rl2.logic.LevelFactoryUtils.chebyshev(a.position, origin),
+                com.bjsp123.rl2.logic.LevelFactoryUtils.chebyshev(b.position, origin)));
         // Find the current target's index in the sorted list (if it points at
         // a hostile) and advance to the next one with wrap-around.
         int currentIdx = -1;
@@ -477,7 +597,7 @@ public class TargetingOverlay extends InputAdapter {
         }
         Mob next = sorted.get((currentIdx + 1) % sorted.size());
         target = next.position;
-        cycleHighlightFrames = CYCLE_HIGHLIGHT_DURATION;
+        cycleHighlightFrames = UIVars.CYCLE_HIGHLIGHT_FRAMES;
         cycleHighlightName   = next.name != null && !next.name.isEmpty()
                 ? next.name
                 : (next.mobType != null ? next.mobType.toLowerCase() : "target");
@@ -500,29 +620,27 @@ public class TargetingOverlay extends InputAdapter {
         float vy = uiCtx.unprojectY(sx, sy);
         // Lift the name above where the damage chip would sit so they don't
         // overlap on the same target.
-        float lift = 22f;
         uiCtx.applyProjection();
         com.badlogic.gdx.graphics.g2d.BitmapFont font = uiCtx.fontRegular;
         float prev = font.getScaleX();
-        font.getData().setScale(prev * 0.72f);
+        font.getData().setScale(prev * UIVars.CYCLE_HIGHLIGHT_SCALE);
         uiCtx.layout.setText(font, cycleHighlightName);
         float w = uiCtx.layout.width;
         float h = uiCtx.layout.height;
-        float pad = 3f;
-        float bgX = vx - w * 0.5f - pad;
-        float bgY = vy + lift - 2f;
-        float bgW = w + 2 * pad;
-        float bgH = h + 2 * pad;
+        float bgX = vx - w * 0.5f - UIVars.CHIP_PAD;
+        float bgY = vy + UIVars.CYCLE_HIGHLIGHT_LIFT - 2f;
+        float bgW = w + 2 * UIVars.CHIP_PAD;
+        float bgH = h + 2 * UIVars.CHIP_PAD;
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         uiCtx.shapes.begin(ShapeRenderer.ShapeType.Filled);
-        uiCtx.shapes.setColor(0f, 0f, 0f, 0.78f);
+        uiCtx.shapes.setColor(0f, 0f, 0f, UIVars.CHIP_BG_ALPHA);
         uiCtx.shapes.rect(bgX, bgY, bgW, bgH);
         uiCtx.shapes.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
         uiCtx.batch.begin();
         font.setColor(UIVars.ACCENT);
-        font.draw(uiCtx.batch, cycleHighlightName, vx - w * 0.5f, vy + lift + h);
+        font.draw(uiCtx.batch, cycleHighlightName, vx - w * 0.5f, vy + UIVars.CYCLE_HIGHLIGHT_LIFT + h);
         font.setColor(Color.WHITE);
         uiCtx.batch.end();
         font.getData().setScale(prev);

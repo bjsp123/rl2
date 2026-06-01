@@ -33,10 +33,13 @@ public final class CombatEval {
         return expectedHit(attacker, target) * (100.0 / cost);
     }
 
-    /** Heuristic accuracy/evasion model - matches the curve MobSystem uses. */
+    /** Accuracy/evasion model. Mirrors {@link com.bjsp123.rl2.logic.MobStats#hitChance(Mob, Mob)}
+     *  exactly so the AI plans against the same probability the game rolls.
+     *  Kept on int components (rather than delegating to the mob-arg form)
+     *  because callers already have StatBlocks unpacked. */
     public static double hitChance(int accuracy, int evasion) {
-        double diff = accuracy - evasion;
-        return Math.max(0.05, Math.min(0.95, 0.5 + 0.05 * diff));
+        int denom = accuracy + evasion;
+        return denom <= 0 ? 0.0 : (double) accuracy / denom;
     }
 
     /**
@@ -354,37 +357,19 @@ public final class CombatEval {
                 com.bjsp123.rl2.logic.MobSystem.firstMobBlocking(level, thrower.position, dst, thrower);
         if (impact == null) return false;
 
-        com.bjsp123.rl2.model.Item.InventoryCategory cat = item.inventoryCategory;
-        java.util.List<com.bjsp123.rl2.model.Point> tiles;
-        if (cat == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
-            int effLvl = com.bjsp123.rl2.logic.ItemStats.effectiveLevel(item, thrower);
-            int size = Math.max(1,
-                    com.bjsp123.rl2.logic.ItemStats.effectiveSize(item, effLvl));
-            tiles = com.bjsp123.rl2.logic.ItemSystem.packTilesAround(level, impact, size);
-        } else if (cat == com.bjsp123.rl2.model.Item.InventoryCategory.POTION) {
-            // applyThrowImpact's potion branch splashes onto every adjacent
-            // tile - chebyshev <= 1 around the impact.
-            tiles = new java.util.ArrayList<>(9);
-            int ix = impact.tileX(), iy = impact.tileY();
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    int x = ix + dx, y = iy + dy;
-                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    tiles.add(new com.bjsp123.rl2.model.Point(x, y));
-                }
-            }
-        } else {
-            // Unrecognised throw category - don't reject, let the existing
-            // utility scoring decide.
-            return true;
-        }
+        // Canonical disc lookup - matches whichever branch applyThrowImpact
+        // would take for this category. Empty list means "predictor doesn't
+        // know what shape this throw makes"; treat like the old default
+        // (accept and let the rest of the utility scoring decide).
+        java.util.List<com.bjsp123.rl2.model.Point> tiles =
+                com.bjsp123.rl2.logic.ItemSystem.tilesAffectedByThrow(level, impact, item, thrower);
+        if (tiles.isEmpty()) return true;
 
         com.bjsp123.rl2.model.Item.ItemEffect te = item.throwEffect;
         for (com.bjsp123.rl2.model.Point p : tiles) {
             Mob m = com.bjsp123.rl2.logic.MobQueries.mobAt(level, p);
             if (m == null || m == thrower || m.hp <= 0) continue;
-            if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(thrower, m)
-                    == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) continue;
+            if (com.bjsp123.rl2.logic.MobSystem.isAlly(thrower, m)) continue;
             if (throwAffects(m, item, te)) return true;
         }
         return false;
@@ -445,8 +430,7 @@ public final class CombatEval {
         if (impact == null) return false;
         Mob m = com.bjsp123.rl2.logic.MobQueries.mobAt(level, impact);
         if (m == null || m == caster || m.hp <= 0) return false;
-        if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(caster, m)
-                == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) return false;
+        if (com.bjsp123.rl2.logic.MobSystem.isAlly(caster, m)) return false;
 
         com.bjsp123.rl2.model.Item.ItemEffect we = wand.wandEffect;
         if (we == null) return wand.damage > 0;
@@ -486,8 +470,7 @@ public final class CombatEval {
         if (s == null || s.mob == null || s.level == null
                 || target == null || target.position == null) return false;
         if (target.hp <= 0) return false;
-        if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(s.mob, target)
-                == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) return false;
+        if (com.bjsp123.rl2.logic.MobSystem.isAlly(s.mob, target)) return false;
         int d = com.bjsp123.rl2.ai.WorldState.chebyshev(s.mob.position, target.position);
         if (d <= 1) return false;          // already adjacent - use melee instead
         if (d > Math.max(1, dashRange)) return false;
@@ -503,8 +486,7 @@ public final class CombatEval {
         if (s == null || s.mob == null || s.level == null
                 || grapple == null || target == null || target.position == null) return false;
         if (target.hp <= 0) return false;
-        if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(s.mob, target)
-                == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) return false;
+        if (com.bjsp123.rl2.logic.MobSystem.isAlly(s.mob, target)) return false;
         int d = com.bjsp123.rl2.ai.WorldState.chebyshev(s.mob.position, target.position);
         if (d <= 1) return false;
         // Grapple silently fades if target.size > tool effective power.

@@ -45,11 +45,17 @@ public final class MobStats {
     /** Min and max damage attacker can land on target after resistance, floored at 0,
      *  plus the AP bonus. */
     public static MinMax netDamageRange(Mob attacker, Mob target) {
-        MinMax dmg = rawDamageRange(attacker);
-        MinMax res = resistRange(target);
-        MinMax ap  = apDamageRange(attacker);
-        return new MinMax(Math.max(0, dmg.min() - res.max()) + ap.min(),
-                          Math.max(0, dmg.max() - res.min()) + ap.max());
+        return netDamageRange(rawDamageRange(attacker), resistRange(target),
+                apDamageRange(attacker));
+    }
+
+    /** Component form of {@link #netDamageRange(Mob, Mob)} - takes the raw,
+     *  resistance, and AP ranges explicitly so chip / preview code can mix in
+     *  an item-derived raw range (e.g. a bomb's {@code effectiveDamageRange})
+     *  while still resolving through the canonical formula. */
+    public static MinMax netDamageRange(MinMax raw, MinMax armor, MinMax ap) {
+        return new MinMax(Math.max(0, raw.min() - armor.max()) + ap.min(),
+                          Math.max(0, raw.max() - armor.min()) + ap.max());
     }
 
     /** Roll a uniform integer in {@code [range.min, range.max]}. */

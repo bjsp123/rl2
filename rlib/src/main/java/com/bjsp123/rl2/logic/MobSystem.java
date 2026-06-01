@@ -567,6 +567,13 @@ public class MobSystem {
      * shared-faction-tag relationship, with lone-wolf species carrying a null
      * faction.
      */
+    /** Shorthand for {@code getAttitudeToMob(a, b) == Attitude.ALLY}. Use
+     *  this for the very common "is this friendly fire?" check so call sites
+     *  don't re-import the Attitude enum or hand-write the same comparison. */
+    public static boolean isAlly(Mob a, Mob b) {
+        return getAttitudeToMob(a, b) == Attitude.ALLY;
+    }
+
     public static Attitude getAttitudeToMob(Mob a, Mob b) {
         if (a == null || b == null || a == b) return Attitude.NOTHING;
         // Owner / owned-pet shortcuts. A tame dog should never be treated as
@@ -2154,11 +2161,11 @@ public class MobSystem {
             if (m == caster || m.hp <= 0 || m.position == null) continue;
             switch (ab.kind) {
                 case BUFF -> {
-                    if (getAttitudeToMob(caster, m) != Attitude.ALLY) continue;
+                    if (!isAlly(caster, m)) continue;
                     if (BuffSystem.hasBuff(m, ab.applies)) continue;
                 }
                 case HEAL -> {
-                    if (getAttitudeToMob(caster, m) != Attitude.ALLY) continue;
+                    if (!isAlly(caster, m)) continue;
                     if (m.hp >= m.effectiveStats().maxHp) continue;
                 }
                 case TELEPORT -> {
@@ -2473,7 +2480,7 @@ public class MobSystem {
             int dx = Math.abs(m.position.tileX() - tx);
             int dy = Math.abs(m.position.tileY() - ty);
             if (Math.max(dx, dy) > approxRadius) continue;
-            if (getAttitudeToMob(caster, m) == Attitude.ALLY) return true;
+            if (isAlly(caster, m)) return true;
         }
         return false;
     }
@@ -2501,7 +2508,7 @@ public class MobSystem {
             int dx = m.position.tileX() - cx;
             int dy = m.position.tileY() - cy;
             if (dx * dx + dy * dy > r2) continue;
-            if (getAttitudeToMob(thrower, m) == Attitude.ALLY) return true;
+            if (isAlly(thrower, m)) return true;
         }
         return false;
     }
@@ -3563,7 +3570,7 @@ public class MobSystem {
 
         if (te == ItemEffect.DAMAGE && it.damage > 0) {
             Mob target = MobQueries.mobAt(level, dst);
-            if (target != null && getAttitudeToMob(target, thrower) != Attitude.ALLY) {
+            if (target != null && !isAlly(target, thrower)) {
                 // Single-target throws (throwing knives, javelins) roll-to-hit using
                 // the same accuracy-vs-evasion math as melee. AOE bombs and wands
                 // never roll - they always land at the target tile. A miss emits a

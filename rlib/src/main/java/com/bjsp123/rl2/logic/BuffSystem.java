@@ -524,6 +524,76 @@ public final class BuffSystem {
         return TextCatalog.getOrDefault("buff." + type + ".description", "");
     }
 
+    /**
+     * Short, level-resolved descriptor of what the buff *does right now*.
+     * Returned string fits one line ("moves 49% faster", "physical damage
+     * /4", "+5 HP/turn"). Empty string for buffs whose effect is the same
+     * regardless of level (FROZEN, INVISIBLE, ON_FIRE) — the description
+     * line already covers those. Used by {@code V2BuffInfo} to surface the
+     * current numeric effect alongside the buff name.
+     */
+    public static String describeEffectAtLevel(BuffType type, int level) {
+        if (type == null || level <= 0) return "";
+        switch (type) {
+            case HASTED: {
+                // moveCost *= 0.8^level. Player understands "% faster".
+                double cost = Math.pow(0.8, level);
+                int faster = (int) Math.round((1.0 - cost) * 100.0);
+                return "moves " + faster + "% faster";
+            }
+            case CHILLED: {
+                // Adds (80 + 15*L)% to move/attack/ranged cost (additive
+                // penalty, not multiplier).
+                return "+" + (80 + 15 * level) + "% move / attack cost";
+            }
+            case PROTECTION:
+                return "physical damage divided by " + (1 << Math.min(level, 30));
+            case ANTI_MAGIC:
+                return "magic / fire damage divided by " + (1 << Math.min(level, 30));
+            case REGENERATION: {
+                int heal = 2 + (3 * level) / 2;
+                return "+" + heal + " HP per turn";
+            }
+            case HOPE:
+                return "+" + level + " accuracy, +" + level + " evasion; fear immunity";
+            case KILLER:
+                // Per stack: 0.9 multiplier to move/attack cost. Level == stacks.
+                double killerCost = Math.pow(0.9, level);
+                int killerFaster = (int) Math.round((1.0 - killerCost) * 100.0);
+                return "moves " + killerFaster + "% faster (" + level + " stacks)";
+            case BLEEDING:
+                return "loses HP each turn (rate tapers as duration drops)";
+            case POISONED:
+                return "loses HP each turn";
+            case ON_FIRE:
+                return "loses HP each turn from fire";
+            case FROZEN:
+                return "cannot act";
+            case INVISIBLE:
+                return "can't be targeted by ranged attacks";
+            case SHIELDED:
+                return "negates the next damaging hit";
+            case WET:
+                return "fire damage halved; chill spreads on freeze";
+            case OILY:
+                return "ignites on contact with fire";
+            case FRIGHTENED:
+                return "flees from the source of fear";
+            case LEVITATING:
+                return "ignores surface effects; can cross chasms";
+            case PHASE:
+                return "can move through walls until next hit";
+            case GHOSTLY:
+                return "intangible to melee until next hit";
+            case TELEPORT_COOLDOWN:
+            case RANGED_COOLDOWN:
+            case HIDING:
+                return "recharging";
+            default:
+                return "";
+        }
+    }
+
     /** Pretty multi-line summary of every buff on a mob, one line per buff. Used by
      *  the HUD's portrait sidebar and the look-mode panel. Empty string when the mob
      *  has no buffs. */

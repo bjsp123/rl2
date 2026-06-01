@@ -53,6 +53,15 @@ public final class V2BuffInfo extends BasePopup {
         beginModalShapes();
         drawScrim();
         drawWindow();
+        // Extra fully-opaque fill under the body region so the description /
+        // effect / turns text stays legible even when the world backdrop is
+        // busy under the window. Window chrome alone uses PANEL_FILL_ALPHA
+        // (~0.85) which can let texture bleed through on bright tiles.
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
+        s.setColor(UIVars.WIN_BG.r, UIVars.WIN_BG.g, UIVars.WIN_BG.b, 1f);
+        float inset = UIVars.WIN_BORDER + 4f;
+        s.rect(window.x + inset, window.y + inset,
+                window.w - 2 * inset, window.h - 2 * inset);
         endModalShapes();
     }
 
@@ -78,6 +87,18 @@ public final class V2BuffInfo extends BasePopup {
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 TextCatalog.format("buff.info.level",
                         TextCatalog.vars("level", buff.level)), window.cx(), top);
+
+        // Level-resolved "Effect: ..." line - shows what the buff is doing
+        // numerically at the current level (e.g. HASTED 3 -> "moves 49%
+        // faster"). Empty for buffs whose effect is purely qualitative.
+        String effect = BuffSystem.describeEffectAtLevel(buff.type, buff.level);
+        if (effect != null && !effect.isEmpty()) {
+            top -= ctx.lineH();
+            TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
+                    TextCatalog.format("buff.info.effect",
+                            TextCatalog.vars("effect", effect)),
+                    window.cx(), top);
+        }
 
         top -= ctx.lineH() * 1.5f;
         for (String line : descLines) {

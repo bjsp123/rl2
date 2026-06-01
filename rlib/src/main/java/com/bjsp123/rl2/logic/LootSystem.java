@@ -53,7 +53,9 @@ public final class LootSystem {
         double powerLevel = itemLevelToPower(Math.max(1, mob.characterLevel - 2));
 
         for (CsvTable.DropSpec spec : def.drops) {
-            if (spec.keyword == null || "NONE".equalsIgnoreCase(spec.keyword)) continue;
+            if (spec.keyword == null
+                    || "NONE".equalsIgnoreCase(spec.keyword)
+                    || "NOTHING_AT_ALL".equalsIgnoreCase(spec.keyword)) continue;
 
             // Integer part = guaranteed count; fractional part = probability of +1.
             // LOOT_DROP_FREQUENCY_COEFF scales the whole quantity so a coefficient
@@ -68,6 +70,21 @@ public final class LootSystem {
                 if (it != null) mob.inventory.bag.add(it);
             }
         }
+    }
+
+    /** True when the mob definition declares {@code dropQuality=NOTHING_AT_ALL}
+     *  (case-insensitive). Used by {@link #dropLootOnDeath} to suppress the
+     *  inventory dump on kill - the mob's gear vanishes with it. Distinct
+     *  from a plain {@code NONE} entry, which only skips the rolled drop
+     *  table but still drops what the mob was carrying. */
+    private static boolean dropsNothingAtAll(MobDefinition def) {
+        if (def == null || def.drops == null) return false;
+        for (CsvTable.DropSpec spec : def.drops) {
+            if (spec.keyword != null && "NOTHING_AT_ALL".equalsIgnoreCase(spec.keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Build one item from a drop spec. {@code STUFF} maps to {@link
@@ -101,12 +118,14 @@ public final class LootSystem {
         // The player's death ends the run; their corpse is never inspected so
         // the inventory dump would be wasted work. Skip.
         if (mob.behavior == Mob.Behavior.PLAYER) return;
-        // Mirror-match enemy players (beacon-room encounter): gear vanishes
-        // with them. The mirror is the only non-PLAYER-behaviour mob in the
-        // game whose {@code characterClass} is set, so the check uniquely
-        // identifies it. Without this gate the encounter would hand the real
-        // player a free arena kit on every beacon clear.
-        if (mob.characterClass != null) return;
+        // Data-driven "drop absolutely nothing" gate: a mobs.csv row with
+        // dropQuality=NOTHING_AT_ALL suppresses both the rolled drop table
+        // (rollAndStashLoot already skips) AND the inventory dump that would
+        // otherwise hand the real player a free kit. Used by ENEMY_PLAYER_*
+        // rows so beacon encounter mobs read as a deadly opponent without
+        // turning into a piñata on kill.
+        MobDefinition def = Registries.mob(mob.mobType);
+        if (def != null && dropsNothingAtAll(def)) return;
 
         Point pos = mob.position;
         List<Item> drops = new ArrayList<>();

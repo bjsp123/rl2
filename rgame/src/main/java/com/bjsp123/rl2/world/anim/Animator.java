@@ -504,6 +504,12 @@ public final class Animator {
         if (target == null || target.position == null) return;
         if (!MobSystem.isVisibleToPlayer(level, target)) return;
         stage.add(Effect.surpriseIcon(target.position));
+        // First-encounter tip: explain the 1.5x damage mechanic. Fires on any
+        // visible surprise (player surprising a mob OR a mob surprising the
+        // player); once shown, the tip stays dismissed for the rest of the run.
+        com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                "concept:surprise", "concept.surprise.tip",
+                "concept.surprise.name", null);
     }
 
     void onMobHitFlinched(Level level, GameEvent.MobHitFlinched m) {
@@ -863,7 +869,10 @@ public final class Animator {
         if (target.behavior == Mob.Behavior.PLAYER && m.amount() > 0
                 && onPlayerLowHpHit != null) {
             double maxHp = target.effectiveStats().maxHp;
-            if (maxHp > 0 && target.hp <= maxHp * 0.20) onPlayerLowHpHit.run();
+            if (maxHp > 0
+                    && target.hp <= maxHp * com.bjsp123.rl2.logic.GameBalance.LOW_HP_HIT_FLASH_THRESHOLD) {
+                onPlayerLowHpHit.run();
+            }
         }
         switch (m.message()) {
             case HIT   -> {
@@ -1242,9 +1251,17 @@ public final class Animator {
         // suffer a -50 accuracy penalty (point-blank); normal range uses the
         // straight accuracy-vs-evasion roll, same denominator as melee.
         if (caster != null && caster.position != null) {
-            int cdx = Math.abs(caster.position.tileX() - target.tileX());
-            int cdy = Math.abs(caster.position.tileY() - target.tileY());
-            int accuracyMod = (Math.max(cdx, cdy) == 1) ? -50 : 0;
+            int cheb = com.bjsp123.rl2.logic.LevelFactoryUtils.chebyshev(
+                    caster.position, target);
+            int accuracyMod = (cheb == 1) ? -50 : 0;
+            // First-encounter tip: only when the point-blank penalty actually
+            // kicks in (cheb == 1). Player learns about the penalty the first
+            // time it bites them (or they bite an enemy with it).
+            if (cheb == 1) {
+                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                        "concept:pointBlank", "concept.pointBlank.tip",
+                        "concept.pointBlank.name", null);
+            }
             if (!MobSystem.rollRangedHit(caster, victim, accuracyMod)) {
                 String cn = caster.name != null ? caster.name
                         : TextCatalog.get("eventlog.fallback.adventurer");

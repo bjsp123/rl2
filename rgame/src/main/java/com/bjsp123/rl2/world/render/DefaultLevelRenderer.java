@@ -91,18 +91,19 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
     // Per-theme shadow tints - cached so shadow passes don't allocate a new Color per cell.
     // Crystal: pure black; Concrete: warm sodium-amber bias; Straightforward: cool cyan bias.
-    private static final Color SHADOW_BLACK   = new Color(0f, 0f, 0f, 0.65f);
+    // Alpha sourced from UIVars.SHADOW_ALPHA so tweaks land in one place.
+    private static final Color SHADOW_BLACK   = new Color(0f, 0f, 0f, com.bjsp123.rl2.ui.v2.UIVars.SHADOW_ALPHA);
     /** Black with a faint warm brown bias - concrete tunnels and brutalist interiors
      *  sit in dim sodium-amber light, so shadows lean warm rather than neutral.
      *  Used for the CONCRETE theme. */
-    private static final Color SHADOW_CONCRETE = new Color(0.06f, 0.04f, 0.02f, 0.65f);
+    private static final Color SHADOW_CONCRETE = new Color(0.06f, 0.04f, 0.02f, com.bjsp123.rl2.ui.v2.UIVars.SHADOW_ALPHA);
     /** Black with a hint of cyan - paired with the SHINY theme so its
      *  cool-lit terrain reads with shadows that bias toward the same hue rather
      *  than neutral grey. */
-    private static final Color SHADOW_SHINY  = new Color(0f, 0.05f, 0.08f, 0.65f);
+    private static final Color SHADOW_SHINY  = new Color(0f, 0.05f, 0.08f, com.bjsp123.rl2.ui.v2.UIVars.SHADOW_ALPHA);
     /** Very dark purple - nearly black with a violet cast. Paired with the
      *  GOTHIC theme so its purple-stone terrain reads with deep violet shadows. */
-    private static final Color SHADOW_GOTHIC = new Color(0.06f, 0.02f, 0.08f, 0.65f);
+    private static final Color SHADOW_GOTHIC = new Color(0.06f, 0.02f, 0.08f, com.bjsp123.rl2.ui.v2.UIVars.SHADOW_ALPHA);
 
     /**
      * Tint for every shadow pass (floor-edge, wall-base, rear-corner) on this level. One
@@ -184,6 +185,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
     /** West-facing + east-facing (mirrored) pairs for the three small critters + the player. */
     /** Player class poses, keyed by {@link CharacterClass}. */
     private Sprite[]        warriorFacing, mageFacing, rogueFacing;
+    /** Enemy-player facings: ghost-variant column of {@code sprites/player.png}.
+     *  Per-class so we can pick the matching silhouette for an ENEMY_PLAYER_*
+     *  mob without re-routing through the regular player atlas. */
+    private Sprite[]        enemyWarriorFacing, enemyMageFacing, enemyRogueFacing;
     /** Per-species facing-pair sprites, keyed by mob-type string. Populated in
      *  {@link #create()} from every row in {@link com.bjsp123.rl2.logic.MobRegistry}.
      *  Replaces the legacy 25 hand-named per-species fields. */
@@ -322,6 +327,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
         warriorFacing          = mobsFacingPair(CharacterClass.WARRIOR);
         mageFacing             = mobsFacingPair(CharacterClass.MAGE);
         rogueFacing            = mobsFacingPair(CharacterClass.ROGUE);
+        enemyWarriorFacing     = enemyPlayerFacingPair(CharacterClass.WARRIOR);
+        enemyMageFacing        = enemyPlayerFacingPair(CharacterClass.MAGE);
+        enemyRogueFacing       = enemyPlayerFacingPair(CharacterClass.ROGUE);
         // Every NPC species - driven entirely by the registry. Flying species
         // (bat, ghost, ...) get the floating y-lift; everyone else stands flat
         // on their tile. The registry is populated from {@code mobs.csv} at
@@ -380,6 +388,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
         registerOutlineSprites(warriorFacing);
         registerOutlineSprites(mageFacing);
         registerOutlineSprites(rogueFacing);
+        registerOutlineSprites(enemyWarriorFacing);
+        registerOutlineSprites(enemyMageFacing);
+        registerOutlineSprites(enemyRogueFacing);
         for (Sprite[] pair : speciesFacing.values()) registerOutlineSprites(pair);
 
         for (String type : com.bjsp123.rl2.logic.Registries.itemTypes()) {
@@ -446,6 +457,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
     private Sprite[] mobsFacingPair(CharacterClass cls) {
         return facingPair(spriteFromRegion(MobSprites.regionFor(cls), 0));
+    }
+
+    /** Per-class enemy-player facings (ghost-variant column of player.png).
+     *  Mirrors {@link #mobsFacingPair(CharacterClass)} so the renderer's
+     *  flip + outline registration paths can treat enemy players the same
+     *  way they treat regular players. */
+    private Sprite[] enemyPlayerFacingPair(CharacterClass cls) {
+        return facingPair(spriteFromRegion(MobSprites.enemyPlayerRegion(cls), 0));
     }
 
     private Sprite[] mobsFloatingFacingPair(String type) {
@@ -2424,6 +2443,15 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
     private Sprite playerSprite(Mob mob, int f) {
         CharacterClass cls = mob.characterClass;
+        // Enemy-player mobs share the player.png atlas but use the ghost
+        // variant column, so swap to the per-class enemy facings here.
+        boolean enemy = mob.mobType != null
+                && mob.mobType.startsWith("ENEMY_PLAYER_");
+        if (enemy) {
+            if (cls == CharacterClass.ROGUE) return enemyRogueFacing[f];
+            if (cls == CharacterClass.MAGE)  return enemyMageFacing[f];
+            return enemyWarriorFacing[f];
+        }
         if (cls == CharacterClass.ROGUE) return rogueFacing[f];
         if (cls == CharacterClass.MAGE)  return mageFacing[f];
         return warriorFacing[f];

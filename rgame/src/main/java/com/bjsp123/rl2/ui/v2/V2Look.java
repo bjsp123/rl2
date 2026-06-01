@@ -136,7 +136,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             return;
         }
 
-        sections.add(new Section(floorSummary(), INFO_TERRAIN));
+        Section terrain = new Section(floorSummary(), INFO_TERRAIN);
+        String moveHint = terrainMoveCostHint();
+        if (!moveHint.isEmpty()) terrain.details.add(moveHint);
+        sections.add(terrain);
 
         if (lookedItem != null) {
             Section item = new Section(ItemNames.displayName(lookedItem, null), INFO_ITEM);
@@ -172,8 +175,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 String type = lookedMob.rangedDamageType == Mob.RangedDamageType.PHYSICAL
                         ? TextCatalog.get("ui.look.damageType.physical")
                         : TextCatalog.get("ui.look.damageType.magic");
+                // One-line ranged summary - damage range + distance the shot
+                // can travel. Surfaces info the model already carries
+                // (rangedDistance) so players can plan around being out-
+                // ranged by crossbowmen / imps.
                 mob.details.add(TextCatalog.format("ui.look.mobRanged",
-                        TextCatalog.vars("type", type, "damage", range(s.rangedDamage))));
+                        TextCatalog.vars("type", type,
+                                "damage", range(s.rangedDamage),
+                                "range", s.rangedDistance)));
             }
             String state = compactMobState(lookedMob, player);
             if (!state.isEmpty()) mob.details.add(state);
@@ -361,6 +370,21 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (i < sections.size() - 1) y -= SECTION_GAP;
         }
         ctx.batch.end();
+    }
+
+    /** Surface a tile's move-cost multiplier when it differs from the
+     *  default (1x). Today the only mechanism is the OIL surface (doubles
+     *  base move cost - see {@code MobSystem.moveCostOnto}); returns empty
+     *  string for default tiles. Pulled into the V2Look terrain section so
+     *  players can predict slowdown without stepping into the puddle. */
+    private String terrainMoveCostHint() {
+        if (!inBounds() || level.surface == null) return "";
+        com.bjsp123.rl2.model.Level.Surface s = level.surface[cx][cy];
+        if (s == com.bjsp123.rl2.model.Level.Surface.OIL) {
+            return TextCatalog.format("ui.look.terrainMoveCost",
+                    TextCatalog.vars("mult", "2"));
+        }
+        return "";
     }
 
     private String floorSummary() {

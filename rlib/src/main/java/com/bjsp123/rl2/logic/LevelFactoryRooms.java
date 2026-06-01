@@ -114,7 +114,12 @@ public final class LevelFactoryRooms {
         int spawnLevel = 1 + level.depth;
 
         Mob.CharacterClass[] classes = Mob.CharacterClass.values();
-        String mirrorType = "PLAYER_" + classes[rng.nextInt(classes.length)].name();
+        // Beacon encounter boss: use the data-driven ENEMY_PLAYER_* mob row
+        // (mobs.csv) rather than re-using the actual PLAYER_* kit. The
+        // ENEMY_PLAYER row carries the right faction, drop suppression
+        // (NOTHING_AT_ALL), and a LEVEL_APPROPRIATE inventory keyword that
+        // generates depth-appropriate gear at spawn time.
+        String mirrorType = "ENEMY_PLAYER_" + classes[rng.nextInt(classes.length)].name();
 
         // Gather candidate floor tiles in expanding rings around the beacon.
         java.util.List<Point> spots = new java.util.ArrayList<>();
@@ -142,15 +147,13 @@ public final class LevelFactoryRooms {
         if (spots.isEmpty()) return;
 
         int idx = 0;
-        Mob mirror = MobFactory.spawnMirror(mirrorType, spots.get(idx++));
-        if (mirror != null) {
-            // Mirror is raised to characterLevel = dungeon depth (not 1 + depth
-            // like the wraith pack) - it's the boss of the encounter and the
-            // user's spec ties its level directly to depth.
-            MobFactory.equipMirrorForDepth(mirror, frac, level.theme,
-                    level.depth, rng);
-            level.mobs.add(mirror);
-        }
+        // Boss spawn flows through the standard spawnMobAt path so the
+        // LEVEL_APPROPRIATE hook in MobDefinition fires - the mob walks out
+        // with a depth-tier weapon + armor + amulet + damage wand + damage
+        // bombs plus its class jade. Spawn level is the dungeon depth (one
+        // higher than the wraith pack at 1+depth) so it reads as the boss.
+        LevelFactoryPopulate.spawnMobAt(level, mirrorType, spots.get(idx++),
+                level.depth, rng, /*withRetainers=*/ false);
         for (int i = 0; i < wraithCount && idx < spots.size(); i++) {
             Mob w = MobFactory.spawn(wraithType, spots.get(idx++));
             if (w == null) continue;

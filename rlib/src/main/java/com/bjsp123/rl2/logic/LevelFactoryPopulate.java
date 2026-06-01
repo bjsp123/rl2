@@ -468,6 +468,17 @@ public final class LevelFactoryPopulate {
         if (m == null) return null;
         MobProgression.setSpawnLevel(m, spawnLevel);
         brandStartingInventory(m, rng);
+        // CSV-driven "give this mob a level-appropriate kit": ENEMY_PLAYER_*
+        // rows declare LEVEL_APPROPRIATE in their startingInventory, which
+        // sets the def flag. We deferred the actual gear roll to here
+        // because MobDefinition.apply() doesn't know the level depth/theme;
+        // spawnMobAt does. Runs AFTER brandStartingInventory so the kit's
+        // items aren't double-branded.
+        MobDefinition spawnedDef = Registries.mob(type);
+        if (spawnedDef != null && spawnedDef.wantsLevelAppropriateKit) {
+            MobFactory.equipLevelAppropriateKit(m, depthFraction(level),
+                    level.theme, spawnLevel, rng);
+        }
         // Pre-roll the mob's drops into its bag at spawn time. Death-time
         // {@link LootSystem#dropLootOnDeath} just dumps the bag - making the
         // dungeon's loot deterministic for a given world seed.

@@ -156,6 +156,15 @@ public final class MobDefinition {
      *  mobs and for player classes with no preset binds. */
     public String actionBar;
 
+    /** Set true when {@code startingInventory} contained the keyword
+     *  {@code LEVEL_APPROPRIATE}. The level spawner then rolls a standard
+     *  weapon + armor + amulet + damage wand + damage bombs kit via
+     *  {@link MobFactory#equipLevelAppropriateKit} using the current
+     *  level's depth + theme. Keyword is stripped from the inventory list
+     *  during parsing, so any literal item types listed alongside still
+     *  resolve normally. */
+    public boolean wantsLevelAppropriateKit;
+
     // -- Sprite columns (read by rgame-side MobSprites loader) ---------------
     public int     spriteCol;
     public int     spriteRow;
@@ -306,6 +315,14 @@ public final class MobDefinition {
         d.abilities = parseAbilities(CsvTable.str(row, "abilities", null));
         d.initialBuffs = parseInitialBuffs(CsvTable.str(row, "initialBuffs", null));
         d.startingInventory = parseStartingInventory(CsvTable.str(row, "startingInventory", null));
+        // Strip the LEVEL_APPROPRIATE sentinel (not an item type) and flip
+        // the matching flag; the level spawner handles the actual gear roll.
+        for (int i = d.startingInventory.size() - 1; i >= 0; i--) {
+            if ("LEVEL_APPROPRIATE".equalsIgnoreCase(d.startingInventory.get(i).type)) {
+                d.startingInventory.remove(i);
+                d.wantsLevelAppropriateKit = true;
+            }
+        }
         d.startingPerks = parseStartingPerks(CsvTable.str(row, "startingPerks", null));
         d.actionBar = CsvTable.str(row, "actionBar", null);
 
