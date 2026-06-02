@@ -30,6 +30,45 @@ public final class Window {
         drawShape(ctx, x, y, w, h, 1f);
     }
 
+    /** Variant for *info-only* panels (V2Look, V2BuffInfo, tip popup, etc.).
+     *  Drops the tri-line panel chrome for a single thin inked border around
+     *  a {@link UIVars#INFO_WIN_BG parchment} fill so the panel reads as a
+     *  document/page rather than another button-style frame. Shadow is
+     *  retained so the page still appears to float above the world.
+     *
+     *  <p>Caller must be inside a {@code ShapeRenderer.Filled} pass with GL
+     *  blending enabled - same contract as {@link #drawShape}. */
+    public static void drawInfoShape(UiCtx ctx, float x, float y, float w, float h) {
+        ShapeRenderer s = ctx.shapes;
+        // Drop shadow - kept so the page reads as resting above the world.
+        s.setColor(UIVars.SHADOW);
+        s.rect(x + UIVars.SHADOW_OFFSET, y - UIVars.SHADOW_OFFSET, w, h);
+        // Single 1-px inked border drawn as four edge rects (we're inside a
+        // Filled pass; using ShapeType.Line would require a begin/end swap).
+        Color border = UIVars.INFO_RULE;
+        s.setColor(border.r, border.g, border.b, 1f);
+        s.rect(x,         y,         w, 1f);
+        s.rect(x,         y + h - 1, w, 1f);
+        s.rect(x,         y,         1f, h);
+        s.rect(x + w - 1, y,         1f, h);
+        // Parchment fill, inset by the border so it doesn't overpaint the
+        // inked edge.
+        Color fill = UIVars.INFO_WIN_BG;
+        s.setColor(fill.r, fill.g, fill.b, UIVars.PANEL_FILL_ALPHA);
+        s.rect(x + 1, y + 1, w - 2, h - 2);
+    }
+
+    /** Hairline ruled separator drawn as a 1-px horizontal line at
+     *  {@code (x, y)} of width {@code w}. Same {@link UIVars#INFO_RULE}
+     *  ink the info-window border uses, so the rule reads as part of the
+     *  page. Caller must be inside an active Filled ShapeRenderer pass. */
+    public static void drawInfoSeparator(UiCtx ctx, float x, float y, float w) {
+        ShapeRenderer s = ctx.shapes;
+        Color rule = UIVars.INFO_RULE;
+        s.setColor(rule.r, rule.g, rule.b, 0.7f);
+        s.rect(x, y, w, 1f);
+    }
+
     public static void drawShape(UiCtx ctx, float x, float y, float w, float h,
                                  float fillAlpha) {
         drawShape(ctx, x, y, w, h, UIVars.WIN_BG, fillAlpha);

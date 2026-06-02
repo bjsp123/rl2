@@ -328,10 +328,10 @@ public final class ItemLore {
         }
 
         // -- Throw behaviour -------------------------------------------------
-        if (it.throwEffect != null || it.throwResult == ThrowResult.RETURN
+        if (it.isThrowable() || it.throwResult == ThrowResult.RETURN
                 || it.throwResult == ThrowResult.CONSUME) {
             StringBuilder thr = new StringBuilder();
-            if (it.throwEffect != null) {
+            if (it.isThrowable()) {
                 flag(thr, TextCatalog.format("item.throw.effect",
                         TextCatalog.vars("effect", wandEffectVerb(it.throwEffect, it, effLvl))));
                 if (it.throwEffect == ItemEffect.APPLYBUFFS

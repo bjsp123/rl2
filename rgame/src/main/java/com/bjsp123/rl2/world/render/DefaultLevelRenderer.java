@@ -765,19 +765,29 @@ public class DefaultLevelRenderer implements LevelRenderer {
         Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
         if (player == null || player.position == null) return;
         int px = player.position.tileX(), py = player.position.tileY();
-        for (Mob m : level.mobs) {
-            if (m == null || m == player || m.position == null) continue;
-            int mx = m.position.tileX(), my = m.position.tileY();
-            int dist = Math.max(Math.abs(mx - px), Math.abs(my - py));
-            if (dist != 1) continue;
-            if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
-            if (!level.visible[mx][my]) continue;
-            if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(player, m)
-                    == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) continue;
-            String chip = formatMeleeChip(player, m);
-            if (chip != null && !chip.isEmpty()) {
-                drawAnnotationAbove(m, chip, com.bjsp123.rl2.ui.v2.UIVars.ACCENT);
+        // Scale the world-space font down for the duration of the chip pass
+        // so a "85% · ~6 dmg" string isn't sized like a billboard. Reset
+        // after the loop so other annotation callers (state-of-mind labels,
+        // attitude marks) keep their full-size font.
+        float prevScale = font.getData().scaleX;
+        font.getData().setScale(prevScale * com.bjsp123.rl2.ui.v2.UIVars.MELEE_CHIP_SCALE);
+        try {
+            for (Mob m : level.mobs) {
+                if (m == null || m == player || m.position == null) continue;
+                int mx = m.position.tileX(), my = m.position.tileY();
+                int dist = Math.max(Math.abs(mx - px), Math.abs(my - py));
+                if (dist != 1) continue;
+                if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
+                if (!level.visible[mx][my]) continue;
+                if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(player, m)
+                        == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) continue;
+                String chip = formatMeleeChip(player, m);
+                if (chip != null && !chip.isEmpty()) {
+                    drawAnnotationAbove(m, chip, com.bjsp123.rl2.ui.v2.UIVars.ACCENT);
+                }
             }
+        } finally {
+            font.getData().setScale(prevScale);
         }
     }
 
@@ -1076,7 +1086,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
     }
 
-    /** Pack a WHITE pixel with the given alpha (0-255) into an RGBA8888 int. */
+    /** Pack a WHITE pixel with the given alpha (0-255) into an RGBA8888 int.
+     *  Kept on straight alpha (white RGB + variable A) because shadow
+     *  callsites use a non-zero themed-RGB vertex colour ({@link
+     *  #getShadowColor} returns e.g. {@code (0.06, 0.04, 0.02, a)}), and
+     *  the project's global SpriteBatch blend is {@code GL_SRC_ALPHA,
+     *  GL_ONE_MINUS_SRC_ALPHA}. A premultiplied atlas under that blend
+     *  would double-multiply alpha into the colour term and visibly wash
+     *  out the warm shadow tints. Converting to premultiplied requires
+     *  also switching the blend func at these draws (or a global pipeline
+     *  change), which we're not doing in Phase 2. */
     private static int white(int alpha) {
         return 0xFFFFFF00 | (alpha & 0xFF);
     }
@@ -1492,9 +1511,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 float pulse = 0.5f + 0.5f * (float) Math.sin(bobTime * (Math.PI * 2.0 / 1.4));
                 float size  = 24f + 8f * pulse;
                 float alpha = 0.55f + 0.35f * pulse;
+                // Switch to additive blending for the halo - the source sprite
+                // has white RGB everywhere with alpha-only variation, and
+                // straight-alpha would leave a visible white fringe on any
+                // non-black background. Additive bloom (srcRGB + dst) is the
+                // correct mode for an emissive flare and produces a clean,
+                // fringe-free glow over any tile colour.
+                batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
                 batch.setColor(1f, 1f, 1f, alpha);
                 batch.draw(glow, cx - size * 0.5f, cy - size * 0.5f, size, size);
                 batch.setColor(Color.WHITE);
+                batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
             }
         }
         outlines.drawRegion(batch, currentBeacon, dx, dy, CELL, 2f * CELL);

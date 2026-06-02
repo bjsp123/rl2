@@ -9,230 +9,399 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Non-blocking, auto-fading "first encounter" tip popup.
+ * Non-blocking, top-of-screen "first encounter" tip popup.
  *
- * <p>Per the design spec:
+ * <p>Layout (compact, single panel):
  * <ul>
- *   <li>Renders centred above the middle of the screen.</li>
- *   <li>Icon on the left, display title on the right, body text below the
- *       title. The icon is a {@link TextureRegion} so any sprite source
- *       works (mob sprite, item sprite, buff icon, perk icon, concept icon).</li>
- *   <li>Click anywhere dismisses immediately.</li>
- *   <li>Auto-fades after 5 real-time seconds.</li>
+ *   <li>"Tip:" label on the left (accent colour)</li>
+ *   <li>Body text in the middle, wrapping as needed</li>
+ *   <li>Icon on the right, if one was supplied</li>
+ *   <li>Thin countdown bar along the bottom edge</li>
+ * </ul>
+ *
+ * <p>Position: docked just below the V2Hud top band so it doesn't obscure
+ * world or HUD content.
+ *
+ * <p>Behaviour:
+ * <ul>
+ *   <li>Appears with a brief flash overlay so the player notices it.</li>
+ *   <li>Auto-fades after {@link #DURATION_SECONDS} real-time seconds.</li>
+ *   <li>Tap inside the panel pins it indefinitely; tap again dismisses;
+ *       tap outside also dismisses.</li>
+ *   <li>When a second tip is queued while one is visible, the new tip
+ *       appears below the current one after a 1 s pause and slides up to
+ *       replace it. Pinning suspends the slide so the player can read in
+ *       peace.</li>
  *   <li>Game continues underneath (non-blocking).</li>
  * </ul>
  *
  * <p>Body text supports {@code \n} (rendered as line break) and {@code *text*}
  * (rendered as accent-coloured emphasis). The asterisks themselves are
  * stripped from the rendered output.
- *
- * <p>Implements {@link V2Popup} so the {@link com.bjsp123.rl2.ui.v2.stage.V2Stage}
- * z-orders it above the world but underneath modal sub-popups. Input is
- * polled separately from {@link com.bjsp123.rl2.screen.PlayScreen} — there's
- * no input-capture model because the player must keep playing while the tip
- * is visible.
  */
 public final class V2TipPopup implements V2Popup {
 
-    /** Total real-time duration a tip stays on screen before auto-fading. */
-    private static final float DURATION_SECONDS = 5f;
-    /** Last second is a linear alpha fade-out. */
-    private static final float FADE_SECONDS     = 1f;
+    /** Total real-time seconds an unpinned tip stays before auto-fading. */
+    private static final float DURATION_SECONDS       = 10f;
+    /** Linear alpha fade in the last {@link #FADE_SECONDS} of lifetime. */
+    private static final float FADE_SECONDS           = 1f;
+    /** Bright overlay shown on the first {@link #FLASH_SECONDS} after a tip
+     *  becomes visible so the player notices it without it shouting. */
+    private static final float FLASH_SECONDS          = 0.28f;
+    /** Pause between a new tip arriving and it sliding up to replace the
+     *  current one. Gives the player time to register "another tip is
+     *  here" before the handoff. */
+    private static final float INCOMING_DELAY_SECONDS = 1f;
+    /** Duration of the slide-up handoff between current and incoming. */
+    private static final float SLIDE_SECONDS          = 0.45f;
+    /** Pixels reserved at the top of the viewport for the V2Hud cluster
+     *  (portrait, bars, burger). Tip panel's TOP edge sits this many
+     *  pixels below the viewport top. */
+    private static final float TOP_HUD_INSET          = 80f;
+    /** Vertical gap between the stacked panels during the slide handoff. */
+    private static final float STACK_GAP              = 6f;
+
+    private static final float PANEL_PAD     = 8f;
+    private static final float LABEL_GAP     = 6f;
+    private static final float ICON_GAP      = 8f;
+    private static final float ICON_SIZE     = 28f;
+    private static final float COUNTDOWN_H   = 3f;
 
     private final UiCtx ctx;
-    private String currentTitle;
-    private String currentBody;
-    private TextureRegion currentIcon;
-    private float elapsedSeconds;
-    private boolean showing;
-    /** When true, the auto-fade timer is suspended - tip stays up until the
-     *  player taps it again. Set by a tap inside the panel; cleared (along
-     *  with dismissal) by a subsequent tap inside, or by any tap outside. */
+    private TipEntry current;
+    private TipEntry incoming;
+    private float incomingDelay;
+    private boolean replacing;
+    private float slideProgress;
     private boolean pinned;
 
+    /** Hit-test rect for the focused (current) panel in its non-slide
+     *  position - clicks against this rect pin/dismiss. */
     private final Rect panel = new Rect();
 
     public V2TipPopup(UiCtx ctx) {
         this.ctx = ctx;
     }
 
-    public boolean isShowing() { return showing; }
+    public boolean isShowing() { return current != null; }
 
-    /** Show a tip. If one is already on-screen the existing tip is replaced
-     *  immediately (TipSystem's queue prevents this in normal flow but we
-     *  don't reject the call defensively). */
+    /** True when the popup can accept another tip without dropping a queued
+     *  one. Used by {@link TipSystem} to gate queue drains. */
+    public boolean canAcceptNew() { return current == null || incoming == null; }
+
+    /** Show a tip. Routes the entry to the appropriate slot:
+     *  <ul>
+     *    <li>Empty popup → becomes the current tip and flashes.</li>
+     *    <li>Has current but no incoming → staged as incoming; after the
+     *        {@link #INCOMING_DELAY_SECONDS pause} the slide handoff
+     *        begins.</li>
+     *    <li>Both slots full → incoming is overwritten (newest wins). The
+     *        TipSystem queue normally prevents this by waiting for
+     *        {@link #canAcceptNew()}.</li>
+     *  </ul> */
     public void show(String title, String body, TextureRegion icon) {
-        this.currentTitle = title == null ? "" : title;
-        this.currentBody  = body  == null ? "" : body;
-        this.currentIcon  = icon;
-        this.elapsedSeconds = 0f;
-        this.pinned = false;
-        this.showing = true;
+        TipEntry e = new TipEntry(body, icon);
+        if (current == null) {
+            current = e;
+            pinned = false;
+            return;
+        }
+        incoming = e;
+        incomingDelay = INCOMING_DELAY_SECONDS;
+        replacing = false;
+        slideProgress = 0f;
     }
 
-    /** Tick the auto-fade timer. Call once per render frame from
-     *  {@link com.bjsp123.rl2.screen.PlayScreen}. {@code dtSeconds} is the
-     *  unscaled real-time delta — tips don't slow down when animation
-     *  speed slows down. Pinned tips ignore the timer until a tap unpins
-     *  them. */
-    public void tick(float dtSeconds) {
-        if (!showing || pinned) return;
-        elapsedSeconds += dtSeconds;
-        if (elapsedSeconds >= DURATION_SECONDS) dismiss();
+    /** Tick the lifecycle. Driven from {@link com.bjsp123.rl2.screen.PlayScreen}
+     *  with the unscaled real-time delta - tips don't slow when animation
+     *  speed slows. */
+    public void tick(float dt) {
+        if (current == null) return;
+        // Tick down per-panel flash overlays independently.
+        if (current.flash > 0f) current.flash = Math.max(0f, current.flash - dt);
+        if (incoming != null && incoming.flash > 0f) {
+            incoming.flash = Math.max(0f, incoming.flash - dt);
+        }
+        // Current-tip auto-fade timer - suspended while pinned (player is
+        // reading it) or sliding off (the slide IS the dismissal).
+        if (!pinned && !replacing) {
+            current.elapsed += dt;
+            if (current.elapsed >= DURATION_SECONDS) {
+                dismissCurrent();
+                return;
+            }
+        }
+        // Incoming-tip state machine: count down the pause, then drive the
+        // slide. Pinning blocks both phases so the player can finish reading.
+        if (incoming != null && !pinned) {
+            if (!replacing) {
+                incomingDelay -= dt;
+                if (incomingDelay <= 0f) {
+                    replacing = true;
+                    // Reflash the incoming the moment it actually appears.
+                    incoming.flash = FLASH_SECONDS;
+                }
+            } else {
+                slideProgress += dt / SLIDE_SECONDS;
+                if (slideProgress >= 1f) {
+                    current = incoming;
+                    pinned = false;
+                    incoming = null;
+                    replacing = false;
+                    slideProgress = 0f;
+                    // TipSystem may have more queued; let it know we have a
+                    // free slot now (incoming == null).
+                    TipSystem.onPopupDismissed();
+                }
+            }
+        }
     }
 
-    /** Click handler with coordinates. Tap inside the panel toggles pinned
-     *  (first tap pins, second tap dismisses); tap outside the panel always
-     *  dismisses. Returns true if a tip was open and the tap was consumed
-     *  (so the caller can swallow the click before it reaches the world). */
+    /** Click handler. Behaviour:
+     *  <ul>
+     *    <li>Tap <i>inside</i> the panel pins (first tap) or dismisses
+     *        (second tap). The panel is the interactive surface so this
+     *        consumes the click - returns {@code true}.</li>
+     *    <li>Tap <i>outside</i> the panel starts the fade-out (unpins and
+     *        jumps elapsed time into the {@link #FADE_SECONDS fade
+     *        window}) but lets the click pass through to the game -
+     *        returns {@code false}. Tip dismisses naturally as the fade
+     *        completes.</li>
+     *  </ul> */
     public boolean handleClick(float vx, float vy) {
-        if (!showing) return false;
+        if (current == null) return false;
         boolean inside = panel.contains(vx, vy);
         if (inside) {
             if (pinned) {
-                dismiss();
+                dismissCurrent();
             } else {
-                // Reset the fade so the freshly-pinned tip reads at full
-                // opacity, not whatever alpha it had drifted to.
                 pinned = true;
-                elapsedSeconds = 0f;
+                current.elapsed = 0f;
             }
-        } else {
-            dismiss();
+            return true;
         }
-        return true;
+        // Outside the panel: nudge the tip into its fade-out phase but
+        // don't consume the input - the player's click should still hit
+        // the game world / HUD beneath.
+        pinned = false;
+        float fadeStart = DURATION_SECONDS - FADE_SECONDS;
+        if (current.elapsed < fadeStart) current.elapsed = fadeStart;
+        return false;
     }
 
-    /** Back-compat overload - dismisses regardless of position. Prefer the
-     *  coord-aware {@link #handleClick(float, float)} so the
-     *  "tap inside = pin" affordance fires. */
+    /** Back-compat overload. Treated as an outside-click so it never
+     *  consumes - matches the new passthrough semantics. */
     public boolean handleClick() { return handleClick(Float.NaN, Float.NaN); }
 
-    private void dismiss() {
-        showing = false;
-        pinned  = false;
-        currentTitle = null;
-        currentBody  = null;
-        currentIcon  = null;
+    private void dismissCurrent() {
+        // Promote queued incoming (if any) into the current slot
+        // immediately, cancelling any half-played slide.
+        TipEntry next = incoming;
+        current = null;
+        pinned = false;
+        incoming = null;
+        incomingDelay = 0f;
+        slideProgress = 0f;
+        replacing = false;
+        if (next != null) {
+            current = next;
+            current.elapsed = 0f;
+            current.flash = FLASH_SECONDS;
+        }
         TipSystem.onPopupDismissed();
     }
 
-    @Override
-    public boolean isOpen() { return showing; }
+    @Override public boolean isOpen() { return current != null; }
 
     @Override
     public void renderSelf() {
-        if (!showing) return;
-        // Layout: panel sits centred horizontally, above the middle (y ~= 60%
-        // of viewport height). Body wraps to a fixed max width; height grows
-        // with line count.
+        if (current == null) return;
+
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float panelW = Math.min(vw * 0.72f, 360f);
-        float maxBodyW = panelW - 16f - 40f - 8f;  // pad + iconW + gap
-        List<String> bodyLines = new ArrayList<>();
-        TextDraw.wrap(ctx.fontRegular,
-                stripEmphasis(currentBody == null ? "" : currentBody),
-                maxBodyW, 12, bodyLines);
-        // Wrap on explicit \n too: TextDraw.wrap doesn't honour newlines so
-        // pre-split on \n then wrap each segment.
-        bodyLines.clear();
-        if (currentBody != null) {
-            for (String seg : currentBody.split("\\\\n")) {
-                List<String> wrapped = new ArrayList<>();
-                TextDraw.wrap(ctx.fontRegular, stripEmphasis(seg),
-                        maxBodyW, 12, wrapped);
-                bodyLines.addAll(wrapped);
-            }
-        }
-        float lineH   = ctx.fontRegular.getLineHeight() + 1f;
-        float titleH  = ctx.fontHeader.getLineHeight() + 1f;
-        float bodyH   = lineH * Math.max(1, bodyLines.size());
-        float iconRow = Math.max(titleH + 4f + bodyH, 44f);
-        float panelH  = iconRow + 16f;
-        float panelX  = (vw - panelW) * 0.5f;
-        float panelY  = vh * 0.55f;
-        panel.set(panelX, panelY, panelW, panelH);
+        float panelW = Math.min(vw * 0.72f, 420f);
+        // Both panels use the same width; height comes from per-tip body
+        // wrap. The incoming may have a different height than the current
+        // - we compute it independently.
+        float currentH = computeHeight(current, panelW);
+        float incomingH = incoming != null ? computeHeight(incoming, panelW) : 0f;
 
-        // Alpha curve: full opacity until DURATION - FADE, linear ramp to 0
-        // over the final FADE seconds.
-        float alpha = 1f;
+        float topSlotY = vh - TOP_HUD_INSET - currentH;
+        float currentY, incomingY = 0f;
+        if (replacing) {
+            // Both panels shift up by (currentH + STACK_GAP) over the slide.
+            float dy = (currentH + STACK_GAP) * slideProgress;
+            currentY  = topSlotY + dy;
+            incomingY = topSlotY - (incomingH + STACK_GAP) + dy;
+        } else {
+            currentY = topSlotY;
+        }
+        float panelX = (vw - panelW) * 0.5f;
+
+        // Per-panel alpha. Current uses the fade curve (capped by pin) and
+        // additionally fades out as it slides off the top. Incoming stays
+        // fully opaque - the slide itself is its visual cue.
+        float currentAlpha = panelAlpha(current.elapsed);
+        if (replacing) currentAlpha *= Math.max(0f, 1f - slideProgress);
+        float incomingAlpha = 1f;
+
+        panel.set(panelX, currentY, panelW, currentH);
+
+        // Render incoming first so the current sits on top during the slide.
+        if (incoming != null && replacing) {
+            renderPanel(incoming, panelX, incomingY, panelW, incomingH,
+                    incomingAlpha, /*drawCountdown=*/ false);
+        }
+        renderPanel(current, panelX, currentY, panelW, currentH,
+                currentAlpha, /*drawCountdown=*/ true);
+    }
+
+    private float panelAlpha(float elapsed) {
+        if (pinned) return 1f;
         float fadeStart = DURATION_SECONDS - FADE_SECONDS;
-        if (elapsedSeconds > fadeStart) {
-            alpha = Math.max(0f,
-                    1f - (elapsedSeconds - fadeStart) / FADE_SECONDS);
-        }
+        if (elapsed <= fadeStart) return 1f;
+        return Math.max(0f, 1f - (elapsed - fadeStart) / FADE_SECONDS);
+    }
 
-        // Shape pass: panel chrome.
+    private float computeHeight(TipEntry tip, float panelW) {
+        // "Tip:" label + body text column + optional icon. The label width
+        // varies with the font but is short ("Tip:"); we compute it once.
+        float labelW = labelWidth();
+        float iconColW = tip.icon != null ? ICON_SIZE + ICON_GAP : 0f;
+        float bodyMaxW = panelW - 2 * PANEL_PAD - labelW - LABEL_GAP - iconColW;
+        List<String> bodyLines = wrappedBody(tip.body, bodyMaxW);
+        float lineH = ctx.fontRegular.getLineHeight() + 1f;
+        float textColH = lineH * Math.max(1, bodyLines.size());
+        float contentH = Math.max(textColH, tip.icon != null ? ICON_SIZE : 0f);
+        return contentH + 2 * PANEL_PAD + COUNTDOWN_H;
+    }
+
+    private float labelWidth() {
+        ctx.layout.setText(ctx.fontRegular, "Tip:");
+        return ctx.layout.width;
+    }
+
+    private List<String> wrappedBody(String body, float maxBodyW) {
+        List<String> out = new ArrayList<>();
+        if (body == null) return out;
+        for (String seg : body.split("\\\\n")) {
+            List<String> wrapped = new ArrayList<>();
+            TextDraw.wrap(ctx.fontRegular, stripEmphasis(seg),
+                    maxBodyW, 12, wrapped);
+            out.addAll(wrapped);
+        }
+        return out;
+    }
+
+    /** Render one panel - chrome + Tip label + body + optional icon +
+     *  optional countdown bar - at the given screen rect with the given
+     *  alpha multiplier. */
+    private void renderPanel(TipEntry tip, float panelX, float panelY,
+                             float panelW, float panelH, float alpha,
+                             boolean drawCountdown) {
+        if (alpha <= 0f) return;
         ctx.applyProjection();
         com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
         com.badlogic.gdx.Gdx.gl.glBlendFunc(
                 com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
                 com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+
+        // Shape pass: shadow, parchment fill, 1-px ink border, countdown
+        // bar fill, and the bright "just appeared" flash overlay.
         ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
-        // Shadow.
+
         ctx.shapes.setColor(0f, 0f, 0f, 0.5f * alpha);
-        ctx.shapes.rect(panel.x + UIVars.SHADOW_OFFSET,
-                panel.y - UIVars.SHADOW_OFFSET,
-                panel.w, panel.h);
-        // Background.
-        Color bg = UIVars.WIN_BG;
+        ctx.shapes.rect(panelX + UIVars.SHADOW_OFFSET,
+                panelY - UIVars.SHADOW_OFFSET, panelW, panelH);
+
+        Color bg = UIVars.INFO_WIN_BG;
         ctx.shapes.setColor(bg.r, bg.g, bg.b, UIVars.PANEL_FILL_ALPHA * alpha);
-        ctx.shapes.rect(panel.x, panel.y, panel.w, panel.h);
-        // Border (single thin line).
+        ctx.shapes.rect(panelX, panelY, panelW, panelH);
+
+        // Countdown bar - thin yellow strip along the bottom edge. Pinned
+        // tips show a full bar (no countdown). Slide-off panels skip the
+        // bar so the visual is calm during transition.
+        if (drawCountdown) {
+            float remaining = pinned ? 1f
+                    : Math.max(0f, 1f - tip.elapsed / DURATION_SECONDS);
+            Color accent = UIVars.ACCENT;
+            ctx.shapes.setColor(accent.r, accent.g, accent.b, 0.85f * alpha);
+            ctx.shapes.rect(panelX + 4f, panelY + 2f,
+                    (panelW - 8f) * remaining, COUNTDOWN_H);
+        }
+
+        // Flash overlay - bright accent on top of the panel that fades out
+        // over FLASH_SECONDS. Sits above the fill but below the text pass.
+        if (tip.flash > 0f) {
+            float flashT = tip.flash / FLASH_SECONDS;
+            Color a = UIVars.ACCENT;
+            ctx.shapes.setColor(a.r, a.g, a.b, 0.55f * flashT * alpha);
+            ctx.shapes.rect(panelX, panelY, panelW, panelH);
+        }
+
         ctx.shapes.end();
-        ctx.shapes.begin(ShapeRenderer.ShapeType.Line);
-        Color border = UIVars.BORDER_MID;
+
+        // 1-px inked border drawn as four edge rects so it stays inside
+        // the Filled pass (no begin/end swap).
+        ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
+        Color border = UIVars.INFO_RULE;
         ctx.shapes.setColor(border.r, border.g, border.b, alpha);
-        ctx.shapes.rect(panel.x, panel.y, panel.w, panel.h);
+        ctx.shapes.rect(panelX,            panelY,            panelW, 1f);
+        ctx.shapes.rect(panelX,            panelY + panelH - 1, panelW, 1f);
+        ctx.shapes.rect(panelX,            panelY,            1f, panelH);
+        ctx.shapes.rect(panelX + panelW-1, panelY,            1f, panelH);
         ctx.shapes.end();
+
         com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
 
         // Text + icon pass.
         ctx.batch.begin();
-        float pad = 8f;
-        float iconSize = 32f;
-        float iconX = panel.x + pad;
-        float iconY = panel.y + panel.h - pad - iconSize;
-        if (currentIcon != null) {
-            ctx.batch.setColor(1f, 1f, 1f, alpha);
-            ctx.batch.draw(currentIcon, iconX, iconY, iconSize, iconSize);
-            ctx.batch.setColor(Color.WHITE);
-        }
-        float textX = iconX + iconSize + 8f;
-        float titleY = panel.y + panel.h - pad;
-        Color title = UIVars.TEXT_BODY;
-        ctx.fontHeader.setColor(title.r, title.g, title.b, alpha);
-        TextDraw.left(ctx, ctx.fontHeader,
-                new Color(title.r, title.g, title.b, alpha),
-                currentTitle == null ? "" : currentTitle,
-                textX, titleY);
-        ctx.fontHeader.setColor(Color.WHITE);
 
-        Color body = UIVars.TEXT_DIM;
+        float labelW = labelWidth();
+        float iconColW = tip.icon != null ? ICON_SIZE + ICON_GAP : 0f;
+        float bodyMaxW = panelW - 2 * PANEL_PAD - labelW - LABEL_GAP - iconColW;
+        List<String> bodyLines = wrappedBody(tip.body, bodyMaxW);
+        float lineH = ctx.fontRegular.getLineHeight() + 1f;
+
+        // "Tip:" label - accent colour, top-aligned with the first body line.
         Color accent = UIVars.ACCENT;
-        float by = titleY - titleH;
+        float topInnerY = panelY + panelH - PANEL_PAD;
+        ctx.fontRegular.setColor(accent.r, accent.g, accent.b, alpha);
+        ctx.fontRegular.draw(ctx.batch, "Tip:",
+                panelX + PANEL_PAD, topInnerY);
+
+        // Body text - starts to the right of "Tip:", one line per wrapped
+        // entry. Uses TEXT_BODY for body text and ACCENT for *emphasis*
+        // runs delimited by asterisks.
+        float bodyX = panelX + PANEL_PAD + labelW + LABEL_GAP;
+        Color body = UIVars.TEXT_BODY;
+        float by = topInnerY;
         for (String line : bodyLines) {
-            drawEmphasizedLine(line, textX, by, body, accent, alpha);
+            drawEmphasizedLine(line, bodyX, by, body, accent, alpha);
             by -= lineH;
         }
+
+        // Icon - far right, vertically centered against the body column.
+        if (tip.icon != null) {
+            float iconX = panelX + panelW - PANEL_PAD - ICON_SIZE;
+            float iconY = panelY + panelH * 0.5f - ICON_SIZE * 0.5f;
+            ctx.batch.setColor(1f, 1f, 1f, alpha);
+            ctx.batch.draw(tip.icon, iconX, iconY, ICON_SIZE, ICON_SIZE);
+            ctx.batch.setColor(Color.WHITE);
+        }
+
+        ctx.fontRegular.setColor(Color.WHITE);
         ctx.batch.end();
     }
 
-    /** Strip {@code *emphasis*} markers so the wrap pass measures line
-     *  widths against the visible text (asterisks aren't drawn). Per-run
-     *  colouring happens later in {@link #drawEmphasizedLine}. */
     private static String stripEmphasis(String s) {
         if (s == null || s.isEmpty()) return "";
         return s.replace("*", "");
     }
 
-    /** Render a line of body text, painting runs delimited by {@code *...*}
-     *  in {@code accent} (yellow) while the surrounding text uses {@code body}.
-     *  Asterisks themselves are not drawn. Segments are laid out left-to-right
-     *  using the regular font's glyph layout for spacing.
-     *
-     *  <p>Caller is inside a SpriteBatch begin/end. */
+    /** Draw a body line, painting {@code *...*} runs in {@code accent}
+     *  while surrounding text uses {@code body}. Asterisks are not drawn.
+     *  Caller must be inside a SpriteBatch begin/end. */
     private void drawEmphasizedLine(String line, float x, float yBaseline,
                                     Color body, Color accent, float alpha) {
         if (line == null || line.isEmpty()) return;
@@ -259,5 +428,21 @@ public final class V2TipPopup implements V2Popup {
             i++;
         }
         ctx.fontRegular.setColor(Color.WHITE);
+    }
+
+    /** Per-tip mutable state. The {@link TipSystem} API still passes a
+     *  title but the compact layout doesn't render it - {@link #show} drops
+     *  the title and the body carries the message. */
+    private static final class TipEntry {
+        final String body;
+        final TextureRegion icon;
+        float elapsed;
+        float flash;
+        TipEntry(String body, TextureRegion icon) {
+            this.body  = body  == null ? "" : body;
+            this.icon  = icon;
+            this.elapsed = 0f;
+            this.flash   = FLASH_SECONDS;
+        }
     }
 }

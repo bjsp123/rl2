@@ -89,9 +89,16 @@ public final class TipSystem {
 
     private static void promoteQueueHeadIfIdle() {
         if (popup == null) return;
-        if (popup.isShowing()) return;
-        Entry e = queue.pollFirst();
-        if (e != null) popup.show(e.title, e.body, e.icon);
+        // Drain queued tips into the popup until it can't accept any more.
+        // The popup has two slots (current + incoming) and handles its own
+        // slide handoff between them, so we don't gate on "fully idle" -
+        // staging the next tip as incoming kicks off the slide animation
+        // for the player while the current one is still being read.
+        while (popup.canAcceptNew()) {
+            Entry e = queue.pollFirst();
+            if (e == null) return;
+            popup.show(e.title, e.body, e.icon);
+        }
     }
 
     /** Pending-tip record. */

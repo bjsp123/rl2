@@ -2,6 +2,7 @@ package com.bjsp123.rl2.world.render;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -297,6 +298,10 @@ final class FxRenderer {
         if (alpha <= 0f) return;
         float cx = baseX + CELL * 0.5f;
         float cy = baseY + CELL * 0.5f;
+        // Concussive blast flash - additive so the shock wave reads as
+        // light pulsing outward, not a flat translucent rectangle leaving
+        // a white fringe on lit floor.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         batch.setColor(1f, 0.95f, 0.55f, alpha);
         batch.draw(whiteRegion, cx - reach, cy + reach - 1f, reach * 2f, 1f);
         batch.draw(whiteRegion, cx - reach, cy - reach,      reach * 2f, 1f);
@@ -307,6 +312,7 @@ final class FxRenderer {
             batch.draw(whiteRegion, cx - 1f, cy - 1f, 2f, 2f);
         }
         batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /** Element-aware damage floater - rising icon-then-text pair. Icon comes
@@ -339,9 +345,16 @@ final class FxRenderer {
             batch.setColor(Color.WHITE);
             textX = baseX + iconSize + 1f;
         }
+        // Scale the world font down for the floater - default world scale
+        // was sized for big "5" / "miss" pops which competed with the tile
+        // art they rose from. Reset after so other renderers that share
+        // {@code font} see it at the default scale.
+        float prevScale = font.getData().scaleX;
+        font.getData().setScale(prevScale * com.bjsp123.rl2.ui.v2.UIVars.DAMAGE_FLOATER_SCALE);
         font.setColor(c.r, c.g, c.b, alpha);
         font.draw(batch, e.text == null ? "" : e.text, textX, textY);
         font.setColor(Color.WHITE);
+        font.getData().setScale(prevScale);
     }
 
     /** Floating buff-icon - same rising motion as floating text, but renders the buff's
@@ -391,6 +404,9 @@ final class FxRenderer {
         if (len < 1e-3f) return;
         float angle = (float) Math.toDegrees(Math.atan2(dy, dx));
         Color tint = tintToColor(e.tint, Color.WHITE);
+        // Additive blend - rays are emissive light; straight-alpha on a
+        // white-RGB sprite leaves visible white fringes on lit floors.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         batch.setColor(tint.r, tint.g, tint.b, alpha * 0.35f);
         batch.draw(whiteRegion,
                 x1, y1 - 3f, 0f, 3f,
@@ -400,6 +416,7 @@ final class FxRenderer {
                 x1, y1 - 1f, 0f, 1f,
                 len, 2f, 1f, 1f, angle);
         batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /** Render the grappling-rope effect - a thick brown line from caster to
@@ -500,11 +517,15 @@ final class FxRenderer {
                 : 0.55f * (1f - (lifeT - 0.3f) / 0.7f);
         if (alpha <= 0f) return;
         TextureRegion sprite = particleSpriteFor(e);
+        // Additive blend - motes are floating embers; emissive light on a
+        // dark background reads fringe-free under additive.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         batch.setColor(1f, 0.95f, 0.7f, alpha);
         batch.draw(sprite, px - 2f, py - 2f, 4f, 4f);
         batch.setColor(1f, 1f, 0.9f, alpha);
         batch.draw(sprite, px - 1f, py - 1f, 2f, 2f);
         batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /** Render one INWARD_SPIRAL particle - a single spark that spirals
@@ -540,6 +561,9 @@ final class FxRenderer {
         // Three-layer stamp for a bold spark: wide tinted halo, mid-size
         // tinted body, near-white core. Sizes doubled vs the original
         // 2-px draw so the swirl reads boldly against the dark world.
+        // Additive blend - sparks are emissive; straight-alpha leaves a
+        // white pall on lit floors at low-alpha edges.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         batch.setColor(tint.r, tint.g, tint.b, alpha * 0.45f);
         batch.draw(sprite, px - 3f, py - 3f, 6f, 6f);
         batch.setColor(tint.r, tint.g, tint.b, alpha);
@@ -551,6 +575,7 @@ final class FxRenderer {
                 alpha);
         batch.draw(sprite, px - 1f, py - 1f, 2f, 2f);
         batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /** Paint screen-spanning effects in {@code stage} (currently just
@@ -578,11 +603,16 @@ final class FxRenderer {
         Color tint = tintToColor(e.tint, Color.YELLOW);
         float halfW = camera.viewportWidth  * camera.zoom * 0.5f;
         float halfH = camera.viewportHeight * camera.zoom * 0.5f;
+        // Full-screen lightning-style flash - additive so a yellow flicker
+        // brightens whatever was on screen rather than tinting it through
+        // an opaque-ish overlay.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         batch.setColor(tint.r, tint.g, tint.b, alpha);
         batch.draw(whiteRegion,
                 camera.position.x - halfW, camera.position.y - halfH,
                 halfW * 2f, halfH * 2f);
         batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /** Render a teleport streak burst - green vertical streaks moving purely along y. */
@@ -596,6 +626,10 @@ final class FxRenderer {
         float baseX = e.location.tileX() * (float) CELL;
         float baseY = e.location.tileY() * (float) CELL;
         Color c = tintToColor(e.tint, Color.GREEN);
+        // Teleport streaks are emissive vertical sparks - additive so they
+        // composite as glowing pillars and never tint the floor white at
+        // their faded ends.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         batch.setColor(c.r, c.g, c.b, alpha);
         float streakW = 1f;
         float streakH = 4f;
@@ -606,6 +640,7 @@ final class FxRenderer {
             batch.draw(whiteRegion, px, py, streakW, streakH);
         }
         batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /** Render an EXPLOSION effect - particles flying outward at constant velocity. */
@@ -620,6 +655,10 @@ final class FxRenderer {
         float rChan = 1f;
         float gChan = Math.max(0.1f, 0.85f - lifeT * 0.7f);
         float bChan = Math.max(0f,   0.45f * (1f - lifeT * 1.4f));
+        // Explosion debris reads as bright sparks - additive so the
+        // particle cloud blooms outward without leaving a yellow-white
+        // pall on any tile lit underneath.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         batch.setColor(rChan, gChan, bChan, alpha);
         float baseX = e.location.tileX() * (float) CELL;
         float baseY = e.location.tileY() * (float) CELL;
@@ -632,6 +671,7 @@ final class FxRenderer {
             batch.draw(whiteRegion, px - size * 0.5f, py - size * 0.5f, size, size);
         }
         batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /** Integrate each particle from its stored initial state and draw with gravity.
@@ -651,6 +691,11 @@ final class FxRenderer {
             // starting at its own spawn frame, independent of the others.
             Color base = tintToColor(e.tint, Color.WHITE);
             float size = e.particleSize > 0 ? e.particleSize : AnimationVars.PARTICLE_SIZE;
+            // Bright bursts (sparks, magic puffs) read as emissive light;
+            // additive blending eliminates white edge fringes on lit
+            // floors. Dim particles (debris, dust) stay on straight alpha
+            // so opaque silhouettes still look right.
+            if (e.particleBright) batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
             for (int i = 0; i < e.particleX0.length; i++) {
                 int age = e.frame - e.particleSpawnFrame[i];
                 if (age < 0 || age >= AnimationVars.PARTICLE_LIFE) continue;
@@ -677,6 +722,7 @@ final class FxRenderer {
                 }
             }
             batch.setColor(Color.WHITE);
+            if (e.particleBright) batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
             return;
         }
 
@@ -757,17 +803,25 @@ final class FxRenderer {
         float hy = sy + (dy - sy) * headT;
 
         Color headColor = tintToColor(e.headTint, Color.WHITE);
+        // The head is an emissive projectile core - additive so it blooms
+        // brighter as it overlaps itself and lights the tile beneath it
+        // without a white halo on bright floors. The trail loop below
+        // re-enters additive only when {@code particleBright} is set so
+        // dim sparks still composite correctly under straight alpha.
         if (e.frame <= flightEnd) {
+            batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
             batch.setColor(headColor.r, headColor.g, headColor.b, 0.35f);
             batch.draw(whiteRegion, hx - 5f, hy - 5f, 10f, 10f);
             batch.setColor(headColor.r, headColor.g, headColor.b, 1f);
             batch.draw(whiteRegion, hx - 2.5f, hy - 2.5f, 5f, 5f);
+            batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         }
 
         int trailLife = 14;
         float gravity = e.particleGravity;
         float size    = e.particleSize > 0 ? e.particleSize : 1.5f;
         EffectTint[] palette = e.particleTints;
+        if (e.particleBright) batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         for (int i = 0; i < e.particleX0.length; i++) {
             int spawn = e.particleSpawnFrame[i];
             int age = e.frame - spawn;
@@ -796,6 +850,7 @@ final class FxRenderer {
                 batch.draw(whiteRegion, px, py, size, size);
             }
         }
+        if (e.particleBright) batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         batch.setColor(Color.WHITE);
     }
 

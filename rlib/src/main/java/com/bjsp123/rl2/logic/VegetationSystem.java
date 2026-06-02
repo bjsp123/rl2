@@ -141,9 +141,35 @@ public final class VegetationSystem {
                     level.vegetation[x][y] = null;
                     continue;  // no spread from a tile that just died this tick
                 }
+                // Grass thicket -> tree: a grass tile surrounded by 3+ grass
+                // 8-neighbours grows into a tree, so dense grass patches
+                // gradually canopy. Read against the snapshot so the
+                // conversion is consistent regardless of iteration order.
+                if (v == Vegetation.GRASS && grassNeighborCount(snap, x, y) >= 3) {
+                    level.vegetation[x][y] = Vegetation.TREES;
+                    emitVegetationChanged(level, x, y, Vegetation.TREES);
+                    continue;  // freshly-grown tree skips its spread roll this tick
+                }
                 trySpread(level, x, y, v, snap);
             }
         }
+    }
+
+    /** Count grass tiles in the 8 cells around (x, y) - excludes the cell
+     *  itself. Reads from the snapshot so the count is stable across the
+     *  tick regardless of which neighbours have already been processed. */
+    private static int grassNeighborCount(Vegetation[][] snap, int x, int y) {
+        int w = snap.length, h = snap[0].length;
+        int count = 0;
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                if (snap[nx][ny] == Vegetation.GRASS) count++;
+            }
+        }
+        return count;
     }
 
     private static void trySpread(Level level, int x, int y, Vegetation v, Vegetation[][] snap) {

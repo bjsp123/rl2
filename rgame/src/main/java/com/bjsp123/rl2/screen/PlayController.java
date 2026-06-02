@@ -334,7 +334,7 @@ final class PlayController {
 
     /** Kick off target-picking for a throw action from the inventory popup. */
     void beginThrow(Mob thrower, Item item) {
-        if (thrower == null || item == null) return;
+        if (thrower == null || item == null || !item.isThrowable()) return;
         Level level = world.currentLevel();
         targetingOverlay.setPlayer(thrower);
         targetingOverlay.setLevel(level);
@@ -426,7 +426,10 @@ final class PlayController {
             int mx = m.position.tileX(), my = m.position.tileY();
             if (!level.visible[mx][my]) continue;
             int d = Math.max(Math.abs(mx - px), Math.abs(my - py));
-            if (d > radius || d < 1) continue;
+            // Charge needs a runway - adjacent (d==1) targets are excluded.
+            // castCharge enforces the same gate; mirroring it here just keeps
+            // the targeting overlay from highlighting illegal tiles.
+            if (d > radius || d < 2) continue;
             if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(user, m)
                     != com.bjsp123.rl2.logic.MobSystem.Attitude.ATTACK) continue;
             // Require at least one walkable 8-neighbor for the arrival tile.
@@ -600,7 +603,7 @@ final class PlayController {
             Item it = bag.get(i);
             if (it == null) continue;
             boolean usable = it.useBehavior != null && it.useBehavior != UseBehavior.NONE;
-            boolean throwable = it.throwEffect != null;
+            boolean throwable = it.isThrowable();
             if (!usable && !throwable) continue;
             boolean alreadyBound = false;
             for (int s = 0; s < actionBar.size(); s++) {

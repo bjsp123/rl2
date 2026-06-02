@@ -434,7 +434,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             case WEAPON, OFFHAND, ARMOR, AMULET, WAND, ITEM, TOOL -> Tab.GEAR;
             case GEM                                         -> Tab.GEMS;
             case FOOD                                        -> Tab.FOOD;
-            case POTION, BOMB, ORB                           -> Tab.ITEMS;
+            case POTION, BOMB, ORB, THROWN                   -> Tab.ITEMS;
         };
     }
 

@@ -232,6 +232,12 @@ public class TurnSystem {
         // applies the buff) immediately deal damage on the same turn instead of waiting
         // a turn to land.
         BuffSystem.tickPerTurn(level);
+        // Generic data-driven level rules layered on top of the standard
+        // pipeline. Each is a cheap no-op unless the level opts in via a flag
+        // / config, so regular floors pay only a boolean (or null) check.
+        level.turnsOnLevel++;
+        LevelSystem.openExitIfCleared(level);   // no-op unless exitUnlocksOnClear
+        MobSystem.runLevelSpawner(level);       // no-op unless level.spawner != null
     }
 
     /** Satiety / starvation was removed from the game. Field stays on

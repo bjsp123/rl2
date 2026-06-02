@@ -12,6 +12,23 @@ Name variables consistenty and systematically even if it means sometimes refacto
 
 
 
+## Backlog
+
+Ticket source of truth is **Notion** — see [BACKLOG.md](../BACKLOG.md) for
+the URL. At session start, when the user prompt is ambiguous ("what's
+next?", "let's keep working"), consult the `Next up` view in Notion and
+propose the top 1–3 tickets. At session end, propose status updates
+(`Done` / `Blocked` / `Backlog`) for any tickets touched — always
+propose, never auto-apply.
+
+Do **not** create new files in `.claude/plans/` for routine work. The
+plans directory is reserved for genuinely multi-session design
+investigations. Routine work is tracked in Notion only.
+
+The master release-readiness plan lives at
+[`.claude/plans/what-if-we-wanted-toasty-duckling.md`](plans/what-if-we-wanted-toasty-duckling.md);
+Notion tickets seed from it.
+
 ## Architecture map
 
 ### Modules

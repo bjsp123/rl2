@@ -76,7 +76,7 @@ public final class V2LevelInfo extends V2Screen {
 
     @Override
     protected void drawBodyShape(UiCtx ctx) {
-        Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
     }
 
     @Override

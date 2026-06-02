@@ -32,7 +32,7 @@ public final class V2Credits extends V2Screen {
 
     @Override
     protected void drawBodyShape(UiCtx ctx) {
-        Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
     }
 
     @Override

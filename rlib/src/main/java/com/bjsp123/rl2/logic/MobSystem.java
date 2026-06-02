@@ -729,6 +729,15 @@ public class MobSystem {
         return MobVisibility.firstMobBlocking(level, from, to, shooter);
     }
 
+    /** True iff a projectile from {@code shooter} aimed at {@code to} actually
+     *  lands on {@code to} - i.e. no wall, closed door (incl. CRYSTAL_DOOR),
+     *  statue, or intervening mob clips the line first. Used by the basic
+     *  ranged-attack AI to gate firing; the SMART-AI throw / wand paths use
+     *  this indirectly via their {@code *WillLandUsefully} eval calls. */
+    public static boolean projectileLineReaches(Level level, Point from, Point to, Mob shooter) {
+        return MobVisibility.projectileLineReaches(level, from, to, shooter);
+    }
+
     /** Queue a deferred impact resolution onto the level. The {@code resolve}
      *  Runnable should invoke the matching {@code apply*Impact} method (which
      *  in turn decrements {@link Level#pendingImpactCount}). Used by every
@@ -1779,8 +1788,8 @@ public class MobSystem {
 
         Point fromPos = mob.position;
         int dmg = Math.max(1, (int) Math.round(mob.effectiveStats().maxHp * 0.5));
-        boolean wouldKill = next == null || arrival == null
-                || mob.hp - dmg <= 0;
+        boolean canRelocate = next != null && arrival != null;
+        boolean wouldKill = !canRelocate || mob.hp - dmg <= 0;
 
         // Revolve-shrink-fade visual at the source tile - same shape as
         // a falling item, but driven by the mob's sprite.
@@ -1793,6 +1802,20 @@ public class MobSystem {
         if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
             EventLog.add(Messages.mobFellInChasm(nameForLog(level, mob),
                     mob.behavior == Behavior.PLAYER));
+        }
+
+        // Player safety net: as long as a relocate destination exists, the
+        // PLAYER always survives the fall - capped at 1 HP - rather than
+        // dying-and-dumping-inventory. Without this a knockback into the
+        // void at <50% HP would silently strip the player's bag, weapon,
+        // armour, amulets, and gems before the death animation. NPCs keep
+        // the original kill-and-dump behaviour.
+        if (wouldKill && canRelocate && mob.behavior == Behavior.PLAYER) {
+            int safeDmg = Math.max(0, (int) Math.floor(mob.hp - 1));
+            transferMobToLevel(level, mob, next, arrival);
+            processAttack(next, null, mob, safeDmg,
+                    AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
+            return;
         }
 
         if (wouldKill) {
@@ -1973,6 +1996,97 @@ public class MobSystem {
                 }
             }
         }
+        // Levels that seal behind the player vanish their stairs-up the first
+        // time the player sets foot on them. Generic + idempotent (once sealed
+        // stairsUp is null), so no per-level "entered" bookkeeping needed.
+        if (mob.behavior == Mob.Behavior.PLAYER && dstLevel.sealOnEntry
+                && dstLevel.stairsUp != null) {
+            LevelSystem.sealStairsUp(dstLevel);
+        }
+    }
+
+    /** Data-driven per-turn mob spawner. Reads {@link Level#spawner} (null on
+     *  levels that don't spawn) and, on a successful chance roll, spawns one
+     *  random species from the pool - optionally awake, with a spawn level
+     *  that escalates the longer the player lingers. No-op when there's no
+     *  spawner, the roll fails, the live-mob cap is hit, or no free tile is
+     *  found. Mirrors the per-mob anthill spawner in {@link TurnSystem} but
+     *  scoped to the whole level. */
+    public static void runLevelSpawner(Level level) {
+        if (level == null) return;
+        Level.Spawner sp = level.spawner;
+        if (sp == null || sp.chancePerTurn <= 0
+                || sp.speciesPool == null || sp.speciesPool.isEmpty()) return;
+        if (RANDOM.nextDouble() >= sp.chancePerTurn) return;
+        // Live-mob cap, summed across the pooled species, plus the global cap.
+        int alive = 0;
+        for (String type : sp.speciesPool) alive += MobQueries.countMobsOfType(level, type);
+        if (alive >= sp.maxAlive) return;
+        if (!MobQueries.levelHasRoomForSpawn(level)) return;
+        Point spawnPos = spawnerTile(level, sp);
+        if (spawnPos == null) return;
+        String species = sp.speciesPool.get(RANDOM.nextInt(sp.speciesPool.size()));
+        Mob bud = MobFactory.spawn(species, spawnPos);
+        if (bud == null) return;
+        // Escalation: spawn level ramps with the player's time on the level.
+        if (sp.levelRampPer10Turns > 0) {
+            int lvl = Math.min(GameBalance.MAX_CHARACTER_LEVEL,
+                    1 + sp.levelRampPer10Turns * (level.turnsOnLevel / 10));
+            MobProgression.setSpawnLevel(bud, lvl);
+        }
+        if (sp.spawnAwake) bud.stateOfMind = Mob.StateOfMind.AWAKE;
+        level.mobs.add(bud);
+        MobHooks.onSpawn(level, bud);
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(bud, spawnPos));
+        }
+    }
+
+    /** Pick a spawn tile per the spawner's placement strategy. */
+    private static Point spawnerTile(Level level, Level.Spawner sp) {
+        if (sp.placement == Level.Spawner.Placement.MIDPOINT_TO_EXIT) {
+            return midpointToExitTile(level);
+        }
+        // ADJACENT: near the player (the level-scoped spawner has no anchor mob).
+        Mob player = TurnSystem.findPlayer(level);
+        return player != null ? MobHooks.freeAdjacentFloor(level, player.position) : null;
+    }
+
+    /** A free floor tile roughly halfway between the player and the exit, with
+     *  a small jitter so repeated spawns average around the midpoint. Falls
+     *  back to the nearest free floor. Null if there's no player or exit yet. */
+    private static Point midpointToExitTile(Level level) {
+        Mob player = TurnSystem.findPlayer(level);
+        Point exit = level.stairsDown != null ? level.stairsDown : level.lockedExit;
+        if (player == null || player.position == null || exit == null) return null;
+        int mx = (player.position.tileX() + exit.tileX()) / 2 + RANDOM.nextInt(5) - 2;
+        int my = (player.position.tileY() + exit.tileY()) / 2 + RANDOM.nextInt(5) - 2;
+        return nearestFreeFloor(level, mx, my);
+    }
+
+    /** Nearest unoccupied floor-like tile to {@code (tx,ty)} by expanding-ring
+     *  search; null if the whole level is blocked. */
+    private static Point nearestFreeFloor(Level level, int tx, int ty) {
+        int maxR = Math.max(level.width, level.height);
+        for (int r = 0; r <= maxR; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue; // ring only
+                    int x = tx + dx, y = ty + dy;
+                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                    if (!level.tiles[x][y].isFloorLike()) continue;
+                    boolean occupied = false;
+                    for (Mob m : level.mobs) {
+                        if (m.position != null
+                                && m.position.tileX() == x && m.position.tileY() == y) {
+                            occupied = true; break;
+                        }
+                    }
+                    if (!occupied) return new Point(x, y);
+                }
+            }
+        }
+        return null;
     }
 
     private static void emitFallingItems(Level level, Mob mob) {
@@ -2819,6 +2933,11 @@ public class MobSystem {
         // (RANGED_MOB_DUMB) gate on adjacency themselves before invoking tryRangedShot.
         if (ss.rangedDistance > 0 && cheb > ss.rangedDistance) return false;
         if (!LevelUtilities.getLineOfSight(level, shooter, target.position)) return false;
+        // Sight isn't enough on its own: CRYSTAL_DOOR is transparent to sight
+        // but blocks projectiles, so without this gate a crossbowman would
+        // happily plink arrows into the door all day. projectileLineReaches
+        // also rejects shots that would hit an intervening mob (incl. ally).
+        if (!projectileLineReaches(level, shooter.position, target.position, shooter)) return false;
         // Cooldown gate - present-RANGED_COOLDOWN-buff means "still recharging".
         if (BuffSystem.hasBuff(shooter, com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN)) {
             return false;
@@ -3381,6 +3500,11 @@ public class MobSystem {
      *  time. */
     public static void throwItem(Level level, Mob thrower, Item it, Point dst) {
         if (thrower == null || it == null || dst == null) return;
+        // Single authoritative throw-eligibility gate: only THROWN weapons and
+        // consumable throwables (bombs/potions/orbs/tools) can be thrown -
+        // wielded gear and generic items can't, even if their data still
+        // carries a throwEffect.
+        if (!it.isThrowable()) return;
         if (it.inventoryCategory == Item.InventoryCategory.BOMB) {
             com.bjsp123.rl2.util.ActionTracker.bumpBomb(thrower);
         } else {

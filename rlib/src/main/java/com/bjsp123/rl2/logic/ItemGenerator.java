@@ -185,7 +185,10 @@ public final class ItemGenerator {
         }
         if (it == null) return null;
         ItemDefinition d = Registries.item(type);
-        if (d != null && d.useBehavior != UseBehavior.EAT) {
+        // Food-category items (edible food AND walk-over powerups) are always
+        // level 0 - their effect is flat, and effectiveLevel forces POWERUP to
+        // 0 anyway, so a stamped level would just be a misleading ghost value.
+        if (d != null && it.inventoryCategory != Item.InventoryCategory.FOOD) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
         if (it.baseChargeMax > 0) {
@@ -333,9 +336,11 @@ public final class ItemGenerator {
         Item it = ItemFactory.build(pick);
         if (it == null) return null;
         ItemDefinition d = Registries.item(pick);
-        // Food and gems don't carry plusses (existing convention from
-        // assignItemLevel); WANDs / EQUIPMENT / etc. all do.
-        if (d != null && d.useBehavior != UseBehavior.EAT) {
+        // Food-category items (edible food AND walk-over powerups) and gems
+        // don't carry plusses; WANDs / EQUIPMENT / etc. all do. Gating on the
+        // FOOD category (not just useBehavior==EAT) keeps powerups level 0,
+        // matching effectiveLevel's POWERUP->0 rule.
+        if (d != null && it.inventoryCategory != Item.InventoryCategory.FOOD) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
         if (it.baseChargeMax > 0) {

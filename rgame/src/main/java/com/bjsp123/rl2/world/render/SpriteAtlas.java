@@ -155,7 +155,16 @@ final class SpriteAtlas {
             for (int x = 0; x < w; x++) {
                 float dx = (x - cx) / rx, dy = (y - cy) / ry;
                 int a = Math.round(Math.max(0f, 1f - dx * dx - dy * dy) * peakAlpha * 255f);
-                if (a > 0) pm.drawPixel(x, y, 0xffffff00 | a);
+                // Premultiplied form: RGB = A. The oval is a coverage mask
+                // (white intensity scaled by alpha), and storing it
+                // premultiplied means a Linear-filtered sample at the
+                // oval's edge never bleeds a brighter-than-coverage RGB
+                // value from neighbouring opaque pixels. Shadow callsites
+                // call setColor(0, 0, 0, mobAlpha), which multiplies the
+                // texture RGB to zero either way, so existing draws look
+                // identical; future setColor(nonzero) callers also stay
+                // physically correct.
+                if (a > 0) pm.drawPixel(x, y, (a << 24) | (a << 16) | (a << 8) | a);
             }
         }
         return pm;

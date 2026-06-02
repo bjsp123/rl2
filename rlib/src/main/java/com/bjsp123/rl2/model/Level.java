@@ -45,18 +45,22 @@ public class Level {
     /**
      * Ground-level flora/effect overlay drawn on top of the floor. GRASS is a few green
      * blades, MUSHROOMS is a small cluster, FIRE is a burning patch managed by
-     * {@link com.bjsp123.rl2.logic.FireSystem}, TREES are large trunks that block light
-     * (but not movement or line-of-sight) and are flammable like grass - they don't spread
-     * on their own. None of these block sight; TREES blocks light propagation only (see
-     * {@link #blocksLight}).
+     * {@link com.bjsp123.rl2.logic.FireSystem}, TREES are large trunks that block both
+     * light and line-of-sight (canopy + trunk together hide what's behind), and are
+     * flammable like grass - they don't spread on their own.
      */
     public enum Vegetation {
         GRASS, MUSHROOMS, FIRE, TREES;
 
         /** True if a tile carrying this vegetation should block <i>light</i> - lamps and
-         *  glowing items don't shine past it. Sight is unaffected: the player can still
-         *  spot mobs through the canopy as long as the tile is lit by something else. */
+         *  glowing items don't shine past it. */
         public boolean blocksLight() { return this == TREES; }
+
+        /** True if a tile carrying this vegetation should block <i>sight</i> - the
+         *  player can't see mobs hiding behind it. Currently only TREES does;
+         *  the {@link com.bjsp123.rl2.model.Perk#KEEN_SIGHT} perk lets a mob
+         *  see through up to N tree/cloud tiles within Chebyshev range N. */
+        public boolean blocksSight() { return this == TREES; }
     }
 
     /**
@@ -92,6 +96,16 @@ public class Level {
                CONCRETE,
                SHINY,
                GOTHIC
+    }
+
+    /**
+     * Gameplay kind of the level. Regular dungeon floors are REGULAR; the
+     * four endgame floors below the main dungeon use a fixed kind so the
+     * per-turn endgame tick + the renderer can branch on layout-specific
+     * rules (stairs vanishing on entry, horde spawner, win conditions).
+     */
+    public enum LevelKind {
+        REGULAR, LANDING, MIRRORMATCH, HORDE, WALKWAY
     }
 
     public int width;
@@ -237,6 +251,82 @@ public class Level {
      *  visited-vs-unknown rendering - known levels show a tile-grid mini map, unknown
      *  levels show a question mark. Default false. */
     public boolean visited;
+
+    // -- Special-level capabilities -------------------------------------------
+    // Hand-built "special" levels (Landing, Mirrormatch, Horde, Walkway) opt
+    // into the rules below via plain data set by the factory. Generic handlers
+    // in LevelSystem / MobSystem / TurnSystem read these - nothing keys runtime
+    // behaviour off LevelKind any more, so any level (special or regular,
+    // anywhere in the dungeon) can use them. All default to off, so regular
+    // floors are unaffected.
+
+    /** Gameplay kind of this level. {@link LevelKind#REGULAR} for normal
+     *  procedurally-generated floors; one of the special values for the
+     *  hand-built floors. Construction / map metadata only - the level
+     *  factory dispatches on it and the map renderer may style on it, but it
+     *  no longer gates any per-turn or arrival behaviour. */
+    public LevelKind kind = LevelKind.REGULAR;
+
+    /** When true, the level's stairs-up vanish the first time the PLAYER
+     *  arrives (no retreat). Handled generically on arrival - see
+     *  {@code LevelSystem.sealStairsUp}. Idempotent: once sealed,
+     *  {@link #stairsUp} is null so it never re-fires. */
+    public boolean sealOnEntry;
+
+    /** When true, the exit stairs are withheld until every hostile mob is
+     *  dead; the per-turn handler then stamps {@code STAIRS_DOWN} at
+     *  {@link #lockedExit}. See {@code LevelSystem.openExitIfCleared}. */
+    public boolean exitUnlocksOnClear;
+
+    /** Tile where {@code STAIRS_DOWN} is stamped once the level is cleared.
+     *  Used only with {@link #exitUnlocksOnClear}; the factory owns the
+     *  coordinate so no logic hard-codes it. */
+    public Point lockedExit;
+
+    /** Generic count of standard turns the level has been ticking. Bumped once
+     *  per standard turn by {@code TurnSystem}; drives spawner escalation.
+     *  Zero until the level starts ticking (i.e. the player is on it). */
+    public int turnsOnLevel;
+
+    /** Optional data-driven mob spawner. {@code null} on levels that don't
+     *  spawn - the per-turn handler ({@code MobSystem.runLevelSpawner}) is a
+     *  no-op then. Set by the factory (e.g. the Horde floor). */
+    public Spawner spawner;
+
+    /**
+     * Data-driven per-turn mob spawner attached to a level. Every standard
+     * turn the handler rolls {@link #chancePerTurn}; on success it spawns a
+     * random species from {@link #speciesPool} at a tile chosen by
+     * {@link #placement}, optionally awake, scaling the spawn level by
+     * {@link #levelRampPer10Turns}. Capped at {@link #maxAlive} live mobs of
+     * the pooled species.
+     */
+    public static class Spawner {
+        /** Where a spawned mob is placed relative to the level. */
+        public enum Placement {
+            /** Near an arbitrary spawner anchor (legacy ant-hill style). */
+            ADJACENT,
+            /** Roughly halfway between the player and the exit stairs, on
+             *  average - jittered around the midpoint then snapped to a free
+             *  floor tile. */
+            MIDPOINT_TO_EXIT
+        }
+
+        /** Probability per standard turn of spawning one mob. */
+        public double chancePerTurn;
+        /** Species keys to pick from at random for each spawn. */
+        public java.util.List<String> speciesPool = new java.util.ArrayList<>();
+        /** Placement strategy for the spawned mob. */
+        public Placement placement = Placement.MIDPOINT_TO_EXIT;
+        /** When true, the spawned mob starts awake and aware of the player. */
+        public boolean spawnAwake;
+        /** Spawn-level escalation: spawn level = {@code 1 + ramp * (turnsOnLevel/10)},
+         *  capped at the progression max. Zero = no escalation. */
+        public int levelRampPer10Turns;
+        /** Cap on live mobs (counted across {@link #speciesPool}) before the
+         *  spawner pauses. */
+        public int maxAlive = 30;
+    }
 
     /** Rectangles that themed-room generation has reserved on this level. Random-scatter
      *  passes (items / mobs in {@link com.bjsp123.rl2.logic.LevelFactoryPopulate}) skip

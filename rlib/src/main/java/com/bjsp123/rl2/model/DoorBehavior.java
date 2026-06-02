@@ -25,7 +25,8 @@ public record DoorBehavior(
     public enum PassRule {
         /** Anyone walking in bumps the door open (wooden DOOR). */
         ANYONE,
-        /** Only PLAYER-faction mobs can cross; others are blocked
+        /** Only the player avatar can cross; everything else - including
+         *  player-loyal mobs (summons, tamed beasts, kittens) - is blocked
          *  (CRYSTAL_DOOR, ONETIME_DOOR). */
         PLAYER_ONLY,
         /** Reserved for future locked doors with no walk-through opening. */
@@ -34,7 +35,14 @@ public record DoorBehavior(
         public boolean allows(Mob mob) {
             return switch (this) {
                 case ANYONE      -> true;
-                case PLAYER_ONLY -> mob != null && "PLAYER".equals(mob.faction);
+                // The player avatar only: PLAYER (human) or an unowned SMART
+                // agent (the autoplay-piloted player). Owned mobs - pets,
+                // tamed beasts, kittens - all carry owner != null and share
+                // the player's faction, so a faction check let them through;
+                // gate on the avatar identity instead.
+                case PLAYER_ONLY -> mob != null && mob.owner == null
+                        && (mob.behavior == Mob.Behavior.PLAYER
+                            || mob.behavior == Mob.Behavior.SMART);
                 case NONE        -> false;
             };
         }

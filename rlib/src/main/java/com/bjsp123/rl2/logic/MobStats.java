@@ -97,8 +97,10 @@ public final class MobStats {
                 ? mob.intrinsic.healRate * (dst.maxHp / baseMaxHp)
                 : mob.intrinsic.healRate;
 
-        // Knockback: +1 tile every 3 character levels (own rule).
-        dst.knockbackSquares = mob.intrinsic.knockbackSquares + L / 3;
+        // Knockback comes from intrinsic (mobs.csv), the equipped weapon
+        // (scaled in ItemStats, added below), and the KNOCKBACK perk - never
+        // from character level on its own.
+        dst.knockbackSquares = mob.intrinsic.knockbackSquares;
 
         // Range stats: scale the single-int base, expose as [N/2, N] MinMax.
         dst.damage       = rangeFromBase(mob.baseDamage,       L);

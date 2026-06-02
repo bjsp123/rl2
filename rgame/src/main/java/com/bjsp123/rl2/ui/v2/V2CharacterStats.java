@@ -167,7 +167,7 @@ public final class V2CharacterStats extends BasePopup {
         // Modal dim.
         s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
-        Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
 
         // Tabs.
         for (int i = 0; i < tabRects.length; i++) {

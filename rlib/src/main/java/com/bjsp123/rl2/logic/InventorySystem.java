@@ -39,7 +39,7 @@ public final class InventorySystem {
             case WEAPON, OFFHAND, ARMOR, AMULET, WAND, ITEM, TOOL -> BagGroup.EQUIPMENT;
             case GEM                                         -> BagGroup.GEMS;
             case FOOD                                        -> BagGroup.FOOD;
-            case POTION, BOMB, ORB                           -> BagGroup.ITEMS;
+            case POTION, BOMB, ORB, THROWN                   -> BagGroup.ITEMS;
         };
     }
 

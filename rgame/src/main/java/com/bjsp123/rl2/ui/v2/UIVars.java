@@ -30,6 +30,14 @@ public final class UIVars {
 
     // -- Background tiers (warm greys, darkest -> lightest) --------------------
     public static Color WIN_BG          = hex(0x443333);
+    /** Parchment fill for *info-only* windows (V2Look, V2BuffInfo, tip popup,
+     *  etc.). Warm beige so the panel reads as a document/page rather than a
+     *  panel-with-buttons. Picked dark enough that the existing white body
+     *  text stays readable - we don't flip text colors per-panel. */
+    public static Color INFO_WIN_BG     = hex(0x9a8868);
+    /** Hairline rule used by info windows to separate sections. Deep sepia
+     *  on parchment - reads as an inked ruled line on a page. */
+    public static Color INFO_RULE       = hex(0x4a3a28);
     public static Color BTN_BG          = hex(0x5a4040);
     public static Color BTN_PRESSED_BG  = hex(0x6e5050);
     public static Color SLOT_BG         = hex(0x806060);
@@ -149,6 +157,17 @@ public final class UIVars {
     /** Font scale factor for the cursor-anchored hit-chance / damage chip,
      *  applied on top of the regular font. */
     public static float CHIP_SCALE              = 0.62f;
+    /** Font scale factor for the world-space melee preview chip rendered
+     *  over each adjacent enemy. The world-camera font is much larger per
+     *  unit than the V2 font, so this multiplier is independent of {@link
+     *  #CHIP_SCALE} - tune it to match the ranged chip's visual size, not
+     *  its numeric scale value. */
+    public static float MELEE_CHIP_SCALE        = 0.4f;
+    /** Font scale factor for in-world damage / miss floaters (the rising
+     *  "5" / "miss" / "blunt" text). Tuned to match the visual size the
+     *  melee chip used to be at - a notch smaller than the default world
+     *  font so the popups don't dominate the tile they're rising from. */
+    public static float DAMAGE_FLOATER_SCALE    = 0.55f;
     /** Pixels the chip's baseline rises above the target tile's top edge. */
     public static float CHIP_LIFT               = 6f;
     /** Horizontal + vertical padding between chip text and its background rect. */

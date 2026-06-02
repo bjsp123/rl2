@@ -280,6 +280,14 @@ public final class LevelFactoryPopulate {
                     placedTemplate = true;
                 } else {
                     it = ItemGenerator.buildItem(template.type, powerLevel, rng);
+                    // Thrown-weapon clusters are uniform: every knife in the
+                    // pile shares the template's level + brand so the whole
+                    // cluster stacks into one bag slot when picked up.
+                    if (it != null
+                            && template.inventoryCategory == Item.InventoryCategory.THROWN) {
+                        it.level = template.level;
+                        it.brand = template.brand;
+                    }
                 }
                 placeItem(level, it, p);
             }

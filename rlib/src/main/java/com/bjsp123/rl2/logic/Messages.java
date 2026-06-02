@@ -272,6 +272,20 @@ public final class Messages {
                             : "eventlog.combat.roll.hit.element",
                     TextCatalog.vars("attacker", atk, "target", tgt,
                             "dealt", dealt, "element", elementText.trim()));
+        } else if (type == MobSystem.AttackType.ENVIRONMENTAL) {
+            // Environmental damage with an originator (knockback slam,
+            // bystander-of-slam, fall-through-chasm) - drop the attacker +
+            // item attribution and use passive voice. The preceding
+            // narrative log (slamInto / shoved-into-wall / fell) already
+            // names who caused it; phrasing the same hit as "attacker's
+            // weapon does N damage" reads as a double-count and wrongly
+            // attributes the slam to the weapon.
+            String tgtStart = articled(targetName, targetIsPlayer, /*sentenceStart=*/true);
+            body = TextCatalog.format(isPhysical
+                            ? "eventlog.combat.roll.env"
+                            : "eventlog.combat.roll.env.element",
+                    TextCatalog.vars("target", tgtStart, "dealt", dealt,
+                            "element", elementText.trim()));
         } else {
             // Ranged / thrown / magic - "X's <item> does N damage to Y".
             boolean hasItem = itemName != null && !itemName.isEmpty();
@@ -454,6 +468,18 @@ public final class Messages {
         return new LogEvent(TextCatalog.format("eventlog.player.uses",
                                     TextCatalog.vars("player", playerName, "verb", v, "item", itemName)),
                             EventPriority.LOW, true);
+    }
+
+    /** "Warrior charges at the rat!" - dedicated lead-in for the CHARGE tool
+     *  (jade bull). Replaces the generic "Warrior uses the jade bull" line
+     *  so the narrative reads as the action ("charges at X") followed by
+     *  the impact roll ("hits X for N damage"). HIGH priority since it
+     *  flags a deliberate player commitment. */
+    public static LogEvent playerCharges(String playerName, String targetName, boolean targetIsPlayer) {
+        String tgt = articled(targetName, targetIsPlayer, /*sentenceStart=*/false);
+        return new LogEvent(TextCatalog.format("eventlog.player.charges",
+                                    TextCatalog.vars("player", playerName, "target", tgt)),
+                            EventPriority.HIGH, true);
     }
 
     /** "The rope can't pull the kobold." */

@@ -2,9 +2,11 @@ package com.bjsp123.rl2.model;
 
 import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.LevelFactory;
+import com.bjsp123.rl2.logic.LevelFactorySpecial;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -83,8 +85,10 @@ public final class WorldTopology {
             }
         }
 
-        // Depth N: single SHINY CENTER level.
-        slot[1][depth] = addLevel(out, width, height, true, false,
+        // Depth N: single SHINY CENTER level. Carries a downstair into the
+        // special antechamber (Landing) - hasDown=true so LevelFactory
+        // places a real STAIRS_DOWN tile we can wire below.
+        slot[1][depth] = addLevel(out, width, height, true, true,
                 depth, Level.Side.CENTER, 0f,
                 Level.VisualTheme.SHINY, unique, rng);
 
@@ -93,7 +97,63 @@ public final class WorldTopology {
             wireDepth(out, slot, d, pDiag, rng);
         }
 
+        // Special levels: append Landing then the three unique floors in
+        // random order. All single-column (CENTER, mapColumn=0) so the map
+        // screen draws them as a vertical chain hanging off the bottom of the
+        // diamond. Stairs wire as: depth N -> Landing -> shuffled[0] ->
+        // shuffled[1] -> shuffled[2] (no further descent).
+        int lastRegularIdx = slot[1][depth];
+        appendSpecialLevels(out, depth, lastRegularIdx, rng);
+
         return out.toArray(new Level[0]);
+    }
+
+    /** Build and wire the four special floors after the regular dungeon.
+     *  Order: Landing always at depth N+1; then the three unique floors
+     *  (Mirrormatch, Horde, Walkway) shuffled across depths N+2..N+4. */
+    private static void appendSpecialLevels(List<Level> out, int regularDepth,
+                                       int lastRegularIdx, Random rng) {
+        // Landing - the antechamber. Always sits immediately below the
+        // last regular floor.
+        int landingDepth = regularDepth + 1;
+        Level landing = LevelFactorySpecial.buildLanding(landingDepth, rng.nextLong());
+        out.add(landing);
+        int landingIdx = out.size() - 1;
+
+        // Wire the last regular floor's downstair to Landing, and
+        // Landing's upstair back to the last regular floor.
+        Level lastRegular = out.get(lastRegularIdx);
+        lastRegular.stairsDownTarget = landingIdx;
+        landing.stairsUpTarget = lastRegularIdx;
+
+        // Shuffle the three unique floors so each run gets a different
+        // endgame order. Each shuffled floor sits at landingDepth+1+i.
+        List<Level.LevelKind> order = new ArrayList<>();
+        order.add(Level.LevelKind.MIRRORMATCH);
+        order.add(Level.LevelKind.HORDE);
+        order.add(Level.LevelKind.WALKWAY);
+        Collections.shuffle(order, rng);
+
+        int previousIdx = landingIdx;
+        for (int i = 0; i < order.size(); i++) {
+            int floorDepth = landingDepth + 1 + i;
+            long seed = rng.nextLong();
+            Level next = switch (order.get(i)) {
+                case MIRRORMATCH -> LevelFactorySpecial.buildMirrormatch(floorDepth, seed);
+                case HORDE       -> LevelFactorySpecial.buildHorde(floorDepth, seed);
+                case WALKWAY     -> LevelFactorySpecial.buildWalkway(floorDepth, seed);
+                default          -> throw new IllegalStateException("Unexpected: " + order.get(i));
+            };
+            out.add(next);
+            int nextIdx = out.size() - 1;
+            // Wire the previous floor down to this one and this one up to
+            // the previous. The last floor in the chain has no downstair
+            // (its stairsDownTarget stays -1) - that's the end of the run.
+            Level prev = out.get(previousIdx);
+            prev.stairsDownTarget = nextIdx;
+            next.stairsUpTarget = previousIdx;
+            previousIdx = nextIdx;
+        }
     }
 
     /** Allocate downstairs from depth {@code d} into depth {@code d+1}. Phase 1

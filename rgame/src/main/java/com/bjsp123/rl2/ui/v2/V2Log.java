@@ -163,8 +163,8 @@ public final class V2Log extends BasePopup {
         s.setColor(0f, 0f, 0f, 0.5f);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
 
-        // Window chrome.
-        Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        // Window chrome - info-style (read-only scrollable log).
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
 
         // Header background.
         s.setColor(UIVars.SLOT_RECESS.r, UIVars.SLOT_RECESS.g,

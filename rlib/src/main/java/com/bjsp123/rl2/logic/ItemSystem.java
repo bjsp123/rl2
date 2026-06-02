@@ -343,10 +343,14 @@ public final class ItemSystem {
                     SurfaceSystem.addSurface(level, target, Level.Surface.OIL);
             }
             case GRASS -> {
-                // Mix of grass and trees - per-drop coin flip; cascade outward
-                // from the target as each drop fills its cell.
+                // Per-drop roll for tree vs grass - the tree chance scales
+                // linearly with the wand's effective level (5% per level,
+                // capped at 100% so a L20 wand from stacked perks doesn't
+                // overflow). Grass otherwise. Cascades outward from the
+                // target as each drop fills its cell.
+                double treeChance = Math.min(1.0, Math.max(0.0, effectiveLevel * 0.05));
                 for (int i = 0; i < targetTiles; i++) {
-                    Level.Vegetation v = RANDOM.nextDouble() < 0.4
+                    Level.Vegetation v = RANDOM.nextDouble() < treeChance
                             ? Level.Vegetation.TREES
                             : Level.Vegetation.GRASS;
                     VegetationSystem.addVegetation(level, target, v);
@@ -1092,10 +1096,27 @@ public final class ItemSystem {
         int dashRange = Math.max(1, ItemStats.effectiveRange(item, effLvl));
         int dx = Math.abs(target.tileX() - user.position.tileX());
         int dy = Math.abs(target.tileY() - user.position.tileY());
-        if (Math.max(dx, dy) > dashRange) return;
+        int cheb = Math.max(dx, dy);
+        if (cheb > dashRange) return;
+        // Charge needs a runway - refuse to fire against adjacent enemies.
+        // The targeting overlay (chargeGrid) also gates this, but enforcing
+        // it here keeps the AI path and any future caller honest.
+        if (cheb < 2) return;
 
         Point arrival = pickChargeArrival(level, user.position, target);
         if (arrival == null) return;
+
+        // Narrative lead-in - replaces the generic "uses the jade bull"
+        // line. Emitted BEFORE the swing so the log reads "charges at X"
+        // then "hits X for N". HIGH priority since it flags a deliberate
+        // commitment of a turn.
+        if (user.behavior == Behavior.PLAYER) {
+            String targetName = victim.name != null
+                    ? victim.name
+                    : (victim.mobType != null ? victim.mobType.toLowerCase() : "?");
+            EventLog.add(Messages.playerCharges(actorName(user),
+                    targetName, victim.behavior == Behavior.PLAYER));
+        }
 
         // Dash visual + position update.
         Point from = user.position;
@@ -1133,10 +1154,8 @@ public final class ItemSystem {
         }
 
         if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
-        if (user.behavior == Behavior.PLAYER) {
-            EventLog.add(Messages.playerUses(actorName(user),
-                    useVerb(item, "eventlog.item.verb.use"), item.name));
-        }
+        // No trailing "uses the jade bull" log - the leading playerCharges
+        // line above already framed the action.
         TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
     }
 

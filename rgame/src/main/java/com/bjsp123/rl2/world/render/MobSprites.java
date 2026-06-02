@@ -26,15 +26,19 @@ public final class MobSprites {
     private static final int CELL = 32;
     /** Cell dimensions for {@code sprites/player.png}: 32 wide, 64 tall.
      *  Row = class (0=ROGUE, 1=WARRIOR, 2=MAGE). Col = variant
-     *  (0=regular player, 1=enemy player, 2=ghost player). */
+     *  (0=unused, 1=enemy player, 2=ghost player). */
     private static final int PLAYER_CELL_W = 32;
     private static final int PLAYER_CELL_H = 64;
 
+    /** Column index in {@code sprites/player.png} used for the real PC.
+     *  Set to {@code 2} (ghost variant) - the player reads as the
+     *  translucent silhouette while the dedicated enemy art (col 1) is
+     *  reserved for ENEMY_PLAYER_* mobs. */
+    private static final int PLAYER_VARIANT_COL       = 2;
     /** Column index in {@code sprites/player.png} used for enemy-player
-     *  mobs while the dedicated "enemy" art (col 1) is unfinished. Set to
-     *  {@code 2} (ghost variant) so enemy players read as visibly distinct
-     *  from the real player. */
-    private static final int ENEMY_PLAYER_VARIANT_COL = 2;
+     *  mobs. Set to {@code 1} - the dedicated enemy-art column - so
+     *  enemy players read as visibly distinct from the real (ghost) PC. */
+    private static final int ENEMY_PLAYER_VARIANT_COL = 1;
 
     private static Texture mobsTex;
     private static final Map<String, int[]> coords = new HashMap<>();
@@ -135,13 +139,16 @@ public final class MobSprites {
         mobsTex = SpriteAtlas.texture();
         if (mobsTex == null) return;
         // Player + enemy-player atlas: sprites/player.png. Row = class
-        // (0=ROGUE, 1=WARRIOR, 2=MAGE); col = variant
-        // (0=regular, 1=enemy art, 2=ghost). Real players use col 0;
-        // enemy players use the ghost col for now.
+        // (0=ROGUE, 1=WARRIOR, 2=MAGE); col = variant (1=enemy art,
+        // 2=ghost). Real players draw from the ghost column; enemy
+        // players draw from the enemy column.
         playerRegions = new EnumMap<>(CharacterClass.class);
-        playerRegions.put(CharacterClass.ROGUE,   playerRegion(0, 0));
-        playerRegions.put(CharacterClass.WARRIOR, playerRegion(1, 0));
-        playerRegions.put(CharacterClass.MAGE,    playerRegion(2, 0));
+        playerRegions.put(CharacterClass.ROGUE,
+                playerRegion(0, PLAYER_VARIANT_COL));
+        playerRegions.put(CharacterClass.WARRIOR,
+                playerRegion(1, PLAYER_VARIANT_COL));
+        playerRegions.put(CharacterClass.MAGE,
+                playerRegion(2, PLAYER_VARIANT_COL));
         enemyPlayerRegions = new EnumMap<>(CharacterClass.class);
         enemyPlayerRegions.put(CharacterClass.ROGUE,
                 playerRegion(0, ENEMY_PLAYER_VARIANT_COL));

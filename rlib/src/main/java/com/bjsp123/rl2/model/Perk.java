@@ -55,7 +55,14 @@ public enum Perk {
      *  </ul>
      *  Also gates the surface-step buffs (WET, OILY) the holder would get
      *  from stepping on her own water / oil bombs. */
-    BOMB_DODGER;
+    BOMB_DODGER,
+    /** Open. Each level lets the holder see through one square of cloud
+     *  (smoke) or {@link Item.ItemEffect#GRASS}-grown tree canopy. Applied
+     *  inside {@link com.bjsp123.rl2.logic.LevelSystem#updateVisibility}
+     *  by treating the first {@code perkLvl} cloud / tree tiles within
+     *  Chebyshev range of the holder as transparent. Beyond that range,
+     *  those tiles still block sight normally. */
+    KEEN_SIGHT;
 
     public String displayName() {
         return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".name");
@@ -81,6 +88,7 @@ public enum Perk {
             case HURLER      -> "hurler";
             case MANA_FOUNT  -> "manaFount";
             case BOMB_DODGER -> "bombDodger";
+            case KEEN_SIGHT  -> "keenSight";
         };
     }
 }

@@ -4,6 +4,7 @@ import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Mob.Behavior;
+import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.Level.Vegetation;
 
@@ -41,6 +42,52 @@ public class LevelSystem {
             for (int y = 0; y < level.height; y++) {
                 level.explored[x][y] = true;
             }
+        }
+    }
+
+    /** Generic "level seals behind the player" rule. Replaces the level's
+     *  {@code STAIRS_UP} (and alt) tiles with {@code FLOOR} and nulls the
+     *  {@link Level#stairsUp}/{@link Level#stairsUpAlt} points so there's no
+     *  retreat. Fired once on arrival for levels with
+     *  {@link Level#sealOnEntry}; idempotent (after the first call the points
+     *  are null, so re-running is a no-op). {@code stairsUpTarget} is left
+     *  intact for the map screen's connectivity rendering. */
+    public static void sealStairsUp(Level level) {
+        if (level == null) return;
+        clearStairUp(level, level.stairsUp);
+        level.stairsUp = null;
+        clearStairUp(level, level.stairsUpAlt);
+        level.stairsUpAlt = null;
+    }
+
+    private static void clearStairUp(Level level, Point up) {
+        if (up == null) return;
+        int x = up.tileX(), y = up.tileY();
+        if (x >= 0 && y >= 0 && x < level.width && y < level.height
+                && level.tiles[x][y] == Tile.STAIRS_UP) {
+            level.tiles[x][y] = Tile.FLOOR;
+        }
+    }
+
+    /** Generic "exit unlocks once the level is cleared" rule. For levels with
+     *  {@link Level#exitUnlocksOnClear} that haven't opened yet
+     *  ({@code stairsDown == null}): once no hostile mob remains alive, stamp
+     *  {@code STAIRS_DOWN} at {@link Level#lockedExit} and set
+     *  {@link Level#stairsDown}. "Hostile" is anything alive that isn't the
+     *  player or an inanimate prop. Called every standard turn; cheap no-op
+     *  on levels that don't opt in. */
+    public static void openExitIfCleared(Level level) {
+        if (level == null || !level.exitUnlocksOnClear) return;
+        if (level.stairsDown != null || level.lockedExit == null) return;
+        for (Mob m : level.mobs) {
+            if (m == null || m.hp <= 0) continue;
+            if (m.behavior == Behavior.PLAYER || m.behavior == Behavior.INANIMATE) continue;
+            return; // a hostile is still alive - exit stays locked
+        }
+        int x = level.lockedExit.tileX(), y = level.lockedExit.tileY();
+        if (x >= 0 && y >= 0 && x < level.width && y < level.height) {
+            level.tiles[x][y] = Tile.STAIRS_DOWN;
+            level.stairsDown = level.lockedExit;
         }
     }
 
@@ -259,7 +306,14 @@ public class LevelSystem {
             int cx = mob.position.tileX();
             int cy = mob.position.tileY();
             if (cx < 0 || cy < 0 || cx >= w || cy >= h) continue;
-            ShadowCaster.castShadow(cx, cy, w, temp, blocking,
+            // KEEN_SIGHT relaxes the blocking grid for this mob: tree-canopy
+            // and smoke tiles within Chebyshev range = perk level become
+            // transparent, so the player sees through them. Beyond the
+            // range they still block sight normally. Returns the global
+            // blocking array unchanged when the mob has no levels in the
+            // perk to keep the common case allocation-free.
+            boolean[] mobBlocking = relaxBlockingForKeenSight(level, mob, blocking, w, h);
+            ShadowCaster.castShadow(cx, cy, w, temp, mobBlocking,
                     (int) Math.ceil(mob.effectiveStats().visionRadius));
             for (int i = 0; i < accum.length; i++) if (temp[i]) accum[i] = true;
         }
@@ -345,6 +399,13 @@ public class LevelSystem {
                     if (hasMob[idx]) blocks = true;
                     Vegetation v = level.vegetation[x][y];
                     if (v != null && v.blocksLight()) blocks = true;
+                } else if (!blocks) {
+                    // Sight pass: tree-canopy vegetation hides what's behind
+                    // it. The lighting branch above already handles trees
+                    // for the {@code forLight} build; this branch handles
+                    // the FOV build.
+                    Vegetation v = level.vegetation[x][y];
+                    if (v != null && v.blocksSight()) blocks = true;
                 }
                 // Smoke clouds block both sight and light - opaque to FOV
                 // (so a smoky room hides whatever's inside) and to lamps
@@ -429,6 +490,43 @@ public class LevelSystem {
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
                 out[x][y] = src[y * w + x];
+    }
+
+    /** Return a blocking grid for {@code mob}'s FOV pass with KEEN_SIGHT
+     *  relaxations applied: any cell within Chebyshev range = perk level
+     *  of the mob whose blocking comes from smoke or tree canopy is
+     *  cleared. Other blockers (walls, doors, large mobs) stay opaque.
+     *
+     *  <p>When the mob has no levels in KEEN_SIGHT the input array is
+     *  returned unchanged - this hot path runs every render frame, so
+     *  allocating a copy for non-keen mobs would be wasteful. */
+    private static boolean[] relaxBlockingForKeenSight(Level level, Mob mob,
+                                                       boolean[] blocking,
+                                                       int w, int h) {
+        int keen = (mob.perks != null)
+                ? mob.perks.getOrDefault(com.bjsp123.rl2.model.Perk.KEEN_SIGHT, 0)
+                : 0;
+        if (keen <= 0) return blocking;
+        boolean[] relaxed = new boolean[blocking.length];
+        System.arraycopy(blocking, 0, relaxed, 0, blocking.length);
+        int mx = mob.position.tileX(), my = mob.position.tileY();
+        int x0 = Math.max(0, mx - keen), x1 = Math.min(w - 1, mx + keen);
+        int y0 = Math.max(0, my - keen), y1 = Math.min(h - 1, my + keen);
+        for (int y = y0; y <= y1; y++) {
+            for (int x = x0; x <= x1; x++) {
+                int idx = y * w + x;
+                if (!relaxed[idx]) continue;
+                // Only relax tiles whose blocking comes from smoke or
+                // tree canopy. A wall or door within range stays opaque -
+                // KEEN_SIGHT is about peering through soft cover, not
+                // x-ray vision.
+                boolean isSmoke = CloudSystem.smokeAt(level, x, y);
+                Vegetation v = level.vegetation[x][y];
+                boolean isTree = v != null && v.blocksSight();
+                if (isSmoke || isTree) relaxed[idx] = false;
+            }
+        }
+        return relaxed;
     }
 
     /**

@@ -644,17 +644,9 @@ public final class Animator {
 
     void onDoorOpened(Level level, GameEvent.DoorOpened m) {
         if (sounds != null) sounds.playAt("sfx.world.door.open", level, m.pos());
-        // Crystal-door concept tip: fires the first time the player opens a
-        // door whose post-open tile is CRYSTAL_DOOR_OPEN. The plain DOOR
-        // path stays silent - crystal doors are the noteworthy variant.
-        if (m.pos() != null) {
-            int dx = m.pos().tileX(), dy = m.pos().tileY();
-            if (dx >= 0 && dy >= 0 && dx < level.width && dy < level.height
-                    && level.tiles[dx][dy] == com.bjsp123.rl2.model.Tile.CRYSTAL_DOOR_OPEN) {
-                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
-                        "concept:crystal", "concept.crystal.tip", "concept.crystal.name", null);
-            }
-        }
+        // No first-encounter tip for plain or crystal doors - only the
+        // onetime door (handled by onOnetimeDoorBroken) carries one, since
+        // it's the variant with non-obvious mechanics worth surfacing.
     }
 
     void onDoorClosed(Level level, GameEvent.DoorClosed m) {
@@ -689,6 +681,16 @@ public final class Animator {
             queue.sequential(thrown.totalFrames());
             if (sounds != null && it != null && it.inventoryCategory == Item.InventoryCategory.BOMB) {
                 sounds.playAt(itemUseKey(it), level, m.from());
+            }
+            // First-encounter tip: any visible throw from a non-player teaches
+            // the player that mobs pick up and use items too. Bomb-flavoured
+            // wording since that's what the player will see most often, but
+            // a tossed potion / orb fires the same hook.
+            Mob thrower = m.thrower();
+            if (thrower != null && thrower.behavior != Mob.Behavior.PLAYER) {
+                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                        "concept:enemyThrows", "concept.enemyThrows.tip",
+                        "concept.enemyThrows.name", null);
             }
         }
         // ANIMATION-GATED LIFECYCLE step 4: pop the deferred resolve that
@@ -754,6 +756,13 @@ public final class Animator {
         boolean visible = MobSystem.isVisibleToPlayer(level, mob)
                 || visibleAt(level, start) || visibleAt(level, end);
         if (!visible) return;
+        // First-encounter tip: the player has now witnessed a knockback,
+        // so it's a good time to explain the slam damage + cascade rules.
+        // Fires whether the player is the slammer, the slamee, or just a
+        // bystander watching mobs collide.
+        com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                "concept:knockback", "concept.knockback.tip",
+                "concept.knockback.name", null);
         int ddx = start.tileX() - end.tileX();
         int ddy = start.tileY() - end.tileY();
         int dist = Math.max(Math.abs(ddx), Math.abs(ddy));

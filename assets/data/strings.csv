@@ -250,6 +250,7 @@ eventlog.player.grappleBlocked,The rope can't pull the {target}.
 eventlog.player.pickup,{player} picks up a {item}.
 eventlog.player.starves,{player} is starving!
 eventlog.player.uses,{player} {verb} the {item}.
+eventlog.player.charges,{player} charges at {target}!
 eventlog.reason.parenthesized, ({reason})
 eventlog.buff.applied,{target} is {buff}.
 eventlog.buff.expired,{target} is no longer {buff}.
@@ -896,6 +897,9 @@ perk.manaFount.description,"Each food or potion you consume restores N/2 charges
 perk.manaFount.name,Mana Fount
 perk.bombDodger.description,"Bomb damage halved per level; bomb buffs / knockback ignored at L1+; thrown bombs have a chance to be preserved (30% at L1, capped at 100% at L10)."
 perk.bombDodger.name,Bomb Dodger
+perk.keenSight.description,"See through N squares of smoke or tree canopy per level. Distant smoke and trees still hide what's behind them."
+perk.keenSight.name,Keen Sight
+perk.keenSight.tip,"Each level lets you see through one square of *smoke or tree*.\nClouds and forests within range turn transparent; beyond that they still block sight."
 perk.killer.tip,"Killing enemies *stacks the KILLER buff*.\nEach stack speeds your attacks and moves - chain kills for a damage spree."
 perk.stealth.tip,"Enemies notice you from *less distance* per level.\nL10 means only adjacent foes spot you - walk around encounters."
 perk.wandmaster.tip,"Every wand gets *+1 effective level* per perk level.\nMore damage, bigger area, more charges - core mage scaling."
@@ -921,12 +925,14 @@ concept.beacon.name,Beacon
 concept.beacon.tip,"Beacons *teleport you between floors* once activated.\nTouch one to light it, then use a teleport orb from the map."
 concept.onetime.name,One-Time Door
 concept.onetime.tip,"You broke through a *one-time door*.\nThese doors shatter under you and can never be re-opened from the other side."
-concept.crystal.name,Crystal Door
-concept.crystal.tip,"Crystal doors *only open for you*.\nMonsters can't push through. Useful for breaking line of sight or stalling a chase."
 concept.surprise.name,Surprise Attack
 concept.surprise.tip,"A *surprise attack* just landed.\nAttacking an enemy that can't see you - out of line-of-sight, invisible, or hidden - deals *1.5x damage*."
 concept.pointBlank.name,Point-Blank Shot
 concept.pointBlank.tip,"Firing a bow or wand at an *adjacent* target suffers a *-50 accuracy penalty*.\nStep back a tile before shooting, or just swing in melee."
+concept.enemyThrows.name,Enemies Can Use Items
+concept.enemyThrows.tip,"Enemies may *pick up items* lying around the dungeon and use them before you do.\nClear the floor or you might catch a bomb yourself."
+concept.knockback.name,Knockback
+concept.knockback.tip,"Hard hits can *knock* a target back.\nSlammed mobs take extra damage on impact, and if they hit a wall or another mob the strike is worse."
 tile.ALTAR,altar
 tile.CHASM,chasm
 tile.DOOR,door
@@ -1026,6 +1032,7 @@ ui.characterSelect.seedExample,e.g. AB12CD
 ui.characterSelect.seedPrompt,Seed (blank for random)
 ui.characterSelect.seedRandom,Seed: random
 ui.characterSelect.revealWholeWorld,Reveal whole world: {state}
+ui.characterSelect.startOnLanding,Start on Landing: {state}
 ui.characterSelect.startingLevel,Starting level: {level}
 ui.characterSelect.tenPerkPoints,+10 perk points: {state}
 ui.characterSelect.title,Choose Class

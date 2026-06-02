@@ -69,6 +69,11 @@ public class PlayScreen implements Screen {
      *  extra teleport orbs to the starting inventory so the player can
      *  immediately use the network. */
     private final boolean revealWholeWorldRequested;
+    /** Pre-game-options "start on Landing" flag - drops the player on the
+     *  endgame Landing floor instead of depth 1 / startingLevel. Overrides
+     *  startingLevel when true. Temporary while we iterate on the endgame
+     *  floors; defaults true in V2CharacterSelect. */
+    private final boolean startOnLandingRequested;
 
     private World world;
     /** Exposed so burger-menu items from other packages can construct level-info
@@ -111,10 +116,20 @@ public class PlayScreen implements Screen {
      *  at most once per character; faster than caching state per-mob here. */
     private void scanForMobTips(com.bjsp123.rl2.model.Level level) {
         if (level == null || level.mobs == null) return;
+        com.bjsp123.rl2.model.Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
+        if (player == null || player.position == null) return;
+        int px = player.position.tileX(), py = player.position.tileY();
+        // Only fire mob tips when the mob is adjacent to the player. Earlier
+        // we triggered on simple visibility, but a distant new species
+        // spotted across the room would fire the tip without the player
+        // having anything to act on yet. Adjacency means "it's actually in
+        // your face" - that's when the tip is relevant and well-timed.
         for (com.bjsp123.rl2.model.Mob mob : level.mobs) {
             if (mob == null || mob.position == null || mob.mobType == null) continue;
             if (mob.behavior == com.bjsp123.rl2.model.Mob.Behavior.PLAYER) continue;
-            if (!com.bjsp123.rl2.logic.MobSystem.tileVisibleToPlayer(level, mob.position)) continue;
+            int mx = mob.position.tileX(), my = mob.position.tileY();
+            int cheb = Math.max(Math.abs(mx - px), Math.abs(my - py));
+            if (cheb != 1) continue;
             com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
                     "mob:" + mob.mobType,
                     "mob." + mob.mobType + ".tip",
@@ -221,28 +236,35 @@ public class PlayScreen implements Screen {
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls) {
-        this(game, slot, cls, null, false, 1, false, false, false);
+        this(game, slot, cls, null, false, 1, false, false, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls, Long seed) {
-        this(game, slot, cls, seed, false, 1, false, false, false);
+        this(game, slot, cls, seed, false, 1, false, false, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode) {
-        this(game, slot, cls, seed, godMode, 1, false, false, false);
+        this(game, slot, cls, seed, godMode, 1, false, false, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode, int startingLevel,
                       boolean allItems, boolean tenPerkPoints) {
-        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, false);
+        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode, int startingLevel,
                       boolean allItems, boolean tenPerkPoints,
                       boolean revealWholeWorld) {
+        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, revealWholeWorld, false);
+    }
+
+    public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
+                      Long seed, boolean godMode, int startingLevel,
+                      boolean allItems, boolean tenPerkPoints,
+                      boolean revealWholeWorld, boolean startOnLanding) {
         this.game = game;
         this.saveSlot = slot;
         this.charClass = cls;
@@ -253,6 +275,7 @@ public class PlayScreen implements Screen {
         this.allItemsRequested = allItems;
         this.tenPerkPointsRequested = tenPerkPoints;
         this.revealWholeWorldRequested = revealWholeWorld;
+        this.startOnLandingRequested = startOnLanding;
     }
 
     public PlayScreen(Rl2Game game, int slot, World loadedWorld) {
@@ -268,6 +291,7 @@ public class PlayScreen implements Screen {
         this.allItemsRequested = false;
         this.tenPerkPointsRequested = false;
         this.revealWholeWorldRequested = false;
+        this.startOnLandingRequested = false;
     }
 
     @Override
@@ -385,6 +409,18 @@ public class PlayScreen implements Screen {
             world.linkLevels();
             int startIdx = Math.max(0,
                     Math.min(levels.length - 1, startingLevel - 1));
+            // Pre-game-options override: drop the player on the Landing
+            // floor (first endgame floor) rather than the depth-based
+            // startingLevel. Scans the level array for the LANDING kind.
+            if (startOnLandingRequested) {
+                for (int i = 0; i < levels.length; i++) {
+                    if (levels[i] != null
+                            && levels[i].kind == Level.LevelKind.LANDING) {
+                        startIdx = i;
+                        break;
+                    }
+                }
+            }
             // Walk every level up to the start index as visited so the
             // map screen / topology reads them as already-explored.
             for (int i = 0; i <= startIdx; i++) {

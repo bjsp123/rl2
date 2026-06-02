@@ -109,7 +109,11 @@ public class Item {
     public enum InventoryCategory {
         WEAPON, OFFHAND, ARMOR, AMULET, GEM, TOOL,
         POTION, WAND, FOOD, ORB, BOMB,
-       
+        /** Dedicated thrown-weapon category (throwing knives, ...). Throwable
+         *  but NOT wieldable - they never enter a gear slot. Stackable, and
+         *  cluster-generated copies share level + brand (see
+         *  {@code LevelFactoryPopulate}). */
+        THROWN,
         ITEM;
 
         /** True if items in this category go into a gear strip equipment slot. */
@@ -385,12 +389,27 @@ public class Item {
         return v;
     }
 
-    /** True only for categories that may form stacks: potions, bombs, and food.
-     *  All other item types (weapons, wands, gems, tools, ...) are always singletons. */
+    /** True only for categories that may form stacks: potions, bombs, food,
+     *  and thrown weapons. All other item types (weapons, wands, gems,
+     *  tools, ...) are always singletons. */
     public boolean isStackable() {
         return inventoryCategory == InventoryCategory.POTION
                 || inventoryCategory == InventoryCategory.BOMB
-                || inventoryCategory == InventoryCategory.FOOD;
+                || inventoryCategory == InventoryCategory.FOOD
+                || inventoryCategory == InventoryCategory.THROWN;
+    }
+
+    /** True if this item can be thrown at a target. Thrown weapons (the
+     *  {@link InventoryCategory#THROWN} category) plus consumable throwables
+     *  (bombs, potions, orbs) and throw-tools (e.g. the catcher ball) qualify.
+     *  Wielded gear - weapons, armour, amulets, offhand - and generic bag
+     *  items never do, even if a leftover {@code throwEffect} lingers in their
+     *  data. Single source of truth for throw-eligibility. */
+    public boolean isThrowable() {
+        return throwEffect != null
+                && inventoryCategory != null
+                && !inventoryCategory.isEquipment()
+                && inventoryCategory != InventoryCategory.ITEM;
     }
 
     /** True if {@code other} is "exactly identical" for stacking purposes - same type,

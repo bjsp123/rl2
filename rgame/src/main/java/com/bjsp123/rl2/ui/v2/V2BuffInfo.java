@@ -49,6 +49,11 @@ public final class V2BuffInfo extends BasePopup {
     }
 
     @Override
+    protected void drawWindow() {
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
+    }
+
+    @Override
     protected void renderShapesPass() {
         beginModalShapes();
         drawScrim();
@@ -58,8 +63,10 @@ public final class V2BuffInfo extends BasePopup {
         // busy under the window. Window chrome alone uses PANEL_FILL_ALPHA
         // (~0.85) which can let texture bleed through on bright tiles.
         com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
-        s.setColor(UIVars.WIN_BG.r, UIVars.WIN_BG.g, UIVars.WIN_BG.b, 1f);
-        float inset = UIVars.WIN_BORDER + 4f;
+        s.setColor(UIVars.INFO_WIN_BG.r, UIVars.INFO_WIN_BG.g, UIVars.INFO_WIN_BG.b, 1f);
+        // The drawInfoShape border is just 1 px; a 4 px inset clears it with
+        // a margin and gives text a fully-opaque parchment backdrop.
+        float inset = 4f;
         s.rect(window.x + inset, window.y + inset,
                 window.w - 2 * inset, window.h - 2 * inset);
         endModalShapes();

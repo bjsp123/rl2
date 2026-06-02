@@ -61,6 +61,11 @@ public final class V2CharacterSelect extends V2Screen {
     /** Reveal-whole-world flag: every level pre-explored, every beacon
      *  pre-activated, +10 teleport orbs in the starting inventory. */
     private boolean revealWholeWorld;
+    /** Drop the player on the endgame Landing floor (1 below the last
+     *  regular dungeon depth) instead of depth 1. Defaults TRUE while we
+     *  iterate on the endgame floors - flip back to FALSE once they're
+     *  feature-complete and the regular dungeon start matters again. */
+    private boolean startOnLanding = true;
 
     private final Rect window       = new Rect();
     private final Rect charPopup    = new Rect();
@@ -201,7 +206,10 @@ public final class V2CharacterSelect extends V2Screen {
                         () -> { tenPerkPoints = !tenPerkPoints; show(); }),
                 new OptionRow(() -> TextCatalog.format("ui.characterSelect.revealWholeWorld",
                         TextCatalog.vars("state", onOff(revealWholeWorld))),
-                        () -> { revealWholeWorld = !revealWholeWorld; show(); })
+                        () -> { revealWholeWorld = !revealWholeWorld; show(); }),
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.startOnLanding",
+                        TextCatalog.vars("state", onOff(startOnLanding))),
+                        () -> { startOnLanding = !startOnLanding; show(); })
         )) {
             buttons.add(new Btn(row.label.get(), optionsPopup.x + pad, yTop,
                     btnW, btnH, row.onClick));
@@ -240,7 +248,7 @@ public final class V2CharacterSelect extends V2Screen {
         game.saveSystem.clear(slot);
         game.setRootScreen(new PlayScreen(game, slot, selected,
                 customSeed, godMode, startingLevel, allItems, tenPerkPoints,
-                revealWholeWorld));
+                revealWholeWorld, startOnLanding));
     }
 
     // -- Seed entry ------------------------------------------------------

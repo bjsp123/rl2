@@ -267,7 +267,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
 
-        Window.drawShape(ctx, window.x, window.y, window.w, window.h);
+        // V2Look is *info-only* (read the tile, never interact with it), so it
+        // uses the lighter info-window fill. The user-facing signal is the
+        // contrast against interactive windows like inventory or settings.
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
         s.setColor(UIVars.BORDER_MID);
         s.rect(window.x + 6f, window.top() - HEADER_H, window.w - 12f, 1f);
 
@@ -308,7 +311,15 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
             for (TextDraw.TextBlock detail : sec.detailBlocks) y -= detail.height();
             y -= sec.iconRowH();
-            if (i < sections.size() - 1) y -= SECTION_GAP;
+            if (i < sections.size() - 1) {
+                // Inked ruled line halfway through the gap so it visually
+                // separates this section from the next without crowding
+                // either one. Page-style.
+                float ruleY = y - SECTION_GAP * 0.5f;
+                Window.drawInfoSeparator(ctx, textLeft, ruleY,
+                        window.right() - PAD - textLeft);
+                y -= SECTION_GAP;
+            }
         }
 
         s.end();
@@ -426,7 +437,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (it.brand != null && it.brand.element != null) {
             bits.add(TextCatalog.getOrDefault("ui.look.brandEffect." + it.brand.element.name(),
                     TextCatalog.get("ui.look.brandEffect.generic")));
-        } else if (it.throwEffect != null
+        } else if (it.isThrowable()
                 && it.throwEffect != Item.ItemEffect.DAMAGE) {
             // get() (not getOrDefault) so a missing key shows as ??key?? in
             // the UI instead of an empty pill - lets us catch un-translated
