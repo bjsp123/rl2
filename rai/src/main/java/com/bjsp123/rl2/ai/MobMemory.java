@@ -37,7 +37,6 @@ public final class MobMemory {
 
     public Goal   lastGoal;
     public double lastGoalScore;
-    public int    explorationFailureStreak;
     public int    levelStamp = -1;
     /** Current exploration target; cleared on arrival or when no longer a frontier.
      *  Caching the target prevents the "step one tile, switch frontier, step back"
@@ -68,7 +67,6 @@ public final class MobMemory {
         knownInactiveBeacons.clear();
         stairsDown = null;
         stairsUp = null;
-        explorationFailureStreak = 0;
         exploreTarget = null;
         exploreTargetAge = 0;
         ticksOnCurrentLevel = 0;

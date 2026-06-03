@@ -95,8 +95,17 @@ public final class BrandSystem {
                 }
             }
             case FREEZE -> {
-                BuffSystem.apply(level, target, Buff.BuffType.CHILLED,
-                        power, 8 * TurnSystem.STANDARD_TURN_TICKS, attacker);
+                // Cold bite (RL-31): the brand now deals COLD damage (x4 vs wet
+                // targets, like the freeze bomb), then applies CHILLED. Fired as
+                // MAGIC, not MELEE, so it can't re-trigger this brand and recurse.
+                MobSystem.processAttack(level, attacker, target,
+                        MobSystem.rollRange(new MinMax(1, Math.max(1, power))),
+                        MobSystem.AttackType.MAGIC, MobSystem.DamageElement.COLD, null,
+                        new MobSystem.DamageCause(attacker, weapon, "freeze"));
+                if (target.hp > 0) {
+                    BuffSystem.apply(level, target, Buff.BuffType.CHILLED,
+                            power, 8 * TurnSystem.STANDARD_TURN_TICKS, attacker);
+                }
                 if (tx >= 0 && ty >= 0 && tx < level.width && ty < level.height
                         && level.surface[tx][ty] == Level.Surface.WATER) {
                     level.surface[tx][ty] = Level.Surface.ICE;

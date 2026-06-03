@@ -103,13 +103,12 @@ public final class BuffSystem {
         Buff existing = get(target, type);
         if (existing != null) {
             // KILLER is a stacking buff: re-applying it on each kill ADDS the
-            // incoming level to the existing stack count and RESETS the
-            // duration (instead of the default max-merge). The Warrior's
-            // perk feeds {@code ceil(perkLvl/2)} as the incoming level so
-            // higher-rank KILLER perk means each kill bumps the stack
-            // faster.
+            // incoming level to the existing stack count (capped at
+            // KILLER_MAX_STACKS) and RESETS the duration (instead of the default
+            // max-merge). The Warrior's perk feeds {@code ceil(perkLvl/2)} as the
+            // incoming level so higher-rank KILLER bumps the stack faster.
             if (type == BuffType.KILLER) {
-                existing.level         = existing.level + newLevel;
+                existing.level         = Math.min(KILLER_MAX_STACKS, existing.level + newLevel);
                 existing.durationTicks = newDuration;
             } else {
                 existing.level         = Math.max(existing.level,         newLevel);
@@ -479,6 +478,11 @@ public final class BuffSystem {
      *  here rather than compounding toward 1, so a maxed perk on a kill streak
      *  caps at this cost instead of becoming near-instant. */
     public static final int KILLER_MIN_COST = 40;
+
+    /** Max KILLER stack level. Kills add {@code ceil(perkLvl/2)} each but the
+     *  stack caps here so the buff level stays sane (the cost benefit is already
+     *  bounded by {@link #KILLER_MIN_COST}). */
+    public static final int KILLER_MAX_STACKS = 10;
 
     /** Apply the KILLER speed multiplier to an already-(other-buff-)scaled cost,
      *  but never below {@link #KILLER_MIN_COST} - and never RAISE a cost that

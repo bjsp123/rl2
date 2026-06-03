@@ -470,10 +470,10 @@ public final class ItemSystem {
      * Wand-of-lightning chain. Lightning hits the mob on {@code target} (if any),
      * then jumps to any other mob within Chebyshev range {@code jumpRadius}
      * that hasn't already been hit, repeating until the chain runs out of
-     * eligible neighbours. Each victim takes the wand's rolled damage,
-     * doubled if the victim is WET (the {@link Buff.BuffType#WET} buff or
-     * standing on a {@link Level.Surface#WATER} / {@link Level.Surface#ICE}
-     * tile).
+     * eligible neighbours. Each victim takes the wand's rolled SHOCK damage;
+     * wetness (the {@link Buff.BuffType#WET} buff or standing on a
+     * {@link Level.Surface#WATER} / {@link Level.Surface#ICE} tile) doubles it
+     * via the central wet-vulnerability rule in {@code MobSystem.processAttack}.
      *
      * <p>Jump radius is normally {@code 2} tiles, but bumps to {@code 4} when
      * the impact tile carries a {@link Level.Surface#WATER} or
