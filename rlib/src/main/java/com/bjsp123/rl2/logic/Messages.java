@@ -559,6 +559,13 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
+    /** "Adventurer snatches the fire bomb out of the air!" - BOMB_DODGER catch (RL-34). */
+    public static LogEvent bombCaught(String playerName, String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.bomb.caught",
+                                    TextCatalog.vars("player", playerName, "item", itemName)),
+                            EventPriority.HIGH, true);
+    }
+
     public static LogEvent itemEquipped(String playerName, String itemName) {
         return new LogEvent(TextCatalog.format("eventlog.item.equipped",
                                     TextCatalog.vars("player", playerName, "item", itemName)),

@@ -749,7 +749,7 @@ public final class ItemSystem {
         while (!frontier.isEmpty()) {
             Mob v = frontier.poll();
             int dmg = MobSystem.rollRange(dmgRange);
-            if (isWet(level, v)) dmg *= 2;
+            // Wet x2 is now applied centrally in MobSystem.processAttack (SHOCK + wet).
             MobSystem.processAttack(level, caster, v, dmg,
                     MobSystem.AttackType.MAGIC, MobSystem.DamageElement.SHOCK, null,
                     new MobSystem.DamageCause(caster, originItem, "lightning"));
@@ -773,17 +773,6 @@ public final class ItemSystem {
         }
     }
 
-    /** True if {@code m} is electrically conductive - carries the WET buff or
-     *  stands on a water / ice tile. Pulled out of the lightning case so the
-     *  chain step can reuse it without duplicating the surface read. */
-    private static boolean isWet(Level level, Mob m) {
-        if (m == null || m.position == null) return false;
-        if (BuffSystem.hasBuff(m, Buff.BuffType.WET)) return true;
-        int x = m.position.tileX(), y = m.position.tileY();
-        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
-        Level.Surface s = level.surface[x][y];
-        return s == Level.Surface.WATER || s == Level.Surface.ICE;
-    }
 
     /** Closest unhit mob within Chebyshev range {@code radius} of {@code from}.
      *  Returns null when no eligible candidate exists. */

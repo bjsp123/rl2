@@ -209,6 +209,7 @@ effect.mob.tamed,tame!
 eventlog.achievement.unlocked,Achievement unlocked: {achievement}.
 eventlog.beacon.activated,{player} activates the beacon.
 eventlog.bomb.detonates,The {item} detonates.
+eventlog.bomb.caught,{player} snatches the {item} out of the air!
 eventlog.buff.applied,{target} is {buff}.
 eventlog.buff.expired,{target} is no longer {buff}.
 eventlog.combat.elementalDamage,The {target} takes {damage} {element} damage.

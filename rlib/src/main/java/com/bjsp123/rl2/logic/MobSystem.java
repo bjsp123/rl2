@@ -71,7 +71,20 @@ public class MobSystem {
      *  (mechanism) - a fire bomb's impact damage is THROWN/PHYSICAL while its DOT is
      *  ENVIRONMENTAL/FIRE. */
     public enum DamageElement {
-        PHYSICAL, MAGIC, POISON, FIRE, SHOCK, STARVATION
+        PHYSICAL, MAGIC, POISON, FIRE, SHOCK, STARVATION, COLD
+    }
+
+    /** True if {@code m} is "wet" - carries the WET buff or stands on a water /
+     *  ice tile. Wetness conducts lightning (x2) and aggravates cold (x4, RL-31),
+     *  applied centrally in {@link #processAttack}; also gates the chilled+wet
+     *  freeze in {@code BuffSystem.maybeFreeze}. */
+    public static boolean isWet(Level level, Mob m) {
+        if (level == null || m == null || m.position == null) return false;
+        if (BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.WET)) return true;
+        int x = m.position.tileX(), y = m.position.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        Level.Surface s = level.surface[x][y];
+        return s == Level.Surface.WATER || s == Level.Surface.ICE;
     }
 
     /** Mutable accumulator for the per-attack tuning log line. Callers populate it
@@ -1227,12 +1240,18 @@ public class MobSystem {
             rawDealt = 0;
         }
         // Buff-based mitigation. PROTECTION blunts physical, ANTI_MAGIC blunts magic
-        // and fire. Other elements (POISON, SHOCK, STARVATION) ignore both buffs.
+        // and fire. Other elements (POISON, SHOCK, STARVATION, COLD) ignore both buffs.
         int dealt = switch (element) {
             case PHYSICAL          -> BuffSystem.mitigatePhysicalDamage(target, rawDealt);
             case MAGIC, FIRE       -> BuffSystem.mitigateMagicDamage(target, rawDealt);
-            case POISON, SHOCK, STARVATION -> rawDealt;
+            case POISON, SHOCK, STARVATION, COLD -> rawDealt;
         };
+        // Wet vulnerability (RL-31): water conducts lightning (x2) and aggravates
+        // cold (x4). Applied after mitigation so it scales the real hit.
+        if (dealt > 0 && isWet(level, target)) {
+            if (element == DamageElement.COLD)       dealt *= 4;
+            else if (element == DamageElement.SHOCK) dealt *= 2;
+        }
         // BLUNT floater - emitted ahead of the HIT/MISS floater whenever a defensive
         // buff ate part of the hit, so the renderer plays the dim "blunt" first.
         if (dealt < rawDealt && rawDealt > 0 && level != null && level.events != null) {
@@ -1503,6 +1522,12 @@ public class MobSystem {
             // by the player's own onMobEnteredTile path, never picked up
             // into anyone's bag. Non-player mobs leave them untouched.
             if (item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.POWERUP) {
+                continue;
+            }
+            // RL-36: mobs must not pick up the teleport ORB (throwEffect TELEPORT) -
+            // thrown, it scatters everyone in its blast to a random level, so a mob
+            // grabbing one could fling the player away. Leave it on the floor.
+            if (item.throwEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
                 continue;
             }
             // Snapshot the floor position BEFORE addToBag clears it, so the
@@ -2475,6 +2500,7 @@ public class MobSystem {
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
             Mob target = nearestAttackTarget(mob, level);
             if (target == null) return false;
+            if (!hasLineOfFire(mob, target, level)) return false;
             if (expectedWandDamage(wand, mob, target) <= 0) return false;
             return wandBeatsMelee(mob, wand, target);
         }
@@ -2491,6 +2517,7 @@ public class MobSystem {
                 || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.FIRE) {
             Mob target = nearestAttackTarget(mob, level);
             if (target == null || target.position == null) return false;
+            if (!hasLineOfFire(mob, target, level)) return false;
             int effLvl = ItemStats.effectiveLevel(wand, mob);
             int effectSize = ItemStats.effectiveSize(wand, effLvl);
             if (effectSize <= 0) return false;
@@ -2600,14 +2627,27 @@ public class MobSystem {
         return false;
     }
 
-    /** True iff the mob has at least one hostile in throw range and no ally
-     *  inside the bomb's AOE around that target. */
+    /** True iff {@code shooter} both sees {@code target} AND has an unobstructed
+     *  projectile path to it. CRYSTAL_DOOR is sight-transparent but blocks
+     *  projectiles, so without the second check a mob lobs bombs / fires wands at
+     *  a target it can't actually hit (e.g. the player sealed outside a beacon
+     *  room); the shot clips short and splashes its own allies (RL-16). Mirrors
+     *  the gate in {@link #tryRangedShot}. */
+    private static boolean hasLineOfFire(Mob shooter, Mob target, Level level) {
+        if (target == null || target.position == null) return false;
+        return LevelUtilities.getLineOfSight(level, shooter, target.position)
+                && projectileLineReaches(level, shooter.position, target.position, shooter);
+    }
+
+    /** True iff the mob has at least one hostile in throw range, a clear line of
+     *  fire to it, and no ally inside the bomb's AOE around that target. */
     private static boolean canThrowBombAtSomeone(Mob thrower, com.bjsp123.rl2.model.Item bomb, Level level) {
         Mob target = nearestAttackTarget(thrower, level);
         if (target == null || target.position == null) return false;
         int d = Math.max(Math.abs(target.position.tileX() - thrower.position.tileX()),
                          Math.abs(target.position.tileY() - thrower.position.tileY()));
         if (d > AI_BOMB_THROW_RANGE) return false;
+        if (!hasLineOfFire(thrower, target, level)) return false;
         return !allyInBombAoe(thrower, target.position, bomb, level);
     }
 
@@ -3263,9 +3303,30 @@ public class MobSystem {
                     || BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.PHASE)) continue;
             int d = Math.max(Math.abs(m.position.tileX() - mx),
                              Math.abs(m.position.tileY() - my));
-            if (d <= stealthScaledRadius(m, radius)) return true;
+            if (d <= stealthScaledRadius(m, radius)) {
+                // RL-33: a STEALTHy target a SLEEPING observer can see may slip
+                // notice this turn; awake mobs have already noticed and track
+                // normally, so the dodge only gates the initial wake.
+                if (mob.stateOfMind == StateOfMind.ASLEEP
+                        && stealthDodgesNotice(level, mob, m)) continue;
+                return true;
+            }
         }
         return false;
+    }
+
+    /** RL-33: per-turn stealth dodge. Returns true when {@code observer} FAILS to
+     *  notice a STEALTHy {@code target} it can see this turn. Notice chance =
+     *  {@code 1 - 0.05*stealthLvl} (L0 always notices, L10 = 50%/turn). LoS-gated:
+     *  stealth only helps against a foe that can actually see you. Non-stealthy
+     *  targets never dodge. */
+    private static boolean stealthDodgesNotice(Level level, Mob observer, Mob target) {
+        if (target == null || target.perks == null) return false;
+        int lvl = target.perks.getOrDefault(com.bjsp123.rl2.model.Perk.STEALTH, 0);
+        if (lvl <= 0) return false;
+        if (!LevelUtilities.getLineOfSight(level, observer, target.position)) return false;
+        double noticeProb = Math.max(0.0, 1.0 - 0.05 * lvl); // L10 -> 0.50
+        return RANDOM.nextDouble() >= noticeProb;            // true = failed to notice
     }
 
     /** Apply the STEALTH perk to {@code observer}'s detection {@code radius}.
@@ -3511,33 +3572,17 @@ public class MobSystem {
         } else {
             com.bjsp123.rl2.util.ActionTracker.bumpThrow(thrower);
         }
-        // "Adventurer throws the fire bomb." Replaces the previous generic
-        // "uses" wording with a verb that names the action.
+        // "Adventurer throws the fire bomb." Bombs are notable, so log EVERY bomb
+        // throw visibly - including mob throws, which used to be LOW-priority and
+        // hidden (RL-35). Other thrown items remain player-only in the log.
         EventLog.add(Messages.itemThrown(nameForLog(level, thrower),
                 it.name != null ? it.name : it.type,
-                thrower.behavior == Behavior.PLAYER));
-        // BOMB_DODGER conservation - bombs occasionally survive the throw.
-        // Save chance scales with perk level: 50% at L1, +10% per level,
-        // capped at 99% (L10+). Non-bomb throws always consume; non-perked
-        // throwers always consume. When the bomb is saved we keep the
-        // inventory entry but still emit the projectile (it visually flies
-        // out and detonates at the destination, just respawning in the
-        // thrower's bag - a bit of magical hand-wave).
-        boolean saved = false;
-        if (it.inventoryCategory == Item.InventoryCategory.BOMB
-                && thrower.perks != null) {
-            int lvl = thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0);
-            if (lvl > 0) {
-                double chance = Math.min(0.99, 0.40 + lvl * 0.10);
-                if (RANDOM.nextDouble() < chance) saved = true;
-            }
-        }
-        if (!saved) {
-            removeFromInventory(thrower, it);
-        } else if (level != null && level.events != null && thrower.position != null) {
-            // Visible feedback so the player notices the bomb was preserved.
-            level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(thrower, 0));
-        }
+                thrower.behavior == Behavior.PLAYER
+                        || it.inventoryCategory == Item.InventoryCategory.BOMB));
+        // Thrown items are always consumed from the thrower's bag. (The old
+        // BOMB_DODGER "bomb survives the throw" regeneration is gone - RL-34
+        // reworks the perk into catching ENEMY bombs instead; see applyThrowImpact.)
+        removeFromInventory(thrower, it);
         // Clip the trajectory at the first mob / wall / statue between
         // thrower and the user-picked tile. Bombs detonate against the
         // obstacle rather than ghosting through it.
@@ -3629,6 +3674,33 @@ public class MobSystem {
         int tx = dst.tileX(), ty = dst.tileY();
         ItemEffect te = it.throwEffect;
         boolean inBounds = tx >= 0 && ty >= 0 && tx < level.width && ty < level.height;
+
+        // RL-34: BOMB_DODGER catch. An ENEMY bomb about to land within 3 tiles of
+        // a player who has the perk has a (25 + 5*lvl)% chance to be snatched into
+        // the player's bag instead of detonating.
+        if (it.inventoryCategory == Item.InventoryCategory.BOMB && inBounds && thrower != null) {
+            Mob player = TurnSystem.findPlayer(level);
+            if (player != null && player != thrower && player.position != null
+                    && player.inventory != null
+                    && getAttitudeToMob(thrower, player) == Attitude.ATTACK) {
+                int pLvl = player.perks == null ? 0
+                        : player.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0);
+                int dist = Math.max(Math.abs(tx - player.position.tileX()),
+                                    Math.abs(ty - player.position.tileY()));
+                if (pLvl > 0 && dist <= 3 && RANDOM.nextDouble() < 0.25 + 0.05 * pLvl) {
+                    it.location = null;
+                    if (InventorySystem.addToBag(player.inventory, it)) {
+                        EventLog.add(Messages.bombCaught(nameForLog(level, player),
+                                it.name != null ? it.name : it.type));
+                        if (level.events != null) {
+                            level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemPickedUp(
+                                    player, it, dst));
+                        }
+                        return; // caught -> no detonation
+                    }
+                }
+            }
+        }
 
         // Bomb detonation log - HIGH priority for any bomb that does damage
         // or applies a cloud. Non-damaging utility throws (CAPTURE / TAME /
@@ -3908,7 +3980,7 @@ public class MobSystem {
             if (target != null) {
                 processAttack(level, thrower, target,
                         scaledBombDamage(target, it, bombDamage),
-                        AttackType.THROWN, DamageElement.PHYSICAL,
+                        AttackType.THROWN, DamageElement.COLD,
                         null, new DamageCause(thrower, it, "throw"));
                 BrandSystem.applyBrandOnHit(level, thrower, target, it);
             }

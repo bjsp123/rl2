@@ -156,12 +156,26 @@ public final class BuffSystem {
     private static void maybeFreeze(Level level, Mob target, BuffType applied, Mob source) {
         if (applied != BuffType.CHILLED && applied != BuffType.WET) return;
         Buff chilled = get(target, BuffType.CHILLED);
+        if (chilled == null) return;
+        // "Wet" = the WET buff OR standing on a water/ice tile (RL-32), so chilling
+        // a mob standing in water freezes it even without the buff.
+        if (!MobSystem.isWet(level, target)) return;
         Buff wet = get(target, BuffType.WET);
-        if (chilled == null || wet == null) return;
-        int lvl = Math.max(chilled.level, wet.level);
-        int dur = Math.max(chilled.durationTicks, wet.durationTicks);
-        Mob src = source != null ? source : (chilled.source != null ? chilled.source : wet.source);
-        apply(level, target, BuffType.FROZEN, lvl, dur, src);
+        int lvl = Math.max(chilled.level, wet != null ? wet.level : 1);
+        int dur = Math.max(chilled.durationTicks,
+                wet != null ? wet.durationTicks : chilled.durationTicks);
+        Mob src = source != null ? source
+                : (chilled.source != null ? chilled.source : (wet != null ? wet.source : null));
+        // Cold-shock burst (RL-31): on the transition INTO chilled+wet (i.e. not
+        // already frozen), deal a one-time COLD hit - quadrupled by wetness in
+        // processAttack. Dealt BEFORE freezing so it doesn't shorten the fresh
+        // FROZEN via shortenFrozenOnDamage. Burst base 5*lvl -> ~20*lvl felt.
+        if (get(target, BuffType.FROZEN) == null && target.hp > 0) {
+            MobSystem.processAttack(level, src, target, 5 * Math.max(1, lvl),
+                    MobSystem.AttackType.MAGIC, MobSystem.DamageElement.COLD, null,
+                    new MobSystem.DamageCause(src, null, "cold-shock"));
+        }
+        if (target.hp > 0) apply(level, target, BuffType.FROZEN, lvl, dur, src);
     }
 
     /** Strip a buff if present. No-op otherwise. Used by potion effects that should
