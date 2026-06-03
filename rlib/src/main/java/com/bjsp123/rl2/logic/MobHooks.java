@@ -23,7 +23,8 @@ public final class MobHooks {
 
     private MobHooks() {}
 
-    private static final Random RANDOM = new Random();
+    private static final Random RANDOM =
+            com.bjsp123.rl2.util.SimRng.register("MobHooks", new Random());
 
     /**
      * Fires after {@code killer} lands the killing blow on {@code victim}, before the

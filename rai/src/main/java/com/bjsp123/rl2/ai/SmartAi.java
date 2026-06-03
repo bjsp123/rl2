@@ -169,7 +169,7 @@ public final class SmartAi implements MobBrain {
                 !nearUnknown.isEmpty() ? nearUnknown : anyWalkable;
         if (pool.isEmpty()) return null;
         com.bjsp123.rl2.model.Point pick =
-                pool.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(pool.size()));
+                pool.get(WALK_RNG.nextInt(pool.size()));
         return new com.bjsp123.rl2.ai.action.ActionMoveToward(pick, "wander", 0.5);
     }
 
@@ -242,7 +242,12 @@ public final class SmartAi implements MobBrain {
         }
         mob.statsDirty = true;
     }
-    private static final java.util.Random PERK_RNG = new java.util.Random(0x5EEDEDL);
+    private static final java.util.Random PERK_RNG =
+            com.bjsp123.rl2.util.SimRng.register("SmartAi.perk", new java.util.Random(0x5EEDEDL));
+    /** Random-walk tie-break for the escape wander. Registered (was
+     *  ThreadLocalRandom) so escapes replay deterministically under a seed. */
+    private static final java.util.Random WALK_RNG =
+            com.bjsp123.rl2.util.SimRng.register("SmartAi.walk", new java.util.Random());
 
     /** Track how long we've been failing to advance the fight against the nearest
      *  enemy. If we keep firing ranged into the void while their HP holds steady,
@@ -294,9 +299,11 @@ public final class SmartAi implements MobBrain {
     private static void refreshMemory(Mob mob, Level level, MobMemory mem) {
         boolean[][] fov = new boolean[level.width][level.height];
         LevelSystem.computeMobVisibilityInto(level, mob, fov);
+        boolean revealedNew = false;
         for (int y = 0; y < level.height; y++) {
             for (int x = 0; x < level.width; x++) {
                 if (!fov[x][y]) continue;
+                if (!mem.knownTiles[x][y]) revealedNew = true; // flipped unknown->known this turn
                 mem.knownTiles[x][y] = true;
                 Tile t = level.tiles[x][y];
                 mem.rememberedTile[x][y] = t;
@@ -306,6 +313,9 @@ public final class SmartAi implements MobBrain {
                 else if (t == Tile.BEACON_ACTIVE) mem.knownInactiveBeacons.remove(new Point(x, y));
             }
         }
+        // Track exploration progress: a turn that reveals no new tile counts
+        // toward the dwell-livelock fallback (Decider's "descend-stalled" branch).
+        if (revealedNew) mem.exploreStallTurns = 0; else mem.exploreStallTurns++;
         // Items currently visible: snapshot known floor items; drop ones we used to remember
         // here that are no longer present.
         if (level.items != null) {

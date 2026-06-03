@@ -63,6 +63,10 @@ public final class AutoplayGame {
      */
     public static AutoplayGame newRun(long seed, Mob.CharacterClass cls,
                                       int worldW, int worldH) {
+        // Pin every process-wide gameplay RNG (combat / AI / environment) to
+        // this run's seed so the whole sim replays deterministically - same
+        // seed, same run. World-gen already seeds its own local rng below.
+        com.bjsp123.rl2.util.SimRng.reseedAll(seed);
         Random rng = new Random(seed);
         World world = new World();
         world.unique = new UniqueTracker();
@@ -670,6 +674,10 @@ public final class AutoplayGame {
             if (now > lastLevelIndex) stats.stairsDescended++;
             else                      stats.stairsAscended++;
             if (now > stats.depthReached) stats.depthReached = now;
+            if (now >= 0 && now < stats.arrivalTickPerDepth.length
+                    && stats.arrivalTickPerDepth[now] < 0) {
+                stats.arrivalTickPerDepth[now] = turnsElapsed; // first arrival at this depth
+            }
             lastLevelIndex = now;
         }
     }

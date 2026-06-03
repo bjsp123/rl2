@@ -425,6 +425,7 @@ public final class BuffSystem {
         int chilledPenalty = 0;
         double moveMultiplier = 1.0;
         double actionMultiplier = 1.0;
+        double killerMult = 1.0; // KILLER kept separate so its reduction floors at KILLER_MIN_COST
         for (Buff b : mob.buffs) {
             if (b == null || b.type == null) continue;
             switch (b.type) {
@@ -440,24 +441,39 @@ public final class BuffSystem {
                 }
                 case HASTED -> moveMultiplier *= Math.pow(0.8, b.level);
                 case KILLER -> {
-                    // KILLER stacks via the apply() carve-out above. Each
-                    // stack multiplies action + move cost by 0.9 - softer
-                    // than the previous 0.85 / 0.8 multipliers so a
-                    // warrior on a kill streak speeds up gradually rather
-                    // than collapsing turn cost to 1.
-                    double k = Math.pow(0.9, Math.max(1, b.level));
-                    moveMultiplier   *= k;
-                    actionMultiplier *= k;
+                    // Killer-streak haste: each stack multiplies BOTH move and
+                    // action (attack/ranged) cost by 0.9, compounding. Tracked
+                    // separately from the other multipliers so its benefit floors
+                    // at KILLER_MIN_COST (see below) instead of collapsing cost
+                    // toward 1 - a maxed perk stacks +5/kill and would otherwise
+                    // reach ~zero cost on a kill streak.
+                    killerMult *= Math.pow(0.9, Math.max(1, b.level));
                 }
                 case CHILLED -> chilledPenalty = Math.max(chilledPenalty, 80 + b.level * 15);
                 default -> { /* other buff types don't yet contribute to the stat block */ }
             }
         }
-        dst.moveCost = scaledCost(dst.moveCost + chilledPenalty, moveMultiplier);
-        dst.attackCost = scaledCost(dst.attackCost + chilledPenalty, actionMultiplier);
+        dst.moveCost   = killerFloor(scaledCost(dst.moveCost   + chilledPenalty, moveMultiplier),   killerMult);
+        dst.attackCost = killerFloor(scaledCost(dst.attackCost + chilledPenalty, actionMultiplier), killerMult);
         if (dst.rangedCost > 0) {
-            dst.rangedCost = scaledCost(dst.rangedCost + chilledPenalty, actionMultiplier);
+            dst.rangedCost = killerFloor(scaledCost(dst.rangedCost + chilledPenalty, actionMultiplier), killerMult);
         }
+    }
+
+    /** Lowest move/action cost the KILLER streak buff will reduce a stat to.
+     *  KILLER still stacks (duration + count), but its speed benefit bottoms out
+     *  here rather than compounding toward 1, so a maxed perk on a kill streak
+     *  caps at this cost instead of becoming near-instant. */
+    public static final int KILLER_MIN_COST = 40;
+
+    /** Apply the KILLER speed multiplier to an already-(other-buff-)scaled cost,
+     *  but never below {@link #KILLER_MIN_COST} - and never RAISE a cost that
+     *  other buffs already pushed below the floor. No-op when no KILLER is active. */
+    private static int killerFloor(int cost, double killerMult) {
+        if (killerMult >= 1.0) return cost;
+        int reduced = (int) Math.round(cost * killerMult);
+        int floor = Math.min(cost, KILLER_MIN_COST);
+        return Math.max(floor, reduced);
     }
 
     // effectiveAccuracy / effectiveEvasion deleted: their contributions now flow
@@ -556,11 +572,16 @@ public final class BuffSystem {
             }
             case HOPE:
                 return "+" + level + " accuracy, +" + level + " evasion; fear immunity";
-            case KILLER:
-                // Per stack: 0.9 multiplier to move/attack cost. Level == stacks.
-                double killerCost = Math.pow(0.9, level);
-                int killerFaster = (int) Math.round((1.0 - killerCost) * 100.0);
-                return "moves " + killerFaster + "% faster (" + level + " stacks)";
+            case KILLER: {
+                // Effect is 0.9^level on move/attack cost, but floored at
+                // KILLER_MIN_COST - so the % faster tops out instead of climbing
+                // to ~100%. Compute against the standard cost as a representative
+                // base, applying the same floor the stat pipeline does.
+                int base = TurnSystem.STANDARD_TURN_TICKS;
+                int eff  = Math.max(KILLER_MIN_COST, (int) Math.round(base * Math.pow(0.9, level)));
+                int killerFaster = (int) Math.round((1.0 - eff / (double) base) * 100.0);
+                return "moves & attacks " + killerFaster + "% faster";
+            }
             case BLEEDING:
                 return "loses HP each turn (rate tapers as duration drops)";
             case POISONED:

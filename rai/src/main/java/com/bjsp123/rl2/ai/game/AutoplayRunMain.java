@@ -77,7 +77,8 @@ public final class AutoplayRunMain {
                 ? Mob.CharacterClass.values()
                 : new Mob.CharacterClass[]{onlyClass};
 
-        Path csvOut = Paths.get("autoplay.csv").toAbsolutePath();
+        Path csvOut = Paths.get("results", "autoplay.csv").toAbsolutePath();
+        Files.createDirectories(csvOut.getParent());
         try (PrintWriter csv = new PrintWriter(Files.newBufferedWriter(csvOut))) {
             csv.println("seed,char_class,outcome,turns,depth_reached,max_depth,"
                     + "char_level,perks_spent,"

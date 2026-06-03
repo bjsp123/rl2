@@ -91,7 +91,10 @@ public final class LevelFactoryPopulate {
      *  also pass the powerLevel + theme gate. The output list contains
      *  {@code count} copies of each eligible type so the caller can
      *  iterate it directly to place every guaranteed copy. */
-    private static List<String> guaranteedItems(Level level) {
+    /** Distinct item types guaranteed to appear on {@code level} (each type's
+     *  copy count is {@code def.guaranteedPerLevel}). Caller decides whether to
+     *  scatter or cluster the copies. */
+    private static List<String> guaranteedTypes(Level level) {
         List<String> out = new ArrayList<>();
         double f = depthFraction(level);
         for (String type : Registries.itemTypes()) {
@@ -99,7 +102,7 @@ public final class LevelFactoryPopulate {
             if (def == null || def.guaranteedPerLevel <= 0) continue;
             if (def.theme != null && def.theme != level.theme) continue;
             if (powerWeight(def.powerMin, def.powerMax, f) <= 0) continue;
-            for (int i = 0; i < def.guaranteedPerLevel; i++) out.add(type);
+            out.add(type);
         }
         return out;
     }
@@ -253,10 +256,29 @@ public final class LevelFactoryPopulate {
      *  {@link LevelFactoryUtils#randomInnerFloorTile}. */
     public static void placeItems(Level level, Random rng) {
         double powerLevel = depthFraction(level);
-        for (String type : guaranteedItems(level)) {
-            Point spot = nonReservedInnerTile(level, rng);
-            if (spot == null) break;
-            placeItem(level, ItemGenerator.buildItem(type, powerLevel), spot);
+        for (String type : guaranteedTypes(level)) {
+            ItemDefinition gdef = Registries.item(type);
+            if (gdef == null) continue;
+            int copies = gdef.guaranteedPerLevel;
+            if (gdef.inventoryCategory == Item.InventoryCategory.FOOD) {
+                // Powerups / food scatter across the level - they're meant to
+                // be stumbled on while exploring, not piled in one spot.
+                for (int i = 0; i < copies; i++) {
+                    Point spot = nonReservedInnerTile(level, rng);
+                    if (spot == null) break;
+                    placeItem(level, ItemGenerator.buildItem(type, powerLevel), spot);
+                }
+            } else {
+                // Everything else guaranteed (e.g. cherry bombs) clusters
+                // together on adjacent floor tiles - a findable cache, not
+                // scattered singletons.
+                Point seed = nonReservedInnerTile(level, rng);
+                if (seed == null) continue;
+                for (Point p : adjacentFloorTiles(level, seed, copies)) {
+                    if (level.isReserved(p.tileX(), p.tileY())) continue;
+                    placeItem(level, ItemGenerator.buildItem(type, powerLevel), p);
+                }
+            }
         }
         int clusters = GameBalance.RANDOM_ITEMS_PER_LEVEL + rng.nextInt(3);
         for (int i = 0; i < clusters; i++) {

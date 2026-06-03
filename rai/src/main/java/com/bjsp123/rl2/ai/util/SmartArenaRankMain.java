@@ -80,7 +80,8 @@ public final class SmartArenaRankMain {
             }
         }
 
-        Path csvOut = Paths.get("smart_arena.csv").toAbsolutePath();
+        Path csvOut = Paths.get("results", "smart_arena.csv").toAbsolutePath();
+        Files.createDirectories(csvOut.getParent());
         try (java.io.PrintWriter csv = new java.io.PrintWriter(Files.newBufferedWriter(csvOut))) {
             csv.println("player,char_level,brain,opponent,trial,outcome,turns,player_hp,opp_hp");
             for (int lvl : LEVELS) {

@@ -158,7 +158,8 @@ public class MobSystem {
         lastPlayerHitDealt = 0;
     }
 
-    private static final Random RANDOM = new Random();
+    private static final Random RANDOM =
+            com.bjsp123.rl2.util.SimRng.register("MobSystem", new Random());
 
     /** Default duration in game ticks (3 standard turns) that the
      *  {@link com.bjsp123.rl2.model.Buff.BuffType#OILY} buff lasts when a mob

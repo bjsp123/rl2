@@ -46,7 +46,8 @@ public final class WorldDumpMain {
         world.levels = WorldTopology.build(width, height, rng, world.unique);
 
         String yaml = WorldYamlDump.dump(world);
-        Path out = Paths.get("world_dump.yaml").toAbsolutePath();
+        Path out = Paths.get("results", "world_dump.yaml").toAbsolutePath();
+        Files.createDirectories(out.getParent());
         Files.writeString(out, yaml);
         System.out.println("[rl2] seed " + SeedCode.encode(seed) + " (long=" + seed + ")");
         System.out.println("[rl2] wrote " + out);

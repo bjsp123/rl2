@@ -47,7 +47,8 @@ public final class SmartAgentRunMain {
         loadData(assets);
         RaiBootstrap.init();
 
-        Path csvPath = Paths.get("smart_agent_run.csv").toAbsolutePath();
+        Path csvPath = Paths.get("results", "smart_agent_run.csv").toAbsolutePath();
+        Files.createDirectories(csvPath.getParent());
         StringBuilder csv = new StringBuilder(
                 "seed,class,depth_reached,max_depth,turns_survived,hp_remaining,satiety_remaining,outcome\n");
 

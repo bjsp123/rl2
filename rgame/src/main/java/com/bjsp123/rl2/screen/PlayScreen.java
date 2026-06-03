@@ -442,6 +442,9 @@ public class PlayScreen implements Screen {
                     : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
             EventLog.add(Messages.beginGame(playerName));
             EventLog.add(Messages.enterLevel(playerName, startLevel.depth, startLevel.flags));
+            // Start-of-run audio sting. Fires once per run (initialize() is
+            // guarded by `initialized`). Honors SFX mute/volume via SoundManager.
+            if (game.sounds != null) game.sounds.play("sfx.game.start");
         }
 
         Mob player = TurnSystem.findPlayer(world.currentLevel());

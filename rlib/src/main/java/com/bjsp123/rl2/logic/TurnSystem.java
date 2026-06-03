@@ -154,7 +154,8 @@ public class TurnSystem {
      * turn" effects should be plugged in here rather than tied to any particular actor's
      * cadence so they keep a stable game-time rate independent of player or mob speed.
      */
-    private static final java.util.Random TURN_SPAWN_RNG = new java.util.Random();
+    private static final java.util.Random TURN_SPAWN_RNG =
+            com.bjsp123.rl2.util.SimRng.register("TurnSystem.spawn", new java.util.Random());
 
     private static void tickStandardTurn(Level level) {
         // Per-turn spawn (e.g. ant hills budding off ants). Runs for INANIMATE mobs too,

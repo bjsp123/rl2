@@ -16,10 +16,11 @@ import com.bjsp123.rl2.model.Mob;
  */
 public final class ActionBar {
 
-    /** Maximum number of HUD action buttons. Always 9 to match
-     *  {@link com.bjsp123.rl2.model.Mob#actionSlotTypes}; the visible
-     *  count is controlled by {@link com.bjsp123.rl2.ui.skin.QuickslotCount}. */
-    public static final int SLOTS = 9;
+    /** Maximum number of HUD action buttons. Matches the largest quickslot
+     *  count choice (10) and the size of {@link com.bjsp123.rl2.model.Mob#actionSlotTypes};
+     *  the visible count is controlled by
+     *  {@link com.bjsp123.rl2.ui.skin.Settings#quickslotCount}. */
+    public static final int SLOTS = 10;
 
     private final Item[] slots = new Item[SLOTS];
     /** Player Mob this action bar persists into. Set by {@link #bindToPlayer}
@@ -62,9 +63,7 @@ public final class ActionBar {
     public void bindToPlayer(Mob player) {
         this.owner = player;
         if (player == null) return;
-        if (player.actionSlotTypes == null) {
-            player.actionSlotTypes = new String[SLOTS];
-        }
+        ensureSlotCapacity(player);
         // Restore live Item references from the persisted type strings.
         // Each saved type matches the first bag item of that type that
         // hasn't already been claimed by an earlier slot.
@@ -93,11 +92,25 @@ public final class ActionBar {
      *  bound owner so the save format captures them. */
     private void persistTypes() {
         if (owner == null) return;
-        if (owner.actionSlotTypes == null) {
-            owner.actionSlotTypes = new String[SLOTS];
-        }
+        ensureSlotCapacity(owner);
         for (int i = 0; i < SLOTS; i++) {
             owner.actionSlotTypes[i] = slots[i] != null ? slots[i].type : null;
+        }
+    }
+
+    /** Make {@code player.actionSlotTypes} at least {@link #SLOTS} long,
+     *  preserving any existing entries. Handles older saves whose array was
+     *  sized to a smaller {@code SLOTS} (e.g. 9) so a slot-count bump can't
+     *  index out of bounds. */
+    private static void ensureSlotCapacity(Mob player) {
+        if (player.actionSlotTypes == null
+                || player.actionSlotTypes.length < SLOTS) {
+            String[] grown = new String[SLOTS];
+            if (player.actionSlotTypes != null) {
+                System.arraycopy(player.actionSlotTypes, 0, grown, 0,
+                        player.actionSlotTypes.length);
+            }
+            player.actionSlotTypes = grown;
         }
     }
 

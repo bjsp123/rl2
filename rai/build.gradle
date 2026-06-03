@@ -52,3 +52,17 @@ tasks.register('rankSmartArena', JavaExec) {
     workingDir  = rootProject.projectDir
     standardOutput = System.out
 }
+
+// [DEV] AI playtesting regression harness (RL-30). Runs the SMART agent for
+// every class x starting character level {1,20,50}, N runs each (default 3),
+// each capped at a 100k-tick timeout; reports max/avg depth, player level, and
+// turn count per cell. Writes regression.csv + a stdout summary table.
+// Override runs per cell: ./gradlew :rai:regression --args="1"
+tasks.register('regression', JavaExec) {
+    group       = 'diagnostics'
+    description = 'AI regression: SMART agent x class x start-level {1,20,50}'
+    mainClass   = 'com.bjsp123.rl2.ai.util.RegressionRunMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}

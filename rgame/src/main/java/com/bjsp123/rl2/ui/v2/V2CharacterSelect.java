@@ -78,6 +78,25 @@ public final class V2CharacterSelect extends V2Screen {
     private final java.util.EnumMap<CharacterClass, Mob> sampleMob
             = new java.util.EnumMap<>(CharacterClass.class);
 
+    /** The detail popup is split into icon-labelled tabs so each view is
+     *  one focused thing (per the "list OR info" principle) instead of one
+     *  crammed, overflowing panel. */
+    private enum DetailTab { SUMMARY, STATS, ITEMS, PERKS }
+    private static final DetailTab[] DETAIL_TABS = DetailTab.values();
+    private DetailTab detailTab = DetailTab.SUMMARY;
+    private final Rect[] detailTabRects =
+            { new Rect(), new Rect(), new Rect(), new Rect() };
+
+    /** Icon for each detail tab - tabs are labelled with icons, not text. */
+    private static com.bjsp123.rl2.world.render.IconSprites.Icon tabIcon(DetailTab t) {
+        return switch (t) {
+            case SUMMARY -> com.bjsp123.rl2.world.render.IconSprites.Icon.CHARACTER;
+            case STATS   -> com.bjsp123.rl2.world.render.IconSprites.Icon.INFO;
+            case ITEMS   -> com.bjsp123.rl2.world.render.IconSprites.Icon.EQUIPMENT;
+            case PERKS   -> com.bjsp123.rl2.world.render.IconSprites.Icon.PERKS;
+        };
+    }
+
     public V2CharacterSelect(Rl2Game game, int slot) {
         super(game.ui);
         this.game = game;
@@ -126,7 +145,7 @@ public final class V2CharacterSelect extends V2Screen {
             float y = yTop - i * (btnH + gap);
             buttons.add(new Btn(c.displayName(),
                     window.x + 16f, y, btnW, btnH,
-                    () -> { selected = c; show(); }).header());
+                    () -> { selected = c; detailTab = DetailTab.SUMMARY; show(); }).header());
         }
     }
 
@@ -138,17 +157,40 @@ public final class V2CharacterSelect extends V2Screen {
         float ph = Math.min(560f, vh - 144f);
         charPopup.set((vw - pw) * 0.5f, (vh - ph) * 0.5f, pw, ph);
 
-        // Sprite frame - encyclopaedia-style, sized to 2x source max
-        // with a 64-px floor.
-        Mob sample = sampleMob(selected);
-        TextureRegion region = sample != null ? MobSprites.regionFor(sample) : null;
-        int srcMax = 32;
-        if (region != null) {
-            srcMax = Math.max(region.getRegionWidth(), region.getRegionHeight());
+        // Tab bar - four icon tabs (Summary / Stats / Items / Perks) just
+        // below the title band. Each tab swaps the body content so no single
+        // view crams everything. The active tab gets the header (accent) look.
+        float tabH   = 40f;
+        float tabGap = 6f;
+        float tabX   = charPopup.x + 14f;
+        float tabW   = (charPopup.w - 28f - tabGap * 3f) / 4f;
+        float tabY   = charPopup.top() - headerBandH() - tabH;
+        for (int i = 0; i < DETAIL_TABS.length; i++) {
+            final DetailTab t = DETAIL_TABS[i];
+            float tx = tabX + i * (tabW + tabGap);
+            detailTabRects[i].set(tx, tabY, tabW, tabH);
+            Btn tab = new Btn("", tx, tabY, tabW, tabH,
+                    () -> { detailTab = t; show(); });
+            tab.icon = com.bjsp123.rl2.world.render.IconSprites.regionFor(tabIcon(t));
+            if (t == detailTab) tab.header();
+            buttons.add(tab);
         }
-        float frameSz = Math.max(64f, srcMax * 2f);
-        spriteFrame.set(charPopup.cx() - frameSz * 0.5f,
-                charPopup.top() - headerBandH() - frameSz, frameSz, frameSz);
+
+        // Sprite frame - Summary tab only; sized 2x source (64-px floor),
+        // centred just below the tab bar.
+        if (detailTab == DetailTab.SUMMARY) {
+            Mob sample = sampleMob(selected);
+            TextureRegion region = sample != null ? MobSprites.regionFor(sample) : null;
+            int srcMax = 32;
+            if (region != null) {
+                srcMax = Math.max(region.getRegionWidth(), region.getRegionHeight());
+            }
+            float frameSz = Math.max(64f, srcMax * 2f);
+            spriteFrame.set(charPopup.cx() - frameSz * 0.5f,
+                    tabY - 8f - frameSz, frameSz, frameSz);
+        } else {
+            spriteFrame.set(0, 0, 0, 0);
+        }
 
         // Bottom-row buttons: a square SETTINGS-icon Options button on
         // the left, and a wide PLAY button filling the rest. The square
@@ -292,14 +334,16 @@ public final class V2CharacterSelect extends V2Screen {
             Window.drawShape(ctx,
                     charPopup.x, charPopup.y, charPopup.w, charPopup.h);
 
-            // Sprite frame chrome.
-            Edges.drawTriLine(s, spriteFrame.x, spriteFrame.y,
-                    spriteFrame.w, spriteFrame.h, UIVars.HUD_LINE_W);
-            s.setColor(UIVars.ICON_FRAME_BG);
-            s.rect(spriteFrame.x + UIVars.HUD_BORDER,
-                    spriteFrame.y + UIVars.HUD_BORDER,
-                    spriteFrame.w - 2 * UIVars.HUD_BORDER,
-                    spriteFrame.h - 2 * UIVars.HUD_BORDER);
+            // Sprite frame chrome - Summary tab only.
+            if (detailTab == DetailTab.SUMMARY) {
+                Edges.drawTriLine(s, spriteFrame.x, spriteFrame.y,
+                        spriteFrame.w, spriteFrame.h, UIVars.HUD_LINE_W);
+                s.setColor(UIVars.ICON_FRAME_BG);
+                s.rect(spriteFrame.x + UIVars.HUD_BORDER,
+                        spriteFrame.y + UIVars.HUD_BORDER,
+                        spriteFrame.w - 2 * UIVars.HUD_BORDER,
+                        spriteFrame.h - 2 * UIVars.HUD_BORDER);
+            }
         }
 
         if (optionsOpen) {
@@ -340,78 +384,74 @@ public final class V2CharacterSelect extends V2Screen {
                 charPopup.cx(), charPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f,
                 charPopup.w - 28f);
 
-        // Aspect-fit the mob sprite inside the frame, with the same
-        // 8-radial silhouette outline encyclopaedia entries use.
-        if (sample != null) {
-            TextureRegion region = MobSprites.regionFor(sample);
-            if (region != null) {
-                drawAspectFit(region,
-                        spriteFrame.x, spriteFrame.y,
-                        spriteFrame.w, spriteFrame.h);
-            }
-        }
-
         float lh       = ctx.lineH();
         float left     = charPopup.x + 14f;
         float right    = charPopup.right() - 14f;
-        float top      = spriteFrame.y - lh;
         float maxLineW = right - left;
         float guard    = charPopup.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET + 48f + lh;
+        // Content starts below the sprite on Summary, below the tab bar on
+        // the other tabs (no sprite there, so each list gets the full column
+        // - no more truncation).
+        float top = (detailTab == DetailTab.SUMMARY)
+                ? spriteFrame.y - lh
+                : detailTabRects[0].y - 10f - lh;
 
-        if (def != null && def.description != null && !def.description.isEmpty()) {
-            TextDraw.TextBlock desc = TextDraw.block(ctx.fontRegular,
-                    def.description, maxLineW, 3, lh);
-            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM, desc, left, top);
-            top -= desc.height();
-            top -= 6f;
-        }
-
-        if (sample != null) {
-            com.bjsp123.rl2.model.StatBlock st = sample.effectiveStats();
-            top = statRow(left, top, TextCatalog.get("ui.characterSelect.hp"),
-                    Integer.toString((int) Math.round(st.maxHp)));
-            top = statRow(left, top, TextCatalog.get("ui.characterSelect.acc"),
-                    Integer.toString(st.accuracy));
-            top = statRow(left, top, TextCatalog.get("ui.characterSelect.eva"),
-                    Integer.toString(st.evasion));
-            top = statRow(left, top, TextCatalog.get("ui.characterSelect.atk"),
-                    st.damage.min() + "-" + st.damage.max());
-            top = statRow(left, top, TextCatalog.get("ui.characterSelect.armor"),
-                    st.armor.min() + "-" + st.armor.max());
-            top -= 6f;
-        }
-
-        if (def != null && def.startingInventory != null
-                && !def.startingInventory.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, TextCatalog.get("ui.characterSelect.gear"), left, top);
-            top -= lh;
-            for (MobDefinition.StartItem si : def.startingInventory) {
-                if (top < guard) break;
-                String iname = lookupItemName(si.type);
-                String line = (si.count > 1)
-                        ? "  " + iname + " x" + si.count
-                        : "  " + iname;
-                TextDraw.TextBlock gear = TextDraw.block(ctx.fontRegular,
-                        line, maxLineW, 2, lh);
-                TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, gear, left, top);
-                top -= gear.height();
+        switch (detailTab) {
+            case SUMMARY -> {
+                if (sample != null) {
+                    TextureRegion region = MobSprites.regionFor(sample);
+                    if (region != null) {
+                        drawAspectFit(region, spriteFrame.x, spriteFrame.y,
+                                spriteFrame.w, spriteFrame.h);
+                    }
+                }
+                if (def != null && def.description != null && !def.description.isEmpty()) {
+                    TextDraw.TextBlock desc = TextDraw.block(ctx.fontRegular,
+                            def.description, maxLineW, 8, lh);
+                    TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM, desc, left, top);
+                }
             }
-            top -= 4f;
-        }
-
-        if (def != null && def.startingPerks != null
-                && !def.startingPerks.isEmpty()) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, TextCatalog.get("ui.characterSelect.perks"), left, top);
-            top -= lh;
-            for (com.bjsp123.rl2.logic.MobDefinition.StartPerk sp : def.startingPerks) {
-                if (top < guard) break;
-                String label = sp.level > 1
-                        ? "  " + sp.perk.displayName() + " +" + (sp.level - 1)
-                        : "  " + sp.perk.displayName();
-                TextDraw.TextBlock perk = TextDraw.block(ctx.fontRegular,
-                        label, maxLineW, 2, lh);
-                TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, perk, left, top);
-                top -= perk.height();
+            case STATS -> {
+                if (sample != null) {
+                    com.bjsp123.rl2.model.StatBlock st = sample.effectiveStats();
+                    top = statRow(left, top, TextCatalog.get("ui.characterSelect.hp"),
+                            Integer.toString((int) Math.round(st.maxHp)));
+                    top = statRow(left, top, TextCatalog.get("ui.characterSelect.acc"),
+                            Integer.toString(st.accuracy));
+                    top = statRow(left, top, TextCatalog.get("ui.characterSelect.eva"),
+                            Integer.toString(st.evasion));
+                    top = statRow(left, top, TextCatalog.get("ui.characterSelect.atk"),
+                            st.damage.min() + "-" + st.damage.max());
+                    top = statRow(left, top, TextCatalog.get("ui.characterSelect.armor"),
+                            st.armor.min() + "-" + st.armor.max());
+                }
+            }
+            case ITEMS -> {
+                if (def != null && def.startingInventory != null) {
+                    for (MobDefinition.StartItem si : def.startingInventory) {
+                        if (top < guard) break;
+                        String iname = lookupItemName(si.type);
+                        String line = (si.count > 1) ? iname + " x" + si.count : iname;
+                        TextDraw.TextBlock gear = TextDraw.block(ctx.fontRegular,
+                                line, maxLineW, 2, lh);
+                        TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, gear, left, top);
+                        top -= gear.height();
+                    }
+                }
+            }
+            case PERKS -> {
+                if (def != null && def.startingPerks != null) {
+                    for (com.bjsp123.rl2.logic.MobDefinition.StartPerk sp : def.startingPerks) {
+                        if (top < guard) break;
+                        String label = sp.level > 1
+                                ? sp.perk.displayName() + " +" + (sp.level - 1)
+                                : sp.perk.displayName();
+                        TextDraw.TextBlock perk = TextDraw.block(ctx.fontRegular,
+                                label, maxLineW, 2, lh);
+                        TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, perk, left, top);
+                        top -= perk.height();
+                    }
+                }
             }
         }
     }

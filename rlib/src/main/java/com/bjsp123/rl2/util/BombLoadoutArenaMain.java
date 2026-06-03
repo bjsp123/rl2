@@ -82,7 +82,8 @@ public final class BombLoadoutArenaMain {
 
         List<String> opponents = pickOpponents();
 
-        Path fightCsv = Paths.get("bomb_loadout_arena.csv").toAbsolutePath();
+        Path fightCsv = Paths.get("results", "bomb_loadout_arena.csv").toAbsolutePath();
+        Files.createDirectories(fightCsv.getParent());
         FIGHT_LOG = new PrintWriter(Files.newBufferedWriter(fightCsv));
         FIGHT_LOG.println("warrior_level,weapon,bomb,opponent,trial,outcome,turns,"
                 + "bombs_thrown,bombs_hit,bomb_damage_total,"
@@ -328,7 +329,8 @@ public final class BombLoadoutArenaMain {
     }
 
     private static void writeSummary() throws IOException {
-        Path p = Paths.get("bomb_loadout_summary.csv").toAbsolutePath();
+        Path p = Paths.get("results", "bomb_loadout_summary.csv").toAbsolutePath();
+        Files.createDirectories(p.getParent());
         try (PrintWriter w = new PrintWriter(Files.newBufferedWriter(p))) {
             w.println("warrior_level,weapon,bomb,total_fights,win_pct,draw_pct,loss_pct,"
                     + "avg_turns,avg_bombs_thrown,avg_bomb_dmg_per_throw,bomb_dud_pct,"

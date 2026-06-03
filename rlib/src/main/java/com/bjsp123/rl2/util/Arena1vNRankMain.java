@@ -92,9 +92,10 @@ public final class Arena1vNRankMain {
         loadData(assets);
         GEAR = new PlayerGearProvider(0xC0FFEEL);
 
-        Path csvOut = Paths.get(STRIP_JADE_BULL
+        Path csvOut = Paths.get("results", STRIP_JADE_BULL
                 ? "arena_fights_no_jade_bull.csv"
                 : "arena_fights.csv");
+        Files.createDirectories(csvOut.toAbsolutePath().getParent());
         FIGHT_LOG = new java.io.PrintWriter(Files.newBufferedWriter(csvOut));
         FIGHT_LOG.println("player_class,char_level,opponent_type,trial,outcome,"
                 + "turns,melee,wand,bomb,potion,tool,eat,throw,"

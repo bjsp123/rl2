@@ -85,7 +85,8 @@ public final class FullArenaRankMain {
         loadData(assets);
         GEAR = new PlayerGearProvider(0xC0FFEEL);
 
-        Path csvOut = Paths.get("arena_full.csv");
+        Path csvOut = Paths.get("results", "arena_full.csv");
+        Files.createDirectories(csvOut.toAbsolutePath().getParent());
         FIGHT_LOG = new java.io.PrintWriter(Files.newBufferedWriter(csvOut));
         FIGHT_LOG.println("fighter_a,fighter_b,char_level,trial,outcome,turns,"
                 + "a_hp,a_max_hp,b_hp,b_max_hp");

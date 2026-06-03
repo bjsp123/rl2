@@ -15,7 +15,8 @@ public final class ItemSystem {
 
     private ItemSystem() {}
 
-    private static final java.util.Random RANDOM = new java.util.Random();
+    private static final java.util.Random RANDOM =
+            com.bjsp123.rl2.util.SimRng.register("ItemSystem", new java.util.Random());
 
     private static String actorName(Mob mob) {
         return mob != null && mob.name != null
@@ -650,7 +651,8 @@ public final class ItemSystem {
 
     /** Local RNG for polymorph rolls. Separate from MobSystem.RANDOM so
      *  visual / world-state side-effects don't desync the combat stream. */
-    private static final java.util.Random POLY_RNG = new java.util.Random();
+    private static final java.util.Random POLY_RNG =
+            com.bjsp123.rl2.util.SimRng.register("ItemSystem.poly", new java.util.Random());
 
     /** Pick a random non-unique, non-player mob type whose intrinsic
      *  size lies in {@code [oldSize-1, oldSize+1]} and whose type

@@ -330,6 +330,10 @@ public abstract class V2Screen extends ScreenAdapter {
     protected final void addStandardBurgerItems(com.bjsp123.rl2.Rl2Game game) {
         addBurgerItem(TextCatalog.get("ui.menu.main"), () -> game.setRootScreen(new V2Title(game, ctx)));
         addBurgerItem(TextCatalog.get("ui.menu.settings"),  () -> game.pushScreen(new V2Settings(game, ctx)));
+        // Encyclopedia is always reachable from the burger - the standalone
+        // "How to Play" / reference, in or out of a run.
+        addBurgerItem(TextCatalog.get("ui.menu.encyclopedia"),
+                () -> game.pushScreen(new V2EncyclopediaScreen(game)));
         if (game.currentPlay == null) {
             addBurgerItem(TextCatalog.get("ui.menu.credits"), () -> game.pushScreen(new V2Credits(game)));
         }

@@ -35,7 +35,8 @@ import java.util.Random;
  */
 public final class FireSystem {
 
-    private static final Random RANDOM = new Random();
+    private static final Random RANDOM =
+            com.bjsp123.rl2.util.SimRng.register("FireSystem", new Random());
     private static final int[][] DIRS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
     /** Initial fire lifetime range, in <b>game ticks</b>. ~300 ticks per the spec, with a

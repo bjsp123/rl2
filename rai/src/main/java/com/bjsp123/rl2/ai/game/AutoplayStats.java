@@ -25,6 +25,11 @@ public final class AutoplayStats {
     public final Map<String, Integer> killsByMobType = new LinkedHashMap<>();
     public int[]  killsPerDepth = new int[0];
 
+    /** First tick ({@code turnsElapsed}) the agent ARRIVED at each depth index;
+     *  {@code -1} = never reached, index 0 = 0 (the run starts on depth 0).
+     *  Drives the average pace-to-depth report. */
+    public int[]  arrivalTickPerDepth = new int[0];
+
     public int    bombsThrown;
     public int    wandsFired;
     public int    potionsDrunk;
@@ -51,6 +56,11 @@ public final class AutoplayStats {
     void ensureSizedFor(int levels) {
         if (itemsPerDepth.length < levels) itemsPerDepth = new int[levels];
         if (killsPerDepth.length < levels) killsPerDepth = new int[levels];
+        if (arrivalTickPerDepth.length < levels) {
+            arrivalTickPerDepth = new int[levels];
+            java.util.Arrays.fill(arrivalTickPerDepth, -1);
+            if (levels > 0) arrivalTickPerDepth[0] = 0; // start on depth 0 at turn 0
+        }
     }
 
     void bumpItem(String type, int depthIdx) {

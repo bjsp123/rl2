@@ -45,7 +45,7 @@ public final class Settings {
     public static final float[] UI_FONT_SCALE_CHOICES = { 0.75f, 1.0f, 1.5f, 2.0f };
 
     public static final int QUICKSLOT_COUNT_DEFAULT = 8;
-    public static final int[] QUICKSLOT_COUNT_CHOICES = { 4, 6, 8, 9 };
+    public static final int[] QUICKSLOT_COUNT_CHOICES = { 4, 6, 8, 10 };
 
     public static final boolean USE_BUFF_ICONS_DEFAULT = true;
 

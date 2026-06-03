@@ -124,6 +124,11 @@ public final class V2Hud {
     private static final float CHARGE_FLASH_FRAMES = 45f;
     private final float[] prevCharge  = new float[ActionBar.SLOTS];
     private final float[] chargeFlash = new float[ActionBar.SLOTS];
+
+    // -- HP / XP bar gain-flash state (RL-24) ---------------------------------
+    private static final float BAR_FLASH_FRAMES = 45f;
+    private double prevHp = -1, prevXp = -1;
+    private float hpFlash, xpFlash;
     private boolean menuOpen;
     /** True when the action slots are folded into a grid because the viewport
      *  is too narrow for a single row. Set each frame by {@link #layoutRects()};
@@ -278,8 +283,10 @@ public final class V2Hud {
         clockRect.set(MARGIN, xpBarRect.y - CLOCK_SIZE - 8f, CLOCK_SIZE, CLOCK_SIZE);
 
         // Burger at top-right.
-        burgerRect.set(w - MARGIN - ACTION_BTN, h - MARGIN - ACTION_BTN,
-                ACTION_BTN, ACTION_BTN);
+        // Identical to the menu-screen burger (same size, inset, chrome, and
+        // glyph) so it reads the same in-play and out (RL-27).
+        burgerRect.set(w - MARGIN - Burger.SIZE, h - MARGIN - Burger.SIZE,
+                Burger.SIZE, Burger.SIZE);
 
         // Look at bottom-left.
         lookRect.set(MARGIN, MARGIN, ACTION_BTN, ACTION_BTN);
@@ -435,6 +442,22 @@ public final class V2Hud {
         }
     }
 
+    /** Bright additive pulse over a bar's interior while {@code flash} > 0,
+     *  fading out as it decays. Called from the batch (text) pass; returns the
+     *  decremented counter. Mirrors the mana-gain flash on the action slots. */
+    private float drawBarFlash(Rect r, float flash) {
+        if (flash <= 0f) return 0f;
+        float alpha = (flash / BAR_FLASH_FRAMES) * 0.55f;
+        ctx.batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE);
+        ctx.batch.setColor(1f, 1f, 1f, alpha);
+        ctx.batch.draw(ctx.whitePixel, r.x + 3, r.y + 3, r.w - 6, r.h - 6);
+        ctx.batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ctx.batch.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+        return Math.max(0f, flash - 1f);
+    }
+
     private void drawTurnClock(ShapeRenderer s) {
         float cx = clockRect.cx();
         float cy = clockRect.cy();
@@ -485,16 +508,25 @@ public final class V2Hud {
             }
         }
 
-        // XP bar right-side labels - character level and unspent-perk star.
-        Mob playerXp = currentPlayer();
-        if (playerXp != null) {
-            String lvlLabel = String.valueOf(playerXp.characterLevel);
-            if (playerXp.perkPoints > 0) lvlLabel += " *";
-            com.badlogic.gdx.graphics.Color lvlColor =
-                    playerXp.perkPoints > 0 ? UIVars.ACCENT : UIVars.TEXT_DIM;
-            TextDraw.right(ctx, ctx.fontRegular, lvlColor,
-                    lvlLabel, xpBarRect.right() - 2f, xpBarRect.y + xpBarRect.h - 2f);
+        // "lv5 Rogue" in small writing under the portrait (moved off the xp
+        // bar, RL-28). A perk-point star trails it (accent) when points are
+        // unspent.
+        if (playerForPortrait != null && playerForPortrait.characterClass != null) {
+            String lbl = "lv" + playerForPortrait.characterLevel + " "
+                    + playerForPortrait.characterClass.displayName();
+            if (playerForPortrait.perkPoints > 0) lbl += " *";
+            com.badlogic.gdx.graphics.Color c = playerForPortrait.perkPoints > 0
+                    ? UIVars.ACCENT : UIVars.TEXT_DIM;
+            com.badlogic.gdx.graphics.g2d.BitmapFont f = ctx.fontRegular;
+            float prevScale = f.getScaleX();
+            f.getData().setScale(prevScale * 0.7f);
+            TextDraw.centre(ctx, f, c, lbl, portraitRect.cx(), portraitRect.y - 1f);
+            f.getData().setScale(prevScale);
+            f.setColor(com.badlogic.gdx.graphics.Color.WHITE);
         }
+
+        // Character level now renders as "lv5 Rogue" under the portrait
+        // (see the portrait block above), not as a bare number on the xp bar.
 
         // Action button icons - pull from ActionBar.
         if (actionBar != null) {
@@ -512,9 +544,11 @@ public final class V2Hud {
             f.getData().setScale(prevScale * 0.7f);
             f.setColor(UIVars.TEXT_DIM);
             int n = com.bjsp123.rl2.ui.skin.Settings.quickslotCount();
-            for (int i = 0; i < n && i < 9; i++) {
+            for (int i = 0; i < n; i++) {
                 Rect r = actionRects[i];
-                String label = Integer.toString(i + 1);
+                // Hotkey label: 1-9 then 0 for the tenth slot (1-9-0 hotbar
+                // convention, matching GameInput's key mapping).
+                String label = i < 9 ? Integer.toString(i + 1) : "0";
                 ctx.layout.setText(f, label);
                 float lx = r.x + 3f;
                 float ly = r.y + r.h - 2f;
@@ -546,6 +580,18 @@ public final class V2Hud {
                 chargeFlash[i] = Math.max(0f, chargeFlash[i] - 1f);
             }
         }
+
+        // HP / XP bar gain-flash (RL-24) - bright additive pulse when the
+        // value rises (heal / xp pickup), mirroring the mana-gain flash above.
+        Mob barP = currentPlayer();
+        if (barP != null) {
+            if (prevHp >= 0 && barP.hp > prevHp + 0.01) hpFlash = BAR_FLASH_FRAMES;
+            prevHp = barP.hp;
+            if (prevXp >= 0 && barP.xp > prevXp + 0.01) xpFlash = BAR_FLASH_FRAMES;
+            prevXp = barP.xp;
+        }
+        hpFlash = drawBarFlash(hpBarRect, hpFlash);
+        xpFlash = drawBarFlash(xpBarRect, xpFlash);
 
         // Inventory button - chest icon if available, else "Bag" label.
         TextureRegion chest = IconSprites.regionFor(IconSprites.Icon.INV);

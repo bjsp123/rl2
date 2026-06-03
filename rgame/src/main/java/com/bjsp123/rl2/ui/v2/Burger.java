@@ -16,7 +16,9 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
  */
 public final class Burger {
 
-    public static final float SIZE  = 44f;
+    /** Burger button size. Shared by the HUD (V2Hud) so the burger is
+     *  identical in-play and on menu screens. Kept small per RL-27. */
+    public static final float SIZE  = 36f;
     public static final float INSET = 8f;
 
     public final Rect rect = new Rect();

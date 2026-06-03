@@ -28,7 +28,8 @@ public class LevelSystem {
      *  active beacon. ~80 ms between emissions reads as a steady spiral
      *  swarm without saturating the effect stage. */
     private static final int INWARD_SPIRAL_INTERVAL_MS = 80;
-    private static final java.util.Random LIGHT_MOTE_RNG = new java.util.Random();
+    private static final java.util.Random LIGHT_MOTE_RNG =
+            com.bjsp123.rl2.util.SimRng.register("LevelSystem.lightMote", new java.util.Random());
 
     /** Mark every tile of {@code level} as explored, so the renderer paints
      *  the whole map (in remembered-but-not-currently-visible state).
@@ -71,24 +72,42 @@ public class LevelSystem {
 
     /** Generic "exit unlocks once the level is cleared" rule. For levels with
      *  {@link Level#exitUnlocksOnClear} that haven't opened yet
-     *  ({@code stairsDown == null}): once no hostile mob remains alive, stamp
+     *  ({@code stairsDown == null}): once no enemy mob remains alive, stamp
      *  {@code STAIRS_DOWN} at {@link Level#lockedExit} and set
-     *  {@link Level#stairsDown}. "Hostile" is anything alive that isn't the
-     *  player or an inanimate prop. Called every standard turn; cheap no-op
-     *  on levels that don't opt in. */
+     *  {@link Level#stairsDown}. An "enemy" is anything alive that isn't an
+     *  inanimate prop and isn't on the player's side - crucially excluding the
+     *  player's own allies/pets AND the SMART-piloted avatar (autoplay/arena),
+     *  none of which should hold the exit hostage. Called every standard turn;
+     *  cheap no-op on levels that don't opt in. */
     public static void openExitIfCleared(Level level) {
         if (level == null || !level.exitUnlocksOnClear) return;
         if (level.stairsDown != null || level.lockedExit == null) return;
         for (Mob m : level.mobs) {
             if (m == null || m.hp <= 0) continue;
-            if (m.behavior == Behavior.PLAYER || m.behavior == Behavior.INANIMATE) continue;
-            return; // a hostile is still alive - exit stays locked
+            if (m.behavior == Behavior.INANIMATE) continue;
+            if (isPlayerSide(m)) continue; // the avatar + the player's own allies
+            return; // an enemy is still alive - exit stays locked
         }
         int x = level.lockedExit.tileX(), y = level.lockedExit.tileY();
         if (x >= 0 && y >= 0 && x < level.width && y < level.height) {
             level.tiles[x][y] = Tile.STAIRS_DOWN;
             level.stairsDown = level.lockedExit;
         }
+    }
+
+    /** True for the player's own side: the avatar itself (human {@code PLAYER}
+     *  or an unowned {@code SMART} mob - the autoplay/arena pilot) and any mob
+     *  loyal to the player (faction {@code PLAYER}, or owned by a PLAYER/SMART
+     *  avatar). Mirrors the crystal-door pass rule in {@code DoorBehavior} so a
+     *  locked exit opens exactly when every ENEMY is dead - not held open by the
+     *  player's pets or, in autoplay, by miscounting the agent as a hostile. */
+    private static boolean isPlayerSide(Mob m) {
+        return m.behavior == Behavior.PLAYER
+                || (m.behavior == Behavior.SMART && m.owner == null)
+                || "PLAYER".equals(m.faction)
+                || (m.owner != null
+                    && (m.owner.behavior == Behavior.PLAYER
+                        || m.owner.behavior == Behavior.SMART));
     }
 
     public static void computeLighting(Level level) {

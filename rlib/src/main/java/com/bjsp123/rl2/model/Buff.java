@@ -93,8 +93,11 @@ public class Buff {
          *  the buff is present. Applied when the mob reaches a tile no hostile can see
          *  it from. */
         HIDING,
-        /** Killer perk's on-kill buff: reduces both {@code moveCost} and {@code attackCost}
-         *  by 20%. Duration 10 standard turns. */
+        /** Killer perk's on-kill buff: multiplies both {@code moveCost} and
+         *  {@code attackCost} by {@code 0.9^stacks} (compounding), floored at
+         *  {@code BuffSystem.KILLER_MIN_COST} so a long kill streak tops out
+         *  rather than reaching near-zero cost. Duration {@code 8 + 2*stacks}
+         *  standard turns, refreshed on each kill. */
         KILLER,
         /** Open-wound DOT. Per standard turn the mob loses
          *  {@code (level * standardTurnsRemaining) / 2} HP - strong at first

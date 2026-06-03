@@ -13,6 +13,7 @@ import com.bjsp123.rl2.model.Inventory;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.ui.hud.ActionBar;
+import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.world.render.DefaultLevelRenderer;
 import com.bjsp123.rl2.world.render.ItemSprites;
 
@@ -101,7 +102,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     /** Quickslot-binding buttons - six numbered cells in the detail popup
      *  that bind / unbind the chosen item to / from each action-bar slot.
      *  Built only when an {@link ActionBar} has been wired. */
-    private final Rect[] bindBtnRects = new Rect[6];
+    private final Rect[] bindBtnRects = new Rect[ActionBar.SLOTS];
 
     // Pressed state.
     private final boolean[] tabPressed = new boolean[Tab.values().length];
@@ -312,16 +313,17 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             detailUseBtn  .set(btnX,                              btnY, btnW, btnH);
             detailEquipBtn.set(btnX + (btnW + btnGap),            btnY, btnW, btnH);
             detailThrowBtn.set(btnX + 2 * (btnW + btnGap),        btnY, btnW, btnH);
-            // Quickslot bind row - six 32x32 cells centred just above the
-            // action button row. Only laid out when an action bar has been
-            // wired; rendering + input both check {@link #actionBar} first.
+            // Quickslot bind row - one 32x32 cell per quickslot (count is the
+            // player setting, 4/6/8/10), centred just above the action button
+            // row. Only laid out when an action bar has been wired; rendering +
+            // input both check {@link #actionBar} first.
+            int bindN = Settings.quickslotCount();
             float bindSz = 32f;
             float bindGap = 4f;
-            float bindRowW = bindBtnRects.length * bindSz
-                    + (bindBtnRects.length - 1) * bindGap;
+            float bindRowW = bindN * bindSz + (bindN - 1) * bindGap;
             float bindX = detailWindow.cx() - bindRowW * 0.5f;
             float bindY = btnY + btnH + 14f;
-            for (int i = 0; i < bindBtnRects.length; i++) {
+            for (int i = 0; i < bindN; i++) {
                 bindBtnRects[i].set(bindX + i * (bindSz + bindGap),
                         bindY, bindSz, bindSz);
             }
@@ -537,7 +539,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // image-bearing slots; the slot number paints over them in
         // the text pass. Currently-bound slot border swaps to ACCENT.
         if (actionBar != null) {
-            for (int i = 0; i < bindBtnRects.length; i++) {
+            for (int i = 0; i < Settings.quickslotCount(); i++) {
                 Rect r = bindBtnRects[i];
                 boolean bound = actionBar.get(i) == selectedItem;
                 boolean pressed = i == bindPressed;
@@ -767,12 +769,15 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         TextCatalog.get("ui.inventory.quickslot"),
                         detailWindow.cx(),
                         bindBtnRects[0].top() + 16f);
-                for (int i = 0; i < bindBtnRects.length; i++) {
+                for (int i = 0; i < Settings.quickslotCount(); i++) {
                     Rect r = bindBtnRects[i];
                     boolean bound = actionBar.get(i) == selectedItem;
+                    // Hotkey label: 1-9 then 0 for the tenth slot (1-9-0 hotbar
+                    // convention), matching the HUD.
+                    String key = i < 9 ? Integer.toString(i + 1) : "0";
                     TextDraw.centre(ctx, ctx.fontRegular,
                             bound ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                            Integer.toString(i + 1),
+                            key,
                             r.cx(), r.cy() + 6f);
                 }
             }
@@ -805,7 +810,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         return true;
                     }
                     if (actionBar != null) {
-                        for (int i = 0; i < bindBtnRects.length; i++) {
+                        for (int i = 0; i < Settings.quickslotCount(); i++) {
                             if (bindBtnRects[i].contains(vx, vy)) {
                                 bindPressed = i;
                                 return true;
@@ -905,7 +910,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     int idx = bindPressed;
                     bindPressed = -1;
                     if (actionBar != null
-                            && idx < bindBtnRects.length
+                            && idx < Settings.quickslotCount()
                             && bindBtnRects[idx].contains(vx, vy)) {
                         // Toggle - tap again to unbind.
                         if (actionBar.get(idx) == selectedItem) {

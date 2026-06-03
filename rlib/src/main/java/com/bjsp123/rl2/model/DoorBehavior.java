@@ -25,8 +25,8 @@ public record DoorBehavior(
     public enum PassRule {
         /** Anyone walking in bumps the door open (wooden DOOR). */
         ANYONE,
-        /** Only the player avatar can cross; everything else - including
-         *  player-loyal mobs (summons, tamed beasts, kittens) - is blocked
+        /** The player and anything loyal to the player (summons, tamed
+         *  beasts, charmed allies) can cross; hostile mobs are blocked
          *  (CRYSTAL_DOOR, ONETIME_DOOR). */
         PLAYER_ONLY,
         /** Reserved for future locked doors with no walk-through opening. */
@@ -35,14 +35,18 @@ public record DoorBehavior(
         public boolean allows(Mob mob) {
             return switch (this) {
                 case ANYONE      -> true;
-                // The player avatar only: PLAYER (human) or an unowned SMART
-                // agent (the autoplay-piloted player). Owned mobs - pets,
-                // tamed beasts, kittens - all carry owner != null and share
-                // the player's faction, so a faction check let them through;
-                // gate on the avatar identity instead.
-                case PLAYER_ONLY -> mob != null && mob.owner == null
-                        && (mob.behavior == Mob.Behavior.PLAYER
-                            || mob.behavior == Mob.Behavior.SMART);
+                // The player avatar PLUS any player-loyal mob - owned by the
+                // player (pets / tamed beasts) or sharing the player's faction
+                // (charmed / converted allies). Crystal doors keep enemies out,
+                // not your own party. A mob owned by something that ISN'T the
+                // player (e.g. a cat's kittens) is not loyal and stays blocked.
+                case PLAYER_ONLY -> mob != null && (
+                        mob.behavior == Mob.Behavior.PLAYER
+                        || (mob.behavior == Mob.Behavior.SMART && mob.owner == null)
+                        || "PLAYER".equals(mob.faction)
+                        || (mob.owner != null
+                            && (mob.owner.behavior == Mob.Behavior.PLAYER
+                                || mob.owner.behavior == Mob.Behavior.SMART)));
                 case NONE        -> false;
             };
         }

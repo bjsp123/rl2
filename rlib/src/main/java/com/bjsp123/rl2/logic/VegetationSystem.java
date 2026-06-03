@@ -30,7 +30,8 @@ import java.util.Random;
  */
 public final class VegetationSystem {
 
-    private static final Random RANDOM = new Random();
+    private static final Random RANDOM =
+            com.bjsp123.rl2.util.SimRng.register("VegetationSystem", new Random());
     private static final int[][] DIRS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
     private VegetationSystem() {}

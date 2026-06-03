@@ -63,7 +63,8 @@ public final class CloudSystem {
      *  re-applies it next turn if the mob is still standing in it. */
     private static final int POISON_BUFF_DURATION_TICKS = 2 * TurnSystem.STANDARD_TURN_TICKS;
 
-    private static final Random RNG = new Random();
+    private static final Random RNG =
+            com.bjsp123.rl2.util.SimRng.register("CloudSystem", new Random());
 
     // -- Encoding helpers ----------------------------------------------------
 

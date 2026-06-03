@@ -52,6 +52,12 @@ public final class MobMemory {
      *  Used by {@code SmartAi} to break out of stuck states by forcing a random
      *  productive action when this exceeds {@code MAX_WAIT_STREAK}. */
     public int    consecutiveWaitTurns;
+    /** Consecutive decisions during which the FOV sweep revealed NO new tile.
+     *  Reset to 0 in {@link SmartAi#refreshMemory} whenever a tile flips
+     *  unknown->known. Once it exceeds {@code Decider.EXPLORE_STALL_LIMIT} and a
+     *  reachable down-stair is known, the agent abandons frontier exploration and
+     *  commits to descending - breaks the early-floor dwell livelock. */
+    public int    exploreStallTurns;
 
     /** Discard everything tied to a specific level - called when the mob descends. */
     public void onLevelChange(int newLevelStamp) {
@@ -67,6 +73,7 @@ public final class MobMemory {
         exploreTargetAge = 0;
         ticksOnCurrentLevel = 0;
         consecutiveWaitTurns = 0;
+        exploreStallTurns = 0;
         levelStamp = newLevelStamp;
     }
 

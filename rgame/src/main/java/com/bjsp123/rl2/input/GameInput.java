@@ -79,11 +79,13 @@ public class GameInput extends InputAdapter {
         if (keycode == Input.Keys.C) {
             if (onCharacterToggle != null) { onCharacterToggle.run(); return true; }
         }
-        // Number-row 1..6 -> action-bar slots 0..5. Numpad number keys are reserved for the
-        // 8-way movement diamond, so this is top-row-only. Fires regardless of whose turn
-        // it is - triggerActionSlot itself gates on isPlayerTurn and the animation queue.
+        // Number-row 1..9 -> action-bar slots 0..8, 0 -> slot 9 (the tenth).
+        // Gated on the live quickslot count so keys for hidden slots stay
+        // inert. Numpad number keys are reserved for the 8-way movement
+        // diamond, so this is top-row-only. Fires regardless of whose turn it
+        // is - triggerActionSlot itself gates on isPlayerTurn and the queue.
         int slot = numberKeyToSlot(keycode);
-        if (slot >= 0) {
+        if (slot >= 0 && slot < com.bjsp123.rl2.ui.skin.Settings.quickslotCount()) {
             if (onActionSlot != null) { onActionSlot.accept(slot); return true; }
         }
         Mob player = TurnSystem.getActivePlayer(world.currentLevel());
@@ -113,7 +115,8 @@ public class GameInput extends InputAdapter {
         return true;
     }
 
-    /** Maps the number-row keys 1..6 to slot indices 0..5; returns -1 for anything else. */
+    /** Maps the number-row keys to action-slot indices: 1..9 -> 0..8 and
+     *  0 -> 9 (the tenth slot). Returns -1 for anything else. */
     private static int numberKeyToSlot(int keycode) {
         return switch (keycode) {
             case Input.Keys.NUM_1 -> 0;
@@ -122,6 +125,10 @@ public class GameInput extends InputAdapter {
             case Input.Keys.NUM_4 -> 3;
             case Input.Keys.NUM_5 -> 4;
             case Input.Keys.NUM_6 -> 5;
+            case Input.Keys.NUM_7 -> 6;
+            case Input.Keys.NUM_8 -> 7;
+            case Input.Keys.NUM_9 -> 8;
+            case Input.Keys.NUM_0 -> 9;
             default               -> -1;
         };
     }

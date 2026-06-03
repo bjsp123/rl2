@@ -16,8 +16,8 @@ package com.bjsp123.rl2.model;
 public enum Perk {
     /** Warrior signature. Killing a foe stacks the {@link Buff.BuffType#KILLER}
      *  buff. Stacks-per-kill = {@code ceil(perkLvl/2)}; duration refresh =
-     *  {@code 8 + 2 * ceil(perkLvl/2)} turns; each active buff stack multiplies
-     *  attack and move cost by 0.85 (compounding). */
+     *  {@code 8 + 2 * ceil(perkLvl/2)} turns; each stack multiplies attack and
+     *  move cost by 0.9 (compounding), floored at {@code BuffSystem.KILLER_MIN_COST}. */
     KILLER,
     /** Open. Multiplies every other mob's wake / vision radius vs this player
      *  by {@code 1 / (perkLvl + 1)}. At L10 only adjacent mobs can see them. */

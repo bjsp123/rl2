@@ -11,6 +11,7 @@ import com.bjsp123.rl2.ai.eval.ExplorationEval;
 import com.bjsp123.rl2.ai.eval.ItemEval;
 import com.bjsp123.rl2.ai.goal.GoalDescend;
 import com.bjsp123.rl2.ai.goal.GoalPickupKnown;
+import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
@@ -56,6 +57,22 @@ public final class Decider {
      *  willing to fire. */
     public static final double HP_LOW_THRESHOLD = 0.7;
 
+    /** Consecutive no-reveal decisions after which the agent abandons frontier
+     *  exploration and commits to known, reachable stairs (see the
+     *  "descend-stalled" branch in {@link #decide}). Catches a hard stall where
+     *  {@code nearestExploreTarget} keeps returning a frontier the agent can
+     *  never actually reveal. */
+    public static final int EXPLORE_STALL_LIMIT = 60;
+
+    /** Decisions spent on one floor after which - once a reachable down-stair is
+     *  known - the agent commits to descending rather than keep grinding the
+     *  floor. Catches the slow-dwell pathology (the agent DOES reveal tiles, just
+     *  ~10x too slowly via explore<->loot ping-pong, so {@link #EXPLORE_STALL_LIMIT}
+     *  never trips). Set well above a normal floor's decision count (~10-50) and
+     *  far below the observed dwell (~700-2500), so productive exploration is
+     *  unaffected. */
+    public static final int EXPLORE_FATIGUE_LIMIT = 250;
+
     /** Return the chosen {@link Action} for this tick. Never null.
      *
      *  <p>The "no enemies in sight" leaves (heal / pickup-powerup / pickup-item /
@@ -65,6 +82,21 @@ public final class Decider {
      *  through; if fight has no applicable action the agent waits and the
      *  wait-streak escape in {@link SmartAi} handles deadlocks. */
     public static Action decide(WorldState s) {
+        // 0. Locked-exit floor (e.g. Mirrormatch): the way down only appears
+        //    once every enemy is dead, so clearing the floor outranks
+        //    everything - fight what's in sight, hunt the rest. Never wait for
+        //    stairs that won't come, and never flee the very foes we must kill
+        //    to leave.
+        if (mustClearToExit(s)) {
+            if (!s.visibleEnemies.isEmpty()) { LAST_BRANCH.set("clear-fight"); return planFight(s); }
+            Point foe = nearestEnemyTile(s);
+            if (foe != null) {
+                LAST_BRANCH.set("clear-hunt");
+                return new ActionMoveToward(foe, "clear-exit", 0.6, true);
+            }
+            // No enemy remains; the exit stamps this turn - fall through to descend.
+        }
+
         // 1. Level fully explored → descend.
         if (levelFullyExplored(s)) { LAST_BRANCH.set("descend"); return planDescend(s); }
 
@@ -77,6 +109,19 @@ public final class Decider {
             }
             LAST_BRANCH.set("fight");
             return planFight(s);
+        }
+
+        // 2.5 Exploration stalled OR we've dwelt too long on this floor, and a
+        //     reachable down-stair is known -> commit to descent instead of
+        //     grinding the floor. Placed after combat so the agent still fights
+        //     visible enemies rather than walking past them; skipped while stairs
+        //     are unknown/unreachable (so it keeps exploring to find a route, and
+        //     never hijacks a locked-exit floor where stairsDown is null).
+        if (s.memory != null && s.stairsReachable()
+                && (s.memory.exploreStallTurns > EXPLORE_STALL_LIMIT
+                    || s.memory.ticksOnCurrentLevel > EXPLORE_FATIGUE_LIMIT)) {
+            LAST_BRANCH.set("descend-stalled");
+            return planDescend(s);
         }
 
         // 3. No enemies in sight - try each leaf branch; fall through on Wait.
@@ -123,6 +168,34 @@ public final class Decider {
             if (CombatEval.isStrongerThan(e, s.mob)) return true;
         }
         return false;
+    }
+
+    /** True while on a floor whose exit only unlocks once every enemy is dead
+     *  and that exit hasn't stamped yet (e.g. the Mirrormatch special floor).
+     *  The agent must clear it rather than wait for stairs that won't appear. */
+    private static boolean mustClearToExit(WorldState s) {
+        return s.level != null && s.level.exitUnlocksOnClear && s.level.stairsDown == null;
+    }
+
+    /** Position of the nearest living enemy anywhere on the level (not just in
+     *  sight) - used to hunt the last foes keeping a locked exit sealed. Skips
+     *  the agent itself, inanimates, and the agent's own allies. Null when no
+     *  enemy remains. */
+    private static Point nearestEnemyTile(WorldState s) {
+        Point me = s.mob.position;
+        if (me == null) return null;
+        Point best = null;
+        int bestD = Integer.MAX_VALUE;
+        for (Mob m : s.level.mobs) {
+            if (m == null || m == s.mob || m.hp <= 0) continue;
+            if (m.behavior == Mob.Behavior.INANIMATE) continue;
+            if (m.position == null) continue;
+            if (MobSystem.isAlly(s.mob, m)) continue;
+            int d = Math.abs(m.position.tileX() - me.tileX())
+                    + Math.abs(m.position.tileY() - me.tileY());
+            if (d < bestD) { bestD = d; best = m.position; }
+        }
+        return best;
     }
 
     // Predicates for the leaf branches are inlined into `decide` via fall-through:

@@ -516,9 +516,11 @@ public class Mob {
      *  Persisted with the save so quickslot assignments survive a load.
      *  The live {@code ActionBar} mirrors this whenever the player binds /
      *  unbinds; on load, the bar restores from the type strings by
-     *  matching them against the player's inventory. Always sized to the
-     *  maximum (9) so saved bindings survive a slot-count preference change. */
-    public String[] actionSlotTypes = new String[9];
+     *  matching them against the player's inventory. Sized to the maximum
+     *  quickslot count (10, matching {@code ActionBar.SLOTS}) so saved
+     *  bindings survive a slot-count preference change; older 9-slot saves
+     *  are grown to fit on load by {@code ActionBar.ensureSlotCapacity}. */
+    public String[] actionSlotTypes = new String[10];
 
     // -- Transient runtime - not part of the save format ---------------------
     /** True iff the door tile the mob currently stands on was {@link Tile#DOOR} (closed)

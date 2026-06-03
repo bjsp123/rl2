@@ -10,7 +10,8 @@ import java.util.Random;
 /** Effective-stat rollup and combat-number helpers for mobs. */
 public final class MobStats {
 
-    private static final Random RANDOM = new Random();
+    private static final Random RANDOM =
+            com.bjsp123.rl2.util.SimRng.register("MobStats", new Random());
 
     private MobStats() {}
 

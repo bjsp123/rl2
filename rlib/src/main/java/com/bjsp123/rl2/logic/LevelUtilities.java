@@ -53,7 +53,8 @@ public final class LevelUtilities {
         public Surface surfaceType;
     }
 
-    private static final Random RANDOM = new Random();
+    private static final Random RANDOM =
+            com.bjsp123.rl2.util.SimRng.register("LevelUtilities", new Random());
     private static final int[][] DIRS_4 = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
     private static final int[][] DIRS_8 = {{1, 0}, {-1, 0}, {0, 1}, {0, -1},
                                            {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};

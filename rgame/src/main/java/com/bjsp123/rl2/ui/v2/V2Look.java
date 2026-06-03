@@ -32,7 +32,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private static final float HEADER_H = 38f;
     private static final float PAD = 12f;
-    private static final float INFO = 24f;
+    /** Info-button size. Chunky (a clear tappable square, not a tiny glyph)
+     *  so the "open the encyclopedia entry" affordance is obvious. */
+    private static final float INFO = 40f;
     private static final float SECTION_GAP = 8f;
     private static final float DETAIL_INDENT = 12f;
     private static final float BUFF_ICON_SZ = 14f;
@@ -186,6 +188,13 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
             String state = compactMobState(lookedMob, player);
             if (!state.isEmpty()) mob.details.add(state);
+            // Main levelled stats - armour / accuracy / evasion, the core
+            // combat numbers that scale with the mob's level (damage is shown
+            // on its own line above). Lets the player size up a foe at a glance.
+            mob.details.add(TextCatalog.format("ui.look.mobStats",
+                    TextCatalog.vars("armor", range(s.armor),
+                            "acc", s.accuracy,
+                            "eva", s.evasion)));
             if (lookedMob.inventory != null) {
                 List<Item> gear = lookedMob.inventory.allEquipped();
                 if (!gear.isEmpty()) {
@@ -196,6 +205,19 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     }
                     mob.details.add(TextCatalog.format("ui.look.mobEquipment",
                             TextCatalog.vars("items", sb.toString())));
+                }
+                // Carried (un-equipped) bag items - e.g. an enemy player's
+                // bombs / wands / potions. Equipped gear is listed separately
+                // above; this surfaces what they might throw or drink.
+                List<Item> bag = lookedMob.inventory.bag;
+                if (bag != null && !bag.isEmpty()) {
+                    StringBuilder cb = new StringBuilder();
+                    for (int gi = 0; gi < bag.size(); gi++) {
+                        if (gi > 0) cb.append(" · ");
+                        cb.append(ItemNames.displayName(bag.get(gi), null));
+                    }
+                    mob.details.add(TextCatalog.format("ui.look.mobCarrying",
+                            TextCatalog.vars("items", cb.toString())));
                 }
             }
             if (lookedMob.buffs != null) {

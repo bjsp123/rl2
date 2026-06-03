@@ -85,6 +85,11 @@ public final class MobProgression {
         if (mob == null) return;
         int target = Math.min(GameBalance.MAX_CHARACTER_LEVEL, Math.max(1, targetLevel));
         mob.characterLevel = target;
+        // Born at level N => carry the matching cumulative XP, so the mob can
+        // actually advance from here. Without this a mob spawned above level 1
+        // sits at xp 0 - a full level schedule below its rank - and can never
+        // gain a level (awardXp needs xp >= xpToReach(level+1)).
+        mob.xp = xpToReach(target);
         mob.statsDirty = true;
         mob.hp = mob.effectiveStats().maxHp;
     }

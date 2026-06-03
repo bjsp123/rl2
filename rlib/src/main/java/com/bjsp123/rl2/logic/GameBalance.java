@@ -99,6 +99,13 @@ public final class GameBalance {
      *
      * <p>Does not mutate the input mobs.
      */
+    /** Dedicated RNG for the Monte-Carlo {@link #mobfight} estimator, registered
+     *  so it reseeds deterministically per run. It was a fresh {@code new
+     *  Random()} per call - and since the AI calls mobfight to compare threats,
+     *  that leaked wall-clock randomness into decisions every tick. */
+    private static final Random MOBFIGHT_RNG =
+            com.bjsp123.rl2.util.SimRng.register("GameBalance.mobfight", new Random());
+
     public static double mobfight(Mob a, Mob b) {
         return mobfight(a, b, MOBFIGHT_DEFAULT_TRIALS);
     }
@@ -106,7 +113,7 @@ public final class GameBalance {
     /** {@link #mobfight(Mob, Mob)} with an explicit trial count. */
     public static double mobfight(Mob a, Mob b, int trials) {
         if (a == null || b == null || trials <= 0) return 0.0;
-        Random rng = new Random();
+        Random rng = MOBFIGHT_RNG;
         // Snapshot effective stats so the sim sees the same values combat code would.
         com.bjsp123.rl2.model.StatBlock as = a.effectiveStats();
         com.bjsp123.rl2.model.StatBlock bs = b.effectiveStats();
