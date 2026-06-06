@@ -117,7 +117,7 @@ public class Rl2Game extends Game {
     public void create() {
         // Data-driven configs - read once at startup, before any factory call or
         // gameplay code reads a balance number. Game-balance loads first because
-        // some Mob field initializers reference GameBalance.STARTING_SATIETY etc.
+        // some Mob field initializers reference GameBalance constants.
         loadStrings();
         loadGameBalance();
         loadUiVars();
@@ -126,6 +126,7 @@ public class Rl2Game extends Game {
         loadItemConfig();
         loadBrandConfig();
         loadThemedRoomConfig();
+        loadRecipeConfig();
         loadTipsConfig();
         loadHelpConfig();
         Settings.init(persistence);
@@ -223,6 +224,16 @@ public class Rl2Game extends Game {
                 com.badlogic.gdx.Gdx.files.internal("data/themedrooms.csv");
         if (!fh.exists()) return;
         com.bjsp123.rl2.logic.Registries.loadThemedRooms(fh.readString());
+    }
+
+    /** Read {@code assets/data/recipes.csv} into the gem-recipe registry (RL-50).
+     *  Missing file is non-fatal - the registry stays empty and the forge shows
+     *  no recipes. */
+    private void loadRecipeConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/recipes.csv");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.logic.Registries.loadRecipes(fh.readString());
     }
 
     private void loadTipsConfig() {

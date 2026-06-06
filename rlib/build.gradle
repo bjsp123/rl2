@@ -25,6 +25,15 @@ tasks.register('dumpWorld', JavaExec) {
     workingDir  = rootProject.projectDir
 }
 
+// [DEV] Headless gem-recipe validator + balance report (RL-50).
+tasks.register('dumpRecipes', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Validate recipes.csv and print a gem-economy balance report'
+    mainClass   = 'com.bjsp123.rl2.util.RecipeDumpMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+}
+
 // [DEV] Headless 1v1 round-robin power ranker. Spawns every fightable mob
 // (plus the three player classes), runs N trials of GameBalance.mobfight
 // between every pair, and prints a ranking at character level 1 and 10.

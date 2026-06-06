@@ -1,0 +1,50 @@
+# Gem recipes (RL-50). One recipe per craftable gem-item.
+#
+# Each row: an output item (a GEM-category item type in items.csv) plus 2-4
+# ingredient SLOTS. Combining gems that satisfy every slot at a gem hearth
+# produces one of the output item.
+#
+# A slot cell is one of:
+#   <GEMSPECIES>  a specific named gem (e.g. BLOODHIVE)   -- the keystone
+#   exotic        any EXOTIC-class gem
+#   metal_exotic  any METAL- or EXOTIC-class gem
+#   any           any gem at all
+# Empty slot cells mean the recipe has fewer than 4 ingredients.
+#
+# Cost curve by rarity (gates output power against the gem economy:
+# ~22 basic / ~8 metal / ~5 exotic per game -> ~12 low-rarity OR ~5 high):
+#   r2  any,any                                 (2 basic)
+#   r3  any,any,NAMED(basic)                    (3 basic)
+#   r4  any,NAMED(basic),metal_exotic           (2 basic + 1 rare)
+#   r5  NAMED(rare),metal_exotic,any            (~2 rare + 1 basic)
+#   r6  NAMED(rare),metal_exotic,any,any        (named-rare + rare + 2 basic)
+#   r7  NAMED(exotic),exotic,metal_exotic,any   (2 exotic + 1 rare + 1 basic)
+# NAMED keystones follow gem theme affinity (gothic/blood, shiny/ice,
+# crystal/arcane, concrete/earth).
+output,rarity,slot1,slot2,slot3,slot4
+# --- Low rarity (basic-fed) -------------------------------------------------
+ELEMENTAL_INSCRIPTION,2,any,any,,
+FERVENT_ASPIRATION,2,any,any,,
+BLIND_MASTER,3,any,any,HAMETHYST,
+THIRTY_SIX_STRATAGEMS,3,any,any,LETTUSTONE,
+EIGHT_DIRECTIONS_DEFENCE,3,any,any,SALAMITE,
+HEAVENLY_PEACH,3,any,any,ICELANDSPAR,
+INVOCATION_OF_CHIYOU,3,any,any,SALAMITE,
+BLIZZARD_PETAL,4,any,ICELANDSPAR,metal_exotic,
+HARVEST_BLOSSOM,4,any,LETTUSTONE,metal_exotic,
+LESSER_SEAL,4,any,HAMETHYST,metal_exotic,
+POLYMORPH_SIGN,4,any,HAMETHYST,metal_exotic,
+INVOCATION_OF_JIUTIAN,4,any,HAMETHYST,metal_exotic,
+INVOCATION_OF_THE_FOXES,4,any,LETTUSTONE,metal_exotic,
+# --- Mid / high rarity (rare-gated) -----------------------------------------
+BLOOD_FLOWER,5,BLOODHIVE,metal_exotic,any,
+CRYSTAL_OF_INVERSION,6,FLUORON,metal_exotic,any,any
+STONE_BURNER,6,MALACHOR,metal_exotic,any,any
+EIGHTFOLD_MULTIPLICATION,6,BLACKGLASS,metal_exotic,any,any
+GREATER_SEAL,6,GOLD,metal_exotic,any,any
+SYMBOL_OF_INSANITY,6,BLOODHIVE,metal_exotic,any,any
+INVOCATION_OF_TAISHAN,6,SILVER,metal_exotic,any,any
+INVOCATION_OF_RU_SHOU,6,MALACHOR,metal_exotic,any,any
+INVOCATION_OF_MO_YE,6,GOLD,metal_exotic,any,any
+PATH_THROUGH_OBLIVION,7,BLACKGLASS,exotic,metal_exotic,any
+PILL_OF_IMMORTALITY,7,FLUORON,exotic,metal_exotic,any

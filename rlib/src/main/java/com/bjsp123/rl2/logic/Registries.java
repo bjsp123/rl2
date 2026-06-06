@@ -22,6 +22,8 @@ public final class Registries {
             new CsvRegistryStore<>("brands.csv", BrandDefinition::parseAll, d -> d.brand);
     private static final CsvRegistryStore<ThemedRoomDefinition> THEMED_ROOMS =
             new CsvRegistryStore<>("themedrooms.csv", ThemedRoomDefinition::parseAll, d -> d.type);
+    private static final CsvRegistryStore<GemRecipe> RECIPES =
+            new CsvRegistryStore<>("recipes.csv", GemRecipe::parseAll, r -> r.output);
 
     private static final Map<String, Set<String>> mobFactionMembers = new LinkedHashMap<>();
     private static final Set<String> EMPTY_SET = Collections.emptySet();
@@ -82,4 +84,9 @@ public final class Registries {
     public static void loadThemedRooms(String csv) { THEMED_ROOMS.load(csv); }
     public static ThemedRoomDefinition themedRoom(String type) { return THEMED_ROOMS.get(type); }
     public static Set<String> themedRoomTypes() { return THEMED_ROOMS.knownTypes(); }
+
+    public static void loadRecipes(String csv) { RECIPES.load(csv); }
+    public static GemRecipe recipe(String output) { return RECIPES.get(output); }
+    public static Set<String> recipeTypes() { return RECIPES.knownTypes(); }
+    public static List<GemRecipe> recipes() { return List.copyOf(RECIPES.map().values()); }
 }

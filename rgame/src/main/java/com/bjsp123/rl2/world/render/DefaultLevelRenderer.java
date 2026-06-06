@@ -693,11 +693,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         long _t4 = System.nanoTime(); int _f4 = batch.renderCalls;
         if (DRAW_FOG) fog.render(batch);
-        // Screen-space FX overlay (currently the beacon-activation level
-        // flicker) - drawn ABOVE fog so unseen cells also get the warm
-        // pulse, since the activation reads as a level-wide event.
+        // Buff over-head icons draw ABOVE the fog so an icon that sits over an
+        // unexplored tile to the north isn't clipped by the fog overlay (RL-44).
+        drawBuffOverheadIconsPass(level);
+        // Screen-space FX overlay: beacon-activation level flicker, plus buff-acquire
+        // icons (also above fog for the same north-clipping reason).
         if (animator != null) {
-            fxRenderer.drawScreenSpaceEffects(animator.stage, camera);
+            fxRenderer.drawScreenSpaceEffects(animator.stage, camera, level);
         }
         gameFbo.endWorldPass(batch);
         long _t5 = System.nanoTime();
@@ -2200,6 +2202,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
             ox += as.stepFromDx * (1f - t) * CELL;
             oy += as.stepFromDy * (1f - t) * CELL;
         }
+        // FRIGHTENED: rapid left-right tremble (RL-44).
+        if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FRIGHTENED)) {
+            ox += (float) Math.sin(stairLabelTime * 30.0) * 1.5f;
+        }
         // Live mobs render fully opaque; the death-fade lives on rgame's ghost list,
         // not on the mob itself (killMob removes the mob from level.mobs immediately).
         // Teleport fade still multiplies in.
@@ -2217,6 +2223,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
             float pulse = (float)(0.5 + 0.5 * Math.sin(stairLabelTime * 1.5));
             alpha = 0.2f + 0.3f * pulse;
         }
+        // GHOSTLY: semi-transparent (paired with the desaturate overlay in drawMobSprite).
+        if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.GHOSTLY)) {
+            alpha *= 0.6f;
+        }
         Sprite s = spriteForMob(mob);
         if (s != null) {
             // Unique mobs continuously pulse their outline between black and white.
@@ -2228,8 +2238,21 @@ public class DefaultLevelRenderer implements LevelRenderer {
             if (as.borderFlashFrames > 0) {
                 pulseR = 1f; pulseG = 1f; pulseB = 1f;
             }
+            // OUTLINE_PULSE buffs (protection / anti-magic / sorcery) tint the outline (RL-44).
+            com.bjsp123.rl2.world.render.BuffVisuals.V outlineBuff =
+                    com.bjsp123.rl2.world.render.BuffVisuals.active(mob,
+                            com.bjsp123.rl2.world.render.BuffVisuals.Category.OUTLINE_PULSE);
+            if (outlineBuff != null) {
+                float pp = 0.5f + 0.5f * (float) Math.sin(stairLabelTime * 4.0);
+                pulseR = outlineBuff.r * pp;
+                pulseG = outlineBuff.g * pp;
+                pulseB = outlineBuff.b * pp;
+            }
+            // Phasing shimmer: the PHASE buff, or a phase-dodge slide in progress (RL: dodge
+            // shows the same look without granting the gameplay PHASE buff).
             boolean phaseActive    = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
-                    mob, com.bjsp123.rl2.model.Buff.BuffType.PHASE);
+                    mob, com.bjsp123.rl2.model.Buff.BuffType.PHASE)
+                    || as.phaseDodgeFrames > 0;
             boolean frozenActive   = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
                     mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN);
             boolean shieldedActive    = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
@@ -2237,7 +2260,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
             boolean levitatingActive  = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
                     mob, com.bjsp123.rl2.model.Buff.BuffType.LEVITATING);
             drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale,
-                    pulseR, pulseG, pulseB, phaseActive, frozenActive, shieldedActive, levitatingActive);
+                    pulseR, pulseG, pulseB, phaseActive, frozenActive, shieldedActive, levitatingActive, mob);
         } else {
             System.err.println("No sprite for mob " + mob.mobType + " at (" + mx + ", " + my + ")");
             //placeholder drawn here?
@@ -2256,6 +2279,26 @@ public class DefaultLevelRenderer implements LevelRenderer {
         double maxHp = mob.effectiveStats().maxHp;
         if (mob.behavior != Behavior.PLAYER && maxHp > 0 && mob.hp < maxHp) {
             drawMobHpBar(mob, mx, my, ox, oy, alpha);
+        }
+        // Over-head buff icons are drawn in drawBuffOverheadIconsPass (above the fog).
+    }
+
+    /** Post-fog pass: draw every visible mob's over-head buff icons above the fog overlay
+     *  so they aren't clipped by unexplored tiles to the north (RL-44). */
+    private void drawBuffOverheadIconsPass(Level level) {
+        if (level.mobs == null) return;
+        for (Mob mob : level.mobs) {
+            if (mob.position == null) continue;
+            int mx = mob.position.tileX(), my = mob.position.tileY();
+            if (!inBounds(level, mx, my) || !level.visible[mx][my]) continue;
+            com.bjsp123.rl2.world.anim.MobAnimState as = animator.stateOf(mob);
+            float ox = as.animOffsetX(), oy = as.animOffsetY();
+            if (as.stepTotal > 0 && as.teleportFadeMs <= 0) {
+                float t = Math.min(1f, as.stepFrame / (float) as.stepTotal);
+                ox += as.stepFromDx * (1f - t) * CELL;
+                oy += as.stepFromDy * (1f - t) * CELL;
+            }
+            drawBuffOverheadIcons(mob, mx, my, ox, oy, 1f);
         }
     }
 
@@ -2293,7 +2336,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
             float drawX = cx + bx - iconSize * 0.5f;
             float drawY = midY - iconSize * 0.5f + by;
             if(i==0 || i==n-1) drawY -= CELL * 0.25f; //lower the ones at the edge
-            com.badlogic.gdx.graphics.g2d.TextureRegion r = GemSprites.regionFor(gems.get(i));
+            // ItemSprites routes raw gems to GemSprites and crafted gem-items
+            // (RL-50, gemSpecies==null) to the item atlas, so both orbit correctly.
+            com.badlogic.gdx.graphics.g2d.TextureRegion r =
+                    com.bjsp123.rl2.world.render.ItemSprites.regionFor(gems.get(i));
             if (r == null) continue;
             batch.setColor(1f, 1f, 1f, alpha);
             batch.draw(r, drawX, drawY, iconSize, iconSize);
@@ -2324,6 +2370,39 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.setColor(Color.WHITE);
     }
 
+    /** Over-head icon row for OVERHEAD_ICON-category buffs (RL-44): the eye for
+     *  ESP/INSIGHT, the clock for cooldown buffs, the KILLER eyes. Icons sit just above
+     *  the HP-bar line, centred over the mob's head; KILLER pulses. */
+    private void drawBuffOverheadIcons(Mob mob, int mx, int my, float ox, float oy, float alpha) {
+        if (mob.buffs == null || mob.buffs.isEmpty()) return;
+        final float icon = 9f, gap = 1f;
+        int count = 0;
+        for (com.bjsp123.rl2.model.Buff b : mob.buffs) {
+            if (com.bjsp123.rl2.world.render.BuffVisuals.of(b.type).category
+                    == com.bjsp123.rl2.world.render.BuffVisuals.Category.OVERHEAD_ICON
+                    && BuffIcons.regionFor(b.type) != null) count++;
+        }
+        if (count == 0) return;
+        float totalW = count * icon + (count - 1) * gap;
+        float startX = mx * CELL + CELL / 2f + ox - totalW / 2f;
+        float y = my * CELL + CELL + 6f + oy;   // a few px above the HP-bar line
+        int i = 0;
+        for (com.bjsp123.rl2.model.Buff b : mob.buffs) {
+            if (com.bjsp123.rl2.world.render.BuffVisuals.of(b.type).category
+                    != com.bjsp123.rl2.world.render.BuffVisuals.Category.OVERHEAD_ICON) continue;
+            com.badlogic.gdx.graphics.g2d.TextureRegion r = BuffIcons.regionFor(b.type);
+            if (r == null) continue;
+            float a = alpha;
+            if (b.type == com.bjsp123.rl2.model.Buff.BuffType.KILLER) {
+                a *= 0.6f + 0.4f * (float) (0.5 + 0.5 * Math.sin(stairLabelTime * 6.0));
+            }
+            batch.setColor(1f, 1f, 1f, a);
+            batch.draw(r, startX + i * (icon + gap), y, icon, icon);
+            i++;
+        }
+        batch.setColor(Color.WHITE);
+    }
+
     /**
      * Draw a mob so its VISIBLE silhouette is exactly {@link #MOB_VISIBLE_W} x {@link
      * #MOB_VISIBLE_H} on screen, regardless of how much blank canvas its source frame has.
@@ -2333,7 +2412,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      * shadow is drawn first, anchored at the baseline.
      */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY, float alpha) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f, false, false, false, false);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, 1f, 0f, 0f, 0f, false, false, false, false, null);
     }
 
     /** Spawn-scale variant: {@code spawnScale} 0..1 multiplies both x and y
@@ -2342,7 +2421,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  is the no-op default for normal rendering. */
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale) {
-        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f, false, false, false, false);
+        drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale, 0f, 0f, 0f, false, false, false, false, null);
     }
 
     /**
@@ -2355,14 +2434,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
                                float outlinePulseR, float outlinePulseG, float outlinePulseB,
                                boolean phaseEffect) {
         drawMobSprite(s, gx, gy, offsetX, offsetY, alpha, spawnScale,
-                outlinePulseR, outlinePulseG, outlinePulseB, phaseEffect, false, false, false);
+                outlinePulseR, outlinePulseG, outlinePulseB, phaseEffect, false, false, false, null);
     }
 
     private void drawMobSprite(Sprite s, int gx, int gy, float offsetX, float offsetY,
                                float alpha, float spawnScale,
                                float outlinePulseR, float outlinePulseG, float outlinePulseB,
                                boolean phaseEffect, boolean frozenEffect, boolean shieldedEffect,
-                               boolean levitatingEffect) {
+                               boolean levitatingEffect, com.bjsp123.rl2.model.Mob mob) {
         // "Natural" sprites (large blobs etc.) draw at source scale; everything else gets
         // normalised to MOB_VISIBLE_W x MOB_VISIBLE_H so silhouettes read consistently.
         float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * spawnScale;
@@ -2394,20 +2473,30 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.draw(shadowRegion, tileCenterX - shadowW / 2f, baselineY - SHADOW_H / 2f,
                 shadowW, SHADOW_H);
         batch.setColor(1f, 1f, 1f, alpha);
-        // SHIELDED shell: draw the mob's silhouette slightly enlarged in cyan before
-        // the mob itself so the glow sits behind it and reads as a surrounding barrier.
+        // GLOW shells behind the sprite, read as a surrounding aura: SHIELDED (cyan, the
+        // original) plus any GLOW-category buff (e.g. HOPE golden) - RL-44.
         if (shieldedEffect) {
-            float pulse = (float)(0.5 + 0.5 * Math.sin(stairLabelTime * 5.0));
-            batch.setColor(0.5f, 0.9f, 1.0f, alpha * (0.18f + 0.12f * pulse));
-            batch.draw(s.region, drawX - 8f, drawY - 8f, dw + 16f, dh + 16f);
-            batch.setColor(0.5f, 0.9f, 1.0f, alpha * (0.55f + 0.35f * pulse));
-            batch.draw(s.region, drawX - 4f, drawY - 4f, dw + 8f, dh + 8f);
+            drawGlowShell(s, drawX, drawY, dw, dh, alpha, 0.5f, 0.9f, 1.0f);
+        }
+        if (mob != null) {
+            com.bjsp123.rl2.world.render.BuffVisuals.V glow =
+                    com.bjsp123.rl2.world.render.BuffVisuals.active(mob,
+                            com.bjsp123.rl2.world.render.BuffVisuals.Category.GLOW);
+            if (glow != null) drawGlowShell(s, drawX, drawY, dw, dh, alpha, glow.r, glow.g, glow.b);
         }
         float outlineW = com.bjsp123.rl2.ui.skin.Settings.mobOutlineWidth();
         float outlineA = com.bjsp123.rl2.ui.skin.Settings.mobOutlineDarkness() * alpha;
         if (!phaseEffect && outlineA > 0f && outlineW > 0f) {
             outlines.drawMob(batch, s.region, drawX, drawY, dw, dh,
                     outlinePulseR, outlinePulseG, outlinePulseB, outlineA);
+        }
+        // HASTED: faded side copies of the sprite read as a horizontal motion smear (RL-44).
+        if (mob != null && com.bjsp123.rl2.world.render.BuffVisuals.has(
+                mob, com.bjsp123.rl2.world.render.BuffVisuals.Category.ZOOM)) {
+            float smear = dw * 0.20f;
+            batch.setColor(1f, 1f, 1f, alpha * 0.30f);
+            batch.draw(s.region, drawX - smear, drawY, dw, dh);
+            batch.draw(s.region, drawX + smear, drawY, dw, dh);
         }
         batch.setColor(1f, 1f, 1f, alpha);
         if (phaseEffect) {
@@ -2419,17 +2508,42 @@ public class DefaultLevelRenderer implements LevelRenderer {
             batch.setColor(0.82f, 0.88f, 0.92f, alpha * 0.40f);
             batch.draw(s.region, drawX, drawY, dw, dh);
         }
+        // DESATURATE: GHOSTLY / HIDING get a flat grey overlay so they read washed-out (RL-44).
+        if (mob != null) {
+            com.bjsp123.rl2.world.render.BuffVisuals.V gray =
+                    com.bjsp123.rl2.world.render.BuffVisuals.active(mob,
+                            com.bjsp123.rl2.world.render.BuffVisuals.Category.DESATURATE);
+            if (gray != null) {
+                batch.setColor(0.6f, 0.6f, 0.62f, alpha * gray.grayAlpha);
+                batch.draw(s.region, drawX, drawY, dw, dh);
+            }
+        }
         batch.setColor(Color.WHITE);
+    }
+
+    /** Draw a two-pass tinted glow shell behind the mob sprite (the SHIELDED look,
+     *  generalized for any GLOW-category buff). Pulses with {@code stairLabelTime}. */
+    private void drawGlowShell(Sprite s, float drawX, float drawY, float dw, float dh,
+                               float alpha, float r, float g, float b) {
+        float pulse = (float) (0.5 + 0.5 * Math.sin(stairLabelTime * 5.0));
+        batch.setColor(r, g, b, alpha * (0.18f + 0.12f * pulse));
+        batch.draw(s.region, drawX - 8f, drawY - 8f, dw + 16f, dh + 16f);
+        batch.setColor(r, g, b, alpha * (0.55f + 0.35f * pulse));
+        batch.draw(s.region, drawX - 4f, drawY - 4f, dw + 8f, dh + 8f);
     }
 
     private void drawPhaseStrips(Sprite s, float drawX, float drawY, float dw, float dh, float alpha) {
         final int STRIP_H = 2;
         com.badlogic.gdx.graphics.Texture tex = s.region.getTexture();
-        int rx = s.region.getRegionX();
-        int ry = s.region.getRegionY();
         int rw = s.region.getRegionWidth();
         int rh = s.region.getRegionHeight();
         if (rh <= 0) { batch.draw(s.region, drawX, drawY, dw, dh); return; }
+        // True top-left source pixel, robust to flipped UVs: a right-facing player sprite is
+        // a flip(true,false) region, where getRegionX() returns the RIGHT edge. Using
+        // min(u,u2)/min(v,v2) gives the actual left/top so the per-strip slice + flipX flag
+        // don't fight each other (fixes phasing rendering when facing right).
+        int srcX = Math.round(Math.min(s.region.getU(), s.region.getU2()) * tex.getWidth());
+        int srcY = Math.round(Math.min(s.region.getV(), s.region.getV2()) * tex.getHeight());
         float maxShift = CELL * 0.18f;
         float sinVal = (float) Math.sin(stairLabelTime * 5.0);
         batch.setColor(1f, 1f, 1f, alpha);
@@ -2442,7 +2556,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
             float destY = drawY + dh - (i * STRIP_H + srcH) * dh / (float) rh;
             float xShift = (i % 2 == 0 ? 1f : -1f) * maxShift * sinVal;
             batch.draw(tex, drawX + xShift, destY, dw, destH,
-                    rx, ry + i * STRIP_H, rw, srcH, fx, fy);
+                    srcX, srcY + i * STRIP_H, rw, srcH, fx, fy);
         }
     }
 

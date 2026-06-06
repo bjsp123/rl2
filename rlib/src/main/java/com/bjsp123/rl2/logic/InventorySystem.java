@@ -165,6 +165,20 @@ public final class InventorySystem {
         return true;
     }
 
+    /** Destroy a gem-slot occupant outright (does NOT return it to the bag).
+     *  Used by single-use crafted gem-items (RL-50): triggering one consumes
+     *  it from its slot. Returns {@code true} if a slot held {@code it}. */
+    public static boolean removeFromGemSlots(Inventory inv, Item it) {
+        if (inv == null || it == null) return false;
+        for (int i = 0; i < inv.gems.length; i++) {
+            if (inv.gems[i] == it) {
+                inv.gems[i] = null;
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** {@code true} when {@code it} is currently sitting in one of
      *  {@code inv}'s equipment positions. Used by UI surfaces that need
      *  to render Equip vs. Unequip on the same affordance. */
@@ -220,7 +234,6 @@ public final class InventorySystem {
         out.level = src.level;
         out.tameOnThrow = src.tameOnThrow;
         out.gemSpecies = src.gemSpecies;
-        out.gemSize = src.gemSize;
         out.inventoryCategory = src.inventoryCategory;
         out.count = 1;
         return out;

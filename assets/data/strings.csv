@@ -1,6 +1,4 @@
 key,en
-achievement.ARTISAN.description,Craft your first item.
-achievement.ARTISAN.name,Artisan
 achievement.BEGUN_THE_ADVENTURE.description,Descend to depth 2.
 achievement.BEGUN_THE_ADVENTURE.name,Begun the Adventure
 achievement.category.COMBAT,Combat
@@ -70,14 +68,14 @@ brand.THUNDER.name,thunder
 brand.VICIOUSNESS.description,A cruel weapon that tends to hit hard and accurately.
 brand.VICIOUSNESS.name,viciousness
 buff.ANTI_MAGIC.description,Incoming magic and fire damage is reduced.
-buff.ANTI_MAGIC.details,Halves magic / fire damage per level (asymptotic).
+buff.ANTI_MAGIC.details,Halves magic / fire damage per stack (asymptotic).
 buff.ANTI_MAGIC.name,Anti-magic
 buff.ANTI_MAGIC.tip,*Halves incoming magic and fire damage* - key against wand-users.
 buff.BLEEDING.description,Open wound draining health every turn.
-buff.BLEEDING.details,Loses HP each turn; bleed-rate tapers down as the duration shortens.
+buff.BLEEDING.details,Loses HP each turn; bleed-rate tapers down as the stacks count down.
 buff.BLEEDING.name,Bleeding
 buff.CHILLED.description,Acting slower than normal due to magical chill.
-buff.CHILLED.details,Move and attack costs increased substantially. Combine with wet to freeze.
+buff.CHILLED.details,Move and attack costs rise sharply (more per stack). Combine with wet to freeze.
 buff.CHILLED.name,Chilled
 buff.CHILLED.tip,You're *chilled* - slowed down for a few turns.
 buff.death.ON_FIRE, burns to a cinder
@@ -90,7 +88,7 @@ buff.FRIGHTENED.details,"Frightened creatures can't approach danger.  Magical bl
 buff.FRIGHTENED.name,Frightened
 buff.FRIGHTENED.tip,You're *frightened* and can't attack terrifying enemies.  The best cure is to walk into *light*.
 buff.FROZEN.description,Frozen in place until incoming damage chips the ice away.
-buff.FROZEN.details,Prevents all motion and action until the condition ends. Taking damage shortens the freeze. Fixme how
+buff.FROZEN.details,Prevents all motion and action until the buff ends. Taking damage removes 2 stacks, ending it sooner.
 buff.FROZEN.name,Frozen
 buff.FROZEN.tip,You're *frozen solid* - you can't act until the ice melts or you're hit.
 buff.GHOSTLY.description,Fly and pass through solid objects like a ghost.
@@ -100,22 +98,24 @@ buff.GHOSTLY.tip,With this condition you can *fly and pass through walls* -- an 
 buff.HASTE_COOLDOWN.description,Recharging a Haste ability until it can be used again.
 buff.HASTE_COOLDOWN.name,Recharging
 buff.HASTED.description,Able to move more swiftly than normal.
-buff.HASTED.details,Move and attack costs reduced by 20% per level (compounding).
+buff.HASTED.details,Move and attack costs reduced by 20% per stack (compounding).
 buff.HASTED.name,Hasted
 buff.HASTED.tip,You're *hasted*.  Moves and attacks cost less time - capitalise on it.
 buff.HEAL_COOLDOWN.description,Recharging a Heal ability until it can be used again.
 buff.HEAL_COOLDOWN.name,Recharging
+buff.PHASE_DODGE_COOLDOWN.description,Recharging a phase-dodge until it can be used again.
+buff.PHASE_DODGE_COOLDOWN.name,Recharging
+buff.PHASE_DODGE_COOLDOWN.effect,recharging
 buff.HIDING.description,Attempting to hide out of sight of enemies.
 buff.HIDING.details,Mob remains stationary and cannot be targeted until disturbed.
 buff.HIDING.name,Hiding
-buff.HIDING.tip,You're *hiding*.\nEnemies can't see you until you act or the buff wears off. fixme is this right
+buff.HIDING.tip,You're *hiding*.\nEnemies can't see you until you act or the buff wears off.
 buff.HOPE.description,"Filled with hope and courage, less frighened and more effective."
-buff.HOPE.details,Grants immunity to frightened. Bonus accuracy and evasion scale with level.
+buff.HOPE.details,Grants immunity to frightened. Bonus accuracy and evasion scale with stacks.
 buff.HOPE.name,Blessed
 buff.info.effect,Effect: {effect}
-buff.info.level,Level {level}
 buff.info.permanent,Permanent
-buff.info.turns,{turns} turns
+buff.info.stacks,{stacks} stacks
 buff.INSIGHT.description,The whole level layout is revealed.
 buff.INSIGHT.details,Marks every tile as explored each turn.
 buff.INSIGHT.name,Insight
@@ -124,7 +124,7 @@ buff.INVISIBLE.details,Adds +40 evasion. Attacking ends the effect.
 buff.INVISIBLE.name,Invisible
 buff.INVISIBLE.tip,Evasion bonus and impossible to target -- great for approaching ranged enemies.
 buff.KILLER.description,Empowered by recent kills to strike and move faster.
-buff.KILLER.details,Each kill stacks the buff: every stack multiplies move and attack costs by 0.85 (compounding).
+buff.KILLER.details,Each kill adds stacks; every stack multiplies move and attack costs by 0.9 (compounding) down to a floor. Effect caps at 10 stacks.
 buff.KILLER.name,Killer
 buff.LEVITATING.description,"Hovering, and unaffected by ground hazards or chasms."
 buff.LEVITATING.details,"Can cross chasms safely; ignores ground-level surfaces (water, oil)."
@@ -134,7 +134,7 @@ buff.OILY.details,Doubles fire damage taken; ignition lasts longer when set on f
 buff.OILY.name,Oily
 buff.OILY.tip,You're *oiled*. Take *2x damage from fire*.  Step in water to wash it off.
 buff.ON_FIRE.description,Losing HP each turn until it burns out.
-buff.ON_FIRE.details,Loses HP each turn (scales with level). Doubled if also oily. Ended by being chilled or stepping into water.
+buff.ON_FIRE.details,Loses a fixed amount of HP each turn. Doubled if also oily. Ended by being chilled or stepping into water.
 buff.ON_FIRE.name,On Fire
 buff.ON_FIRE.tip,You're *burning* - lose health each turn. Water puts it out; oil makes it spread.
 buff.PHASE.description,Moving at blinding speed and very hard to hit. Ends on taking or dealing damage.
@@ -146,9 +146,9 @@ buff.POISONED.details,Loses HP each turn. Cured by anything that brings Regenera
 buff.POISONED.name,Poisoned
 buff.POISONED.tip,You're *poisoned* - lose health each turn. Armor won't help; heal or wait it out.
 buff.PROTECTION.description,Protected from incoming physical damage.
-buff.PROTECTION.details,Halves physical damage per level (asymptotic).
+buff.PROTECTION.details,Halves physical damage per stack (asymptotic).
 buff.PROTECTION.name,Protection
-buff.PROTECTION.tip,*Halves incoming physical damage* (more at higher levels).
+buff.PROTECTION.tip,*Halves incoming physical damage* (more at higher stacks).
 buff.RANGED_COOLDOWN.description,Reloading and preparing to make a ranged attack.
 buff.RANGED_COOLDOWN.name,Recharging
 buff.REGENERATION.description,Regenerating health each turn.
@@ -160,18 +160,40 @@ buff.SHIELDED.details,Negates the next instance of incoming damage entirely.
 buff.SHIELDED.name,Shielded
 buff.SHIELDED.tip,*Immune to all damage* until it wears off.\nUse aggressively while it lasts.
 buff.SORCERY.description,Spells and potions are extra-empowered by sorcery.
-buff.SORCERY.details,"Item effects fire at higher level - more damage, more range, longer durations."
+buff.SORCERY.details,"Item effects fire at a higher *item* level - more damage, more range, longer durations."
 buff.SORCERY.name,Sorcery
 buff.SORCERY.tip,Your *wands* and *potions* work better while this effect is on.
-buff.STARVING.description,Needs to eat soon or start taking damage.
-buff.STARVING.details,Hunger has run out. Regeneration is suppressed and HP slowly drains.
-buff.STARVING.name,Starving
 buff.TELEPORT_COOLDOWN.description,Recharging a Teleport ability.
 buff.TELEPORT_COOLDOWN.name,Recharging
 buff.WET.description,Soaking wet.  Takes extra damage from lightning and cold.
-buff.WET.details,Doubles fire and lightning damage taken. Combines with chilled to freeze.
+buff.WET.details,Doubles lightning and quadruples cold damage taken. Combine with chilled to freeze.
 buff.WET.name,Wet
 buff.WET.tip,You're *wet*. Take extra damage from lightning and cold.
+# Buff "Effect:" lines (RL-46) - shown in V2BuffInfo; numbers filled by BuffSystem.describeEffectForStacks
+buff.HASTED.effect,moves {pct}% faster
+buff.CHILLED.effect,move & attack cost +{n}
+buff.PROTECTION.effect,physical damage divided by {n}
+buff.ANTI_MAGIC.effect,magic / fire damage divided by {n}
+buff.REGENERATION.effect,+{n} HP per turn
+buff.HOPE.effect,"+{n} accuracy, +{n} evasion; fear immunity"
+buff.KILLER.effect,moves & attacks {pct}% faster
+buff.BLEEDING.effect,loses HP each turn (rate tapers as stacks drop)
+buff.POISONED.effect,loses HP each turn
+buff.ON_FIRE.effect,loses HP each turn from fire
+buff.FROZEN.effect,cannot act
+buff.INVISIBLE.effect,can't be targeted by ranged attacks
+buff.SHIELDED.effect,negates the next damaging hit
+buff.WET.effect,takes 2x lightning & 4x cold damage; freezes if chilled
+buff.OILY.effect,takes 2x fire damage; ignites on contact with fire
+buff.FRIGHTENED.effect,flees from the source of fear
+buff.LEVITATING.effect,ignores surface effects; can cross chasms
+buff.PHASE.effect,can move through walls until next hit
+buff.GHOSTLY.effect,intangible to melee until next hit
+buff.recharging.effect,recharging
+# DOT-death verb phrases (RL-46) - used by BuffSystem.logDotDeath
+buff.dotdeath.ON_FIRE,burns to a cinder
+buff.dotdeath.POISONED,succumbs to poison
+buff.dotdeath.BLEEDING,bleeds out
 characterClass.mage.blurb,Expert wand user who fights at a distance using wands and his magical *Shield*.
 characterClass.mage.name,Mage
 characterClass.rogue.blurb,Bomb specialist who can see through smoke and vegetation and escape with her *Phase* power.
@@ -208,9 +230,12 @@ effect.levelUp.up,level up
 effect.mob.tamed,tame!
 eventlog.achievement.unlocked,Achievement unlocked: {achievement}.
 eventlog.beacon.activated,{player} activates the beacon.
+eventlog.charge.noRoom,No solid ground beside your foe to charge onto.
 eventlog.bomb.detonates,The {item} detonates.
+eventlog.phasedodge,{name} phases out of harm's way.
 eventlog.bomb.caught,{player} snatches the {item} out of the air!
 eventlog.buff.applied,{target} is {buff}.
+eventlog.buff.applied.stacks,{target} is {buff} ({stacks}).
 eventlog.buff.expired,{target} is no longer {buff}.
 eventlog.combat.elementalDamage,The {target} takes {damage} {element} damage.
 eventlog.combat.elementalDamageFrom,The {target} takes {damage} {element} damage from {origin}.
@@ -242,7 +267,6 @@ eventlog.damageElement.fire,fire
 eventlog.damageElement.magic,magic
 eventlog.damageElement.poison,poison
 eventlog.damageElement.shock,shock
-eventlog.damageElement.starvation,starvation
 eventlog.door.broken,{mover} smashes through the door.
 eventlog.door.closed,{mover} closes the door.
 eventlog.door.opened,{mover} opens the door.
@@ -291,7 +315,6 @@ eventlog.player.charges,{player} charges at {target}.
 eventlog.player.eats,{player} eats the {item}.
 eventlog.player.grappleBlocked,The rope can't pull the {target}.
 eventlog.player.pickup,{player} picks up a {item}.
-eventlog.player.starves,{player} is starving!
 eventlog.player.uses,{player} {verb} the {item}.
 eventlog.powerup.absorbed,{player} absorbs the {item}.
 eventlog.reason.parenthesized, ({reason})
@@ -488,6 +511,9 @@ item.KATANA.tip,"A long, sharp blade. *High damage*.\nSlightly slower than the d
 item.KITE_SHIELD.description,A sturdy kite shield offering good protection.
 item.KITE_SHIELD.name,kite shield
 item.KITE_SHIELD.tip,Larger offhand shield with *more armor*.\nReplaces a weapon's off-hand slot.
+item.ICE_DAGGER.description,A frost-bound throwing blade that chills whatever it strikes.
+item.ICE_DAGGER.name,ice dagger
+item.ICE_DAGGER.tip,Throw for ranged damage that also *chills* the target - slowing it, and freezing it if it's wet.
 item.KUNAI.description,A heavy throwing blade that hits far harder than a knife.
 item.KUNAI.name,kunai
 item.KUNAI.tip,Throw for heavy ranged damage - the strongest thrown blade.
@@ -615,7 +641,7 @@ item.TORCH.tip,A torch. *Lights up dark tiles around you*.\nCounters light-hatin
 item.use.APPLYBUFF,{verb} to gain {buffs}{duration}.
 item.use.CHARGE,Aim and {verb} at a visible foe to dash to them and strike.
 item.use.DRINK.buff,Drink to gain {buffs}{duration}.
-item.use.EAT,Can be eaten to restore satiety.
+item.use.EAT,Can be eaten.
 item.use.GRANT_PERK,Consume to gain XP.
 item.use.GRAPPLE,Aim and {verb} to yank the contents of the target tile to your side.
 item.use.JUMP,Aim and {verb} to leap to a chosen tile within range.
@@ -725,6 +751,7 @@ mob.ability.cooldown, every {turns} turns
 mob.ability.duration, for {turns} turns
 mob.ability.HEAL,Heals an ally for {amount} health{cooldown}
 mob.ability.TELEPORT,Suddenly appears at the side of an enemy{cooldown}
+mob.ability.PHASE_DODGE,Phases aside to avoid an incoming attack{cooldown}
 mob.AWFUL_WRAITH.description,These horrible phantoms seem to have something to do with the beacon system.  They are huge in size and malice.
 mob.AWFUL_WRAITH.name,awful wraith
 mob.AWFUL_WRAITH.tip,"High evasion, armor piercing, magic resistant -- good luck."
@@ -950,6 +977,9 @@ perk.hurler.tip,"Powerful synergy with bombs and thrown weapons -- and perhaps w
 perk.jump.description,"Adds magical extra distance to abilities that move you -- such as the Frog, the Jade Bull, and the Blinkstone."
 perk.jump.name,Blink
 perk.jump.tip,Powerful synergy with movement items.
+perk.dodge.description,Grants a phase-dodge: when about to be hit, you blink to an adjacent square and avoid the whole attack. Cooldown shortens per level (11 - level turns).
+perk.dodge.name,Dodge
+perk.dodge.tip,"Lifesaving against hard hitters - but it needs a free square to blink to, and it recharges between dodges."
 perk.keenSight.description,See further through clouds or plants per level. Distant smoke and trees will still hide what's behind them.
 perk.keenSight.name,Keen Sight
 perk.keenSight.tip,"A good way of getting surprise attacks, or of making smoke bombs and vegetation count."
@@ -959,7 +989,7 @@ perk.killer.tip,Useful when fighting a lot of enemies -- if you can build up mom
 perk.knockback.description,Levels 1-5: +1 tile of melee knockback per level (max 5 extra tiles). Levels 6-10: each additional level adds extra damage when the knocked-back target strikes a solid object.
 perk.knockback.name,Knockback
 perk.knockback.tip,"Useful it enemies are in a line or have their backs to a wall, because knockback can do damage each time an enemy slams into something."
-perk.manaFount.description,Each food or potion you consume restores level/2 charges on average to every wand and item you carry.
+perk.manaFount.description,Half the time you consume food or a potion, it restores level/2 charges to every wand and item you carry.
 perk.manaFount.name,Mana Fount
 perk.manaFount.tip,"Extremely useful for heavy wand users, or for using items that need a lot of charges per use."
 perk.stealth.description,"Enemies are less likely to wake up, and can see you from less far away, for each level of Stealth."
@@ -973,6 +1003,7 @@ terrain.attribute.blocksProjectile,Stops projectiles.
 terrain.attribute.blocksSight,Blocks sight.
 terrain.attribute.canHoldItem,Can support objects.
 terrain.attribute.emitsLight,Emits light.
+terrain.attribute.fatalFall,Non-flying creatures fall through to the level below.
 terrain.attribute.flammable,Flammable - catches fire from heat sources.
 terrain.attribute.flyingOnly,Passable only to flying beings.
 terrain.attribute.oneWayBreak,Breaks when touched.
@@ -1076,14 +1107,13 @@ ui.characterStats.armor,Armor
 ui.characterStats.attack,Attack
 ui.characterStats.attackCost,Attack speed
 ui.characterStats.available,Available
-ui.characterStats.buffLevel,{name} (lvl {level})
+ui.characterStats.buffLevel,{name} x{stacks}
 ui.characterStats.buffs,Buffs
 ui.characterStats.evasion,Evasion
 ui.characterStats.hero,Hero
 ui.characterStats.hp,HP
 ui.characterStats.light,Light
 ui.characterStats.moveCost,Move speed
-ui.characterStats.satiety,Satiety
 ui.characterStats.tab.perks,Perks
 ui.characterStats.tab.stats,Stats
 ui.characterStats.title,Character
@@ -1093,14 +1123,6 @@ ui.common.close,x
 ui.common.delete,Delete
 ui.common.done,Done
 ui.common.play,PLAY
-ui.crafting.cancel,Cancel
-ui.crafting.chooseIngredient,Tap a slot to choose an ingredient.
-ui.crafting.chooseItem,Choose item
-ui.crafting.combine,Combine
-ui.crafting.combined,Combined: {item}
-ui.crafting.recipes,Recipes:
-ui.crafting.title,Crafting
-ui.crafting.yields,Yields: {item}
 ui.credits.line.code,Code by hwacha
 ui.credits.line.engine,Built with libgdx
 ui.credits.line.font,Pixel Operator font
@@ -1108,10 +1130,10 @@ ui.credits.line.fontBy,by Jayvee Enaguas
 ui.credits.line.game,rl2
 ui.credits.line.thanks,Thanks for playing.
 ui.credits.title,Credits
-ui.encyclopedia.gemDetails,"Theme: {theme}
-Tier: {tier}
+ui.encyclopedia.gemDetails,"Affinity: {affinity}
+Rarity: {rarity}
 
-Gems combine: two of the same species and matching size yield one gem of the next size up."
+A gem is more likely to appear on levels matching its affinity."
 ui.encyclopedia.terrain.blocksMovement,Blocks movement.
 ui.encyclopedia.terrain.blocksSight,Blocks sight.
 ui.encyclopedia.terrain.seeThrough,See-through.
@@ -1304,3 +1326,52 @@ world.mobState.awake,awake
 world.mobState.fleeing,fleeing
 world.mobState.following,following
 world.mobState.hiding,hiding
+
+item.ELEMENTAL_INSCRIPTION.name,Elemental Inscription
+item.ELEMENTAL_INSCRIPTION.description,Grant a brand to a selected equippable item.
+item.FERVENT_ASPIRATION.name,Fervent Aspiration
+item.FERVENT_ASPIRATION.description,Grant +1 level to a selected equippable item.
+item.BLIND_MASTER.name,Blind Master
+item.BLIND_MASTER.description,Grant ESP and Insight at maximum stacks and fill every eligible square with smoke.
+item.THIRTY_SIX_STRATAGEMS.name,Thirty-Six Stratagems
+item.THIRTY_SIX_STRATAGEMS.description,Open the map and travel to a chosen beacon; with no beacons, teleport to a random spot at the shallowest depth.
+item.EIGHT_DIRECTIONS_DEFENCE.name,Eight Directions Defence
+item.EIGHT_DIRECTIONS_DEFENCE.description,Grant 8 stacks of Eightfold Defence: heavy armor and magic resist per level, and immunity to negative status effects.
+item.HEAVENLY_PEACH.name,Heavenly Peach
+item.HEAVENLY_PEACH.description,Heal fully, recharge all items, and gain enough experience to reach the next level.
+item.INVOCATION_OF_CHIYOU.name,Invocation of Chiyou
+item.INVOCATION_OF_CHIYOU.description,Create two sets of five bombs, as if found two levels deeper.
+item.BLIZZARD_PETAL.name,Blizzard Petal
+item.BLIZZARD_PETAL.description,Freeze every visible enemy at the maximum number of stacks.
+item.HARVEST_BLOSSOM.name,Harvest Blossom
+item.HARVEST_BLOSSOM.description,Destroy visible grass and trees, leaving a healing or mana pill on each affected square.
+item.LESSER_SEAL.name,Lesser Seal
+item.LESSER_SEAL.description,Turn every regular door on the level into a one-time door.
+item.POLYMORPH_SIGN.name,Polymorph Sign
+item.POLYMORPH_SIGN.description,Polymorph every visible enemy.
+item.INVOCATION_OF_JIUTIAN.name,Invocation of Jiutian
+item.INVOCATION_OF_JIUTIAN.description,Create a random wand, as if found two levels deeper.
+item.INVOCATION_OF_THE_FOXES.name,Invocation of the Foxes
+item.INVOCATION_OF_THE_FOXES.description,Create two random tools (never jade items).
+item.BLOOD_FLOWER.name,Blood Flower
+item.BLOOD_FLOWER.description,Destroy all visible blood and deal heavy physical damage to every visible enemy, scaled by the blood consumed.
+item.CRYSTAL_OF_INVERSION.name,Crystal of Inversion
+item.CRYSTAL_OF_INVERSION.description,Choose any point on the level, seen or unseen, and erupt a great explosion there.
+item.STONE_BURNER.name,Stone Burner
+item.STONE_BURNER.description,Set every square beside a statue or lamp ablaze, searing the enemies within.
+item.EIGHTFOLD_MULTIPLICATION.name,Eightfold Multiplication
+item.EIGHTFOLD_MULTIPLICATION.description,Summon eight autonomous clones of yourself on adjacent tiles.
+item.GREATER_SEAL.name,Greater Seal
+item.GREATER_SEAL.description,Turn every regular door on the level into a crystal door.
+item.SYMBOL_OF_INSANITY.name,Symbol of Insanity
+item.SYMBOL_OF_INSANITY.description,Drive every visible enemy to turn hostile against all creatures.
+item.INVOCATION_OF_TAISHAN.name,Invocation of Taishan
+item.INVOCATION_OF_TAISHAN.description,Create three objects around you, as if found six levels deeper.
+item.INVOCATION_OF_RU_SHOU.name,Invocation of Ru Shou
+item.INVOCATION_OF_RU_SHOU.description,Create a piece of armor, as if found ten levels deeper.
+item.INVOCATION_OF_MO_YE.name,Invocation of Mo Ye
+item.INVOCATION_OF_MO_YE.description,Create a branded sword, as if found ten levels deeper.
+item.PATH_THROUGH_OBLIVION.name,Path Through Oblivion
+item.PATH_THROUGH_OBLIVION.description,Gain eight turns of levitation, then turn all floor within eight squares to chasm.
+item.PILL_OF_IMMORTALITY.name,Pill of Immortality
+item.PILL_OF_IMMORTALITY.description,Become invulnerable for 100 turns.

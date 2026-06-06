@@ -229,6 +229,13 @@ final class PlayController {
         if (user == null || item == null || item.useBehavior == null) return;
         Level level = world.currentLevel();
         if (!TurnSystem.isPlayerTurn(level)) return;
+        // Crafted gem-items (RL-50) are equipped in gem slots and triggered as
+        // single-use effects, not used like bag consumables - hand off to the
+        // dedicated trigger flow that consumes the gem from its slot.
+        if (com.bjsp123.rl2.logic.RecipeSystem.isCraftedGem(item)) {
+            triggerCraftedGem(user, item);
+            return;
+        }
         switch (item.useBehavior) {
             case EAT, DRINK, GRANT_PERK, APPLYBUFF -> {
                 ItemSystem.useItem(level, user, item);
@@ -242,6 +249,32 @@ final class PlayController {
             case CHARGE   -> beginCharge(level, user, item);
             case TELEPORT -> { if (openMapScreen != null) openMapScreen.run(); }
             case NONE -> { /* unreachable - the popup gates Use on isUsable() */ }
+        }
+    }
+
+    /** Trigger a crafted gem-item (RL-50) the player equipped in a gem slot.
+     *  WAND-flavoured gems gather a target tile first; the rest fire at once.
+     *  The gem is destroyed (removed from its slot) only when the effect
+     *  actually fires - unforged stubs return false and stay equipped. */
+    private void triggerCraftedGem(Mob user, Item gem) {
+        Level level = world.currentLevel();
+        if (gem.useBehavior == UseBehavior.WAND) {
+            targetingOverlay.setPlayer(user);
+            targetingOverlay.setLevel(level);
+            targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
+            targetingOverlay.activate(target -> {
+                Level cur = world.currentLevel();
+                if (ItemSystem.triggerGem(cur, user, gem, target)) {
+                    com.bjsp123.rl2.logic.InventorySystem.removeFromGemSlots(user.inventory, gem);
+                    animator.consume(cur);
+                    afterMove(cur);
+                }
+            }, gem);
+            return;
+        }
+        if (ItemSystem.triggerGem(level, user, gem, null)) {
+            com.bjsp123.rl2.logic.InventorySystem.removeFromGemSlots(user.inventory, gem);
+            afterMove(level);
         }
     }
 

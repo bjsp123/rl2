@@ -39,16 +39,15 @@ public final class ItemSystem {
     // -- Use-time effect dispatchers ------------------------------------------
 
     /**
-     * Consume a food item: raise {@code eater}'s satiety by {@code item.foodValue}
-     * (capped at {@link GameBalance#STARTING_SATIETY}), apply any buff carried by
-     * the item ({@link Item#appliesBuff} - silvery pear's HOPE, conference pear's
-     * ESP, etc.), then remove the item from their inventory. No-op for items
-     * without food value.
+     * Consume a food item: apply any buff carried by the item
+     * ({@link Item#appliesBuff} - silvery pear's HOPE, conference pear's ESP, etc.),
+     * then remove it from the eater's inventory. {@code foodValue} marks an item as
+     * edible but is otherwise inert - eating no longer restores any stat. No-op for
+     * items without food value.
      */
     public static void eat(Level level, Mob eater, Item item) {
         if (eater == null || item == null || item.foodValue <= 0) return;
         com.bjsp123.rl2.util.ActionTracker.bumpEat(eater);
-        eater.satiety = Math.min(GameBalance.STARTING_SATIETY, eater.satiety + item.foodValue);
         applyConsumableBuff(level, eater, item);
         applyManaFountRecharge(level, eater);
         MobSystem.removeFromInventory(eater, item);
@@ -72,6 +71,8 @@ public final class ItemSystem {
         if (user == null || user.perks == null || user.inventory == null) return;
         int lvl = user.perks.getOrDefault(com.bjsp123.rl2.model.Perk.MANA_FOUNT, 0);
         if (lvl <= 0) return;
+        // Procs only half the time - consuming food / a potion has a 50% chance to recharge.
+        if (!RANDOM.nextBoolean()) return;
         int recharge = lvl / 2;
         if ((lvl & 1) == 1 && RANDOM.nextBoolean()) recharge++;
         if (recharge <= 0) return;
@@ -220,6 +221,24 @@ public final class ItemSystem {
     public static void applyPotionImpact(Level level, Point at, Item item, Mob source) {
         if (level == null || at == null || item == null) return;
         int cx = at.tileX(), cy = at.tileY();
+        // A thrown poison potion shatters into a lingering POISON cloud over the splash
+        // disc (the cloud re-applies POISONED to anything standing in it each turn) rather
+        // than a one-shot splash. Classified by the buff it carries, not its name.
+        if (item.appliesBuff != null
+                && item.appliesBuff.contains(com.bjsp123.rl2.model.Buff.BuffType.POISONED)) {
+            int dur = Math.max(1, ItemStats.effectiveDuration(item));
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    int x = cx + dx, y = cy + dy;
+                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                    if (level.tiles[x][y].blocksMovement()) continue;
+                    CloudSystem.addCloud(level, x, y,
+                            com.bjsp123.rl2.model.Level.Cloud.POISON, dur);
+                }
+            }
+            emitPotionBurst(level, at, item);
+            return;
+        }
         // Snapshot the affected mobs so an in-loop death doesn't ConcurrentModification.
         java.util.List<Mob> victims = new java.util.ArrayList<>();
         if (level.mobs != null) {
@@ -272,28 +291,11 @@ public final class ItemSystem {
         if (item == null || item.appliesBuff == null
                 || item.appliesBuff.isEmpty()) return;
         int effLvl = ItemStats.effectiveLevel(item, user);
-        int lvl = ItemStats.effectiveBuffLevel(item, effLvl);
-        int dur = ItemStats.effectiveBuffDuration(item, effLvl);
+        // Stacks = the item's effect duration in turns (scaled by item level). The buff's
+        // magnitude derives from its current stacks and fades as they count down (RL-43).
+        int stacks = ItemStats.effectiveDuration(item, effLvl);
         for (com.bjsp123.rl2.model.Buff.BuffType b : item.appliesBuff) {
-            BuffSystem.apply(level, user, b, lvl, dur, user, item);
-        }
-    }
-
-    /**
-     * Consume a perk-granting item - currently just power orbs. Awards one perk
-     * point to the user, removes the item from inventory, and logs the action.
-     * Caller is responsible for the move-cost accounting.
-     */
-    public static void grantPerk(Level level, Mob user, Item item) {
-        if (user == null || item == null) return;
-        user.perkPoints++;
-        MobSystem.removeFromInventory(user, item);
-        if (level != null && level.events != null && user.position != null) {
-            level.events.add(new com.bjsp123.rl2.event.GameEvent.RainbowBurst(user.position));
-        }
-        if (user.behavior == Behavior.PLAYER) {
-            EventLog.add(Messages.playerUses(actorName(user),
-                    useVerb(item, "eventlog.item.verb.use"), item.name));
+            BuffSystem.apply(level, user, b, stacks, user, item);
         }
     }
 
@@ -456,6 +458,13 @@ public final class ItemSystem {
             case VOID -> applyVoidImpact(level, target, effectiveLevel);
             case POLYMORPH -> applyPolymorphImpact(level, target, radiusForTileCount(targetTiles));
         }
+        // A damage-dealing wand strike is loud - wake nearby sleepers within their wake
+        // radius. Terrain / utility wands (water, oil, grass, fungus, etc.) stay silent.
+        switch (element) {
+            case FIRE, DETONATION, BLAST, LIGHTNING, MISSILE ->
+                MobSystem.wakeMobsNear(level, target, "a nearby spell");
+            default -> { }
+        }
         if (element != Item.ItemEffect.DETONATION
                 && element != Item.ItemEffect.BANISHMENT
                 && element != Item.ItemEffect.MISSILE
@@ -466,22 +475,6 @@ public final class ItemSystem {
         if (level.pendingImpactCount > 0) level.pendingImpactCount--;
     }
 
-    /**
-     * Wand-of-lightning chain. Lightning hits the mob on {@code target} (if any),
-     * then jumps to any other mob within Chebyshev range {@code jumpRadius}
-     * that hasn't already been hit, repeating until the chain runs out of
-     * eligible neighbours. Each victim takes the wand's rolled SHOCK damage;
-     * wetness (the {@link Buff.BuffType#WET} buff or standing on a
-     * {@link Level.Surface#WATER} / {@link Level.Surface#ICE} tile) doubles it
-     * via the central wet-vulnerability rule in {@code MobSystem.processAttack}.
-     *
-     * <p>Jump radius is normally {@code 2} tiles, but bumps to {@code 4} when
-     * the impact tile carries a {@link Level.Surface#WATER} or
-     * {@link Level.Surface#BLOOD} surface - those puddles act as electrical
-     * conductors so the arc carries further. The {@code caster} itself is an
-     * eligible chain target, so a careless lightning shot in a puddled room
-     * can fry the wand-user along with everyone else.
-     */
     /** Wand-of-void impact. Tears a chasm at the target tile and pulls
      *  every mob within Chebyshev radius {@code (effectiveLevel / 2) + 1}
      *  toward the centre. Floor-like tiles in the disc convert to
@@ -711,6 +704,22 @@ public final class ItemSystem {
         }
     }
 
+    /**
+     * Wand-of-lightning chain. Lightning hits the mob on {@code target} (if any),
+     * then jumps to any other mob within Chebyshev range {@code jumpRadius}
+     * that hasn't already been hit, repeating until the chain runs out of
+     * eligible neighbours. Each victim takes the wand's rolled SHOCK damage;
+     * wetness (the {@link Buff.BuffType#WET} buff or standing on a
+     * {@link Level.Surface#WATER} / {@link Level.Surface#ICE} tile) doubles it
+     * via the central wet-vulnerability rule in {@code MobSystem.processAttack}.
+     *
+     * <p>Jump radius is normally {@code 2} tiles, but bumps to {@code 4} when
+     * the impact tile carries a {@link Level.Surface#WATER} or
+     * {@link Level.Surface#BLOOD} surface - those puddles act as electrical
+     * conductors so the arc carries further. The {@code caster} itself is an
+     * eligible chain target, so a careless lightning shot in a puddled room
+     * can fry the wand-user along with everyone else.
+     */
     private static void applyLightningChain(Level level, Mob caster, Point target,
                                             Item wand, int effectiveLevel) {
         // Capture the primary target before the chain runs - it may die mid-
@@ -792,14 +801,6 @@ public final class ItemSystem {
         return best;
     }
 
-    /**
-     * Generic summon-wand path. If the wand-of-X has a non-null
-     * {@link Item#summonsWhenUsed}, this spawns one of that mob type on a free
-     * floor tile adjacent to {@code caster}, sets ownership, and scales the
-     * summon to the wand's level. Returns {@code true} if a summon happened -
-     * callers always pay the move cost regardless, so the wand burns a turn
-     * even when the spawn is gated out by population caps or no-room.
-     */
     /**
      * Single entry point for firing a wand, used by both the player (after the
      * targeting overlay confirms a tile) and AI (after picking a target). Handles
@@ -932,11 +933,94 @@ public final class ItemSystem {
         switch (item.useBehavior) {
             case EAT         -> eat(level, user, item);
             case DRINK       -> drinkPotion(level, user, item);
-            case GRANT_PERK  -> grantXP(level, user, item);//grantPerk(level, user, item);
+            case GRANT_PERK  -> grantXP(level, user, item);
             case APPLYBUFF   -> acted = useChargedBuffTool(level, user, item);
             case WAND, GRAPPLE, JUMP, CHARGE, TELEPORT, NONE -> { return; } // need a target or a specialized caller
         }
         if (acted) TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+    }
+
+    /**
+     * Trigger a crafted gem-item (RL-50) the player has equipped in a gem slot.
+     * Dispatches on the gem's item type. Returns {@code true} if the gem fired
+     * (the caller then consumes it from the gem slot); {@code false} for
+     * gem-items whose effect isn't forged yet - those log a stub and are NOT
+     * consumed, so no charge is wasted.
+     *
+     * <p>Only three representative effects are wired in this slice; the rest of
+     * the RL-50 roster falls through to the stub. {@code target} is non-null
+     * only for gems whose {@code useBehavior} is {@link Item.UseBehavior#WAND}
+     * (the controller gathered a tile first).
+     */
+    public static boolean triggerGem(Level level, Mob user, Item gem, com.bjsp123.rl2.model.Point target) {
+        if (level == null || user == null || gem == null || gem.type == null) return false;
+        switch (gem.type) {
+            case "CRYSTAL_OF_INVERSION" -> {
+                if (target == null) return false;
+                // Single-use: prime one charge, fire the detonation, then the
+                // caller destroys the gem - so the charge gate is moot.
+                gem.charge = 1f;
+                fireWand(level, user, gem, target);
+                return true;
+            }
+            case "BLIZZARD_PETAL" -> {
+                for (Mob m : enemiesOnLevel(level, user)) {
+                    BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.FROZEN, 99, user, gem);
+                }
+                announceGemUse(user, gem);
+                return true;
+            }
+            case "BLIND_MASTER" -> {
+                BuffSystem.apply(level, user, com.bjsp123.rl2.model.Buff.BuffType.ESP, 99, user, gem);
+                BuffSystem.apply(level, user, com.bjsp123.rl2.model.Buff.BuffType.INSIGHT, 99, user, gem);
+                if (user.position != null) {
+                    int px = user.position.tileX(), py = user.position.tileY();
+                    for (int x = px - 2; x <= px + 2; x++) {
+                        for (int y = py - 2; y <= py + 2; y++) {
+                            if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                            if (level.tiles[x][y].blocksMovement()) continue;
+                            CloudSystem.addCloud(level, x, y, com.bjsp123.rl2.model.Level.Cloud.SMOKE, 8);
+                        }
+                    }
+                }
+                announceGemUse(user, gem);
+                return true;
+            }
+            default -> {
+                // Effect not forged yet (RL-50 body). Log a stub; do NOT consume.
+                if (user.behavior == Behavior.PLAYER) {
+                    EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                            "The " + (gem.name != null ? gem.name : gem.type)
+                                    + " shimmers, but its power is not yet forged.",
+                            com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+                }
+                return false;
+            }
+        }
+    }
+
+    /** Hostile, untamed, living mobs on the level (excludes {@code user},
+     *  the player, allies, and inanimate scenery). Used by level-wide gem
+     *  effects. */
+    private static java.util.List<Mob> enemiesOnLevel(Level level, Mob user) {
+        java.util.List<Mob> out = new java.util.ArrayList<>();
+        if (level == null || level.mobs == null) return out;
+        for (Mob m : level.mobs) {
+            if (m == null || m == user || m.hp <= 0) continue;
+            if (m.owner != null) continue;
+            if (m.behavior == Behavior.PLAYER || m.behavior == Behavior.SMART
+                    || m.behavior == Behavior.INANIMATE) continue;
+            out.add(m);
+        }
+        return out;
+    }
+
+    /** Standard "player invokes the gem" log line. */
+    private static void announceGemUse(Mob user, Item gem) {
+        if (user.behavior == Behavior.PLAYER) {
+            EventLog.add(Messages.playerUses(actorName(user),
+                    useVerb(gem, "eventlog.item.verb.use"), gem.name));
+        }
     }
 
     private static boolean useChargedBuffTool(Level level, Mob user, Item item) {
@@ -1095,7 +1179,16 @@ public final class ItemSystem {
         if (cheb < 2) return;
 
         Point arrival = pickChargeArrival(level, user.position, target);
-        if (arrival == null) return;
+        if (arrival == null) {
+            // No solid floor beside the target to land on - the charge fizzles without
+            // spending the charge or the turn (never strand the charger on a chasm).
+            if (user.behavior == Behavior.PLAYER) {
+                EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                        TextCatalog.get("eventlog.charge.noRoom"),
+                        com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+            }
+            return;
+        }
 
         // Narrative lead-in - replaces the generic "uses the jade bull"
         // line. Emitted BEFORE the swing so the log reads "charges at X"
@@ -1150,10 +1243,11 @@ public final class ItemSystem {
         TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
     }
 
-    /** Pick the dash arrival tile: an 8-neighbor of {@code target} that is
-     *  walkable, unoccupied, and as close as possible to {@code userPos} (so
-     *  the dash lands on the natural side of the victim). Returns null when
-     *  no neighbour is free. */
+    /** Pick the dash arrival tile: an 8-neighbor of {@code target} that is solid
+     *  floor, unoccupied, and as close as possible to {@code userPos} (so the dash
+     *  lands on the natural side of the victim). Returns null when no floor neighbour
+     *  is free - the charge must land the charger on solid ground, never into a chasm
+     *  (the tile is floor-like AND non-blocking, so lamps and chasms are both excluded). */
     private static Point pickChargeArrival(Level level, Point userPos, Point target) {
         Point best = null;
         int bestDist = Integer.MAX_VALUE;
@@ -1164,7 +1258,8 @@ public final class ItemSystem {
                 if (dx == 0 && dy == 0) continue;
                 int nx = tx + dx, ny = ty + dy;
                 if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
-                if (level.tiles[nx][ny].blocksMovement()) continue;
+                com.bjsp123.rl2.model.Tile at = level.tiles[nx][ny];
+                if (!at.isFloorLike() || at.blocksMovement()) continue;
                 if (MobQueries.mobAt(level, new Point(nx, ny)) != null) continue;
                 int d = Math.max(Math.abs(nx - ux), Math.abs(ny - uy));
                 if (d < bestDist) {
@@ -1301,33 +1396,14 @@ public final class ItemSystem {
         }
     }
 
-    private static void dropInventoryIntoChasm(Level level, Mob mob) {
-        if (mob == null || mob.inventory == null) return;
-        java.util.List<Item> falling = new java.util.ArrayList<>();
-        if (mob.inventory.bag != null) {
-            falling.addAll(mob.inventory.bag);
-            mob.inventory.bag.clear();
-        }
-        falling.addAll(mob.inventory.allEquipped());
-        mob.inventory.weapon  = null;
-        mob.inventory.offhand = null;
-        mob.inventory.armor   = null;
-        java.util.Arrays.fill(mob.inventory.amulets, null);
-        java.util.Arrays.fill(mob.inventory.gems,    null);
-        boolean tileVisible = MobSystem.tileVisibleToPlayer(level, mob.position);
-        boolean involvesPlayer = mob.behavior == Mob.Behavior.PLAYER;
-        if (level.events != null) {
-            for (Item it : falling) {
-                level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
-                        it, mob.position));
-                if (tileVisible) {
-                    com.bjsp123.rl2.logic.EventLog.add(
-                            com.bjsp123.rl2.logic.Messages.itemFellInChasm(it.name, involvesPlayer));
-                }
-            }
-        }
-    }
-
+    /**
+     * Generic summon-wand path. If the wand-of-X has a non-null
+     * {@link Item#summonsWhenUsed}, this spawns one of that mob type on a free
+     * floor tile adjacent to {@code caster}, sets ownership, and scales the
+     * summon to the wand's level. Returns {@code true} if a summon happened -
+     * callers always pay the move cost regardless, so the wand burns a turn
+     * even when the spawn is gated out by population caps or no-room.
+     */
     public static boolean castSummonWand(Level level, Mob caster, Item wand) {
         if (level == null || caster == null || wand == null) return false;
         if (wand.summonsWhenUsed == null) return false;
@@ -1361,24 +1437,6 @@ public final class ItemSystem {
         int r = (int) Math.ceil(Math.sqrt(tiles / Math.PI));
         return Math.max(1, r);
     }
-
-    /** Pack {@code count} tiles around {@code centre}, "closest first" by
-     *  (Chebyshev distance, then Manhattan distance, then random). Only
-     *  returns tiles that have a clear projectile path from the centre
-     *  (no walls or closed doors in the way) — tiles in line-of-sight
-     *  shadow are skipped, so a bomb behind a corner doesn't wrap around.
-     *
-     *  <p>Centre tile itself is always first if it's in-bounds. Each
-     *  Chebyshev ring fills cardinal-extreme tiles first (manhattan = R),
-     *  then intermediate edges, then pure diagonals (manhattan = 2R);
-     *  within each band the order is randomised. If a ring can't fully
-     *  fill from the remaining count budget, that ring's selection is
-     *  randomly truncated — so a partial outer ring reads as scattered
-     *  affected tiles rather than a clean arc.
-     *
-     *  <p>Hard cap of 16 rings (a 33×33 area, ~1000 tiles) so a malformed
-     *  effectSize doesn't iterate forever. Returns fewer than
-     *  {@code count} tiles when the reachable area can't supply that many. */
 
     /**
      * Tiles a thrown {@code item} will affect when it lands on {@code impact}.
@@ -1415,6 +1473,23 @@ public final class ItemSystem {
         return java.util.Collections.singletonList(impact);
     }
 
+    /** Pack {@code count} tiles around {@code centre}, "closest first" by
+     *  (Chebyshev distance, then Manhattan distance, then random). Only
+     *  returns tiles that have a clear projectile path from the centre
+     *  (no walls or closed doors in the way) — tiles in line-of-sight
+     *  shadow are skipped, so a bomb behind a corner doesn't wrap around.
+     *
+     *  <p>Centre tile itself is always first if it's in-bounds. Each
+     *  Chebyshev ring fills cardinal-extreme tiles first (manhattan = R),
+     *  then intermediate edges, then pure diagonals (manhattan = 2R);
+     *  within each band the order is randomised. If a ring can't fully
+     *  fill from the remaining count budget, that ring's selection is
+     *  randomly truncated — so a partial outer ring reads as scattered
+     *  affected tiles rather than a clean arc.
+     *
+     *  <p>Hard cap of 16 rings (a 33×33 area, ~1000 tiles) so a malformed
+     *  effectSize doesn't iterate forever. Returns fewer than
+     *  {@code count} tiles when the reachable area can't supply that many. */
     public static java.util.List<Point> packTilesAround(Level level, Point centre, int count) {
         return packTilesAround(level, centre, count, RANDOM);
     }
