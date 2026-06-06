@@ -74,3 +74,30 @@ CUTLASS,,0.7,1,,WEAPON,,12,1,,5,,,,,DAMAGE,,NONE,,,,,,,,,,,1,,,4,7,
 BLOODYBLADE,,0.7,1,,WEAPON,,11,1,,,,,5,,POISONCLOUD,,NONE,,,,2,,,,,,,,,,5,7,
 DAGGER,,0,0.3,,WEAPON,,5,0.8,,,,,,,DAMAGE,,NONE,,,,,,,,,,,,,,6,7,
 PUNCH_DAGGER,,0.4,1,,WEAPON,,6,1,3,,,,,,DAMAGE,,NONE,,,,,,,,,,,,,,1,7,
+# --- Crafted gem-items (RL-50). Built only at a gem hearth (restrictedDrop), equipped
+# --- into the 3 gem slots and triggered. Sprites are placeholders (0,8). Effects: the 3
+# --- representative ones are implemented in ItemSystem.triggerGem; the rest log a stub.
+ELEMENTAL_INSCRIPTION,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+FERVENT_ASPIRATION,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+BLIND_MASTER,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,ESP|INSIGHT,,,,,,,,,,,0,8,TRUE
+THIRTY_SIX_STRATAGEMS,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+EIGHT_DIRECTIONS_DEFENCE,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+HEAVENLY_PEACH,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+INVOCATION_OF_CHIYOU,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+BLIZZARD_PETAL,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,FROZEN,,,,,,,,,,,0,8,TRUE
+HARVEST_BLOSSOM,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+LESSER_SEAL,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+POLYMORPH_SIGN,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+INVOCATION_OF_JIUTIAN,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+INVOCATION_OF_THE_FOXES,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+BLOOD_FLOWER,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+CRYSTAL_OF_INVERSION,,,,,GEM,,,,,,,,12,,,,WAND,invoke,,,,,,DETONATION,,,,,,,0,8,TRUE
+STONE_BURNER,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+EIGHTFOLD_MULTIPLICATION,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+GREATER_SEAL,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+SYMBOL_OF_INSANITY,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+INVOCATION_OF_TAISHAN,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+INVOCATION_OF_RU_SHOU,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+INVOCATION_OF_MO_YE,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+PATH_THROUGH_OBLIVION,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE
+PILL_OF_IMMORTALITY,,,,,GEM,,,,,,,,,,,,APPLYBUFF,invoke,,,,,,,,,,,,,0,8,TRUE

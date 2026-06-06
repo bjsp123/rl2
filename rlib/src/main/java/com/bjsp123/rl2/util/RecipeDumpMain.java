@@ -5,6 +5,7 @@ import com.bjsp123.rl2.logic.GemSystem;
 import com.bjsp123.rl2.logic.RecipeSystem;
 import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.GemSpecies;
+import com.bjsp123.rl2.model.Inventory;
 import com.bjsp123.rl2.model.Item;
 
 import java.io.IOException;
@@ -132,8 +133,14 @@ public final class RecipeDumpMain {
         }
     }
 
+    /** Verify each recipe is buildable from its own sample gem fill. We test the
+     *  real forge flow (the player picks a recipe row, then {@code canAfford} /
+     *  {@code consume} run for that chosen recipe) rather than gem->recipe
+     *  {@code match}: recipes deliberately share ingredient shapes (e.g. two
+     *  {@code any,any} recipes), so a gem set can satisfy several recipes and
+     *  uniqueness is not an invariant. */
     private static int roundTrip(List<GemRecipe> recipes) {
-        System.out.println("\n---- match round-trip ----");
+        System.out.println("\n---- build round-trip ----");
         int errors = 0;
         for (GemRecipe r : recipes) {
             List<Item> gems = sampleGems(r);
@@ -141,29 +148,42 @@ public final class RecipeDumpMain {
                 System.out.println("SKIP " + r.output + " (no concrete gem fill found)");
                 continue;
             }
-            GemRecipe forward = RecipeSystem.match(gems);
-            if (forward != r) {
-                System.out.println("ERROR: " + r.output + " did not match its own sample fill"
-                        + " (got " + (forward == null ? "null" : forward.output) + ")");
+            // The exact fill must be affordable for THIS recipe.
+            if (!RecipeSystem.canAfford(r, bagOf(gems))) {
+                System.out.println("ERROR: " + r.output + " not affordable from its own sample fill");
                 errors++;
                 continue;
             }
-            // Shuffle (reverse) - order must not matter.
+            // Order must not matter.
             List<Item> reversed = new ArrayList<>(gems);
             java.util.Collections.reverse(reversed);
-            if (RecipeSystem.match(reversed) != r) {
-                System.out.println("ERROR: " + r.output + " match is order-sensitive"); errors++;
+            if (!RecipeSystem.canAfford(r, bagOf(reversed))) {
+                System.out.println("ERROR: " + r.output + " affordability is order-sensitive"); errors++;
             }
-            // One fewer gem must NOT fully match.
+            // Consume must succeed and leave no gems behind.
+            Inventory consumeBag = bagOf(gems);
+            if (!RecipeSystem.consume(r, consumeBag)) {
+                System.out.println("ERROR: " + r.output + " consume() failed on its own fill"); errors++;
+            } else if (!RecipeSystem.gemsInBag(consumeBag).isEmpty()) {
+                System.out.println("ERROR: " + r.output + " consume() left gems behind"); errors++;
+            }
+            // One fewer gem must NOT be affordable.
             if (gems.size() > 1) {
                 List<Item> fewer = new ArrayList<>(gems.subList(0, gems.size() - 1));
-                if (RecipeSystem.match(fewer) == r) {
-                    System.out.println("ERROR: " + r.output + " matched with too few gems"); errors++;
+                if (RecipeSystem.canAfford(r, bagOf(fewer))) {
+                    System.out.println("ERROR: " + r.output + " affordable with too few gems"); errors++;
                 }
             }
         }
-        System.out.println("round-trip: " + (errors == 0 ? "clean" : errors + " error(s)"));
+        System.out.println("build round-trip: " + (errors == 0 ? "clean" : errors + " error(s)"));
         return errors;
+    }
+
+    /** A fresh inventory whose bag holds exactly {@code gems}. */
+    private static Inventory bagOf(List<Item> gems) {
+        Inventory inv = new Inventory();
+        for (Item g : gems) inv.bag.add(g);
+        return inv;
     }
 
     /** Build a concrete gem list that satisfies every slot of {@code r}, choosing
