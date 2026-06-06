@@ -84,7 +84,7 @@ public final class AutoplayRunMain {
                     + "char_level,perks_spent,"
                     + "stairs_down,stairs_up,items_picked,mobs_killed,mobs_killed_env,"
                     + "bombs_thrown,wands_fired,potions_drunk,melee_attacks,"
-                    + "hp_remaining,max_hp,satiety_remaining");
+                    + "hp_remaining,max_hp");
             Random seedRng = new Random();
             for (Mob.CharacterClass cls : classesToRun) {
                 List<AutoplayStats> pool = new ArrayList<>(runs);
@@ -117,14 +117,14 @@ public final class AutoplayRunMain {
     }
 
     private static void writeRow(PrintWriter csv, long seed, Mob.CharacterClass cls, AutoplayStats s) {
-        csv.printf("%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.1f,%.1f,%d%n",
+        csv.printf("%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.1f,%.1f%n",
                 SeedCode.encode(seed), cls.name(), s.outcome, s.turnsSurvived,
                 s.depthReached, s.maxDepth,
                 s.finalCharLevel, s.finalPerksSpent,
                 s.stairsDescended, s.stairsAscended,
                 s.itemsPickedUp, s.mobsKilled, s.mobsKilledByEnv,
                 s.bombsThrown, s.wandsFired, s.potionsDrunk, s.meleeAttacks,
-                s.finalHp, s.finalMaxHp, s.finalSatiety);
+                s.finalHp, s.finalMaxHp);
     }
 
     private static void printAggregate(Mob.CharacterClass cls, List<AutoplayStats> pool,

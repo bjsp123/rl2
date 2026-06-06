@@ -15,7 +15,7 @@ import com.bjsp123.rl2.ui.v2.UiCtx;
  * <p>Three stable z-layer Groups are inserted on construction:
  * <ol>
  *   <li>{@link #popupLayer} - primary popups (inventory, encyclopedia,
- *       look, character stats, crafting, map, level info, hall of fame,
+ *       look, character stats, map, level info, hall of fame,
  *       game over).</li>
  *   <li>{@link #subPopupLayer} - popups that overlay a primary popup
  *       (inventory item-detail, V2Saves delete-confirm).</li>

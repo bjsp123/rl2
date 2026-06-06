@@ -171,7 +171,7 @@ public final class AutoplayGame {
             for (var b : m.buffs) {
                 if (b == null || b.type == null) continue;
                 if (buffs.length() > 0) buffs.append("|");
-                buffs.append(b.type.name()).append("(").append(b.durationTicks).append(")");
+                buffs.append(b.type.name()).append("(").append(b.stacks).append(")");
             }
         }
         String tileHere = ax >= 0 && ay >= 0 && ax < level.width && ay < level.height
@@ -525,7 +525,6 @@ public final class AutoplayGame {
         stats.depthReached = Math.max(stats.depthReached, world.currentLevelIndex);
         stats.finalHp = Math.max(0, agent.hp);
         stats.finalMaxHp = agent.effectiveStats().maxHp;
-        stats.finalSatiety = agent.satiety;
         stats.finalCharLevel = agent.characterLevel;
         int perksSum = 0;
         if (agent.perks != null) {

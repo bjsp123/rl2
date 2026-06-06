@@ -37,7 +37,6 @@ public final class AutoplayStats {
 
     public double finalHp;
     public double finalMaxHp;
-    public int    finalSatiety;
     public int    finalCharLevel;
     public int    finalPerksSpent;
     /** True if stairs-down on the level we ended on were ever sighted by the agent's FOV. */

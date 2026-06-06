@@ -69,7 +69,7 @@ public class LookMode extends InputAdapter {
         // Prefer the nearest *hostile* mob - a friendly kitten or tame pet
         // standing 3 tiles away shouldn't steal focus from a wraith 5 tiles
         // away. Fall back to any visible mob, then to the player's own tile.
-        Mob nearest = com.bjsp123.rl2.logic.MobTargeting.nearestHostile(player, level);
+        Mob nearest = com.bjsp123.rl2.logic.MobQueries.nearestHostile(player, level);
         if (nearest == null) nearest = nearestVisibleMob(player, level);
         cursor = (nearest != null) ? nearest.position : player.position;
         if (history != null && cursor != null) history.record(level, cursor);

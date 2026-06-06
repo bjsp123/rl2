@@ -16,7 +16,7 @@ import java.util.Set;
 
 /**
  * Level generation orchestrator. The actual work - corridor routing, room shapes, surface
- * and mob population - is split across {@link LevelFactoryUtils}, {@link LevelFactoryRooms}
+ * and mob population - is split across {@link LevelFactoryUtils}, {@link ThemedRoomPainter}
  * and {@link LevelFactoryPopulate}; this file glues the stages together.
  *
  * <p>Pipeline per level:
@@ -24,7 +24,8 @@ import java.util.Set;
  *   <li>Roll flags + theme + {@link Layout} from the seeded RNG.</li>
  *   <li>Layout-specific room generation: BSP partition or Poisson-disc scatter.</li>
  *   <li>Connect the resulting rooms with L-corridors via Prim's MST plus a few loop edges.</li>
- *   <li>Pick a {@link LevelFactoryRooms.RoomKind} per room and paint the interior.</li>
+ *   <li>Pick a {@link ThemedRoomDefinition} per room and stamp its decoration via
+ *       {@link ThemedRoomPainter}.</li>
  *   <li>Wall in chasms touching floors, punch perimeter doors, prune orphan doors.</li>
  *   <li>Place stairs in the first and last rooms; populate water, vegetation, items, mobs.</li>
  * </ol>
@@ -41,7 +42,8 @@ public final class LevelFactory {
      *
      * <p>Layouts are about the SHAPE of the level - corridor and room placement strategy.
      * The contents of each room (regular, round, walkway, grass-farm, ...) are picked
-     * separately per room and live in {@link LevelFactoryRooms.RoomKind}.
+     * separately per room and are data-driven via {@link ThemedRoomDefinition}
+     * (see {@code assets/data/themedrooms.csv}).
      */
     public enum Layout {
         /** Recursive binary partition of the level into room-sized rectangles, each carved
@@ -1047,7 +1049,11 @@ public final class LevelFactory {
     private static void placeStairs(Level level, List<int[]> rooms, boolean hasUp, boolean hasDown,
                                     Random rng) {
         if (rooms.isEmpty()) return;
-        int upIdx = 0, downIdx = rooms.size() - 1;
+        // Stairs must never land in a beacon room (the beacon encounter is meant to be a
+        // self-contained side room, not the through-route). Pick the up room from the front
+        // and the down room from the back, skipping any room that holds a beacon.
+        int upIdx   = firstNonBeaconRoom(level, rooms, true);
+        int downIdx = firstNonBeaconRoom(level, rooms, false);
         if (hasUp) {
             Point p = randomFloorIn(level, rooms.get(upIdx), rng);
             if (p != null) {
@@ -1122,6 +1128,31 @@ public final class LevelFactory {
             }
         }
         return best;
+    }
+
+    /** First room index whose rect holds no beacon tile, scanning from the front when
+     *  {@code fromStart} (the up-stair room) or from the back otherwise (the down-stair
+     *  room). Falls back to the natural end room if every room has a beacon. */
+    private static int firstNonBeaconRoom(Level level, List<int[]> rooms, boolean fromStart) {
+        int n = rooms.size();
+        for (int i = 0; i < n; i++) {
+            int idx = fromStart ? i : n - 1 - i;
+            if (!roomHasBeacon(level, rooms.get(idx))) return idx;
+        }
+        return fromStart ? 0 : n - 1;
+    }
+
+    /** True if any cell of room rect {@code r} is a beacon tile (active or inactive). */
+    private static boolean roomHasBeacon(Level level, int[] r) {
+        int x0 = r[0], y0 = r[1], w = r[2], h = r[3];
+        for (int x = x0; x < x0 + w; x++) {
+            for (int y = y0; y < y0 + h; y++) {
+                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                Tile t = level.tiles[x][y];
+                if (t == Tile.BEACON_INACTIVE || t == Tile.BEACON_ACTIVE) return true;
+            }
+        }
+        return false;
     }
 
     private static Point randomFloorIn(Level level, int[] r, Random rng) {

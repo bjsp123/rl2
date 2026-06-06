@@ -62,7 +62,11 @@ public enum Perk {
      *  by treating the first {@code perkLvl} cloud / tree tiles within
      *  Chebyshev range of the holder as transparent. Beyond that range,
      *  those tiles still block sight normally. */
-    KEEN_SIGHT;
+    KEEN_SIGHT,
+    /** Open. Grants the reactive PHASE_DODGE: when about to take damage, the holder
+     *  slides to a free adjacent square and negates the whole hit, then goes on cooldown.
+     *  Cooldown length = {@code 11 - perkLvl} turns (L1 = 10, L10 = 1). */
+    DODGE;
 
     public String displayName() {
         return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".name");
@@ -89,6 +93,7 @@ public enum Perk {
             case MANA_FOUNT  -> "manaFount";
             case BOMB_DODGER -> "bombDodger";
             case KEEN_SIGHT  -> "keenSight";
+            case DODGE       -> "dodge";
         };
     }
 }

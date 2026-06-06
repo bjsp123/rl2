@@ -127,7 +127,8 @@ public class Item {
     public enum UseBehavior {
         /** No use action; the "Use" button is grayed out. */
         NONE,
-        /** Consume the item to raise the user's satiety by {@code foodValue}. */
+        /** Consume the item; applies any buff it carries. {@code foodValue} marks it
+         *  edible but is otherwise inert (satiety was removed from the game). */
         EAT,
         /** Element wand: fires a projectile that applies {@link Item#wandEffect} on
          *  impact. Summon-style wands (non-null {@link Item#summonsWhenUsed}) bypass
@@ -234,7 +235,9 @@ public class Item {
      *  bombs). Scales with item level via TILECOUNT_LEVEL_SCALE_FACTOR.
      *  Zero for items without an AOE component. */
     public int effectSize;
-    /** Satiety restored when the item is eaten. Zero for non-food. */
+    /** Marks the item as edible (positive = food). Retained from the old satiety
+     *  system but inert now - eating applies the item's buff, if any, and nothing else.
+     *  Zero for non-food. */
     public int foodValue;
     public Point location; // null when in an inventory
     /** What happens when this item is thrown; null means it just lands on the floor. */
@@ -344,14 +347,9 @@ public class Item {
      *  category in {@code GemSystem.createGem}. */
     public InventoryCategory inventoryCategory;
 
-    /** Gem species - non-null iff this item is a gem. Drives icon colour, theme
-     *  shape (triangle for crystal, square for concrete), and same-kind recipe matching.
+    /** Gem species - non-null iff this item is a gem. Drives icon and affinity.
      *  {@link #isGem()} reads off this field. */
     public GemSpecies gemSpecies;
-    /** Gem size 1-9 (tiny, small, medium, large, fine, impressive, mighty, sublime,
-     *  exquisite). Combining two gems of the same {@link #gemSpecies} and matching size
-     *  yields one gem of the next size up. Ignored for non-gems. */
-    public int gemSize;
 
     /** Count of identical items represented by this entry. {@code 1} for a singleton.
      *  Inventory operations merge new items into the existing stack via
@@ -406,10 +404,15 @@ public class Item {
      *  items never do, even if a leftover {@code throwEffect} lingers in their
      *  data. Single source of truth for throw-eligibility. */
     public boolean isThrowable() {
+        if (inventoryCategory == null
+                || inventoryCategory.isEquipment()
+                || inventoryCategory == InventoryCategory.ITEM) return false;
+        // Throwable if it has a thrown effect, is tame-bait (e.g. the delicious fish,
+        // thrown at a cat / dog to tame it - no throwEffect), or is FOOD: all food can be
+        // tossed (most just land on the floor and do nothing; some tame / feed).
         return throwEffect != null
-                && inventoryCategory != null
-                && !inventoryCategory.isEquipment()
-                && inventoryCategory != InventoryCategory.ITEM;
+                || inventoryCategory == InventoryCategory.FOOD
+                || (tameOnThrow != null && !tameOnThrow.isEmpty());
     }
 
     /** True if {@code other} is "exactly identical" for stacking purposes - same type,

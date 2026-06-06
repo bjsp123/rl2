@@ -96,6 +96,25 @@ public class SaveSystem {
             }
         };
         json.setSerializer(EnumMap.class, enumMapSerializer);
+        // Save compatibility: skip JSON fields the model no longer declares (e.g. the
+        // removed gem-size field) instead of throwing and aborting the whole load.
+        json.setIgnoreUnknownFields(true);
+        // Tolerate gem species that no longer exist - the RL-47 gem roster changed, so an
+        // older save's removed species deserialises to null (a harmless non-gem) rather
+        // than throwing a SerializationException that fails the entire load.
+        json.setSerializer(com.bjsp123.rl2.model.GemSpecies.class,
+                new Json.Serializer<com.bjsp123.rl2.model.GemSpecies>() {
+            @Override
+            public void write(Json j, com.bjsp123.rl2.model.GemSpecies g, Class knownType) {
+                j.writeValue(g == null ? null : g.name());
+            }
+            @Override
+            public com.bjsp123.rl2.model.GemSpecies read(Json j, JsonValue value, Class type) {
+                if (value == null || value.isNull()) return null;
+                try { return com.bjsp123.rl2.model.GemSpecies.valueOf(value.asString()); }
+                catch (Exception e) { return null; }
+            }
+        });
     }
 
     private static String worldKey(int slot) { return "rl2-save-"  + slot; }

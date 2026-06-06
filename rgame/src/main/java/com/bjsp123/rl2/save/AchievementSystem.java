@@ -4,7 +4,6 @@ import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.logic.MobDefinition;
 import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.HallOfFameEntry;
-import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
@@ -104,12 +103,6 @@ public final class AchievementSystem {
     public void observeRunEnded(HallOfFameEntry entry) {
         if (entry == null) return;
         unlock(Achievement.HALL_OF_FAMER);
-    }
-
-    /** Fired from V2Crafting on a successful craft. */
-    public void observeCrafted(Item result) {
-        if (result == null) return;
-        unlock(Achievement.ARTISAN);
     }
 
     // -- Internal --------------------------------------------------------

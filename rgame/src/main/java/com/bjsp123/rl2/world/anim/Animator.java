@@ -62,7 +62,7 @@ public final class Animator {
 
 
     /** Wall-clock emit interval for fire-particle effects. Mirrors the legacy
-     *  {@code FireSystem.FIRE_PARTICLE_INTERVAL_MS}. */
+     *  {@code GameBalance.FIRE_PARTICLE_INTERVAL_MS}. */
     /** Wall-clock window for sleep-Z emission cadence (1.2 s - 2.0 s). */
 
     public MobAnimState stateOf(Mob mob) {
@@ -133,6 +133,7 @@ public final class Animator {
                         s.stepFromDy = 0f;
                     }
                 }
+                if (s.phaseDodgeFrames > 0) s.phaseDodgeFrames--;
                 if (s.animEndFrame > 0) {
                     s.animFrame++;
                     if (s.animFrame >= s.animEndFrame) {
@@ -184,6 +185,7 @@ public final class Animator {
             tickBurningParticles(level, dtMs);
             tickSleepZs(level, dtMs);
             tickLevitatePuffs(level, dtMs);
+            tickBuffParticles(level, dtMs);
             // Cloud puffs are per-render-frame Poisson emission, not
             // wall-clock; emit them once per render regardless of speed.
             emitCloudPuffs(level);
@@ -821,6 +823,31 @@ public final class Animator {
                 0f, AnimationVars.DUST_UP_BIAS_PX_PER_FRAME * 2f, RNG));
     }
 
+    /** Phase-dodge: a quick smooth slide from {@code from} to {@code to}, rendered with the
+     *  phasing shimmer (via {@link MobAnimState#phaseDodgeFrames}). No dust - it's a phase,
+     *  not a hop. The gameplay model already moved the mob; this is visual only. */
+    void onMobPhaseDodged(Level level, GameEvent.MobPhaseDodged m) {
+        Mob mob = m.mob();
+        if (mob == null) return;
+        Point from = m.from(), to = m.to();
+        if (from == null || to == null) return;
+        boolean visible = MobSystem.isVisibleToPlayer(level, mob)
+                || visibleAt(level, from) || visibleAt(level, to);
+        if (!visible) return;
+        if (sounds != null) sounds.playAt("sfx.mob.action.phasedodge", level, to);
+        int ddx = from.tileX() - to.tileX();
+        int ddy = from.tileY() - to.tileY();
+        int dist = Math.max(Math.abs(ddx), Math.abs(ddy));
+        if (dist == 0) return;
+        int frames = scaleFrames(Math.max(AnimationVars.STEP_FRAMES_MIN, stepFramesFor(mob) * dist));
+        MobAnimState s = stateOf(mob);
+        s.stepFromDx = (float) ddx;
+        s.stepFromDy = (float) ddy;
+        s.stepFrame  = 0;
+        s.stepTotal  = frames;
+        s.phaseDodgeFrames = frames + scaleFrames(6);
+    }
+
     /** Grappling-rope visual - extend phase blocks subsequent events
      *  (the dragged-mob's {@link GameEvent.MobKnockedBack} slide that
      *  follows in the same drain pass starts at frame {@code extendFrames}
@@ -888,8 +915,6 @@ public final class Animator {
                 // Element-aware floater: PHYSICAL keeps the plain red "-N"
                 // contract; the four mitigated elements (MAGIC/FIRE/POISON/SHOCK)
                 // get a coloured number with a buff-icon glyph to its left.
-                // STARVATION also routes to the plain red "-N" - the hunger UI
-                // already carries the explanation and an icon would be noise.
                 // PHYSICAL knockback wall-slam and chasm fall get their own
                 // buff-icon glyphs (slots 24 / 25) so the player can tell
                 // a wall-slam apart from a sword swing at a glance.
@@ -901,8 +926,7 @@ public final class Animator {
                 } else if (el == MobSystem.DamageElement.PHYSICAL && "fall".equals(medium)) {
                     stage.add(Effect.damageFloaterPhysical(target.position, m.amount(),
                             /*iconAtlasIndex=*/25));
-                } else if (el == null || el == MobSystem.DamageElement.PHYSICAL
-                        || el == MobSystem.DamageElement.STARVATION) {
+                } else if (el == null || el == MobSystem.DamageElement.PHYSICAL) {
                     stage.add(Effect.floatingText(target.position,
                             "-" + m.amount(), Effect.EffectTint.RED));
                 } else {
@@ -946,7 +970,7 @@ public final class Animator {
      *  "buff fade" floater above the mob: the dying buff's icon side-by-
      *  side with the CANCELLED glyph at atlas slot 26. Silent for cooldown
      *  buffs (already filtered upstream in
-     *  {@link com.bjsp123.rl2.logic.BuffSystem#tickEveryGameTick} so the
+     *  {@link com.bjsp123.rl2.logic.BuffSystem#tickPerTurn} so the
      *  rolling log doesn't fill with "no longer on teleport cooldown"
      *  lines). Off-screen expiries are suppressed. */
     void onBuffRemoved(Level level, GameEvent.BuffRemoved m) {
@@ -1023,23 +1047,22 @@ public final class Animator {
         if (visibleAt(level, m.pos())) queue.concurrent(burst.totalFrames());
     }
 
-    /** LEVEL_UP pickup composite - non-blocking. Colored particles (gold)
-     *  rising and turning white, staggered up-arrows in gold, white border
-     *  flash on the player for 0.5 s. */
+    /** LEVEL_UP / XP pickup composite - non-blocking. Purple particles + up-arrows
+     *  rising and turning white, white border flash on the player for 0.5 s. */
     private void spawnLevelUpVisual(Level level, Point at) {
-        spawnPowerupPickupVisual(level, at, Effect.EffectTint.YELLOW);
+        spawnPowerupPickupVisual(level, at, Effect.EffectTint.MAUVE);
     }
 
-    /** HP_UP pickup composite - non-blocking. Red particles rising to white,
-     *  red up-arrows, player border flash. */
+    /** HP_UP (health) pickup composite - non-blocking. Green particles + up-arrows
+     *  rising to white, player border flash. */
     private void spawnHpUpVisual(Level level, Point at) {
-        spawnPowerupPickupVisual(level, at, Effect.EffectTint.RED);
+        spawnPowerupPickupVisual(level, at, Effect.EffectTint.GREEN);
     }
 
-    /** MANA_UP pickup composite - non-blocking. Blue particles rising to white,
-     *  blue up-arrows, player border flash. */
+    /** MANA_UP (charges) pickup composite - non-blocking. Cyan particles + up-arrows
+     *  rising to white, player border flash. */
     private void spawnManaUpVisual(Level level, Point at) {
-        spawnPowerupPickupVisual(level, at, Effect.EffectTint.BLUE);
+        spawnPowerupPickupVisual(level, at, Effect.EffectTint.CYAN);
     }
 
     /** Shared pickup composite used by all three powerup types. All effects
@@ -1441,6 +1464,57 @@ public final class Animator {
         int tileX = (int) Math.floor(visualTX);
         int tileY = (int) Math.floor(visualTY);
         stage.add(Effect.dustCloud(tileX, tileY, pxX, pxY, vx, vy, RNG));
+    }
+
+    private static final int BUFF_PARTICLE_MIN_MS   = 240;
+    private static final int BUFF_PARTICLE_RANGE_MS = 200;
+
+    /** Per-mob emission of {@link BuffVisuals.Category#DRIFT} buff particles (RL-44):
+     *  regeneration arrows, poison/chill/oil/wet/bleed drops, etc. One shared cadence;
+     *  each firing emits one particle per active drift buff. Visible mobs only. */
+    private void tickBuffParticles(Level level, int dtMs) {
+        if (level.mobs == null) return;
+        for (Mob m : level.mobs) {
+            MobAnimState s = states.get(m);
+            boolean active = m.hp > 0 && m.position != null
+                    && com.bjsp123.rl2.world.render.BuffVisuals.has(
+                            m, com.bjsp123.rl2.world.render.BuffVisuals.Category.DRIFT);
+            if (!active) {
+                if (s != null) s.buffParticleCountdownMs = 0;
+                continue;
+            }
+            if (!MobSystem.isVisibleToPlayer(level, m)) continue;
+            if (s == null) s = stateOf(m);
+            s.buffParticleCountdownMs -= dtMs;
+            while (s.buffParticleCountdownMs <= 0) {
+                emitBuffParticles(m, s);
+                s.buffParticleCountdownMs += BUFF_PARTICLE_MIN_MS + RNG.nextInt(BUFF_PARTICLE_RANGE_MS);
+            }
+        }
+    }
+
+    /** Emit one particle per active drift buff at {@code mob}'s current visual tile. */
+    private void emitBuffParticles(Mob mob, MobAnimState s) {
+        float vtx = mob.position.tileX(), vty = mob.position.tileY();
+        if (s.stepTotal > 0) {
+            float t = Math.min(1f, s.stepFrame / (float) s.stepTotal);
+            vtx += s.stepFromDx * (1f - t);
+            vty += s.stepFromDy * (1f - t);
+        }
+        com.bjsp123.rl2.model.Point at =
+                new com.bjsp123.rl2.model.Point(Math.round(vtx), Math.round(vty));
+        if (mob.buffs == null) return;
+        for (com.bjsp123.rl2.model.Buff b : mob.buffs) {
+            com.bjsp123.rl2.world.render.BuffVisuals.V v =
+                    com.bjsp123.rl2.world.render.BuffVisuals.of(b.type);
+            if (v.category != com.bjsp123.rl2.world.render.BuffVisuals.Category.DRIFT) continue;
+            switch (v.drift) {
+                case ARROW_UP -> stage.add(Effect.upArrow(at, v.particleTint, 0));
+                case BURST    -> stage.add(Effect.particleBurst(at, v.particleTint, 4, RNG));
+                case DROPS    -> stage.add(Effect.buffDrip(at, v.particleTint, RNG));
+                default       -> { }
+            }
+        }
     }
 
     // -- Helpers --------------------------------------------------------------------

@@ -35,6 +35,13 @@ public final class MobAnimState {
     /** Wall-clock countdown until the next levitating-mob foot-puff. Zeroed
      *  out when the mob loses the LEVITATING buff. */
     public int levitatePuffCountdownMs;
+    /** Wall-clock countdown until the next buff-driven particle emission (RL-44).
+     *  One shared cadence; when it fires, one particle is emitted per active
+     *  {@code DRIFT} buff. Zeroed when the mob carries no drift buff. */
+    public int buffParticleCountdownMs;
+    /** Render-frame countdown while a phase-dodge slide plays. While {@code > 0} the renderer
+     *  draws the mob with the phasing shimmer (without applying the gameplay PHASE buff). */
+    public int phaseDodgeFrames;
 
     // -- Powerup pickup border flash -----------------------------------------
     /** Remaining frames for the white-border flash on powerup pickup.

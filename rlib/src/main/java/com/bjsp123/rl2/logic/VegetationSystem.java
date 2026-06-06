@@ -24,8 +24,8 @@ import java.util.Random;
  *       blood surface jumps to 2%, and an unlit blood-adjacent cell doubles again to 4% -
  *       so dark fleshy corners seed the fastest.</li>
  *   <li>Existing grass / mushroom tiles that pick up an {@link Surface#OIL} surface
- *       (typically from an oil splash thrown over them) wither at
- *       {@value #OIL_DECAY_CHANCE_PCT}% per turn until cleared.</li>
+ *       (typically from an oil splash thrown over them) wither at the
+ *       {@link GameBalance#OIL_DECAY_CHANCE} per-turn rate until cleared.</li>
  * </ul>
  */
 public final class VegetationSystem {
@@ -35,22 +35,6 @@ public final class VegetationSystem {
     private static final int[][] DIRS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
     private VegetationSystem() {}
-
-    /**
-     * Run one spread roll across {@code level}. Called once <b>per game turn</b> from
-     * {@code PlayScreen.tick}, alongside {@link FireSystem#tickPerTurn}, so the random
-     * per-cell chances compound at the designed rate. Uses a snapshot of the vegetation
-     * grid so a patch that grows this turn doesn't immediately seed another in the same
-     * turn.
-     */
-    /** Per-turn chance that a lit mushroom tile withers away and becomes bare floor. */
-    private static final double MUSHROOM_LIT_DECAY_CHANCE = 0.01;
-    /** Per-turn chance that a grass/mushroom tile sitting on an OIL surface withers.
-     *  Oil-doused vegetation rots fast - moderate per-tile chance, so a thrown
-     *  oil-splash bomb visibly clears flora over the next handful of turns. */
-    private static final double OIL_DECAY_CHANCE = 0.05;
-    /** Display copy of {@link #OIL_DECAY_CHANCE} for the class Javadoc. */
-    private static final int OIL_DECAY_CHANCE_PCT = 5;
 
     /**
      * Try to place {@code v} at {@code p}. If the target cell already holds
@@ -115,6 +99,13 @@ public final class VegetationSystem {
         return true;
     }
 
+    /**
+     * Run one spread roll across {@code level}. Called once <b>per game turn</b> from
+     * {@code PlayScreen.tick}, alongside {@link FireSystem#tickPerTurn}, so the random
+     * per-cell chances compound at the designed rate. Uses a snapshot of the vegetation
+     * grid so a patch that grows this turn doesn't immediately seed another in the same
+     * turn.
+     */
     public static void tickPerTurn(Level level) {
         int w = level.width, h = level.height;
         Vegetation[][] snap = new Vegetation[w][h];
@@ -130,7 +121,7 @@ public final class VegetationSystem {
                 // dying tile doesn't get one last seeding roll on the way out.
                 if ((v == Vegetation.GRASS || v == Vegetation.MUSHROOMS)
                         && level.surface[x][y] == Surface.OIL
-                        && RANDOM.nextDouble() < OIL_DECAY_CHANCE) {
+                        && RANDOM.nextDouble() < GameBalance.OIL_DECAY_CHANCE) {
                     level.vegetation[x][y] = null;
                     continue;
                 }
@@ -138,7 +129,7 @@ public final class VegetationSystem {
                 // so a mushroom seeded this same tick gets its first decay roll next tick.
                 if (v == Vegetation.MUSHROOMS
                         && level.lit != null && level.lit[x][y]
-                        && RANDOM.nextDouble() < MUSHROOM_LIT_DECAY_CHANCE) {
+                        && RANDOM.nextDouble() < GameBalance.MUSHROOM_LIT_DECAY_CHANCE) {
                     level.vegetation[x][y] = null;
                     continue;  // no spread from a tile that just died this tick
                 }

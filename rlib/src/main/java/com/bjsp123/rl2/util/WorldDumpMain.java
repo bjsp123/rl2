@@ -1,7 +1,5 @@
 package com.bjsp123.rl2.util;
 
-import com.bjsp123.rl2.logic.GameBalance;
-import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.UniqueTracker;
 import com.bjsp123.rl2.model.World;
 import com.bjsp123.rl2.model.WorldTopology;
@@ -34,8 +32,8 @@ public final class WorldDumpMain {
 
     public static void main(String[] args) throws IOException {
         long seed = parseSeed(args.length > 0 ? args[0] : null);
-        Path assets = locateAssetsDir();
-        loadData(assets);
+        Path assets = ArenaHarness.locateAssetsDir();
+        ArenaHarness.loadData(assets);
 
         int width  = 48;
         int height = 48;
@@ -67,29 +65,4 @@ public final class WorldDumpMain {
         return Long.parseLong(arg);
     }
 
-    /** Walk up from the working directory until an {@code assets/data} folder
-     *  appears. Lets the task be invoked from anywhere in the repo without
-     *  hard-coding a relative path. */
-    private static Path locateAssetsDir() {
-        Path cwd = Paths.get("").toAbsolutePath();
-        for (Path p = cwd; p != null; p = p.getParent()) {
-            Path candidate = p.resolve("assets").resolve("data");
-            if (Files.isDirectory(candidate)) return candidate;
-        }
-        throw new IllegalStateException(
-                "Could not find assets/data starting from " + cwd);
-    }
-
-    private static void loadData(Path assets) throws IOException {
-        Path strings = assets.resolve("strings.csv");
-        if (Files.exists(strings)) com.bjsp123.rl2.logic.TextCatalog.load(Files.readString(strings));
-        Path config = assets.resolve("config.csv");
-        if (Files.exists(config)) GameBalance.load(Files.readString(config));
-
-        Registries.loadMobs(Files.readString(assets.resolve("mobs.csv")));
-        Registries.loadItems(Files.readString(assets.resolve("items.csv")));
-
-        Path themed = assets.resolve("themedrooms.csv");
-        if (Files.exists(themed)) Registries.loadThemedRooms(Files.readString(themed));
-    }
 }

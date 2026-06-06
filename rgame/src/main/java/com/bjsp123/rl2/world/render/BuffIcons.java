@@ -153,6 +153,21 @@ public final class BuffIcons {
         return new TextureRegion(sheet, sx, sy, PARTICLE_CELL, PARTICLE_CELL);
     }
 
+    /** The arrow-up particle sprite - the cell immediately right of the top droplet
+     *  ({@code DROP_0}, particle-grid col 2) in {@code buffs16.png}'s particle band.
+     *  Used for rising "up arrow" effects (regeneration buff, powerup pickups) instead
+     *  of a font glyph. Returns {@code null} on load / bounds failure. */
+    public static TextureRegion arrowUpRegion() {
+        if (cache == null) load();
+        if (sheet == null) return null;
+        int sx = PARTICLE_X0 + 3 * PARTICLE_CELL;   // col 3 = right of the top droplet (col 2)
+        int sy = SpriteAtlas.buffsY() + SLASH_Y;     // top row of the particle band
+        if (sx + PARTICLE_CELL > sheet.getWidth() || sy + PARTICLE_CELL > sheet.getHeight()) {
+            return null;
+        }
+        return new TextureRegion(sheet, sx, sy, PARTICLE_CELL, PARTICLE_CELL);
+    }
+
     /** Number of icon columns per row in the buff-icon band. */
     private static final int COLS_PER_ROW = 20;
 
@@ -178,7 +193,7 @@ public final class BuffIcons {
      *
      * <p>Row 0 (left → right): on fire, invisible, frightened, oily,
      * sorcerous, levitating, regenerating, poisoned, blessed, ghostly,
-     * hasted, protection, anti-magic, ESP, chilled, starving, recharging
+     * hasted, protection, anti-magic, ESP, chilled, (unused), recharging
      * (cooldown), killer, wet, bleeding.
      * <p>Row 1: phase (col 0), frozen (col 1).
      */
@@ -202,11 +217,13 @@ public final class BuffIcons {
             case HASTED       -> 10;
             case PROTECTION   -> 11;
             case ANTI_MAGIC   -> 12;
-            case ESP, INSIGHT -> 13;
+            // Two distinct eye icons sit right of the CANCELLED glyph (slot 26).
+            case ESP          -> 27;
+            case INSIGHT      -> 28;
             case CHILLED      -> 14;
-            case STARVING     -> 15;
-            // Cooldown / dormant buffs share the "recharging" icon.
-            case TELEPORT_COOLDOWN, RANGED_COOLDOWN, HIDING -> 16;
+            // Cooldown / dormant buffs share the "recharging" (clock) icon.
+            case TELEPORT_COOLDOWN, RANGED_COOLDOWN, HASTE_COOLDOWN, HEAL_COOLDOWN,
+                 PHASE_DODGE_COOLDOWN, HIDING -> 16;
             case KILLER       -> 17;
             case WET          -> 18;
             case BLEEDING     -> 19;

@@ -9,17 +9,16 @@ import com.bjsp123.rl2.model.Point;
  * Game-clock driver. The single entry point is {@link #tick(Level)}: each call advances
  * the clock by one game tick, runs any AI mob whose {@link Mob#ticksTillMove} just hit
  * zero, and on every {@link #STANDARD_TURN_TICKS}th call fires the per-turn handlers
- * (heal, satiety, fire damage, vegetation spread, ...). One tick is the same currency
- * used everywhere else ({@link Mob#moveCost}, {@link GameBalance#STARVATION_TICKS_PER_HP}, ...).
+ * (heal, fire damage, vegetation spread, ...). One tick is the same currency used
+ * everywhere else ({@link Mob#moveCost}, {@link #STANDARD_TURN_TICKS}, ...).
  *
- * <p>Three cadences interact:
+ * <p>Two cadences interact here:
  * <ul>
  *   <li><b>Game ticks</b> - {@link #tick} drains one tick per call and dispatches AI.</li>
  *   <li><b>Game turns</b> - every {@link #STANDARD_TURN_TICKS}th tick, {@link #tick}
  *       runs {@link #tickStandardTurn}.</li>
- *   <li><b>Real time</b> - {@link #advanceEffects} and {@link MobSystem#advanceMobAnimations}
- *       run once per render frame, independent of the game clock.</li>
  * </ul>
+ * Real-time, per-render-frame effects (animations, FX) live in rgame, not here.
  */
 public class TurnSystem {
 
@@ -62,12 +61,8 @@ public class TurnSystem {
             }
         }
 
-        // Per-game-tick buff duration decrement. Runs every tick so buff
-        // expiry lands exactly when the budget runs out, not snapped to the
-        // next standard-turn boundary. DOT damage application is separate
-        // and stays per-standard-turn (see {@link BuffSystem#tickPerTurn}).
-        BuffSystem.tickEveryGameTick(level, 1);
-
+        // Buff stacks count down once per standard turn in BuffSystem.tickPerTurn
+        // (driven from tickStandardTurn below) - there is no per-game-tick path.
         MobAi.processAllAiTurns(level);
 
         level.standardTurnTickAcc++;
@@ -123,11 +118,8 @@ public class TurnSystem {
             }
         }
 
-        // Catch up the per-game-tick buff decrement by the same delta this
-        // bulk advance just consumed. Keeps buff expiry on the exact tick the
-        // budget runs out regardless of which advance path drove the clock.
-        BuffSystem.tickEveryGameTick(level, delta);
-
+        // Buff stacks decrement per standard turn inside tickStandardTurn (below),
+        // so this bulk advance applies them via the same standard-turn boundary loop.
         level.standardTurnTickAcc += delta;
         while (level.standardTurnTickAcc >= STANDARD_TURN_TICKS) {
             level.standardTurnTickAcc -= STANDARD_TURN_TICKS;
@@ -148,8 +140,8 @@ public class TurnSystem {
 
     /**
      * Single dispatch point for everything that fires once per standard turn (every
-     * {@link #STANDARD_TURN_TICKS} ticks of game time): per-mob drains (heal, satiety,
-     * oily coat, fire damage), per-tile drains (fire lifetime), and per-cell rolls
+     * {@link #STANDARD_TURN_TICKS} ticks of game time): per-mob drains (heal, oily coat,
+     * fire damage), per-tile drains (fire lifetime), and per-cell rolls
      * (vegetation spread, mushroom decay, fire spread, smoke emission). New "once per
      * turn" effects should be plugged in here rather than tied to any particular actor's
      * cadence so they keep a stable game-time rate independent of player or mob speed.
@@ -184,26 +176,19 @@ public class TurnSystem {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(bud, spawnPos));
             }
         }
-        // Snapshot the mob list - advanceSatiety can starve the player (which routes
-        // through processAttack -> killMob -> level.mobs.remove now), so iterating the
-        // live list throws ConcurrentModificationException.
+        // Snapshot the mob list - per-turn handlers can add or remove mobs, so
+        // iterating the live list risks a ConcurrentModificationException.
         java.util.List<Mob> heartbeat = new java.util.ArrayList<>(level.mobs);
         for (Mob mob : heartbeat) {
             if (mob.behavior == Behavior.INANIMATE) continue;
             // Heal: healRate is HP-per-tick, so one standard turn restores
-            // STANDARD_TURN_TICKS * healRate. Suppressed while STARVING so the player
-            // who's run out of food can't passively recover. POISONED would suppress it
-            // too if/when that buff lands its drain.
+            // STANDARD_TURN_TICKS * healRate.
             com.bjsp123.rl2.model.StatBlock s = mob.effectiveStats();
-            boolean canHeal = s.healRate > 0 && mob.hp > 0
-                    && !BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.STARVING);
+            boolean canHeal = s.healRate > 0 && mob.hp > 0;
             if (canHeal) {
                 mob.hp = Math.min(s.maxHp,
                         mob.hp + STANDARD_TURN_TICKS * s.healRate);
             }
-            // Satiety drains by one full turn's worth of ticks (and may cascade into
-            // starvation HP loss for the player - see advanceSatiety).
-            advanceSatiety(level, mob, STANDARD_TURN_TICKS);
             // INSIGHT: while the buff is active, re-stamp every tile as
             // explored so the player's map stays revealed for the duration.
             // Player-only - NPCs don't have a personal map.
@@ -240,13 +225,6 @@ public class TurnSystem {
         LevelSystem.openExitIfCleared(level);   // no-op unless exitUnlocksOnClear
         MobSystem.runLevelSpawner(level);       // no-op unless level.spawner != null
     }
-
-    /** Satiety / starvation was removed from the game. Field stays on
-     *  {@link Mob} for save back-compat but never decreases. This no-op
-     *  is the single neutering point; food items still bump the satiety
-     *  field harmlessly, the STARVING buff is never applied, and the
-     *  satiety bar / character-stats row are hidden in rgame. */
-    private static void advanceSatiety(Level level, Mob mob, int gameTicks) { }
 
     public static boolean isPlayerTurn(Level level) {
         for (Mob mob : level.mobs) {

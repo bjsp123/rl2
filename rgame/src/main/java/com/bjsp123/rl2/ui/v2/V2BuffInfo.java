@@ -90,15 +90,10 @@ public final class V2BuffInfo extends BasePopup {
                 BuffSystem.displayName(buff.type), window.cx(), top,
                 window.w - 28f);
 
-        top -= ctx.headerLineH();
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                TextCatalog.format("buff.info.level",
-                        TextCatalog.vars("level", buff.level)), window.cx(), top);
-
-        // Level-resolved "Effect: ..." line - shows what the buff is doing
-        // numerically at the current level (e.g. HASTED 3 -> "moves 49%
+        // Stacks-resolved "Effect: ..." line - shows what the buff is doing
+        // numerically at its current stack count (e.g. HASTED 3 -> "moves 49%
         // faster"). Empty for buffs whose effect is purely qualitative.
-        String effect = BuffSystem.describeEffectAtLevel(buff.type, buff.level);
+        String effect = BuffSystem.describeEffectForStacks(buff.type, buff.stacks);
         if (effect != null && !effect.isEmpty()) {
             top -= ctx.lineH();
             TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
@@ -114,10 +109,9 @@ public final class V2BuffInfo extends BasePopup {
         }
 
         top -= 6f;
-        int displayTurns = com.bjsp123.rl2.logic.BuffSystem.displayTurns(buff.durationTicks);
-        String durStr = displayTurns > 0
-                ? TextCatalog.format("buff.info.turns",
-                        TextCatalog.vars("turns", displayTurns))
+        String durStr = buff.stacks > 0
+                ? TextCatalog.format("buff.info.stacks",
+                        TextCatalog.vars("stacks", buff.stacks))
                 : TextCatalog.get("buff.info.permanent");
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, durStr, window.cx(), top);
 

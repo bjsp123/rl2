@@ -103,8 +103,7 @@ public final class BrandSystem {
                         MobSystem.AttackType.MAGIC, MobSystem.DamageElement.COLD, null,
                         new MobSystem.DamageCause(attacker, weapon, "freeze"));
                 if (target.hp > 0) {
-                    BuffSystem.apply(level, target, Buff.BuffType.CHILLED,
-                            power, 8 * TurnSystem.STANDARD_TURN_TICKS, attacker);
+                    BuffSystem.apply(level, target, Buff.BuffType.CHILLED, 8, attacker);
                 }
                 if (tx >= 0 && ty >= 0 && tx < level.width && ty < level.height
                         && level.surface[tx][ty] == Level.Surface.WATER) {

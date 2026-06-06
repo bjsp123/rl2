@@ -50,7 +50,7 @@ public final class SmartAgentRunMain {
         Path csvPath = Paths.get("results", "smart_agent_run.csv").toAbsolutePath();
         Files.createDirectories(csvPath.getParent());
         StringBuilder csv = new StringBuilder(
-                "seed,class,depth_reached,max_depth,turns_survived,hp_remaining,satiety_remaining,outcome\n");
+                "seed,class,depth_reached,max_depth,turns_survived,hp_remaining,outcome\n");
 
         Random rng = new Random();
         for (Mob.CharacterClass cls : Mob.CharacterClass.values()) {
@@ -61,7 +61,7 @@ public final class SmartAgentRunMain {
                         .append(r.depthReached).append(',').append(r.maxDepth).append(',')
                         .append(r.turnsSurvived).append(',')
                         .append(String.format("%.1f", r.hpRemaining)).append(',')
-                        .append(r.satietyRemaining).append(',').append(r.outcome).append('\n');
+                        .append(r.outcome).append('\n');
                 System.out.printf("[%s] seed=%s depth=%d/%d turns=%d hp=%.1f outcome=%s%n",
                         cls.name(), SeedCode.encode(seed),
                         r.depthReached, r.maxDepth, r.turnsSurvived, r.hpRemaining, r.outcome);
@@ -105,7 +105,6 @@ public final class SmartAgentRunMain {
         r.maxDepth = maxDepth;
         r.turnsSurvived = turnsSurvived;
         r.hpRemaining = agent.hp;
-        r.satietyRemaining = agent.satiety;
         r.outcome = outcome;
         return r;
     }
@@ -144,7 +143,6 @@ public final class SmartAgentRunMain {
         int maxDepth;
         int turnsSurvived;
         double hpRemaining;
-        int satietyRemaining;
         String outcome;
     }
 }

@@ -148,8 +148,9 @@ final class FxRenderer {
             if (!level.visible[ex][ey]) return;
             drawBlast(effect);
         } else if (effect.type == EffectType.BUFF_ICON) {
-            if (!level.visible[ex][ey]) return;
-            drawBuffIcon(effect);
+            // Drawn ABOVE the fog in drawScreenSpaceEffects so a buff icon rising over
+            // an unexplored tile to the north isn't clipped by the fog overlay (RL-44).
+            return;
         } else if (effect.type == EffectType.DAMAGE_FLOATER) {
             if (!level.visible[ex][ey]) return;
             drawDamageFloater(effect);
@@ -583,12 +584,23 @@ final class FxRenderer {
      *  by {@link DefaultLevelRenderer} AFTER the per-cell content pass,
      *  so the flicker lays on top of the drawn world. {@code camera} is
      *  used to size the full-viewport quad. */
-    void drawScreenSpaceEffects(EffectStage stage, com.badlogic.gdx.graphics.OrthographicCamera camera) {
+    void drawScreenSpaceEffects(EffectStage stage, com.badlogic.gdx.graphics.OrthographicCamera camera,
+                                Level level) {
         if (stage == null || camera == null) return;
         for (Effect e : stage.active) {
-            if (e.type != EffectType.LEVEL_FLICKER) continue;
             if (e.startDelay > 0) continue;
-            drawLevelFlicker(e, camera);
+            if (e.type == EffectType.LEVEL_FLICKER) {
+                drawLevelFlicker(e, camera);
+            } else if (e.type == EffectType.BUFF_ICON) {
+                // Buff icons render here (above fog). Still FOV-gated on the source tile so
+                // an icon for a mob that walked out of sight doesn't linger over the dark.
+                com.bjsp123.rl2.model.Point loc = e.location;
+                if (loc == null) continue;
+                int ex = loc.tileX(), ey = loc.tileY();
+                if (level != null && (ex < 0 || ey < 0 || ex >= level.width || ey >= level.height
+                        || !level.visible[ex][ey])) continue;
+                drawBuffIcon(e);
+            }
         }
     }
 
@@ -1129,10 +1141,20 @@ final class FxRenderer {
         float t = Math.min(1f, e.frame / (float) total);
         float alpha = 1f - t;
         if (alpha <= 0f) return;
-        float yOffset = e.frame * 0.7f;
+        float yOffset = e.frame * 0.7f;          // rises straight up
         float baseX = (e.location.tileX() + 0.5f) * CELL;
         float baseY = e.location.tileY() * CELL + CELL * 0.6f + yOffset;
         Color c = tintToColor(e.tint, Color.YELLOW);
+        // Prefer the arrow-up sprite from buffs16.png; fall back to a font glyph if the
+        // atlas cell is missing.
+        TextureRegion arrow = com.bjsp123.rl2.world.render.BuffIcons.arrowUpRegion();
+        if (arrow != null) {
+            float sz = CELL * 0.7f;
+            batch.setColor(c.r, c.g, c.b, alpha);
+            batch.draw(arrow, baseX - sz * 0.5f, baseY, sz, sz);
+            batch.setColor(Color.WHITE);
+            return;
+        }
         font.setColor(c.r, c.g, c.b, alpha);
         // GlyphLayout-centred so the arrow head sits on the tile centre
         // regardless of font cap height; the y baseline is the line's top.

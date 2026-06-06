@@ -47,7 +47,7 @@ public final class ActionLibrary {
                 // Offensive ranged options (throws, wands, charges, chasing the
                 // last-known threat) are NOT survive moves and don't appear here.
                 // If the agent wants to keep fighting, KILL re-asserts next tick.
-                addHealingPotions(s, out);
+                addHealingConsumables(s, out);
                 addJumpAway(s, out);
                 addEscapeWandAtNearest(s, out);
                 addSelfBuff(s, out);
@@ -61,7 +61,7 @@ public final class ActionLibrary {
                 // Heal mid-combat when HP drops - matches the MOB AI which fires
                 // tryUseInventoryItem every turn regardless of goal. wouldDrinkHelp
                 // gates entry at hp < 0.7 * maxHp so fresh fighters don't waste it.
-                addHealingPotions(s, out);
+                addHealingConsumables(s, out);
                 addThrowsAtNearest(s, out);
                 addWandAtNearest(s, out);
                 addGrappleNearest(s, out);
@@ -77,10 +77,6 @@ public final class ActionLibrary {
                 addAbility(s, out);
                 addThrowsAtNearest(s, out);
                 addMeleeAdjacent(s, out);
-            }
-            case "EAT" -> {
-                addFood(s, out);
-                addWait(out);
             }
             case "EQUIP" -> {
                 Item best = GoalEquipBetter.bestBagUpgrade(s);
@@ -311,17 +307,17 @@ public final class ActionLibrary {
         if (dest != null) out.add(new ActionMoveToward(dest, "retreat", 0.65));
     }
 
-    public static void addHealingPotions(WorldState s, List<Action> out) {
+    /** Healing consumables held in the bag: beneficial potions to drink, plus
+     *  regen-granting food to eat when the agent is hurt (see {@link ItemEval#wouldHealHelp}). */
+    public static void addHealingConsumables(WorldState s, List<Action> out) {
         if (s.mob.inventory == null) return;
         for (Item it : s.mob.inventory.bag) {
-            if (ItemEval.wouldDrinkHelp(s.mob, it)) out.add(new ActionDrinkPotion(it));
-        }
-    }
-
-    public static void addFood(WorldState s, List<Action> out) {
-        if (s.mob.inventory == null) return;
-        for (Item it : s.mob.inventory.bag) {
-            if (ItemEval.isUsefulFood(s.mob, it, s.satietyFrac)) out.add(new ActionEatFood(it));
+            if (it == null) continue;
+            if (ItemEval.wouldDrinkHelp(s.mob, it)) {
+                out.add(new ActionDrinkPotion(it));
+            } else if (it.useBehavior == UseBehavior.EAT && ItemEval.wouldHealHelp(s.mob, it)) {
+                out.add(new ActionEatFood(it));
+            }
         }
     }
 
@@ -408,7 +404,7 @@ public final class ActionLibrary {
             com.bjsp123.rl2.model.Buff.BuffType primary = it.primaryBuff();
             if (primary == null) continue;
             if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(s.mob, primary)) continue;
-            // Skip REGENERATION here - that path runs through addHealingPotions /
+            // Skip REGENERATION here - that path runs through addHealingConsumables /
             // SURVIVE, where the HP-threshold gate lives.
             if (primary == com.bjsp123.rl2.model.Buff.BuffType.REGENERATION) continue;
             out.add(new ActionDrinkPotion(it));

@@ -54,23 +54,20 @@ public final class ItemEval {
         return true;
     }
 
-    /** True if drinking {@code it} would heal substantial HP - lower bar than wouldDrinkHelp
-     *  (only fires when actually low). */
+    /** True if consuming {@code it} would heal substantial HP - lower bar than
+     *  wouldDrinkHelp (only fires when actually low). Covers REGENERATION potions /
+     *  APPLYBUFF tools AND regen-granting food (e.g. a healing pear): eating one when
+     *  hurt is a valid heal now that food's only effect is its on-eat buff. */
     public static boolean wouldHealHelp(Mob drinker, Item it) {
         if (it == null) return false;
-        if (it.useBehavior != UseBehavior.DRINK && it.useBehavior != UseBehavior.APPLYBUFF) return false;
+        if (it.useBehavior != UseBehavior.DRINK && it.useBehavior != UseBehavior.APPLYBUFF
+                && it.useBehavior != UseBehavior.EAT) return false;
         if (it.damage > 0) return false;
         if (it.baseChargeMax > 0 && it.charge < 1f) return false;
         if (it.appliesBuff == null) return false;
         if (!it.appliesBuff.contains(Buff.BuffType.REGENERATION)) return false;
         StatBlock sb = drinker.effectiveStats();
         return drinker.hp < 0.7 * sb.maxHp;
-    }
-
-    /** True if the item is food the AI would eat right now. */
-    public static boolean isUsefulFood(Mob eater, Item it, double satietyFrac) {
-        if (it == null || it.inventoryCategory != InventoryCategory.FOOD) return false;
-        return satietyFrac < 0.65 || com.bjsp123.rl2.logic.BuffSystem.hasBuff(eater, Buff.BuffType.STARVING);
     }
 
     /** Does {@code it} carry a buff that strips POISONED on application? */
@@ -91,12 +88,13 @@ public final class ItemEval {
     // string. See feedback_evaluate_by_stats_not_identity.md.
 
     /** True if {@code it} actually restores HP - REGENERATION potion / APPLYBUFF
-     *  tool with REGEN, or an HP_UP powerup. Defensive / utility buffs like PHASE
-     *  / SHIELDED / HASTED / INVISIBLE do NOT count - those grant survivability,
-     *  not healing. */
+     *  tool / regen food with REGEN, or an HP_UP powerup. Defensive / utility buffs
+     *  like PHASE / SHIELDED / HASTED / INVISIBLE do NOT count - those grant
+     *  survivability, not healing. */
     public static boolean isHealingItem(Item it) {
         if (it == null) return false;
-        if (it.useBehavior == UseBehavior.DRINK || it.useBehavior == UseBehavior.APPLYBUFF) {
+        if (it.useBehavior == UseBehavior.DRINK || it.useBehavior == UseBehavior.APPLYBUFF
+                || it.useBehavior == UseBehavior.EAT) {
             return it.appliesBuff != null
                     && it.appliesBuff.contains(Buff.BuffType.REGENERATION);
         }

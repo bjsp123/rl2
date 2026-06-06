@@ -26,9 +26,8 @@ import java.util.Random;
  *       is added to {@code unique.rooms}.</li>
  *   <li>{@link #stampRegularThemedRooms} - every non-stair room is decorated
  *       with a uniform pick from the {@code unique=false} rows whose dimensions
- *       and powerLevel fit. Doesn't reserve; regulars coexist with random
- *       scatter the same way the decorative {@code RoomKind} variants used
- *       to.</li>
+ *       and powerLevel fit. Doesn't reserve; regular themed rooms coexist with
+ *       the random scatter pass.</li>
  * </ol>
  *
  * <p>VILLAGE-layout levels finalise their own buildings inside the layout

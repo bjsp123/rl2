@@ -15,7 +15,7 @@ import java.util.function.Predicate;
 /**
  * Single-source item generator. Every dungeon-side path that needs to roll a
  * fresh {@link Item} (level scatter, themed-room drops, mob loot tables,
- * crafting outcomes, future random-event drops) routes through here so the
+ * future random-event drops) routes through here so the
  * power-level <-> plusses contract and category-filter set live in exactly
  * one place.
  *
@@ -65,8 +65,11 @@ public final class ItemGenerator {
         ANY,
         /** Every non-gem item type. Mirrors today's level-scatter pool. */
         NON_GEM,
-        /** Theme-appropriate gem (any tier). Bypasses the items.csv pool entirely. */
+        /** A gem, affinity-weighted toward the level theme. Bypasses the items.csv pool. */
         GEM,
+        /** A rare reward gem for special rooms / unique mobs: 25% an exotic gem, else 50%
+         *  a metal gem, else nothing (a null roll). */
+        SPECIAL_GEM,
         /** Wearables: weapon / shield (offhand) / armor. */
         EQUIPMENT,
         /** Wand or amulet - what a mage caches in their tower. */
@@ -135,20 +138,22 @@ public final class ItemGenerator {
 
     /** Overload that controls whether items with
      *  {@link ItemDefinition#restrictedDrop} are eligible. Themed-room
-     *  population passes {@code true} to access headline rewards like
-     *  POWER_ORB through the standard category resolution; mob drops and
-     *  random scatter use the default {@code false} so those items only
-     *  ever spawn via guaranteed-per-level scatter or explicit themed-room
-     *  drops. */
+     *  population passes {@code true} so restricted rewards can appear via the
+     *  standard category resolution; mob drops and random scatter use the
+     *  default {@code false} so those items only ever spawn via guaranteed-per-level
+     *  scatter or explicit themed-room drops. (The POWER_ORB is additionally kept out
+     *  of the POWERUPS category entirely - see {@code categoryPredicate} - so it is
+     *  never a drop; it spawns only via its guaranteed 1-per-level scatter.) */
     public static Item generateItem(double powerLevel, VisualTheme theme,
                                     LootCategory cat, boolean includeRestricted,
                                     Random rng) {
         if (rng == null) return null;
         LootCategory c = (cat == null) ? LootCategory.ANY : cat;
 
-        // GEM is a separate code path - gems are procedural (no items.csv
+        // GEM / SPECIAL_GEM are separate code paths - gems are procedural (no items.csv
         // row) and route through GemSystem instead of ItemRegistry.
         if (c == LootCategory.GEM) return rollGem(theme, rng);
+        if (c == LootCategory.SPECIAL_GEM) return rollSpecialGem(theme, rng);
 
         // ANY mixes a gem path in with the non-gem pool. The probability of
         // landing on the gem path is set to roughly the gem fraction of the
@@ -208,7 +213,7 @@ public final class ItemGenerator {
      * 0 when the item is already at or above the request, or when the band
      * is invalid (e.g. powerMin > powerMax).
      *
-     * <p>Public so external callers (loot tables, recipe outputs) can apply
+     * <p>Public so external callers (loot tables) can apply
      * the same scaling without re-rolling the whole item.
      */
     public static int plussesForPower(double powerMin, double powerMax, double requested) {
@@ -257,7 +262,7 @@ public final class ItemGenerator {
     private static Predicate<ItemDefinition> categoryPredicate(LootCategory cat) {
         return switch (cat) {
             case ANY, NON_GEM -> d -> true;
-            case GEM          -> d -> false;   // unreachable; GEM short-circuits
+            case GEM, SPECIAL_GEM -> d -> false;   // unreachable; gem paths short-circuit
             case EQUIPMENT    -> d -> d.inventoryCategory == InventoryCategory.WEAPON
                                    || d.inventoryCategory == InventoryCategory.OFFHAND
                                    || d.inventoryCategory == InventoryCategory.ARMOR;
@@ -271,7 +276,10 @@ public final class ItemGenerator {
                                    || isBomb(d);
             case MEAT         -> d -> "FOUL_MEAT".equals(d.type)
                                    || "TASTY_MEAT".equals(d.type);
-            case POWERUPS     -> d -> d.useBehavior == UseBehavior.POWERUP;
+            // POWERUPS drops (mob loot, themed rooms) are the consumable pills only -
+            // xp / mana / hp. The POWER_ORB is restrictedDrop, so it's excluded here and
+            // only ever appears via its guaranteed 1-per-level scatter (RL-48).
+            case POWERUPS     -> d -> d.useBehavior == UseBehavior.POWERUP && !d.restrictedDrop;
         };
     }
 
@@ -294,10 +302,19 @@ public final class ItemGenerator {
     }
 
     private static Item rollGem(VisualTheme theme, Random rng) {
-        if (theme == null) return null;
-        GemSpecies species = GemSystem.rollSpeciesForTheme(theme, rng);
-        if (species == null) return null;
-        return GemSystem.createGem(species, 1);
+        GemSpecies species = GemSystem.rollSpeciesWeighted(theme, rng);
+        return species == null ? null : GemSystem.createGem(species);
+    }
+
+    /** Special-room / unique-mob reward gem: 25% an exotic gem; failing that, 50% a metal
+     *  gem; else nothing. Net ~25% exotic / ~37.5% metal / ~37.5% nothing. */
+    private static Item rollSpecialGem(VisualTheme theme, Random rng) {
+        GemSpecies.GemClass cls;
+        if (rng.nextDouble() < 0.25)      cls = GemSpecies.GemClass.EXOTIC;
+        else if (rng.nextDouble() < 0.50) cls = GemSpecies.GemClass.METAL;
+        else return null;
+        GemSpecies species = GemSystem.rollSpeciesOfClass(cls, theme, rng);
+        return species == null ? null : GemSystem.createGem(species);
     }
 
     /** Pick a single non-gem item from the eligible pool: theme-matching,

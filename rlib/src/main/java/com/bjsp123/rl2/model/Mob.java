@@ -240,7 +240,11 @@ public class Mob {
             HEAL,
             /** Jump the caster adjacent to the nearest enemy in line of sight
              *  (e.g. stalking horror's blink). */
-            TELEPORT
+            TELEPORT,
+            /** Reactive: when about to take damage, slide to a free adjacent square and
+             *  negate the hit, then go on cooldown (e.g. wraiths). Not cast proactively -
+             *  handled in {@code MobSystem.processAttack}, gated by {@link #cooldownTracker}. */
+            PHASE_DODGE
         }
 
         public MobAbility() {}
@@ -270,6 +274,11 @@ public class Mob {
 
         public static MobAbility teleport(Buff.BuffType cooldown, int cooldownTurns) {
             return new MobAbility(AbilityKind.TELEPORT, null, 0, 0, 0,
+                    cooldown, cooldownTurns);
+        }
+
+        public static MobAbility phaseDodge(Buff.BuffType cooldown, int cooldownTurns) {
+            return new MobAbility(AbilityKind.PHASE_DODGE, null, 0, 0, 0,
                     cooldown, cooldownTurns);
         }
     }
@@ -479,10 +488,6 @@ public class Mob {
     public transient java.util.Set<Mob> visibleMobsAtTurnStart;
     // Cooldowns moved to the buff system: TELEPORT_COOLDOWN, RANGED_COOLDOWN, HIDING.
     // BuffSystem.tickPerTurn drains durations on the standard-turn cadence.
-    /** Fullness counter. Ticks down on the standard-turn cadence. When it reaches 0 the
-     *  player starves - see {@link com.bjsp123.rl2.logic.TurnSystem}. NPCs sit at 0
-     *  harmlessly. */
-    public int satiety = com.bjsp123.rl2.logic.GameBalance.STARTING_SATIETY;
 
     // -- Player progression (mutable; player-only in practice) ---------------
     public int score;
@@ -544,10 +549,10 @@ public class Mob {
     public Mob() {}
 
     /**
-     * Effective light radius right now: the larger of {@link #baseLightRadius} and any
-     * equipped amulet's contribution. Computed on demand so the value can never go stale
-     * when equipment changes - there's no cache to refresh. Lighting code calls this once
-     * per cell per frame, which is cheap (one Math.max, one null check).
+     * Effective light radius right now: delegates to the cached effective stat block, which
+     * already folds in the intrinsic radius plus any equipped-amulet / buff contributions.
+     * The cache refreshes itself when equipment or buffs change, so the value never goes
+     * stale; lighting code can call this once per cell per frame cheaply.
      */
     public double lightRadius() {
         return effectiveStats().lightRadius;

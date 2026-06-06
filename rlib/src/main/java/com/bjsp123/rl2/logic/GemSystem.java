@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.GemSpecies;
+import com.bjsp123.rl2.model.GemSpecies.GemClass;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.InventoryCategory;
 import com.bjsp123.rl2.model.Level.VisualTheme;
@@ -10,62 +11,72 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Gem spawn helpers - theme-gated species draw and the factory used by {@code placeGems}
- * and the recipe engine. Equip/unequip live on {@link com.bjsp123.rl2.model.Inventory};
- * stat bonuses from equipped gems will plug into {@link ItemSystem#contributeInto} when
- * designed, with no separate dispatch path needed.
+ * Gem spawn helpers and the gem factory used by {@code placeGems} (RL-47). Gems are picked by
+ * rarity {@link GemClass} and biased toward the level's theme by affinity (matching 2x, else
+ * 0.5x - the same soft weighting items use). Equip/unequip live on
+ * {@link com.bjsp123.rl2.model.Inventory}; gems carry no stats today.
  */
 public final class GemSystem {
 
     private GemSystem() {}
 
-    /** Per-tier relative weights for the spawn draw. Tier 1 species are common; tier 3
-     *  species are rare. Tunable. */
-    private static final int TIER1_WEIGHT = 70;
-    private static final int TIER2_WEIGHT = 25;
-    private static final int TIER3_WEIGHT = 5;
-
-    /** Range of gems spawned per level (inclusive). */
-    public static final int MIN_GEMS_PER_LEVEL = 4;
-    public static final int MAX_GEMS_PER_LEVEL = 6;
-
-    /** Pick a random gem species suitable for a level of {@code theme}, weighted by tier.
-     *  Returns {@code null} when the theme has no gem table (every other VisualTheme). */
-    public static GemSpecies rollSpeciesForTheme(VisualTheme theme, Random rng) {
-        List<GemSpecies> pool = new ArrayList<>();
-        int total = 0;
-        for (GemSpecies g : GemSpecies.values()) {
-            if (g.theme != theme) continue;
-            int w = weightForTier(g.tier);
-            for (int i = 0; i < w; i++) pool.add(g);
-            total += w;
-        }
-        if (total == 0) return null;
-        return pool.get(rng.nextInt(pool.size()));
+    /** Affinity weight: a gem whose affinity matches the level theme is twice as likely;
+     *  a mismatch is half as likely. Mirrors {@code ItemGenerator.themeMultiplier}. */
+    private static double affinityWeight(VisualTheme gemAffinity, VisualTheme levelTheme) {
+        if (gemAffinity == null || levelTheme == null) return 1.0;
+        return gemAffinity == levelTheme ? 2.0 : 0.5;
     }
 
-    private static int weightForTier(int tier) {
-        return switch (tier) {
-            case 1 -> TIER1_WEIGHT;
-            case 2 -> TIER2_WEIGHT;
-            default -> TIER3_WEIGHT;
+    private static int classWeight(GemClass cls) {
+        return switch (cls) {
+            case BASIC  -> GameBalance.GEM_WEIGHT_BASIC;
+            case METAL  -> GameBalance.GEM_WEIGHT_METAL;
+            case EXOTIC -> GameBalance.GEM_WEIGHT_EXOTIC;
         };
     }
 
-    /** Build a level-1 ("tiny") gem of {@code species}. The factory point used both by
-     *  level population and by the recipe engine - same-kind size-up calls
-     *  {@link #createGem(GemSpecies, int)} with the next size. */
-    public static Item createGem(GemSpecies species) {
-        return createGem(species, 1);
+    /** Pick a gem species of rarity {@code cls}, affinity-weighted toward {@code levelTheme}.
+     *  Returns {@code null} only if the class has no members (never, for the fixed roster). */
+    public static GemSpecies rollSpeciesOfClass(GemClass cls, VisualTheme levelTheme, Random rng) {
+        return weightedPick(g -> g.gemClass == cls ? affinityWeight(g.theme, levelTheme) : 0.0, rng);
     }
 
-    public static Item createGem(GemSpecies species, int size) {
+    /** Pick any gem species, weighted by rarity class x affinity. Backs the generic
+     *  {@code LootCategory.GEM} reference (ANY scatter, themed-room {@code GEM} cells). */
+    public static GemSpecies rollSpeciesWeighted(VisualTheme levelTheme, Random rng) {
+        return weightedPick(g -> classWeight(g.gemClass) * affinityWeight(g.theme, levelTheme), rng);
+    }
+
+    private interface Weigher { double weight(GemSpecies g); }
+
+    private static GemSpecies weightedPick(Weigher w, Random rng) {
+        List<GemSpecies> pool = new ArrayList<>();
+        List<Double> weights = new ArrayList<>();
+        double total = 0;
+        for (GemSpecies g : GemSpecies.values()) {
+            double weight = w.weight(g);
+            if (weight <= 0) continue;
+            pool.add(g);
+            weights.add(weight);
+            total += weight;
+        }
+        if (pool.isEmpty()) return null;
+        double r = rng.nextDouble() * total;
+        double acc = 0;
+        for (int i = 0; i < pool.size(); i++) {
+            acc += weights.get(i);
+            if (r < acc) return pool.get(i);
+        }
+        return pool.get(pool.size() - 1);   // fp-drift fallback
+    }
+
+    /** Build a gem of {@code species}. The factory point for level population and loot. */
+    public static Item createGem(GemSpecies species) {
         Item it = new Item();
-        // Procedural item - null type. Identity is carried by gemSpecies + gemSize,
-        // and Item.isGem reads the species field rather than checking the type.
+        // Procedural item - null type. Identity is carried by gemSpecies, and Item.isGem
+        // reads the species field rather than checking the type.
         it.inventoryCategory = InventoryCategory.GEM;
         it.gemSpecies = species;
-        it.gemSize = Math.max(1, size);
         it.name = ItemNames.gemDisplayName(it);
         return it;
     }

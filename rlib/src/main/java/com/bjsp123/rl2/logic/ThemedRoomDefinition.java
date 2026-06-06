@@ -12,8 +12,8 @@ import java.util.Map;
  * Themed rooms layer specific decoration + mob/item content onto an otherwise-
  * regular generated room. The schema splits room composition into orthogonal
  * axes ({@link RoomShape} x {@link ChasmShape} x {@link Vegetation} x
- * {@link Decoration} list) so any combination is expressible without inventing
- * a new {@code RoomKind}.
+ * {@link Decoration} list) so any combination is expressible by adding a CSV
+ * row rather than writing new room-painting code.
  *
  * <p>{@link ThemedRoomRegistry} loads + indexes these; {@link ThemedRoomPainter}
  * stamps decoration; {@link ThemedRoomPopulator} resolves the mob/item specs
@@ -60,7 +60,7 @@ public final class ThemedRoomDefinition {
 
     /** Chasm pattern stamped on top of the floor. {@link #CROSS} = plus-shaped,
      *  {@link #CENTER_SQUARE} = central square, {@link #RANDOM_PATCH} = random
-     *  blob (matches the existing {@code RoomKind.CHASM} painter). */
+     *  blob. */
     public enum ChasmShape { NONE, CROSS, CENTER_SQUARE, RANDOM_PATCH }
 
     /** Vegetation pattern. {@link #GRASS_FILL} paints grass over every interior

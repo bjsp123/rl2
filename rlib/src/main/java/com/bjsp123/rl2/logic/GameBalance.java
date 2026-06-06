@@ -17,7 +17,7 @@ import java.util.Random;
  *
  * <p>Tunables are {@code public static} (not {@code final}) so {@link #load(String)} can
      * override them at startup from {@code assets/data/config.csv}. Each Java field
- * carries a baked-in baseline that takes effect if the properties file is missing or omits
+ * carries a baked-in baseline that takes effect if the config.csv is missing or omits
  * a key. Grouping is by section header; keep new constants inside the right section.
  */
 public final class GameBalance {
@@ -354,12 +354,6 @@ public final class GameBalance {
      *  created. */
     public static int MAX_MOBS_FROM_SPAWNER = 8;
 
-    // ------------------------- Hunger / satiety ------------------------------
-    /** Starting satiety for a fresh mob. Counts down by one per passing tick. */
-    public static int STARTING_SATIETY       = 10000;
-    /** Once satiety is exhausted, the player loses 1 HP per this many ticks. */
-    public static int STARVATION_TICKS_PER_HP = 100;
-
     // ------------------------- Throw range -----------------------------------
     /** Default Chebyshev throw range for the player targeting overlay. */
     public static int DEFAULT_THROW_RANGE = 6;
@@ -387,4 +381,96 @@ public final class GameBalance {
      *  above add a wall-slam damage bonus instead. Previously a magic 5 in
      *  MobSystem.attack. */
     public static int KNOCKBACK_TILE_CAP = 5;
+
+    // ------------------------- Fire ------------------------------------------
+    // Migrated from FireSystem. Tunables now live here / in config.csv.
+
+    /** Initial fire lifetime range, in <b>game ticks</b>. ~300 ticks per the spec, with a
+     *  small jitter so adjacent ignited tiles don't burn out in lockstep. */
+    public static int FIRE_DURATION_MIN_TICKS = 250;
+    public static int FIRE_DURATION_MAX_TICKS = 350;
+
+    /** Fire lifetime when the cell being ignited holds a {@code Vegetation#TREES} tile -
+     *  large trunks burn for a long time once they catch, so the duration is roughly 4x a
+     *  standard tile fire. Also gives the fire enough time to walk a forest from one tree
+     *  to the next at the standard spread rate. */
+    public static int FIRE_DURATION_TREE_MIN_TICKS = 1000;
+    public static int FIRE_DURATION_TREE_MAX_TICKS = 1400;
+
+    /** A fire tile emits one ember every this many milliseconds of <b>real time</b>.
+     *  Particle emission is decoupled from the game-tick clock so embers keep streaming
+     *  while the player is sitting on a tile thinking. */
+    public static int FIRE_PARTICLE_INTERVAL_MS = 500;
+
+    /** Mobs on fire take {@link #FIRE_DAMAGE_PER_INTERVAL} damage every this many
+     *  <b>game ticks</b>. */
+    public static int FIRE_DAMAGE_INTERVAL_TICKS = 100;
+    public static int FIRE_DAMAGE_PER_INTERVAL   = 8;
+
+    /** Per-turn chance that a fire tile spreads to a chosen empty-floor neighbour. Bumped
+     *  from 0.01 - the old rate was so slow fire effectively died out before reaching the
+     *  next tile. 0.05 gives a modest creep across bare floor (~20 turns to traverse a
+     *  cell on average); vegetation and oil paths are much faster. */
+    public static double SPREAD_CHANCE_BARE       = 0.1;
+    /** Per-turn chance that a fire tile spreads to a grass neighbour, replacing it. Grass
+     *  is the most flammable kind of vegetation - bumped up alongside oil so wildfires
+     *  through a meadow read as fast as wildfires through a slick. */
+    public static double SPREAD_CHANCE_GRASS      = 1.00;
+    /** Per-turn chance that a fire tile spreads to a non-grass vegetation neighbour
+     *  (mushrooms, trees), replacing it. Slower than grass - trunks and damp fungus take
+     *  longer to catch even though they burn well once lit. */
+    public static double SPREAD_CHANCE_VEGETATION = 0.70;
+    /** Per-turn chance that a fire tile spreads to an oil neighbour, removing the oil. */
+    public static double SPREAD_CHANCE_OIL        = 1.00;
+
+    // ------------------------- Clouds ----------------------------------------
+    // Migrated from CloudSystem. Tunables now live here / in config.csv.
+
+    /** Maximum cloud duration in standard turns. {@code CloudSystem.addCloud} clamps to
+     *  this; saturation behaviour matches the engine's expectation that no
+     *  cloud lingers beyond a dozen turns regardless of stacking. */
+    public static int MAX_DURATION = 12;
+
+    /** Per-tile per-turn chance a cloud with duration >= 2 spreads to a
+     *  neighbour. */
+    public static double SPREAD_CHANCE = 0.30;
+    /** Per-fire-tile per-turn chance to emit a smoke cloud (duration 5). */
+    public static double SMOKE_EMIT_CHANCE = 0.25;
+    /** Smoke duration emitted by a fire tile. */
+    public static int SMOKE_EMIT_DURATION = 5;
+    /** Per-water-tile per-turn chance to emit a steam cloud (duration 3),
+     *  conditional on adjacent fire. */
+    public static double STEAM_EMIT_CHANCE = 0.50;
+    /** Steam duration emitted by a water tile next to fire. */
+    public static int STEAM_EMIT_DURATION = 3;
+
+    /** POISONED stacks applied per poison-cloud tick. Small - the cloud re-applies it
+     *  next turn if the mob is still standing in it. */
+    public static int POISON_CLOUD_STACKS = 2;
+
+    // ------------------------- Vegetation ------------------------------------
+    // Migrated from VegetationSystem. Tunables now live here / in config.csv.
+
+    /** Per-turn chance that a lit mushroom tile withers away and becomes bare floor. */
+    public static double MUSHROOM_LIT_DECAY_CHANCE = 0.01;
+    /** Per-turn chance that a grass/mushroom tile sitting on an OIL surface withers.
+     *  Oil-doused vegetation rots fast - moderate per-tile chance, so a thrown
+     *  oil-splash bomb visibly clears flora over the next handful of turns. */
+    public static double OIL_DECAY_CHANCE = 0.05;
+
+    // ------------------------- Gems (RL-47) ----------------------------------
+
+    /** Average gems generated per level, by rarity class. A non-integer average rolls the
+     *  fractional part as a chance of one extra (e.g. 0.75 -> 0 a quarter of the time, 1
+     *  otherwise). Tunable in config.csv. */
+    public static double GEMS_BASIC_AVG  = 2.0;
+    public static double GEMS_METAL_AVG  = 0.75;
+    public static double GEMS_EXOTIC_AVG = 0.3;
+
+    /** Relative class weights for a generic (class-agnostic) gem roll - the
+     *  {@code LootCategory.GEM} reference used by ANY scatter and themed-room GEM cells.
+     *  Basic common, metal rare, exotic very rare. */
+    public static int GEM_WEIGHT_BASIC  = 70;
+    public static int GEM_WEIGHT_METAL  = 25;
+    public static int GEM_WEIGHT_EXOTIC = 5;
 }

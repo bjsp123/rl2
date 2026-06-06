@@ -23,7 +23,6 @@ public enum Achievement {
     LEVELED_UP         (Category.PROGRESSION, false),
     WAND_NEWBIE        (Category.ITEMS, false),
     THROWN_AWAY        (Category.ITEMS, false),
-    ARTISAN            (Category.ITEMS, false),
     HALL_OF_FAMER      (Category.RUN, false);
 
     public final Category category;

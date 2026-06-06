@@ -1,6 +1,9 @@
 package com.bjsp123.rl2.logic;
 
+import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
+import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
 
 import java.util.Random;
@@ -14,9 +17,14 @@ import java.util.Random;
  *   <li>{@link ThemedRoomDefinition.ChasmShape} - chasm overlay.</li>
  *   <li>{@link ThemedRoomDefinition.Vegetation} - only paints over surviving FLOOR.</li>
  *   <li>{@link ThemedRoomDefinition.Decoration} list - statues / lamps via
- *       {@link LevelFactoryRooms#placeStatue} / {@link LevelFactoryRooms#placeLamp},
- *       which already require FLOOR + not-near-door.</li>
+ *       {@link #placeStatue} / {@link #placeLamp}, which already require
+ *       FLOOR + not-near-door.</li>
  * </ol>
+ *
+ * <p>The low-level shape and statue/lamp/beacon primitives the decoration layer
+ * stamps with (round-corner walls, walkway plank corridors, random chasm patch,
+ * walled subroom, statue / lamp / beacon drops) live in the "primitives"
+ * section at the bottom of this class.
  */
 final class ThemedRoomPainter {
 
@@ -41,9 +49,9 @@ final class ThemedRoomPainter {
                                        int x, int y, int w, int h, Random rng) {
         switch (s) {
             case RECTANGLE -> { /* default carved rectangle */ }
-            case ROUND     -> LevelFactoryRooms.paintRound   (level, x, y, w, h);
-            case WALKWAY   -> LevelFactoryRooms.paintWalkway (level, x, y, w, h);
-            case SUBROOM   -> LevelFactoryRooms.paintSubroom (level, x, y, w, h, rng);
+            case ROUND     -> paintRound   (level, x, y, w, h);
+            case WALKWAY   -> paintWalkway (level, x, y, w, h);
+            case SUBROOM   -> paintSubroom (level, x, y, w, h, rng);
         }
     }
 
@@ -85,7 +93,7 @@ final class ThemedRoomPainter {
             case NONE          -> { }
             case CROSS         -> paintCrossChasm(level, x, y, w, h);
             case CENTER_SQUARE -> paintCenterSquareChasm(level, x, y, w, h);
-            case RANDOM_PATCH  -> LevelFactoryRooms.paintChasm(level, x, y, w, h, rng);
+            case RANDOM_PATCH  -> paintChasm(level, x, y, w, h, rng);
         }
     }
 
@@ -260,12 +268,12 @@ final class ThemedRoomPainter {
             case STATUES_LARGE_CARDINAL -> placeStatuesAtCardinals(level, x, y, w, h, rng);
             case STATUE_AVENUE_SMALL    -> paintStatueAvenue(level, x, y, w, h, rng, true);
             case STATUE_AVENUE_LARGE    -> paintStatueAvenue(level, x, y, w, h, rng, false);
-            case STATUE_CENTER_LARGE    -> LevelFactoryRooms.placeStatue(level,
+            case STATUE_CENTER_LARGE    -> placeStatue(level,
                                                   x + w / 2, y + h / 2,
-                                                  LevelFactoryRooms.randomLargeStatue(rng));
+                                                  randomLargeStatue(rng));
             case LAMPS_CORNERS          -> placeLampsAtCorners(level, x, y, w, h);
             case LAMPS_CARDINAL         -> placeLampsAtCardinals(level, x, y, w, h);
-            case LAMP_CENTER            -> LevelFactoryRooms.placeLamp(level,
+            case LAMP_CENTER            -> placeLamp(level,
                                                   x + w / 2, y + h / 2);
             case SMALL_STATUES_SCATTERED -> paintSmallStatuesScattered(level, x, y, w, h, rng);
             case CHAPEL_SHRINE          -> paintChapelShrine(level, x, y, w, h);
@@ -289,7 +297,7 @@ final class ThemedRoomPainter {
                                     Random rng) {
         int cx = x + w / 2;
         int ay = anchorY(y, h, placement);
-        LevelFactoryRooms.placeBeacon(level, cx, ay, rng);
+        placeBeacon(level, cx, ay, rng);
     }
 
     /** Chapel-style assembly: a centred altar (3-wide), a beacon 1 cell west
@@ -308,13 +316,13 @@ final class ThemedRoomPainter {
             level.tiles[cx][ay] = Tile.ALTAR;
         }
         // Beacon: 1 cell west of the altar's leftmost cell (cx-1) -> (cx-2, ay).
-        LevelFactoryRooms.placeBeacon(level, cx - 2, ay, rng);
+        placeBeacon(level, cx - 2, ay, rng);
         // Flanking statues at (cx-3, ay) and (cx+2, ay) - need w >= 6.
         if (w >= 6) {
-            LevelFactoryRooms.placeStatue(level, cx - 3, ay,
-                    LevelFactoryRooms.randomLargeStatue(rng));
-            LevelFactoryRooms.placeStatue(level, cx + 2, ay,
-                    LevelFactoryRooms.randomLargeStatue(rng));
+            placeStatue(level, cx - 3, ay,
+                    randomLargeStatue(rng));
+            placeStatue(level, cx + 2, ay,
+                    randomLargeStatue(rng));
         }
     }
 
@@ -332,7 +340,7 @@ final class ThemedRoomPainter {
                 && level.tiles[cx][ay] == Tile.FLOOR) {
             level.tiles[cx][ay] = throne;
         }
-        LevelFactoryRooms.placeBeacon(level, cx - 1, ay, rng);
+        placeBeacon(level, cx - 1, ay, rng);
     }
 
     /** Drop 2-6 small statues at random interior positions, leaving a 1-cell
@@ -346,8 +354,8 @@ final class ThemedRoomPainter {
         for (int i = 0; i < count; i++) {
             int sx = x + 1 + rng.nextInt(w - 2);
             int sy = y + 1 + rng.nextInt(h - 2);
-            LevelFactoryRooms.placeStatue(level, sx, sy,
-                    LevelFactoryRooms.randomSmallStatue(rng));
+            placeStatue(level, sx, sy,
+                    randomSmallStatue(rng));
         }
     }
 
@@ -365,8 +373,8 @@ final class ThemedRoomPainter {
             level.tiles[cx][altarY] = Tile.ALTAR;
         }
         int lampY = altarY - 1;       // 1 south of the altar
-        LevelFactoryRooms.placeLamp(level, cx - 1, lampY);
-        LevelFactoryRooms.placeLamp(level, cx + 1, lampY);
+        placeLamp(level, cx - 1, lampY);
+        placeLamp(level, cx + 1, lampY);
     }
 
     private static void placeStatuesAtCorners(Level level, int x, int y, int w, int h,
@@ -374,9 +382,9 @@ final class ThemedRoomPainter {
         int x0 = x + 1, x1 = x + w - 2;
         int y0 = y + 1, y1 = y + h - 2;
         for (int[] xy : new int[][]{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}}) {
-            Tile s = small ? LevelFactoryRooms.randomSmallStatue(rng)
-                           : LevelFactoryRooms.randomLargeStatue(rng);
-            LevelFactoryRooms.placeStatue(level, xy[0], xy[1], s);
+            Tile s = small ? randomSmallStatue(rng)
+                           : randomLargeStatue(rng);
+            placeStatue(level, xy[0], xy[1], s);
         }
     }
 
@@ -389,8 +397,8 @@ final class ThemedRoomPainter {
         int dy = Math.max(2, h / 3);
         for (int[] xy : new int[][]{{cx - dx, cy}, {cx + dx, cy},
                                     {cx, cy - dy}, {cx, cy + dy}}) {
-            LevelFactoryRooms.placeStatue(level, xy[0], xy[1],
-                    LevelFactoryRooms.randomLargeStatue(rng));
+            placeStatue(level, xy[0], xy[1],
+                    randomLargeStatue(rng));
         }
     }
 
@@ -403,23 +411,23 @@ final class ThemedRoomPainter {
             int rowA = y + 1;
             int rowB = y + h - 2;
             for (int i = x + 2; i <= x + w - 3; i += 2) {
-                Tile a = small ? LevelFactoryRooms.randomSmallStatue(rng)
-                               : LevelFactoryRooms.randomLargeStatue(rng);
-                Tile b = small ? LevelFactoryRooms.randomSmallStatue(rng)
-                               : LevelFactoryRooms.randomLargeStatue(rng);
-                LevelFactoryRooms.placeStatue(level, i, rowA, a);
-                LevelFactoryRooms.placeStatue(level, i, rowB, b);
+                Tile a = small ? randomSmallStatue(rng)
+                               : randomLargeStatue(rng);
+                Tile b = small ? randomSmallStatue(rng)
+                               : randomLargeStatue(rng);
+                placeStatue(level, i, rowA, a);
+                placeStatue(level, i, rowB, b);
             }
         } else {
             int colA = x + 1;
             int colB = x + w - 2;
             for (int j = y + 2; j <= y + h - 3; j += 2) {
-                Tile a = small ? LevelFactoryRooms.randomSmallStatue(rng)
-                               : LevelFactoryRooms.randomLargeStatue(rng);
-                Tile b = small ? LevelFactoryRooms.randomSmallStatue(rng)
-                               : LevelFactoryRooms.randomLargeStatue(rng);
-                LevelFactoryRooms.placeStatue(level, colA, j, a);
-                LevelFactoryRooms.placeStatue(level, colB, j, b);
+                Tile a = small ? randomSmallStatue(rng)
+                               : randomLargeStatue(rng);
+                Tile b = small ? randomSmallStatue(rng)
+                               : randomLargeStatue(rng);
+                placeStatue(level, colA, j, a);
+                placeStatue(level, colB, j, b);
             }
         }
     }
@@ -427,19 +435,319 @@ final class ThemedRoomPainter {
     private static void placeLampsAtCorners(Level level, int x, int y, int w, int h) {
         int x0 = x + 1, x1 = x + w - 2;
         int y0 = y + 1, y1 = y + h - 2;
-        LevelFactoryRooms.placeLamp(level, x0, y0);
-        LevelFactoryRooms.placeLamp(level, x1, y0);
-        LevelFactoryRooms.placeLamp(level, x0, y1);
-        LevelFactoryRooms.placeLamp(level, x1, y1);
+        placeLamp(level, x0, y0);
+        placeLamp(level, x1, y0);
+        placeLamp(level, x0, y1);
+        placeLamp(level, x1, y1);
     }
 
     private static void placeLampsAtCardinals(Level level, int x, int y, int w, int h) {
         int cx = x + w / 2, cy = y + h / 2;
         int dx = Math.max(2, w / 3);
         int dy = Math.max(2, h / 3);
-        LevelFactoryRooms.placeLamp(level, cx - dx, cy);
-        LevelFactoryRooms.placeLamp(level, cx + dx, cy);
-        LevelFactoryRooms.placeLamp(level, cx, cy - dy);
-        LevelFactoryRooms.placeLamp(level, cx, cy + dy);
+        placeLamp(level, cx - dx, cy);
+        placeLamp(level, cx + dx, cy);
+        placeLamp(level, cx, cy - dy);
+        placeLamp(level, cx, cy + dy);
+    }
+
+    // ====================================================================
+    // Low-level shape + statue/lamp/beacon primitives.
+    //
+    // Every variant of decoration is expressed as data in
+    // assets/data/themedrooms.csv; the dispatch layers above call into these
+    // primitives, which provide the shape stamps (round-corner walls, walkway
+    // plank corridors, random chasm patch, walled subroom) and the
+    // statue / lamp / beacon drop helpers (FLOOR-only, never adjacent to a door).
+    // ====================================================================
+
+    // -- Statue helpers -----------------------------------------------------
+
+    private static Tile randomSmallStatue(Random rng) {
+        return rng.nextBoolean() ? Tile.STATUE_SMALL_L : Tile.STATUE_SMALL_R;
+    }
+
+    private static Tile randomLargeStatue(Random rng) {
+        return rng.nextBoolean() ? Tile.STATUE_LARGE_L : Tile.STATUE_LARGE_R;
+    }
+
+    /** Drop a statue at (x, y) only if the cell is plain FLOOR and not adjacent to a door
+     *  - statues next to doorways read as obstacles blocking the passage. Guards against
+     *  painting over chasm, walls, doors, lamps, or another statue we just placed. */
+    private static void placeStatue(Level level, int x, int y, Tile statue) {
+        if (!LevelFactoryUtils.inBounds(level, x, y)) return;
+        if (!level.tiles[x][y].canHoldItem()) return;
+        if (LevelFactoryUtils.adjacentToDoor(level, x, y)) return;
+        level.tiles[x][y] = statue;
+    }
+
+    /** Drop a LAMP tile at (x, y) under the same rules as {@link #placeStatue} - FLOOR-only,
+     *  and never adjacent to a doorway (so an arched door doesn't get a lamp post bolted
+     *  onto its threshold). */
+    private static void placeLamp(Level level, int x, int y) {
+        if (!LevelFactoryUtils.inBounds(level, x, y)) return;
+        if (!level.tiles[x][y].canHoldItem()) return;
+        if (LevelFactoryUtils.adjacentToDoor(level, x, y)) return;
+        level.tiles[x][y] = Tile.LAMP;
+    }
+
+    /** Drop a BEACON_INACTIVE tile at (x, y) under the same rules as
+     *  {@link #placeStatue}. Beacons activate later, when the player steps
+     *  adjacent. Also drops a TELEPORT_ORB on a nearby floor tile and seeds a
+     *  beacon-room encounter (depth-appropriate WRAITH cluster + a
+     *  mirror-match enemy of a random PLAYER class) so every beacon room
+     *  ships fully populated. */
+    private static void placeBeacon(Level level, int x, int y, Random rng) {
+        if (!LevelFactoryUtils.inBounds(level, x, y)) return;
+        if (!level.tiles[x][y].canHoldItem()) return;
+        if (LevelFactoryUtils.adjacentToDoor(level, x, y)) return;
+        level.tiles[x][y] = Tile.BEACON_INACTIVE;
+        placeBeaconOrb(level, x, y);
+        spawnBeaconEncounter(level, x, y, rng);
+    }
+
+    /** Drop a TELEPORT_ORB on a floor tile near the beacon at {@code (bx, by)}.
+     *  Scans an expanding ring (radius 1..3); the first FLOOR tile that can
+     *  hold an item and isn't adjacent to a door wins. Silently bails when no
+     *  candidate exists - a beacon crammed into a 1-tile alcove will simply
+     *  ship without an orb. */
+    private static void placeBeaconOrb(Level level, int bx, int by) {
+        Item orb = ItemFactory.build("TELEPORT_ORB");
+        if (orb == null) return;
+        for (int r = 1; r <= 3; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;
+                    int x = bx + dx, y = by + dy;
+                    if (!LevelFactoryUtils.inBounds(level, x, y)) continue;
+                    if (!level.tiles[x][y].canHoldItem()) continue;
+                    if (LevelFactoryUtils.adjacentToDoor(level, x, y)) continue;
+                    orb.location = new Point(x, y);
+                    level.items.add(orb);
+                    return;
+                }
+            }
+        }
+    }
+
+    /** Populate the room around the beacon at {@code (bx, by)} with the boss
+     *  encounter: a cluster of depth-appropriate wraiths plus a single
+     *  mirror-match enemy of a random {@link Mob.CharacterClass}. Wraith
+     *  variant is chosen by depth-fraction band (matching the rows'
+     *  {@code minPowerLevel}/{@code maxPowerLevel} in mobs.csv); the
+     *  cluster size is fixed per variant. The encounter scales with depth
+     *  via the standard {@code 1 + level.depth} spawn-level rule.
+     *
+     *  <p>Spots are picked off the surrounding rings via a BFS-style scan;
+     *  the mirror takes the first valid floor tile (closest to the beacon),
+     *  the wraiths fill the remaining ring positions. Tiles that already
+     *  carry a mob or that fall on a reserved themed-room rect are skipped. */
+    private static void spawnBeaconEncounter(Level level, int bx, int by,
+                                             Random rng) {
+        double frac = LevelFactoryPopulate.depthFraction(level);
+        String wraithType;
+        int wraithCount;
+        if      (frac < 0.5) { wraithType = "WRAITH";       wraithCount = 4; }
+        else if (frac < 0.8) { wraithType = "LARGE_WRAITH"; wraithCount = 3; }
+        else                 { wraithType = "AWFUL_WRAITH"; wraithCount = 2; }
+        int spawnLevel = 1 + level.depth;
+
+        Mob.CharacterClass[] classes = Mob.CharacterClass.values();
+        // Beacon encounter boss: use the data-driven ENEMY_PLAYER_* mob row
+        // (mobs.csv) rather than re-using the actual PLAYER_* kit. The
+        // ENEMY_PLAYER row carries the right faction, drop suppression
+        // (NOTHING_AT_ALL), and a LEVEL_APPROPRIATE inventory keyword that
+        // generates depth-appropriate gear at spawn time.
+        String mirrorType = "ENEMY_PLAYER_" + classes[rng.nextInt(classes.length)].name();
+
+        // Gather candidate floor tiles in expanding rings around the beacon.
+        java.util.List<Point> spots = new java.util.ArrayList<>();
+        for (int r = 1; r <= 4 && spots.size() < wraithCount + 1; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;
+                    int x = bx + dx, y = by + dy;
+                    if (!LevelFactoryUtils.inBounds(level, x, y)) continue;
+                    if (level.tiles[x][y] != Tile.FLOOR) continue;
+                    boolean occupied = false;
+                    for (Mob existing : level.mobs) {
+                        if (existing.position == null) continue;
+                        if (existing.position.tileX() == x
+                                && existing.position.tileY() == y) {
+                            occupied = true;
+                            break;
+                        }
+                    }
+                    if (occupied) continue;
+                    spots.add(new Point(x, y));
+                }
+            }
+        }
+        if (spots.isEmpty()) return;
+
+        int idx = 0;
+        // Boss spawn flows through the standard spawnMobAt path so the
+        // LEVEL_APPROPRIATE hook in MobDefinition fires - the mob walks out
+        // with a depth-tier weapon + armor + amulet + damage wand + damage
+        // bombs plus its class jade. Spawn level is the dungeon depth (one
+        // higher than the wraith pack at 1+depth) so it reads as the boss.
+        LevelFactoryPopulate.spawnMobAt(level, mirrorType, spots.get(idx++),
+                level.depth, rng, /*withRetainers=*/ false);
+        for (int i = 0; i < wraithCount && idx < spots.size(); i++) {
+            Mob w = MobFactory.spawn(wraithType, spots.get(idx++));
+            if (w == null) continue;
+            MobProgression.setSpawnLevel(w, spawnLevel);
+            level.mobs.add(w);
+        }
+    }
+
+    // -- ROUND --------------------------------------------------------------
+
+    /** Round the corners of the room: any FLOOR cell outside the inscribed ellipse becomes
+     *  WALL. Walls and doors are already in place by the time this runs, so painting WALL
+     *  directly (rather than CHASM + relying on a later wall pass) keeps the geometry crisp.
+     *
+     *  <p>One subtlety: doors live on the rectangle's outer perimeter. The cell directly
+     *  inside a door (one step into the rect) is on a corner of the rectangle for a
+     *  door near a corner, and that corner cell sits OUTSIDE the inscribed ellipse -
+     *  walling it would orphan the door, leaving a doorframe that opens onto solid wall.
+     *  We detect that case and keep the cell as FLOOR so the door has a 1-tile alcove
+     *  reaching into the round room interior. */
+    private static void paintRound(Level level, int x, int y, int w, int h) {
+        if (w < 3 || h < 3) return;
+        double cx = x + (w - 1) / 2.0;
+        double cy = y + (h - 1) / 2.0;
+        double rx = w / 2.0;
+        double ry = h / 2.0;
+        for (int i = x; i < x + w; i++) {
+            for (int j = y; j < y + h; j++) {
+                if (!LevelFactoryUtils.inBounds(level, i, j)) continue;
+                if (!level.tiles[i][j].canHoldItem()) continue;
+                double dx = (i - cx) / rx;
+                double dy = (j - cy) / ry;
+                if (dx * dx + dy * dy <= 1.0) continue;
+                // Outside the ellipse - would normally wall in. Skip if a door sits on
+                // any cardinal neighbour (i.e. on the rectangle's outer ring), so the
+                // door retains a FLOOR alcove leading into the room.
+                if (hasAdjacentDoor(level, i, j)) continue;
+                level.tiles[i][j] = Tile.WALL;
+            }
+        }
+    }
+
+    /** True if any of {@code (i, j)}'s four cardinal neighbours is a {@link Tile#DOOR} or
+     *  {@link Tile#DOOR_OPEN}. Used by {@link #paintRound} to keep a 1-tile floor alcove
+     *  alive for doors near corner positions. */
+    private static boolean hasAdjacentDoor(Level level, int i, int j) {
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] d : dirs) {
+            int ni = i + d[0], nj = j + d[1];
+            if (!LevelFactoryUtils.inBounds(level, ni, nj)) continue;
+            Tile t = level.tiles[ni][nj];
+            if (t == Tile.DOOR || t == Tile.DOOR_OPEN) return true;
+        }
+        return false;
+    }
+
+    // -- WALKWAY ------------------------------------------------------------
+
+    /**
+     * Walkway room: interior becomes CHASM, then a FLOOR_WOOD L-corridor is carved from the
+     * inside neighbour of every door on the room's outer wall to a central hub. Doors are
+     * already placed by the orchestrator before painters run, so we can address each door
+     * directly. Rooms with no doors end up as a sealed chasm pit.
+     */
+    private static void paintWalkway(Level level, int x, int y, int w, int h) {
+        for (int i = x; i < x + w; i++)
+            for (int j = y; j < y + h; j++)
+                if (LevelFactoryUtils.inBounds(level, i, j))
+                    level.tiles[i][j] = Tile.CHASM;
+
+        int cx = x + w / 2;
+        int cy = y + h / 2;
+        plankCell(level, cx, cy);
+
+        // Walk the four perimeter edges and carve a plank L from each door's inside cell to
+        // the hub. The (ix, iy) offset points into the room from the door tile.
+        for (int i = x - 1; i <= x + w; i++) {
+            carveWalkwayFromDoor(level, i, y - 1,    0,  1, cx, cy);  // top wall
+            carveWalkwayFromDoor(level, i, y + h,    0, -1, cx, cy);  // bottom wall
+        }
+        for (int j = y - 1; j <= y + h; j++) {
+            carveWalkwayFromDoor(level, x - 1,    j,  1,  0, cx, cy);  // left wall
+            carveWalkwayFromDoor(level, x + w,    j, -1,  0, cx, cy);  // right wall
+        }
+    }
+
+    /** If {@code (dx, dy)} is a DOOR, carve a FLOOR_WOOD L-corridor from its inside neighbour
+     *  {@code (dx + ix, dy + iy)} to {@code (cx, cy)}. Idempotent - overlapping carves are
+     *  harmless. */
+    private static void carveWalkwayFromDoor(Level level, int dx, int dy, int ix, int iy,
+                                             int cx, int cy) {
+        if (!LevelFactoryUtils.inBounds(level, dx, dy)) return;
+        if (level.tiles[dx][dy] != Tile.DOOR) return;
+        int sx = dx + ix, sy = dy + iy;
+        for (int xx = Math.min(sx, cx); xx <= Math.max(sx, cx); xx++) plankCell(level, xx, sy);
+        for (int yy = Math.min(sy, cy); yy <= Math.max(sy, cy); yy++) plankCell(level, cx, yy);
+    }
+
+    private static void plankCell(Level level, int x, int y) {
+        if (LevelFactoryUtils.inBounds(level, x, y)) level.tiles[x][y] = Tile.FLOOR_WOOD;
+    }
+
+    // -- CHASM --------------------------------------------------------------
+
+    /** A chasm patch in the middle of the room that does not reach the edges. */
+    private static void paintChasm(Level level, int x, int y, int w, int h, Random rng) {
+        if (w < 4 || h < 4) return;
+        int maxIW = w - 2, maxIH = h - 2;
+        int cw = 1 + rng.nextInt(maxIW - 1);
+        int ch = 1 + rng.nextInt(maxIH - 1);
+        int cx = x + 1 + rng.nextInt(w - cw - 1);
+        int cy = y + 1 + rng.nextInt(h - ch - 1);
+        for (int i = cx; i < cx + cw; i++)
+            for (int j = cy; j < cy + ch; j++)
+                if (LevelFactoryUtils.inBounds(level, i, j) && level.tiles[i][j] == Tile.FLOOR)
+                    level.tiles[i][j] = Tile.CHASM;
+    }
+
+    // -- SUBROOM ------------------------------------------------------------
+
+    /**
+     * A smaller walled rectangle inside the main room with a single door on its perimeter.
+     * The interior of the subroom stays FLOOR; only the perimeter (minus one door) becomes
+     * WALL. Needs at least a 5x5 outer rect to fit a 3x3 inner with margin.
+     */
+    private static void paintSubroom(Level level, int x, int y, int w, int h, Random rng) {
+        if (w < 5 || h < 5) return;
+        int iw = 3 + rng.nextInt(Math.max(1, w - 4));
+        int ih = 3 + rng.nextInt(Math.max(1, h - 4));
+        int ix = x + 1 + rng.nextInt(w - iw - 1);
+        int iy = y + 1 + rng.nextInt(h - ih - 1);
+
+        for (int i = ix; i < ix + iw; i++) {
+            wallCell(level, i, iy);
+            wallCell(level, i, iy + ih - 1);
+        }
+        for (int j = iy; j < iy + ih; j++) {
+            wallCell(level, ix, j);
+            wallCell(level, ix + iw - 1, j);
+        }
+
+        // Door on a random non-corner perimeter cell.
+        int side = rng.nextInt(4);
+        int dx, dy;
+        switch (side) {
+            case 0  -> { dx = ix + 1 + rng.nextInt(iw - 2); dy = iy; }
+            case 1  -> { dx = ix + 1 + rng.nextInt(iw - 2); dy = iy + ih - 1; }
+            case 2  -> { dx = ix;                           dy = iy + 1 + rng.nextInt(ih - 2); }
+            default -> { dx = ix + iw - 1;                  dy = iy + 1 + rng.nextInt(ih - 2); }
+        }
+        if (LevelFactoryUtils.inBounds(level, dx, dy)) level.tiles[dx][dy] = Tile.DOOR;
+    }
+
+    private static void wallCell(Level level, int x, int y) {
+        if (LevelFactoryUtils.inBounds(level, x, y) && level.tiles[x][y] == Tile.FLOOR)
+            level.tiles[x][y] = Tile.WALL;
     }
 }

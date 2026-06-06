@@ -345,10 +345,10 @@ public final class V2CharacterStats extends BasePopup {
                 String buffName = BuffSystem.displayName(b.type);
                 TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                         TextCatalog.format("ui.characterStats.buffLevel",
-                                TextCatalog.vars("name", buffName, "level", b.level)),
+                                TextCatalog.vars("name", buffName, "stacks", b.stacks)),
                         left + 22f, top,
                         window.right() - UIVars.PAD_CONTENT - (left + 22f));
-                int displayTurns = com.bjsp123.rl2.logic.BuffSystem.displayTurns(b.durationTicks);
+                int displayTurns = b.stacks;
                 if (displayTurns > 0) {
                     pendingDots.add(new float[]{ left + 17f, top - 16f, displayTurns });
                 }

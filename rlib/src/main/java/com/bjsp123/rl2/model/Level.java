@@ -200,13 +200,13 @@ public class Level {
     public Set<LevelFlag> flags = new HashSet<>();
 
     /** Tileset theme assigned at generation time. Drives which terrain PNG the renderer uses;
-     *  no gameplay impact. Defaults to {@link VisualTheme#CLASSIC} so older saves without the
-     *  field still load into the classic look. */
+     *  no gameplay impact. Defaults to {@link VisualTheme#CRYSTAL} so older saves without the
+     *  field still load into the default look. */
     public VisualTheme theme = VisualTheme.CRYSTAL;
 
     /** Structural archetype rolled at generation time (hub-and-spoke, wheel, labyrinth, ...).
      *  Set by the level factory and otherwise informational - post-generation, the tile grid
-     *  is authoritative. Defaults to {@link Layout#SPD} so older saves still load. */
+     *  is authoritative. Defaults to {@link Layout#BSP} so older saves still load. */
     public Layout layout = Layout.BSP;
 
     public Point stairsUp;

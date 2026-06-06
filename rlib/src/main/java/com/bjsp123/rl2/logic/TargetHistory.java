@@ -13,7 +13,7 @@ import com.bjsp123.rl2.model.Point;
  * <ol>
  *   <li>{@link #lastMob} if it's still on this level.</li>
  *   <li>{@link #lastFloor} if it's in bounds on this level.</li>
- *   <li>The nearest visible hostile (via {@link MobSystem#nearestHostile}).</li>
+ *   <li>The nearest visible hostile (via {@link MobQueries#nearestHostile}).</li>
  *   <li>The player's own tile.</li>
  * </ol>
  *
@@ -49,7 +49,7 @@ public final class TargetHistory {
             return lastMob.position;
         if (isInBounds(lastFloor, level) && LevelUtilities.getLineOfSight(level, player, lastFloor) ) 
             return lastFloor;
-        Mob hostile = MobTargeting.nearestHostile(player, level);              
+        Mob hostile = MobQueries.nearestHostile(player, level);              
         if (hostile != null) return hostile.position;
         return player.position;
     }

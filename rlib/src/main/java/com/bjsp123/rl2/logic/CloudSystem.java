@@ -39,30 +39,6 @@ public final class CloudSystem {
 
     private CloudSystem() {}
 
-    /** Maximum cloud duration in standard turns. {@link #addCloud} clamps to
-     *  this; saturation behaviour matches the engine's expectation that no
-     *  cloud lingers beyond a dozen turns regardless of stacking. */
-    public static final int MAX_DURATION = 12;
-
-    /** Per-tile per-turn chance a cloud with duration >= 2 spreads to a
-     *  neighbour. */
-    public static final double SPREAD_CHANCE = 0.30;
-    /** Per-fire-tile per-turn chance to emit a smoke cloud (duration 5). */
-    public static final double SMOKE_EMIT_CHANCE = 0.25;
-    /** Smoke duration emitted by a fire tile. */
-    public static final int SMOKE_EMIT_DURATION = 5;
-    /** Per-water-tile per-turn chance to emit a steam cloud (duration 3),
-     *  conditional on adjacent fire. */
-    public static final double STEAM_EMIT_CHANCE = 0.50;
-    /** Steam duration emitted by a water tile next to fire. */
-    public static final int STEAM_EMIT_DURATION = 3;
-
-    /** Buff strength applied by a poison cloud each turn. */
-    private static final int POISON_BUFF_LEVEL = 1;
-    /** Buff duration (turns) applied per poison-cloud tick. Short - the cloud
-     *  re-applies it next turn if the mob is still standing in it. */
-    private static final int POISON_BUFF_DURATION_TICKS = 2 * TurnSystem.STANDARD_TURN_TICKS;
-
     private static final Random RNG =
             com.bjsp123.rl2.util.SimRng.register("CloudSystem", new Random());
 
@@ -73,7 +49,7 @@ public final class CloudSystem {
      *  collapses to the empty-cell value 0. */
     public static int pack(Cloud type, int duration) {
         if (type == null || duration <= 0) return 0;
-        int d = Math.min(MAX_DURATION, duration);
+        int d = Math.min(GameBalance.MAX_DURATION, duration);
         return ((type.ordinal() + 1) << 4) | d;
     }
 
@@ -110,7 +86,7 @@ public final class CloudSystem {
     /** Add (or replace) a cloud at {@code (x, y)}. The merge rule:
      *  <ul>
      *    <li>Empty cell -> set to ({@code type}, {@code duration}).</li>
-     *    <li>Same type -> durations add (clamped to {@link #MAX_DURATION}).</li>
+     *    <li>Same type -> durations add (clamped to {@link GameBalance#MAX_DURATION}).</li>
      *    <li>Different type -> the incoming type wins, duration is the larger
      *        of the two so a fresh poison plume doesn't get instantly wiped
      *        by leftover smoke.</li>
@@ -128,7 +104,7 @@ public final class CloudSystem {
             newDur  = duration;
         } else if (existingType == type) {
             newType = type;
-            newDur  = Math.min(MAX_DURATION, existingDur + duration);
+            newDur  = Math.min(GameBalance.MAX_DURATION, existingDur + duration);
         } else {
             newType = type;
             newDur  = Math.max(existingDur, duration);
@@ -156,7 +132,7 @@ public final class CloudSystem {
                 int packed = level.cloud[x][y];
                 int dur = duration(packed);
                 if (dur < 2) continue;
-                if (RNG.nextDouble() >= SPREAD_CHANCE) continue;
+                if (RNG.nextDouble() >= GameBalance.SPREAD_CHANCE) continue;
                 Cloud t = type(packed);
                 if (t == null) continue;
                 int[] nb = pickAdjacentInBounds(level, x, y);
@@ -169,11 +145,11 @@ public final class CloudSystem {
                 int destDur = duration(destPacked);
                 int merged;
                 if (destType == null || destType == t) {
-                    merged = Math.min(MAX_DURATION, destDur + transfer);
+                    merged = Math.min(GameBalance.MAX_DURATION, destDur + transfer);
                 } else {
                     // Mixed types - incoming wins, duration takes the larger
                     // of the two so we don't reset the cloud's lifetime.
-                    merged = Math.min(MAX_DURATION, Math.max(destDur, transfer));
+                    merged = Math.min(GameBalance.MAX_DURATION, Math.max(destDur, transfer));
                 }
                 next[nb[0]][nb[1]] = pack(t, merged);
             }
@@ -207,7 +183,7 @@ public final class CloudSystem {
             int x = m.position.tileX(), y = m.position.tileY();
             if (typeAt(level, x, y) != Cloud.POISON) continue;
             BuffSystem.apply(level, m, Buff.BuffType.POISONED,
-                    POISON_BUFF_LEVEL, POISON_BUFF_DURATION_TICKS, null);
+                    GameBalance.POISON_CLOUD_STACKS, null);
         }
     }
 
@@ -218,14 +194,14 @@ public final class CloudSystem {
             for (int x = 0; x < w; x++) {
                 if (level.vegetation != null
                         && level.vegetation[x][y] == Vegetation.FIRE
-                        && RNG.nextDouble() < SMOKE_EMIT_CHANCE) {
-                    addCloud(level, x, y, Cloud.SMOKE, SMOKE_EMIT_DURATION);
+                        && RNG.nextDouble() < GameBalance.SMOKE_EMIT_CHANCE) {
+                    addCloud(level, x, y, Cloud.SMOKE, GameBalance.SMOKE_EMIT_DURATION);
                 }
                 if (level.surface != null
                         && level.surface[x][y] == Surface.WATER
                         && hasFireNeighbour(level, x, y)
-                        && RNG.nextDouble() < STEAM_EMIT_CHANCE) {
-                    addCloud(level, x, y, Cloud.STEAM, STEAM_EMIT_DURATION);
+                        && RNG.nextDouble() < GameBalance.STEAM_EMIT_CHANCE) {
+                    addCloud(level, x, y, Cloud.STEAM, GameBalance.STEAM_EMIT_DURATION);
                 }
             }
         }

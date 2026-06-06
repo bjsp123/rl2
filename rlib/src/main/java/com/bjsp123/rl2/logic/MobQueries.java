@@ -42,4 +42,26 @@ public final class MobQueries {
         for (Mob m : level.mobs) if (type.equals(m.mobType)) n++;
         return n;
     }
+
+    /**
+     * Nearest currently-visible hostile mob to {@code around}, by Chebyshev distance.
+     * Used by AI and by UI/controller targeting helpers. Skips allies, INANIMATE mobs,
+     * and anything outside the visible set. Returns {@code null} when none qualify.
+     */
+    public static Mob nearestHostile(Mob around, Level level) {
+        if (around == null) return null;
+        Mob best = null;
+        int bestD = Integer.MAX_VALUE;
+        int ax = around.position.tileX(), ay = around.position.tileY();
+        for (Mob m : level.mobs) {
+            if (m == around || MobSystem.isAlly(m, around)) continue;
+            if (m.behavior == Mob.Behavior.INANIMATE) continue;
+            int mx = m.position.tileX(), my = m.position.tileY();
+            if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
+            if (!level.visible[mx][my]) continue;
+            int d = Math.max(Math.abs(mx - ax), Math.abs(my - ay));
+            if (d < bestD) { bestD = d; best = m; }
+        }
+        return best;
+    }
 }

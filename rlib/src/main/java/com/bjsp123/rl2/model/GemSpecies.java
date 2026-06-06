@@ -3,56 +3,54 @@ package com.bjsp123.rl2.model;
 import com.bjsp123.rl2.model.Level.VisualTheme;
 
 /**
- * Gem species. Each species has a fixed dungeon-theme home (so a CRYSTAL level only spawns
- * crystal-theme gems and likewise for CONCRETE), a rarity tier within that theme that
- * controls how often it spawns at the per-level draw, and a packed RGBA8888 colour used by
- * the procedural icon renderer.
- *
- * <p>Shape comes from the theme: crystal gems render as triangles, concrete gems as squares.
- * Colour is per-species; size grows with the gem's prefix tier (tiny ... exquisite).
+ * Gem species (RL-47 roster). Each gem has:
+ * <ul>
+ *   <li>an <b>affinity</b> ({@link VisualTheme}) - a soft spawn bias toward the matching
+ *       dungeon theme (matching levels roll it more often), reusing the same theme-weighting
+ *       items use. It is NOT a hard gate, so a metal gem with no shiny variant still appears
+ *       (less often) on shiny levels.</li>
+ *   <li>a <b>rarity class</b> ({@link GemClass}): BASIC (common), METAL (rare), EXOTIC
+ *       (very rare).</li>
+ *   <li>a packed RGBA8888 colour for any procedural / tint fallback.</li>
+ * </ul>
+ * Sprites come from {@code gems2.png}; the per-species cell lives renderer-side in
+ * {@code GemSprites}. There is no gem size system.
  */
 public enum GemSpecies {
-    BLAZINGSTAR (VisualTheme.CRYSTAL,  1, 0xff5522ff),  // hot orange-red
-    AZURITE     (VisualTheme.CRYSTAL,  1, 0x2266ffff),  // azure blue
-    AMBERGLEAM  (VisualTheme.CRYSTAL,  1, 0xffcc00ff),  // amber yellow
-    SCINTILLIUM (VisualTheme.CRYSTAL,  2, 0xff44ddff),  // magenta
-    GLITTERSHARD(VisualTheme.CRYSTAL,  3, 0x66ffeeff),  // cyan
+    // Basic - one per affinity.
+    LETTUSTONE  (VisualTheme.CONCRETE, GemClass.BASIC,  0x77bb77ff),
+    HAMETHYST   (VisualTheme.CRYSTAL,  GemClass.BASIC,  0xaa22aaff),
+    SALAMITE    (VisualTheme.GOTHIC,   GemClass.BASIC,  0xdd5533ff),
+    ICELANDSPAR (VisualTheme.SHINY,    GemClass.BASIC,  0xcceeffff),
 
-    CUPRIUM    (VisualTheme.CONCRETE, 1, 0x888888ff),  // iron grey
-    ARGENTEL     (VisualTheme.CONCRETE, 1, 0x4455aaff),  // dull blue-grey
-    AURELIUM  (VisualTheme.CONCRETE, 1, 0x333333ff),  // smoked black
-    PETRICHOR   (VisualTheme.CONCRETE, 2, 0x88aa55ff),  // mossy green
-    STEELROCK   (VisualTheme.CONCRETE, 3, 0xaaccffff),  // steel sheen
+    // Metal - rare. No shiny variant.
+    SILVER      (VisualTheme.CONCRETE, GemClass.METAL,  0xccccd0ff),
+    COPPER      (VisualTheme.CRYSTAL,  GemClass.METAL,  0xcc7744ff),
+    GOLD        (VisualTheme.GOTHIC,   GemClass.METAL,  0xeecc33ff),
 
-    BLOODGLASS    (VisualTheme.SHINY, 1, 0xaa5588ff), // blood red  
-    SLIPGLASS     (VisualTheme.SHINY, 1, 0xaa9966ff), // sickly yellow-green
-    JADEGLASS  (VisualTheme.SHINY, 1, 0x33bb66ff),  // jade green
-    MILKSPAR   (VisualTheme.SHINY, 2, 0xddddddff),  // milky 
-    MALACHOR   (VisualTheme.SHINY, 3, 0x66ee88ff), // malachite green
+    // Exotic - very rare. One per affinity.
+    BLOODHIVE   (VisualTheme.GOTHIC,   GemClass.EXOTIC, 0xaa1133ff),
+    BLACKGLASS  (VisualTheme.SHINY,    GemClass.EXOTIC, 0x222233ff),
+    MALACHOR    (VisualTheme.CONCRETE, GemClass.EXOTIC, 0x33aa66ff),
+    FLUORON     (VisualTheme.CRYSTAL,  GemClass.EXOTIC, 0x22ddeeff);
 
-    LETTUSTONE    (VisualTheme.GOTHIC, 1, 0x77bb77ff), // pale green  
-    PORQUOISE     (VisualTheme.GOTHIC, 1, 0x44aaaaff), // cyan-ish
-    HAMETHYST  (VisualTheme.GOTHIC, 1, 0xaa22aaff), // purple  
-    FLUOROS   (VisualTheme.GOTHIC, 2, 0x22aaeeff),  // bright cyan
-    PYRIUM   (VisualTheme.GOTHIC, 3, 0xccaa33ff);  // pyrite gold
+    /** Rarity class - controls per-level spawn counts and special-drop rolls. */
+    public enum GemClass { BASIC, METAL, EXOTIC }
 
-
-    /** Dungeon theme this gem appears in. */
+    /** Affinity: the dungeon theme this gem is biased to spawn on. */
     public final VisualTheme theme;
-    /** Rarity tier 1-3. Tier 1 species are common, tier 3 species are rare. The same-kind
-     *  size-up recipe never crosses species, so tier doesn't affect the recipe graph. */
-    public final int tier;
-    /** Packed RGBA8888 colour for the procedural gem icon. */
+    /** Rarity class. */
+    public final GemClass gemClass;
+    /** Packed RGBA8888 colour for any procedural / tint fallback. */
     public final int rgba;
 
-    GemSpecies(VisualTheme theme, int tier, int rgba) {
-        this.theme = theme;
-        this.tier  = tier;
-        this.rgba  = rgba;
+    GemSpecies(VisualTheme theme, GemClass gemClass, int rgba) {
+        this.theme    = theme;
+        this.gemClass = gemClass;
+        this.rgba     = rgba;
     }
 
-    /** Pretty species name for display ("Blazingstar"). Used by gem display-name composition
-     *  alongside the size prefix. */
+    /** Pretty species name for display ("Lettustone"). */
     public String pretty() {
         String s = name().toLowerCase();
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);

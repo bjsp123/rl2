@@ -59,7 +59,7 @@ Notion tickets seed from it.
 - `V2Stage` — z-ordered popup layers: `addToSubPopup()`, `addToBurger()`. Renders on top of the screen each frame.
 
 **Screens (all in `ui/v2/`):**
-`V2Title`, `V2Saves`, `V2CharacterSelect`, `V2Settings`, `V2HallOfFame`, `V2GameOver`, `V2Encyclopedia`, `V2Arena`, `V2ArenaSetup`, `V2Credits`, `V2Map`, `V2LevelInfo`, `V2CharacterStats`, `V2Inventory`, `V2Crafting`, `V2Look`, `V2BuffInfo`.
+`V2Title`, `V2Saves`, `V2CharacterSelect`, `V2Settings`, `V2HallOfFame`, `V2GameOver`, `V2Encyclopedia`, `V2Arena`, `V2ArenaSetup`, `V2Credits`, `V2Map`, `V2LevelInfo`, `V2CharacterStats`, `V2Inventory`, `V2Look`, `V2BuffInfo`.
 
 **Popups (also in `ui/v2/`):**
 `V2Log` — scrollable event log; `V2Hud` — in-play HUD overlay.
@@ -90,7 +90,7 @@ The popup's `input()` returns false when closed, so events fall through to the s
   - `Item.UseBehavior.POWERUP` — walk-over items; never enter the bag, consumed on tile step.
 - `Level` — one floor: tile grid, mobs, items, surfaces, lighting cache, `events` queue.
 - `GameEvent` — sealed; movement/attack/buff/damage notifications.
-- `GameBalance` — static tunables loaded from `gamebalance.properties`.
+- `GameBalance` — static tunables loaded from `config.csv` (gamebalance-kind rows).
 - `TurnSystem` — game-clock driver; `tick(Level)` advances 1 game tick.
 - `Animator` — render-frame consumer of `Level.events`; owns lerp/ghost/FX state.
 - `EventLog` — static process-wide rolling log (max 400 entries). `EventLog.all()` oldest-first. Cleared on new game. Used by `V2Log` and death-message capture.
@@ -106,7 +106,7 @@ The popup's `input()` returns false when closed, so events fall through to the s
 - Input: `GameInput` → `PlayController.<action>()` mutates `Level`, appends events.
 
 ### Data files (`assets/data/`)
-- `gamebalance.properties` — combat, progression, level dims, mob caps, hunger.
+- `config.csv` — combat, progression, level dims, mob caps, hunger (gamebalance rows), plus animation/ui/other config rows.
 - `mobs.csv` — mob species: stats, AI behavior, abilities, sprite coords. Consumed by both `MobRegistry` (rlib) and `MobSprites` (rgame).
 - `items.csv` — item defs: slot, material, stats, special behaviors, scaling.
 - `themedrooms.csv` — procedural room templates for `LevelFactory`.

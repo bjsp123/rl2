@@ -246,7 +246,7 @@ public final class Decider {
     /** Scored argmax over healing options. */
     static Action planHeal(WorldState s) {
         List<Action> candidates = new ArrayList<>();
-        ActionLibrary.addHealingPotions(s, candidates);
+        ActionLibrary.addHealingConsumables(s, candidates);
         // Known floor HP_UP powerups - walk to them.
         if (s.memory != null) {
             for (Map.Entry<Point, Item> e : s.memory.knownItems.entrySet()) {

@@ -775,6 +775,9 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private static List<Entry> buildBuffsAndPerksEntries() {
         List<Entry> out = new ArrayList<>();
         for (BuffType t : BuffType.values()) {
+            // Cooldown buffs are internal accounting (recharging timers), not player-facing
+            // buffs - keep them out of the encyclopedia list.
+            if (BuffSystem.isCooldownBuff(t)) continue;
             String name = BuffSystem.displayName(t);
             StringBuilder body = new StringBuilder(BuffSystem.description(t));
             // Append a mechanical-details line when one exists for this buff.
@@ -796,8 +799,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         List<Entry> out = new ArrayList<>();
         for (GemSpecies sp : GemSpecies.values()) {
             String desc = TextCatalog.format("ui.encyclopedia.gemDetails",
-                    TextCatalog.vars("theme", sp.theme, "tier", sp.tier));
-            out.add(new Entry(sp, GemSprites.regionFor(sp, 5), sp.pretty(), desc));
+                    TextCatalog.vars("affinity", sp.theme, "rarity", sp.gemClass));
+            out.add(new Entry(sp, GemSprites.regionFor(sp), sp.pretty(), desc));
         }
         return out;
     }
@@ -812,9 +815,15 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             // Attribute lines. Each predicate yields a short statement so the
             // player can scan "blocks movement", "flammable", "see-through"
             // etc. at a glance.
-            sb.append(TextCatalog.get(t.isFloorLike()
-                    ? "terrain.attribute.walkable"
-                    : "terrain.attribute.blocksMovement")).append("\n");
+            // Movement: blocks-movement takes priority (a lamp is "floor-like" for light
+            // and surface stitching but is still a solid obstacle). A tile that neither
+            // blocks movement nor is floor-like - a chasm - is neither walkable nor a wall;
+            // its fall line below describes it instead.
+            if (t.blocksMovement()) {
+                sb.append(TextCatalog.get("terrain.attribute.blocksMovement")).append("\n");
+            } else if (t.isFloorLike()) {
+                sb.append(TextCatalog.get("terrain.attribute.walkable")).append("\n");
+            }
             sb.append(TextCatalog.get(t.blocksSight()
                     ? "terrain.attribute.blocksSight"
                     : "terrain.attribute.seeThrough")).append("\n");
@@ -831,6 +840,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 sb.append(TextCatalog.get("terrain.attribute.emitsLight")).append("\n");
             }
             if (t == Tile.CHASM) {
+                sb.append(TextCatalog.get("terrain.attribute.fatalFall")).append("\n");
                 sb.append(TextCatalog.get("terrain.attribute.flyingOnly")).append("\n");
             }
             if (t == Tile.ONETIME_DOOR) {

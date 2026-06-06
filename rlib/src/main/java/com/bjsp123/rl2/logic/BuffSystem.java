@@ -47,29 +47,44 @@ public final class BuffSystem {
         return null;
     }
 
-    /** Convenience - level of the buff if present, else 0. */
-    public static int level(Mob mob, BuffType type) {
+    /** Convenience - stack count of the buff if present, else 0. */
+    public static int stacks(Mob mob, BuffType type) {
         Buff b = get(mob, type);
-        return b == null ? 0 : b.level;
+        return b == null ? 0 : b.stacks;
+    }
+
+    /** Maximum stacks a buff of {@code type} can hold. Default 10; per-type overrides
+     *  per RL-43. Re-applying a buff never pushes it past this cap. */
+    public static int stackCap(BuffType type) {
+        return switch (type) {
+            case FRIGHTENED, WET -> 2;
+            case OILY -> 3;
+            case FROZEN -> 5;
+            case ON_FIRE -> 8;
+            case INVISIBLE, GHOSTLY, LEVITATING, PHASE -> 20;
+            case KILLER -> 30;            // stacks cap 30; speed effect capped at 10
+            default -> 10;                // ESP, INSIGHT, HIDING, SHIELDED, REGENERATION,
+                                          // POISONED, HASTED, HOPE, CHILLED, PROTECTION,
+                                          // ANTI_MAGIC, SORCERY, BLEEDING, cooldowns
+        };
     }
 
     /** --- Apply / remove ----------------------------------------------------- */
 
     /**
-     * Apply a buff to {@code target}. If a buff of {@code type} already exists, it's
-     * upgraded to {@code max(existingLevel, level)} / {@code max(existingDuration,
-     * durationTicks)}. Spawns a floating "buff name" effect above the target's head so
-     * the player sees what landed.
-     *
-     * <p>{@code durationTicks} is the buff length in <b>game ticks</b>; convert from
-     * standard turns at the call site via {@code N * TurnSystem.STANDARD_TURN_TICKS}.
+     * Apply a buff to {@code target}. {@code stacks} is the buff's combined
+     * strength/lifetime in turns (it counts down 1/turn and the buff drops at 0). If a
+     * buff of {@code type} already exists it's upgraded to {@code max(existing, stacks)};
+     * {@link BuffType#KILLER} instead ADDS the incoming stacks. Either way the result is
+     * clamped to {@link #stackCap(BuffType)}. Spawns a floating "buff name" effect above
+     * the target's head so the player sees what landed.
      *
      * <p>Returns the resulting {@link Buff} (either the upgraded existing one or a
-     * fresh one) so call sites can read final stats if needed.
+     * fresh one) so call sites can read final stacks if needed.
      */
     public static Buff apply(Level level, Mob target, BuffType type,
-                             int buffLevel, int durationTicks, Mob source) {
-        return apply(level, target, type, buffLevel, durationTicks, source, null);
+                             int stacks, Mob source) {
+        return apply(level, target, type, stacks, source, null);
     }
 
     /** Full apply overload that records the originating {@link Item} on the
@@ -80,7 +95,7 @@ public final class BuffSystem {
      *  in a fire caused by Kobold's fire wand"). Pass {@code null} for
      *  {@code sourceItem} when the buff origin item isn't meaningful. */
     public static Buff apply(Level level, Mob target, BuffType type,
-                             int buffLevel, int durationTicks, Mob source,
+                             int stacks, Mob source,
                              com.bjsp123.rl2.model.Item sourceItem) {
         if (target == null || type == null) return null;
         if (target.buffs == null) target.buffs = new java.util.ArrayList<>();
@@ -98,21 +113,17 @@ public final class BuffSystem {
             removeBuff(target, BuffType.CHILLED);
         }
 
-        int newLevel    = Math.max(1, buffLevel);
-        int newDuration = Math.max(1, durationTicks);
+        int cap = stackCap(type);
+        int newStacks = Math.max(1, Math.min(cap, stacks));
         Buff existing = get(target, type);
         if (existing != null) {
-            // KILLER is a stacking buff: re-applying it on each kill ADDS the
-            // incoming level to the existing stack count (capped at
-            // KILLER_MAX_STACKS) and RESETS the duration (instead of the default
-            // max-merge). The Warrior's perk feeds {@code ceil(perkLvl/2)} as the
-            // incoming level so higher-rank KILLER bumps the stack faster.
+            // KILLER is a stacking buff: re-applying it on each kill ADDS the incoming
+            // stacks onto the existing count (capped). Every other buff max-merges so
+            // re-applying never shortens or weakens it.
             if (type == BuffType.KILLER) {
-                existing.level         = Math.min(KILLER_MAX_STACKS, existing.level + newLevel);
-                existing.durationTicks = newDuration;
+                existing.stacks = Math.min(cap, existing.stacks + newStacks);
             } else {
-                existing.level         = Math.max(existing.level,         newLevel);
-                existing.durationTicks = Math.max(existing.durationTicks, newDuration);
+                existing.stacks = Math.max(existing.stacks, newStacks);
             }
             if (source != null) existing.source = source;
             if (sourceItem != null) existing.sourceItem = sourceItem;
@@ -120,7 +131,7 @@ public final class BuffSystem {
             maybeFreeze(level, target, type, source);
             return existing;
         }
-        Buff buff = new Buff(type, newLevel, newDuration, source, sourceItem);
+        Buff buff = new Buff(type, newStacks, source, sourceItem);
         target.buffs.add(buff);
         target.statsDirty = true;
         spawnApplyVfx(level, target, type);
@@ -129,7 +140,7 @@ public final class BuffSystem {
         // the log without telling the player anything useful.
         if (!isCooldownBuff(type)) {
             String name = MobSystem.nameForLog(level, target);
-            EventLog.add(Messages.buffApplied(name, displayName(type),
+            EventLog.add(Messages.buffApplied(name, displayName(type), newStacks,
                     target.behavior == Mob.Behavior.PLAYER));
         }
         // Hope wipes any active fear - adding hope after a fright should free the mob.
@@ -160,21 +171,19 @@ public final class BuffSystem {
         // a mob standing in water freezes it even without the buff.
         if (!MobSystem.isWet(level, target)) return;
         Buff wet = get(target, BuffType.WET);
-        int lvl = Math.max(chilled.level, wet != null ? wet.level : 1);
-        int dur = Math.max(chilled.durationTicks,
-                wet != null ? wet.durationTicks : chilled.durationTicks);
+        int frozenStacks = Math.max(chilled.stacks, wet != null ? wet.stacks : 1);
         Mob src = source != null ? source
                 : (chilled.source != null ? chilled.source : (wet != null ? wet.source : null));
         // Cold-shock burst (RL-31): on the transition INTO chilled+wet (i.e. not
         // already frozen), deal a one-time COLD hit - quadrupled by wetness in
         // processAttack. Dealt BEFORE freezing so it doesn't shorten the fresh
-        // FROZEN via shortenFrozenOnDamage. Burst base 5*lvl -> ~20*lvl felt.
+        // FROZEN via shortenFrozenOnDamage. Burst base 5*stacks -> ~20*stacks felt.
         if (get(target, BuffType.FROZEN) == null && target.hp > 0) {
-            MobSystem.processAttack(level, src, target, 5 * Math.max(1, lvl),
+            MobSystem.processAttack(level, src, target, 5 * Math.max(1, frozenStacks),
                     MobSystem.AttackType.MAGIC, MobSystem.DamageElement.COLD, null,
                     new MobSystem.DamageCause(src, null, "cold-shock"));
         }
-        if (target.hp > 0) apply(level, target, BuffType.FROZEN, lvl, dur, src);
+        if (target.hp > 0) apply(level, target, BuffType.FROZEN, frozenStacks, src);
     }
 
     /** Strip a buff if present. No-op otherwise. Used by potion effects that should
@@ -192,23 +201,22 @@ public final class BuffSystem {
     public static void shortenFrozenOnDamage(Mob mob) {
         Buff frozen = get(mob, BuffType.FROZEN);
         if (frozen == null) return;
-        frozen.durationTicks -= 2 * TurnSystem.STANDARD_TURN_TICKS;
-        if (frozen.durationTicks <= 0) removeBuff(mob, BuffType.FROZEN);
+        frozen.stacks -= 2;
+        if (frozen.stacks <= 0) removeBuff(mob, BuffType.FROZEN);
     }
 
     /** --- Per-turn driver --------------------------------------------------- */
 
-    /** FRIGHTENED-aura duration applied to a terrifiable mob adjacent to a
-     *  terrifying one, in <b>game ticks</b>. Two standard turns lets the fear
-     *  persist for one full AI round after the mob has walked away from the
-     *  terrifier. */
-    public static final int FEAR_AURA_DURATION_TICKS = 2 * TurnSystem.STANDARD_TURN_TICKS;
+    /** FRIGHTENED-aura stacks applied to a terrifiable mob adjacent to a terrifying one.
+     *  Two stacks (= two turns) lets the fear persist for one full AI round after the mob
+     *  has walked away from the terrifier; matches the FRIGHTENED stack cap. */
+    public static final int FEAR_AURA_STACKS = 2;
 
     /**
      * Per-standard-turn pass. Drives terrifying-aura propagation, FRIGHTENED
-     * light-purge, and damage-over-time application (ON_FIRE, POISONED,
-     * BLEEDING, REGENERATION). Duration decrement is NOT done here - that
-     * runs every game tick via {@link #tickEveryGameTick}.
+     * light-purge, damage-over-time application (ON_FIRE, POISONED, BLEEDING,
+     * REGENERATION), and finally the per-turn stack countdown + expiry
+     * (see {@link #decrementStacks}).
      */
     public static void tickPerTurn(Level level) {
         if (level == null || level.mobs == null) return;
@@ -229,7 +237,7 @@ public final class BuffSystem {
                 int dx = Math.abs(other.position.tileX() - sx);
                 int dy = Math.abs(other.position.tileY() - sy);
                 if (Math.max(dx, dy) <= 1) {
-                    apply(level, other, BuffType.FRIGHTENED, 1, FEAR_AURA_DURATION_TICKS, src);
+                    apply(level, other, BuffType.FRIGHTENED, FEAR_AURA_STACKS, src);
                 }
             }
         }
@@ -259,48 +267,58 @@ public final class BuffSystem {
                 if (m.hp <= 0) break;
                 applyPerTurnEffect(level, m, b);
             }
+            // Stacks count down once per turn; drop any buff that hits zero. Runs after
+            // the effect pass so a buff still fires on the turn it expires.
+            if (m.hp > 0) decrementStacks(level, m);
         }
     }
 
     /**
-     * Per-game-tick pass. Decrements every active buff's {@code durationTicks}
-     * by {@code dtTicks} and removes any that hit zero. Called from
-     * {@link TurnSystem#tick} every game tick (and from
-     * {@code TurnSystem.advanceToNextEvent} during catch-up) so buff expiry
-     * lands on the exact tick the budget runs out - not snapped to the next
-     * standard-turn boundary.
+     * Count every active buff's stacks down by 1 and remove any that reach zero. Called
+     * once per standard turn from {@link #tickPerTurn} - stacks are turn-granular now, so
+     * there is no per-game-tick duration path any more.
      */
-    public static void tickEveryGameTick(Level level, int dtTicks) {
-        if (level == null || level.mobs == null || dtTicks <= 0) return;
-        for (Mob m : level.mobs) {
-            if (m == null || m.buffs == null || m.buffs.isEmpty()) continue;
-            if (m.hp <= 0) { m.buffs.clear(); continue; }
-            Iterator<Buff> it = m.buffs.iterator();
-            boolean changed = false;
-            while (it.hasNext()) {
-                Buff b = it.next();
-                b.durationTicks -= dtTicks;
-                if (b.durationTicks <= 0) {
-                    it.remove();
-                    changed = true;
-                    // Natural expiry log - same gate as apply (cooldown
-                    // buffs are silent so the rolling log doesn't fill up
-                    // with "no longer on teleport cooldown" lines).
-                    if (!isCooldownBuff(b.type)) {
-                        String name = MobSystem.nameForLog(level, m);
-                        EventLog.add(Messages.buffExpired(name, displayName(b.type),
-                                m.behavior == Mob.Behavior.PLAYER));
-                        // Emit a BuffRemoved event so the renderer can show
-                        // a brief "buff faded" floater above the mob.
-                        if (level != null && level.events != null) {
-                            level.events.add(new com.bjsp123.rl2.event.GameEvent.BuffRemoved(
-                                    m, b.type, displayName(b.type)));
-                        }
+    private static void decrementStacks(Level level, Mob m) {
+        if (m == null || m.buffs == null || m.buffs.isEmpty()) return;
+        Iterator<Buff> it = m.buffs.iterator();
+        boolean changed = false;
+        while (it.hasNext()) {
+            Buff b = it.next();
+            // WET / OILY don't decay while the mob is still standing in the water / oil that
+            // sustains them - wading keeps you soaked. They decay normally once off it.
+            if (sustainedBySurface(level, m, b.type)) continue;
+            b.stacks -= 1;
+            if (b.stacks <= 0) {
+                it.remove();
+                changed = true;
+                // Natural expiry log - same gate as apply (cooldown buffs are silent so
+                // the rolling log doesn't fill up with "no longer on teleport cooldown").
+                if (!isCooldownBuff(b.type)) {
+                    String name = MobSystem.nameForLog(level, m);
+                    EventLog.add(Messages.buffExpired(name, displayName(b.type),
+                            m.behavior == Mob.Behavior.PLAYER));
+                    // Emit a BuffRemoved event so the renderer can show a brief
+                    // "buff faded" floater above the mob.
+                    if (level != null && level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.BuffRemoved(
+                                m, b.type, displayName(b.type)));
                     }
                 }
             }
-            if (changed) m.statsDirty = true;
         }
+        if (changed) m.statsDirty = true;
+    }
+
+    /** True when {@code type} is a buff whose source surface the mob is currently standing
+     *  on (WET on WATER, OILY on OIL) - such buffs hold steady instead of decaying so a mob
+     *  wading through liquid stays soaked / slick. */
+    private static boolean sustainedBySurface(Level level, Mob m, Buff.BuffType type) {
+        if (level == null || level.surface == null || m == null || m.position == null) return false;
+        int x = m.position.tileX(), y = m.position.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+        com.bjsp123.rl2.model.Level.Surface s = level.surface[x][y];
+        return (type == Buff.BuffType.WET  && s == com.bjsp123.rl2.model.Level.Surface.WATER)
+            || (type == Buff.BuffType.OILY && s == com.bjsp123.rl2.model.Level.Surface.OIL);
     }
 
     /** True for buffs that exist purely as internal time-gates (the four
@@ -308,20 +326,12 @@ public final class BuffSystem {
      *  with no player-meaningful information, so they're filtered out at
      *  the {@link Messages#buffApplied} / {@link Messages#buffExpired}
      *  emit sites. */
-    private static boolean isCooldownBuff(Buff.BuffType type) {
+    public static boolean isCooldownBuff(Buff.BuffType type) {
         return type == Buff.BuffType.TELEPORT_COOLDOWN
             || type == Buff.BuffType.RANGED_COOLDOWN
             || type == Buff.BuffType.HASTE_COOLDOWN
-            || type == Buff.BuffType.HEAL_COOLDOWN;
-    }
-
-    /** HUD-friendly turn count for a buff's remaining duration. Uses ceiling
-     *  division so a still-active sub-turn buff renders as {@code (1t)} rather
-     *  than {@code (0t)}. */
-    public static int displayTurns(int durationTicks) {
-        if (durationTicks <= 0) return 0;
-        return (durationTicks + TurnSystem.STANDARD_TURN_TICKS - 1)
-                / TurnSystem.STANDARD_TURN_TICKS;
+            || type == Buff.BuffType.HEAL_COOLDOWN
+            || type == Buff.BuffType.PHASE_DODGE_COOLDOWN;
     }
 
     /** Per-turn effect for one buff. Damage / heal happens via
@@ -342,39 +352,33 @@ public final class BuffSystem {
                             b.source, b.sourceItem, "fire-dot");
                     boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
                             MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.FIRE, bk, cause);
-                    if (killed) logDotDeath(m, "burns to a cinder");
+                    if (killed) logDotDeath(m, TextCatalog.get("buff.dotdeath.ON_FIRE"));
                 }
             }
             case POISONED -> {
-                // +50% rebalance: was 1 + level. Now 2 + (3*level)/2 (integer).
-                int dmg = 2 + (3 * b.level) / 2;
+                // Damage from current stacks; poison weakens as the stacks count down.
+                int dmg = 2 + (3 * b.stacks) / 2;
                 emitPeriodicDamage(level, m, BuffType.POISONED, dmg);
                 MobSystem.DamageCause cause = new MobSystem.DamageCause(
                         b.source, b.sourceItem, "poison-dot");
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON, null, cause);
-                if (killed) logDotDeath(m, "succumbs to poison");
+                if (killed) logDotDeath(m, TextCatalog.get("buff.dotdeath.POISONED"));
             }
             case BLEEDING -> {
-                // (level x standardTurnsRemaining) / 2 HP per standard turn -
-                // strong at first then tapers as the duration counts down.
-                // Convert ticks to standard turns for game-feel parity with the
-                // pre-tick implementation: a buff applied for 6 standard turns
-                // (600 ticks) at level 4 still ticks for 12 / 10 / 8 / 6 / 4 /
-                // 2 over its life.
-                int turnsLeft = displayTurns(b.durationTicks);
-                // +50% rebalance: was (level * turnsLeft) / 2. Now ×3/4.
-                int dmg = Math.max(1, (3 * b.level * turnsLeft) / 4);
+                // Damage straight from current stacks - strong at first, tapering as the
+                // stacks count down each turn (RL-43): dmg = max(1, 3*stacks/4).
+                int dmg = Math.max(1, (3 * b.stacks) / 4);
                 emitPeriodicDamage(level, m, BuffType.BLEEDING, dmg);
                 MobSystem.DamageCause cause = new MobSystem.DamageCause(
                         b.source, b.sourceItem, "bleed");
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL, null, cause);
-                if (killed) logDotDeath(m, "bleeds out");
+                if (killed) logDotDeath(m, TextCatalog.get("buff.dotdeath.BLEEDING"));
             }
             case REGENERATION -> {
-                // +50% rebalance: was 1 + level. Now 2 + (3*level)/2 (integer).
-                int heal = 2 + (3 * b.level) / 2;
+                // Heal from current stacks; regen tapers as the stacks count down.
+                int heal = 2 + (3 * b.stacks) / 2;
                 MobSystem.heal(level, m, heal);
                 
                 if (hasBuff(m, BuffType.POISONED)) {
@@ -409,17 +413,17 @@ public final class BuffSystem {
     /** True if {@code target}'s incoming {@code dmg} would be mitigated below the raw
      *  value by the named protective buff. The renderer uses this to dim damage text. */
     public static boolean wasMitigated(Mob target, int rawDmg, BuffType buffType) {
-        int level = level(target, buffType);
-        if (level <= 0 || rawDmg <= 0) return false;
-        return rawDmg >> level != rawDmg;
+        int s = stacks(target, buffType);
+        if (s <= 0 || rawDmg <= 0) return false;
+        return rawDmg >> Math.min(s, 30) != rawDmg;
     }
 
     private static int mitigate(Mob target, int dmg, BuffType type) {
         if (dmg <= 0) return dmg;
-        int lvl = level(target, type);
-        if (lvl <= 0) return dmg;
-        // Integer divide by 2^level - at level 1 halves, level 2 quarters, etc.
-        int mitigated = dmg >> Math.min(lvl, 30);
+        int s = stacks(target, type);
+        if (s <= 0) return dmg;
+        // Integer divide by 2^stacks - at 1 stack halves, 2 stacks quarters, etc.
+        int mitigated = dmg >> Math.min(s, 30);
         // If the original damage was positive, leave at least 1 so the hit still
         // registers (otherwise high-level resists silently swallow the entire attack).
         return Math.max(mitigated, dmg > 0 ? 1 : 0);
@@ -443,8 +447,8 @@ public final class BuffSystem {
             if (b == null || b.type == null) continue;
             switch (b.type) {
                 case HOPE -> {
-                    dst.accuracy += b.level;
-                    dst.evasion  += b.level;
+                    dst.accuracy += b.stacks * 5;
+                    dst.evasion  += b.stacks * 5;
                 }
                 case INVISIBLE -> dst.evasion += 40;
                 case GHOSTLY   -> dst.evasion += 20;
@@ -452,17 +456,17 @@ public final class BuffSystem {
                     dst.evasion += 40;
                     moveMultiplier *= 0.3;
                 }
-                case HASTED -> moveMultiplier *= Math.pow(0.8, b.level);
+                case HASTED -> moveMultiplier *= Math.pow(0.8, b.stacks);
                 case KILLER -> {
-                    // Killer-streak haste: each stack multiplies BOTH move and
-                    // action (attack/ranged) cost by 0.9, compounding. Tracked
+                    // Killer-streak haste: multiplies BOTH move and action
+                    // (attack/ranged) cost by 0.9 per stack, compounding. Tracked
                     // separately from the other multipliers so its benefit floors
                     // at KILLER_MIN_COST (see below) instead of collapsing cost
-                    // toward 1 - a maxed perk stacks +5/kill and would otherwise
-                    // reach ~zero cost on a kill streak.
-                    killerMult *= Math.pow(0.9, Math.max(1, b.level));
+                    // toward 1. Effect is capped at 10 stacks even though the buff
+                    // itself can stack to 30.
+                    killerMult *= Math.pow(0.9, Math.min(KILLER_EFFECT_CAP, Math.max(1, b.stacks)));
                 }
-                case CHILLED -> chilledPenalty = Math.max(chilledPenalty, 80 + b.level * 15);
+                case CHILLED -> chilledPenalty = Math.max(chilledPenalty, 80 + b.stacks * 15);
                 default -> { /* other buff types don't yet contribute to the stat block */ }
             }
         }
@@ -479,10 +483,11 @@ public final class BuffSystem {
      *  caps at this cost instead of becoming near-instant. */
     public static final int KILLER_MIN_COST = 40;
 
-    /** Max KILLER stack level. Kills add {@code ceil(perkLvl/2)} each but the
-     *  stack caps here so the buff level stays sane (the cost benefit is already
-     *  bounded by {@link #KILLER_MIN_COST}). */
-    public static final int KILLER_MAX_STACKS = 10;
+    /** KILLER stacks past this don't speed the mob up any further. The buff itself can
+     *  stack to {@code stackCap(KILLER)} (30) so a streak keeps refreshing its lifetime,
+     *  but the speed multiplier saturates here (and is further floored by
+     *  {@link #KILLER_MIN_COST}). */
+    public static final int KILLER_EFFECT_CAP = 10;
 
     /** Apply the KILLER speed multiplier to an already-(other-buff-)scaled cost,
      *  but never below {@link #KILLER_MIN_COST} - and never RAISE a cost that
@@ -513,7 +518,7 @@ public final class BuffSystem {
      *  factories add this onto {@link com.bjsp123.rl2.model.Item#level} when the user
      *  is sorcery-buffed. */
     public static int sorceryBonus(Mob user) {
-        return level(user, BuffType.SORCERY);
+        return stacks(user, BuffType.SORCERY);
     }
 
     /** --- Visuals --------------------------------------------------------- */
@@ -559,77 +564,59 @@ public final class BuffSystem {
     }
 
     /**
-     * Short, level-resolved descriptor of what the buff *does right now*.
-     * Returned string fits one line ("moves 49% faster", "physical damage
-     * /4", "+5 HP/turn"). Empty string for buffs whose effect is the same
-     * regardless of level (FROZEN, INVISIBLE, ON_FIRE) — the description
-     * line already covers those. Used by {@code V2BuffInfo} to surface the
-     * current numeric effect alongside the buff name.
+     * Short, stacks-resolved descriptor of what the buff *does right now*
+     * ("moves 49% faster", "physical damage divided by 4", "+5 HP/turn"). The
+     * wording lives in {@code strings.csv} under {@code buff.<TYPE>.effect}; only
+     * the numbers (which depend on the current stack count) are computed here and
+     * passed in as template vars. Empty string for buffs with no per-stack effect
+     * line. Used by {@code V2BuffInfo}.
      */
-    public static String describeEffectAtLevel(BuffType type, int level) {
-        if (type == null || level <= 0) return "";
+    public static String describeEffectForStacks(BuffType type, int stacks) {
+        if (type == null || stacks <= 0) return "";
         switch (type) {
             case HASTED: {
-                // moveCost *= 0.8^level. Player understands "% faster".
-                double cost = Math.pow(0.8, level);
-                int faster = (int) Math.round((1.0 - cost) * 100.0);
-                return "moves " + faster + "% faster";
+                int faster = (int) Math.round((1.0 - Math.pow(0.8, stacks)) * 100.0);
+                return TextCatalog.format("buff.HASTED.effect", TextCatalog.vars("pct", faster));
             }
-            case CHILLED: {
-                // Adds (80 + 15*L)% to move/attack/ranged cost (additive
-                // penalty, not multiplier).
-                return "+" + (80 + 15 * level) + "% move / attack cost";
-            }
+            case CHILLED:
+                return TextCatalog.format("buff.CHILLED.effect", TextCatalog.vars("n", 80 + 15 * stacks));
             case PROTECTION:
-                return "physical damage divided by " + (1 << Math.min(level, 30));
+                return TextCatalog.format("buff.PROTECTION.effect",
+                        TextCatalog.vars("n", 1 << Math.min(stacks, 30)));
             case ANTI_MAGIC:
-                return "magic / fire damage divided by " + (1 << Math.min(level, 30));
-            case REGENERATION: {
-                int heal = 2 + (3 * level) / 2;
-                return "+" + heal + " HP per turn";
-            }
+                return TextCatalog.format("buff.ANTI_MAGIC.effect",
+                        TextCatalog.vars("n", 1 << Math.min(stacks, 30)));
+            case REGENERATION:
+                return TextCatalog.format("buff.REGENERATION.effect",
+                        TextCatalog.vars("n", 2 + (3 * stacks) / 2));
             case HOPE:
-                return "+" + level + " accuracy, +" + level + " evasion; fear immunity";
+                return TextCatalog.format("buff.HOPE.effect", TextCatalog.vars("n", stacks * 5));
             case KILLER: {
-                // Effect is 0.9^level on move/attack cost, but floored at
-                // KILLER_MIN_COST - so the % faster tops out instead of climbing
-                // to ~100%. Compute against the standard cost as a representative
-                // base, applying the same floor the stat pipeline does.
+                // 0.9^stacks (capped at KILLER_EFFECT_CAP) on move/attack cost, floored
+                // at KILLER_MIN_COST. Compute against the standard cost as a representative
+                // base, applying the same cap + floor the stat pipeline does.
                 int base = TurnSystem.STANDARD_TURN_TICKS;
-                int eff  = Math.max(KILLER_MIN_COST, (int) Math.round(base * Math.pow(0.9, level)));
+                int eff  = Math.max(KILLER_MIN_COST,
+                        (int) Math.round(base * Math.pow(0.9, Math.min(KILLER_EFFECT_CAP, stacks))));
                 int killerFaster = (int) Math.round((1.0 - eff / (double) base) * 100.0);
-                return "moves & attacks " + killerFaster + "% faster";
+                return TextCatalog.format("buff.KILLER.effect", TextCatalog.vars("pct", killerFaster));
             }
-            case BLEEDING:
-                return "loses HP each turn (rate tapers as duration drops)";
-            case POISONED:
-                return "loses HP each turn";
-            case ON_FIRE:
-                return "loses HP each turn from fire";
-            case FROZEN:
-                return "cannot act";
-            case INVISIBLE:
-                return "can't be targeted by ranged attacks";
-            case SHIELDED:
-                return "negates the next damaging hit";
-            case WET:
-                return "fire damage halved; chill spreads on freeze";
-            case OILY:
-                return "ignites on contact with fire";
-            case FRIGHTENED:
-                return "flees from the source of fear";
-            case LEVITATING:
-                return "ignores surface effects; can cross chasms";
-            case PHASE:
-                return "can move through walls until next hit";
-            case GHOSTLY:
-                return "intangible to melee until next hit";
+            case BLEEDING:   return TextCatalog.getOrDefault("buff.BLEEDING.effect", "");
+            case POISONED:   return TextCatalog.getOrDefault("buff.POISONED.effect", "");
+            case ON_FIRE:    return TextCatalog.getOrDefault("buff.ON_FIRE.effect", "");
+            case FROZEN:     return TextCatalog.getOrDefault("buff.FROZEN.effect", "");
+            case INVISIBLE:  return TextCatalog.getOrDefault("buff.INVISIBLE.effect", "");
+            case SHIELDED:   return TextCatalog.getOrDefault("buff.SHIELDED.effect", "");
+            case WET:        return TextCatalog.getOrDefault("buff.WET.effect", "");
+            case OILY:       return TextCatalog.getOrDefault("buff.OILY.effect", "");
+            case FRIGHTENED: return TextCatalog.getOrDefault("buff.FRIGHTENED.effect", "");
+            case LEVITATING: return TextCatalog.getOrDefault("buff.LEVITATING.effect", "");
+            case PHASE:      return TextCatalog.getOrDefault("buff.PHASE.effect", "");
+            case GHOSTLY:    return TextCatalog.getOrDefault("buff.GHOSTLY.effect", "");
             case TELEPORT_COOLDOWN:
             case RANGED_COOLDOWN:
-            case HIDING:
-                return "recharging";
-            default:
-                return "";
+            case HIDING:     return TextCatalog.getOrDefault("buff.recharging.effect", "");
+            default:         return "";
         }
     }
 
@@ -642,8 +629,7 @@ public final class BuffSystem {
         for (Buff b : mob.buffs) {
             if (sb.length() > 0) sb.append('\n');
             sb.append(displayName(b.type));
-            if (b.level > 1) sb.append(" +").append(b.level - 1);
-            sb.append(" (").append(displayTurns(b.durationTicks)).append("t)");
+            sb.append(" x").append(b.stacks);
         }
         return sb.toString();
     }

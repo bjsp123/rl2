@@ -527,6 +527,17 @@ public class Effect {
         return EffectBuilder.particleBurst(location, tint, count, rng);
     }
 
+    /** Continuous body-drip for "dripping" buffs (OILY / WET / CHILLED / BLEEDING) -
+     *  RL-44. A few drops appear at random spots across the mob's body and fall, fading;
+     *  emitted repeatedly by the buff-particle tick so the drip reads as constant. */
+    public static Effect buffDrip(Point location, EffectTint tint, Random rng) {
+        return EffectBuilder.drip(location, tint,
+                /*count*/ 3,
+                /*spawnSpreadFrames*/ 14,
+                /*particleLifeFrames*/ 22,
+                ParticleShape.DROPS, rng);
+    }
+
     /** Liquid (or grass) splash at a character's feet. Tight upward cone with
      *  gravity and a small bounce - kept brief so it reads as a footstep, not
      *  a sustained spray. */

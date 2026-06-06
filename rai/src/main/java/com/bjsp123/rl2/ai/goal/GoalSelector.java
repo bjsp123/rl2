@@ -22,7 +22,6 @@ public final class GoalSelector {
             GoalSurvive.INSTANCE,
             GoalFlee.INSTANCE,
             GoalKill.INSTANCE,
-            GoalEat.INSTANCE,
             GoalHealInSafety.INSTANCE,
             GoalEquipBetter.INSTANCE,
             GoalPickupKnown.INSTANCE,

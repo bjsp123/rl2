@@ -79,18 +79,18 @@ public final class StatBlock {
     public double mushroomEatSpawnChance = 0;
     /** Probability per standard turn of spawning a {@link Mob#turnSpawnType} on a free
      *  adjacent tile. Used by ant hills (20% per turn). Composes by sum (callers clamp). */
-    public double turnSpawnChance = 0   ;
+    public double turnSpawnChance = 0;
 
     // -- Boolean capabilities ------------------------------------------------
-    public boolean flying =false;   
-    public boolean fireImmune = false;;
+    public boolean flying = false;
+    public boolean fireImmune = false;
     /** When the mob takes a damaging blow, ignite a small area around it. OR-merged. */
-    public boolean fireSpreadOnAttack = false;;
+    public boolean fireSpreadOnAttack = false;
     /** When this mob lands a damaging blow, applies a {@code POISONED} buff to the
      *  target. Buff level = the mob's character level; duration = level x 3 turns.
      *  OR-merged so an item or buff that grants "poisoned weapon" composes with a
      *  species (e.g. spider) that already has it. */
-    public boolean poisonsOnAttack = false;;
+    public boolean poisonsOnAttack = false;
     /** Squares to knock the target back on a successful melee hit. Composes by sum
      *  (weapon + intrinsic both contribute). */
     public int knockbackSquares = 0;
@@ -194,11 +194,15 @@ public final class StatBlock {
     /**
      * Merge {@code other} into this block in place. Composition is stat-aware:
      * <ul>
-     *   <li><b>Sum</b>: {@code accuracy}, {@code evasion}, {@code maxHp}, {@code healRate},
-     *       {@code attackCost}, {@code moveCost}, {@code visionRadius}, {@code wakeRadius},
-     *       and the four MinMax stats.</li>
+     *   <li><b>Sum</b>: all integer/double scalars - {@code accuracy}, {@code evasion},
+     *       {@code maxHp}, {@code healRate}, {@code attackCost}, {@code moveCost}, the ranged
+     *       stats, {@code size}, {@code knockbackSquares}, {@code visionRadius},
+     *       {@code wakeRadius}, {@code fireExplosionRadiusOnDeath}, the spawn-chance doubles,
+     *       and every {@link MinMax} stat (component-wise via {@link MinMax#plus}).</li>
      *   <li><b>Max</b>: {@code lightRadius}.</li>
-     *   <li><b>OR</b>: {@code flying}, {@code fireImmune}.</li>
+     *   <li><b>OR</b>: every boolean capability - {@code flying}, {@code fireImmune},
+     *       {@code fireSpreadOnAttack}, {@code poisonsOnAttack}, {@code terrifying},
+     *       {@code terrifiable}, {@code hatesLight}, {@code canPickUp}, {@code poisonImmune}.</li>
      * </ul>
      */
     public StatBlock mergeIn(StatBlock other) {

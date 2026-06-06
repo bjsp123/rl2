@@ -111,8 +111,6 @@ public final class ItemDefinition {
      *  whose {@code theme} matches; null means "any theme". */
     public com.bjsp123.rl2.model.Level.VisualTheme theme;
 
-    /** When true, the level populator places one of this item on every floor
-     *  (in addition to the random scatter). Used by the pear food-floor rule. */
     /** Minimum copies guaranteed on every eligible level. {@code 0}
      *  means "not guaranteed" (the default); {@code 1+} forces that
      *  many copies to be placed before random clusters are rolled. */

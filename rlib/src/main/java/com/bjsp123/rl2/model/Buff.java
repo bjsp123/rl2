@@ -6,17 +6,19 @@ package com.bjsp123.rl2.model;
  * {@link BuffType#FRIGHTENED} to its terrifiable neighbours) or environmental events
  * (stepping on a fire tile applies {@link BuffType#ON_FIRE}).
  *
- * <p>Both {@link #level} and {@link #durationTicks} ramp the strength of the buff. The
- * exact mapping is per-type and lives in {@code BuffSystem}; e.g. regeneration heals
- * {@code 1 + level/2} HP per standard turn, hasted multiplies {@code moveCost} by
- * {@code 0.8^level}, anti-magic divides incoming non-physical damage by {@code 2^level},
- * etc. Duration counts down every game tick (via {@code BuffSystem.tickEveryGameTick});
- * when it reaches 0 the buff is removed. One standard turn = {@code STANDARD_TURN_TICKS}
- * (100) ticks, so storage at tick granularity gives ~1% precision on a "12 turn" buff.
+ * <p>A buff carries a single magnitude/lifetime number, {@link #stacks}. Stacks count
+ * down by 1 each turn (in {@code BuffSystem.tickPerTurn}); the buff is removed when they
+ * reach 0. So {@code stacks} doubles as the remaining duration in turns. Magnitude-scaling
+ * buffs read the <em>current</em> stack count, so their effect fades as the stacks deplete
+ * - e.g. regeneration heals {@code 2 + 3*stacks/2} HP/turn, protection divides physical
+ * damage by {@code 2^stacks}. Binary buffs (invisible, frozen, …) ignore the magnitude and
+ * just use stacks as a timer. Each type has a maximum via {@code BuffSystem.stackCap}
+ * (default 10).
  *
- * <p>If a mob already has a buff of a given type and the same type is applied again,
- * the existing entry is updated to take the <em>greater</em> of the existing and new
- * values for both level and duration ("never make a buff weaker by re-applying it").
+ * <p>If a mob already has a buff of a given type and the same type is applied again, the
+ * existing entry takes the <em>greater</em> of the existing and new stacks ("never make a
+ * buff weaker by re-applying it"). {@link BuffType#KILLER} is the exception - it adds the
+ * incoming stacks onto the existing count (capped).
  */
 public class Buff {
     /** Each enum value is one stackable status effect a mob can carry. The set is
@@ -73,10 +75,6 @@ public class Buff {
         /** Encased in ice after being chilled and wet at the same time. Cannot
          *  move or act; taking damage chips two turns off the duration. */
         FROZEN,
-        /** Player has run out of food. Heal regen is suppressed while active; the buff
-         *  drops as soon as satiety rises above 0 again (drink a potion, eat a pear).
-         *  Player-only - NPCs sit at satiety 0 harmlessly. */
-        STARVING,
         /** Cooldown buffs - present means "can't fire yet"; duration counts down per
          *  standard turn until the buff drops and the action becomes available again.
          *  Replace the legacy {@code MobCooldowns} fields. They share a single
@@ -89,6 +87,8 @@ public class Buff {
         HASTE_COOLDOWN,
         /** Recharging heal-cast ability (kobold general, etc.). */
         HEAL_COOLDOWN,
+        /** Recharging PHASE_DODGE (wraiths, the DODGE perk). Present means "can't dodge yet". */
+        PHASE_DODGE_COOLDOWN,
         /** {@code EXPLORE_HIDE} mob is hunkered in cover; AI keeps it stationary while
          *  the buff is present. Applied when the mob reaches a tile no hostile can see
          *  it from. */
@@ -115,15 +115,12 @@ public class Buff {
     }
 
     public BuffType type;
-    /** Strength of the buff. {@code 1} is baseline; higher values amplify the per-tick
-     *  effect of stat-modifying buffs (regen heal amount, anti-magic divisor, etc.). */
-    public int level;
-    /** Game ticks remaining before the buff is auto-removed. Decremented every game
-     *  tick by {@code BuffSystem.tickEveryGameTick}; on hitting 0 the buff is dropped.
-     *  One standard turn = {@code TurnSystem.STANDARD_TURN_TICKS} (100) ticks. HUD
-     *  displays this rounded up to the nearest turn via
-     *  {@code BuffSystem.displayTurns(durationTicks)}. */
-    public int durationTicks;
+    /** Combined strength + lifetime. Counts down by 1 each turn and the buff drops at 0,
+     *  so it is also the remaining duration in turns. Magnitude-scaling buffs read this
+     *  current value (their effect fades as it depletes); binary buffs treat it purely as
+     *  a timer. {@code 1} is the minimum live value; the maximum is {@code BuffSystem
+     *  .stackCap(type)} (default 10). */
+    public int stacks;
     /** Mob that originally applied this buff (e.g. the player who drank a sorcery
      *  potion, or the kissyblob that frightened a kobold). Used by death messages and
      *  history logs for attribution. Transient - references aren't persisted on save. */
@@ -139,15 +136,14 @@ public class Buff {
 
     public Buff() {}
 
-    public Buff(BuffType type, int level, int durationTicks, Mob source) {
-        this(type, level, durationTicks, source, null);
+    public Buff(BuffType type, int stacks, Mob source) {
+        this(type, stacks, source, null);
     }
 
-    public Buff(BuffType type, int level, int durationTicks, Mob source, Item sourceItem) {
-        this.type          = type;
-        this.level         = Math.max(1, level);
-        this.durationTicks = Math.max(1, durationTicks);
-        this.source        = source;
-        this.sourceItem    = sourceItem;
+    public Buff(BuffType type, int stacks, Mob source, Item sourceItem) {
+        this.type       = type;
+        this.stacks     = Math.max(1, stacks);
+        this.source     = source;
+        this.sourceItem = sourceItem;
     }
 }

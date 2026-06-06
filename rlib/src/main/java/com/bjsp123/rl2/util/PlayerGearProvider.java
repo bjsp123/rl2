@@ -283,7 +283,6 @@ public final class PlayerGearProvider {
         out.minPowerLevel = src.minPowerLevel;
         out.inventoryCategory = src.inventoryCategory;
         out.gemSpecies = src.gemSpecies;
-        out.gemSize = src.gemSize;
         out.count = src.count;
         out.appliesBuff = new ArrayList<>(src.appliesBuff);
         out.tameOnThrow = new ArrayList<>(src.tameOnThrow);

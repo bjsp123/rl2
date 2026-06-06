@@ -33,7 +33,7 @@ import java.util.function.Supplier;
  *
  * <p>Layout, in viewport-relative virtual coords:
  * <ul>
- *   <li><b>Top-left</b> - three stacked status bars (HP / XP / Satiety).</li>
+ *   <li><b>Top-left</b> - stacked status bars (HP / XP).</li>
  *   <li><b>Top-right</b> - burger button (opens settings / map / encyclopaedia /
  *       return-to-title via dropdown - dropdown not yet wired in this slice).</li>
  *   <li><b>Bottom-left</b> - Look button.</li>
@@ -277,9 +277,7 @@ public final class V2Hud {
         hpBarRect.set(barX, by, BAR_W, BAR_H);
         by -= BAR_H + BAR_GAP;
         xpBarRect.set(barX, by, BAR_W, BAR_H);
-        // Satiety bar removed - field stays on Mob for save back-compat
-        // but the meter isn't drawn or tapped. Clock anchors to xpBarRect
-        // now since there's no satiety bar beneath it.
+        // Clock anchors directly under the XP bar (HP / XP are the only status bars).
         clockRect.set(MARGIN, xpBarRect.y - CLOCK_SIZE - 8f, CLOCK_SIZE, CLOCK_SIZE);
 
         // Burger at top-right.
@@ -359,7 +357,7 @@ public final class V2Hud {
 
         Mob player = currentPlayer();
 
-        // Status bars (HP + XP only - satiety was removed from the game).
+        // Status bars (HP + XP).
         if (player != null) {
             double maxHp = player.effectiveStats().maxHp;
             float hpFrac = maxHp > 0 ? (float) (player.hp / maxHp) : 0f;
@@ -415,10 +413,10 @@ public final class V2Hud {
             s.setColor(UIVars.TEXT_DIM);
             for (int i = 0; i < max; i++) {
                 Buff b = dotPlayer.buffs.get(i);
-                if (b == null || b.type == null || b.durationTicks <= 0) continue;
+                if (b == null || b.type == null || b.stacks <= 0) continue;
                 if (BuffIcons.regionFor(b.type) == null) continue;
                 float dotX = bx + i * (iconSz + iconGap) + iconSz + 1f;
-                int dots = Math.min(8, com.bjsp123.rl2.logic.BuffSystem.displayTurns(b.durationTicks));
+                int dots = Math.min(8, b.stacks);
                 for (int d = 0; d < dots; d++) {
                     s.rect(dotX, by + d * 2f, 1f, 1f);
                 }
@@ -429,7 +427,7 @@ public final class V2Hud {
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    /** Draw an HP/XP/Satiety bar - tri-line border, mid warm-grey backdrop,
+    /** Draw an HP/XP bar - tri-line border, mid warm-grey backdrop,
      *  and a fill bar at {@code frac} in {@code fillColor}. */
     private void drawBar(ShapeRenderer s, Rect r, float frac, Color fillColor) {
         Edges.drawTriLine(s, r.x, r.y, r.w, r.h, 1f);
@@ -612,7 +610,7 @@ public final class V2Hud {
                     lookRect.w - 2 * ICON_PAD, lookRect.h - 2 * ICON_PAD);
         }
 
-        // Status line + turn clock - under the satiety bar.
+        // Status line + turn clock - under the XP bar.
         TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                 TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth)),
                 clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f + 5f,

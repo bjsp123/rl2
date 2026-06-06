@@ -44,6 +44,7 @@ sfx.player.pickup.chargepill,sfx/t_ui_confirm_levelup_08.wav
 sfx.player.pickup.gem,sfx/t_gems_pickup_shake_05.wav
 sfx.mob.action.pickup,sfx/t_loot_wood_pickup_01.wav
 sfx.mob.action.ability,sfx/t_magic_spell_air_04.wav
+sfx.mob.action.phasedodge,sfx/t_magic_spell_healing_06.wav
 sfx.mob.action.eat,
 sfx.mob.action.tame,
 sfx.mob.spawn.generic,sfx/t_monster_swamp_mix_02.wav    

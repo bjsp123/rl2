@@ -84,7 +84,6 @@ public class PlayScreen implements Screen {
     private LevelRenderer    levelRenderer;
     private com.bjsp123.rl2.ui.v2.V2Hud v2Hud;
     private V2Inventory v2Inventory;
-    private com.bjsp123.rl2.ui.v2.V2Crafting v2Crafting;
     private V2Look      v2Look;
     private ActionBar         actionBar;
     private TargetingOverlay  targetingOverlay;
@@ -325,7 +324,6 @@ public class PlayScreen implements Screen {
                 v2BuffInfo.input(),
                 v2Inventory.input(),
                 v2CharacterStats.input(),
-                v2Crafting.input(),
                 v2Encyclopedia.input(),
                 v2Log.input(),
                 v2Look.input(),
@@ -338,25 +336,23 @@ public class PlayScreen implements Screen {
         // {@code subPopupLayer} so its scrim covers the inventory text
         // cleanly when up.
         if (popupActors == null) {
-            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[8];
+            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[7];
             popupActors[0] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Inventory);
             popupActors[1] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2CharacterStats);
-            popupActors[2] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Crafting);
-            popupActors[3] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Look);
-            popupActors[4] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Encyclopedia);
-            popupActors[5] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(
+            popupActors[2] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Look);
+            popupActors[3] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Encyclopedia);
+            popupActors[4] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(
                     v2Inventory.detailPopup());
-            popupActors[6] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2BuffInfo);
-            popupActors[7] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Log);
+            popupActors[5] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2BuffInfo);
+            popupActors[6] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Log);
         }
         game.ui.v2Stage.add(popupActors[0]);
         game.ui.v2Stage.add(popupActors[1]);
         game.ui.v2Stage.add(popupActors[2]);
         game.ui.v2Stage.add(popupActors[3]);
-        game.ui.v2Stage.add(popupActors[4]);
+        game.ui.v2Stage.addToSubPopup(popupActors[4]);
         game.ui.v2Stage.addToSubPopup(popupActors[5]);
         game.ui.v2Stage.addToSubPopup(popupActors[6]);
-        game.ui.v2Stage.addToSubPopup(popupActors[7]);
         game.currentPlay = this;
         if (game.music != null) game.music.play(com.bjsp123.rl2.audio.MusicPlayer.Track.GAMEPLAY);
     }
@@ -497,14 +493,6 @@ public class PlayScreen implements Screen {
         v2Inventory.setPlayer(player);
         v2Inventory.setActionBar(actionBar);
         v2Inventory.setSounds(game.sounds);
-        v2Crafting = new com.bjsp123.rl2.ui.v2.V2Crafting(game.ui);
-        v2Crafting.setPlayer(player);
-        if (game.achievementSystem != null) {
-            v2Crafting.setOnCrafted(game.achievementSystem::observeCrafted);
-        }
-        // The Combine button on the inventory's item-detail popup hands the chosen item
-        // to the crafting screen, which pre-loads it into the first empty cell.
-        v2Inventory.setOnCombine((user, item) -> v2Crafting.openWith(item));
 
         lookMode = new LookMode(camera);
         lookMode.setPlayer(player);
@@ -817,7 +805,12 @@ public class PlayScreen implements Screen {
         frameProfiler.add("realtimeFx", span);
 
         span = frameProfiler.start();
-        Mob playerAfter = TurnSystem.findPlayer(level);
+        // Look for the player on the CURRENT level, not the frame-start `level`: a chasm
+        // fall or cross-level teleport during controller.tick() moves the player (and
+        // world.currentLevelIndex) to another level. Using the stale `level` here would
+        // find no player and fire a false "game over" even though the player is alive on
+        // the new level (a silent death with no log / death message).
+        Mob playerAfter = TurnSystem.findPlayer(world.currentLevel());
         // Cross-run achievement poll - depth-threshold checks fire from
         // here so any path that changes the player's level (stairs,
         // chasm fall, debug "starting level") feeds the same poll.
@@ -1012,7 +1005,6 @@ public class PlayScreen implements Screen {
     private boolean isAnyPopupOpen() {
         if (v2Inventory != null && v2Inventory.isOpen()) return true;
         if (lookMode != null && lookMode.isActive()) return true;
-        if (v2Crafting != null && v2Crafting.isOpen()) return true;
         if (v2Hud != null && v2Hud.isMenuOpen()) return true;
         if (targetingOverlay != null && targetingOverlay.isActive()) return true;
         if (v2CharacterStats != null && v2CharacterStats.isOpen()) return true;

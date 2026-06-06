@@ -162,6 +162,43 @@ public final class EffectBuilder {
     }
 
     // ====================================================================
+    // drip — staggered downward drops spread across a body footprint (RL-44).
+    // ====================================================================
+
+    /** Drops that spawn at random staggered frames across a mob's body footprint and
+     *  fall under gravity, fading out - the continuous "dripping" look for OILY / WET /
+     *  CHILLED / BLEEDING. {@code count} drops spawn over {@code spawnSpreadFrames}; each
+     *  lives {@code particleLifeFrames}. Emitted repeatedly by the buff-particle tick so
+     *  drops keep appearing at random spots on the body. */
+    public static Effect drip(Point at, EffectTint tint, int count,
+                              int spawnSpreadFrames, int particleLifeFrames,
+                              Effect.ParticleShape shape, Random rng) {
+        Effect e = new Effect(at, EffectType.PARTICLE_BURST);
+        e.tint                = tint;
+        e.ignoresFov          = true;
+        e.particleFadeToWhite = false;
+        e.particleSize        = 1.3f;
+        e.particleGravity     = 0.04f;
+        e.frameCount          = spawnSpreadFrames + particleLifeFrames;
+        e.particleShape       = shape == null ? null : shape.resolve(rng);
+        e.particleX0          = new float[count];
+        e.particleY0          = new float[count];
+        e.particleVX          = new float[count];
+        e.particleVY          = new float[count];
+        e.particleSpawnFrame  = new int[count];
+        for (int i = 0; i < count; i++) {
+            // Random spots across the body footprint (x 0.25..0.75, y 0.4..1.05 of the
+            // tile); drops fall straight down (no horizontal drift) and fade out.
+            e.particleX0[i]         = TILE_PX * (0.25f + rng.nextFloat() * 0.5f);
+            e.particleY0[i]         = TILE_PX * (0.40f + rng.nextFloat() * 0.65f);
+            e.particleVX[i]         = 0f;
+            e.particleVY[i]         = -(0.05f + rng.nextFloat() * 0.15f);   // downward
+            e.particleSpawnFrame[i] = rng.nextInt(spawnSpreadFrames + 1);
+        }
+        return e;
+    }
+
+    // ====================================================================
     // 3. fountain — staggered upward stream from a point.
     // ====================================================================
 

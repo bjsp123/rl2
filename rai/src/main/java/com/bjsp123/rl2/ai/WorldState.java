@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * Lightweight projection of the current decision context handed to goals and
  * actions. Created once per SMART AI tick and discarded; never mutated by the
- * planner. Holds derived values that goals share (HP%, satiety%, nearest-threat,
+ * planner. Holds derived values that goals share (HP%, nearest-threat,
  * visible enemies/allies) so each goal doesn't recompute them.
  */
 public final class WorldState {
@@ -22,7 +22,6 @@ public final class WorldState {
     public final StatBlock myStats;
 
     public final double hpFrac;
-    public final double satietyFrac;
 
     public final List<Mob> visibleEnemies = new ArrayList<>();
     public final List<Mob> visibleAllies  = new ArrayList<>();
@@ -40,10 +39,6 @@ public final class WorldState {
         this.memory = memory;
         this.myStats = mob.effectiveStats();
         this.hpFrac = myStats.maxHp > 0 ? Math.max(0.0, Math.min(1.0, mob.hp / myStats.maxHp)) : 1.0;
-        int satietyCap = com.bjsp123.rl2.logic.GameBalance.STARTING_SATIETY;
-        this.satietyFrac = satietyCap > 0
-                ? Math.max(0.0, Math.min(1.0, mob.satiety / (double) satietyCap))
-                : 1.0;
 
         Mob nearest = null;
         int bestDist = Integer.MAX_VALUE;

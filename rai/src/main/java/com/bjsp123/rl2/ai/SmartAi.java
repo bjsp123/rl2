@@ -2,7 +2,7 @@ package com.bjsp123.rl2.ai;
 
 import com.bjsp123.rl2.ai.action.Action;
 import com.bjsp123.rl2.logic.LevelSystem;
-import com.bjsp123.rl2.logic.MobBrain;
+import com.bjsp123.rl2.logic.MobBrains;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
@@ -26,7 +26,7 @@ import java.util.WeakHashMap;
  *       both the structural label and the human-readable goal/action.</li>
  * </ol>
  */
-public final class SmartAi implements MobBrain {
+public final class SmartAi implements MobBrains.Brain {
 
     /** Per-mob memory side-table - keeps {@link Mob} free of rai types. */
     private static final Map<Mob, MobMemory> MEMORIES = new WeakHashMap<>();

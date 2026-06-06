@@ -1,5 +1,6 @@
 package com.bjsp123.rl2.logic;
 
+import com.bjsp123.rl2.model.GemSpecies;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Level.LevelFlag;
@@ -87,10 +88,6 @@ public final class LevelFactoryPopulate {
         return keys.get(keys.size() - 1);
     }
 
-    /** Items whose {@code guaranteedPerLevel} count is positive and that
-     *  also pass the powerLevel + theme gate. The output list contains
-     *  {@code count} copies of each eligible type so the caller can
-     *  iterate it directly to place every guaranteed copy. */
     /** Distinct item types guaranteed to appear on {@code level} (each type's
      *  copy count is {@code def.guaranteedPerLevel}). Caller decides whether to
      *  scatter or cluster the copies. */
@@ -351,28 +348,35 @@ public final class LevelFactoryPopulate {
      *  cell when one exists without making placement deterministic. */
     private static final int INNER_TILE_SAMPLES = 8;
 
-    /** Scatter 4-6 size-1 ("tiny") gems on themed levels. Each gem is rolled via
-     *  {@link ItemGenerator} with {@code GEM} category; themes with no gem
-     *  species defined produce no gems (the generator returns {@code null} and
-     *  the loop bails). */
+    /** Scatter gems by rarity class (RL-47): on average {@code GEMS_BASIC_AVG} basic,
+     *  {@code GEMS_METAL_AVG} metal, {@code GEMS_EXOTIC_AVG} exotic. Each gem's species is
+     *  affinity-weighted toward the level theme. Every theme spawns gems (affinity is a soft
+     *  bias, not a gate). */
     public static void placeGems(Level level, Random rng) {
-        double powerLevel = depthFraction(level);
-        // First gem also acts as the "is this theme gem-eligible?" probe - a
-        // null return means the theme has no gem table so no gems on this level.
-        Item firstGem = ItemGenerator.generateItem(powerLevel, level.theme,
-                ItemGenerator.LootCategory.GEM, rng);
-        if (firstGem == null) return;
-        int count = GemSystem.MIN_GEMS_PER_LEVEL
-                + rng.nextInt(GemSystem.MAX_GEMS_PER_LEVEL - GemSystem.MIN_GEMS_PER_LEVEL + 1);
+        placeGemsOfClass(level, GemSpecies.GemClass.BASIC,  GameBalance.GEMS_BASIC_AVG,  rng);
+        placeGemsOfClass(level, GemSpecies.GemClass.METAL,  GameBalance.GEMS_METAL_AVG,  rng);
+        placeGemsOfClass(level, GemSpecies.GemClass.EXOTIC, GameBalance.GEMS_EXOTIC_AVG, rng);
+    }
+
+    private static void placeGemsOfClass(Level level, GemSpecies.GemClass cls,
+                                         double avg, Random rng) {
+        int count = sampleCount(avg, rng);
         for (int i = 0; i < count; i++) {
+            GemSpecies species = GemSystem.rollSpeciesOfClass(cls, level.theme, rng);
+            if (species == null) return;
             Point p = LevelFactoryUtils.randomFloorTile(level, rng);
             if (p == null) return;
-            Item gem = (i == 0) ? firstGem
-                                : ItemGenerator.generateItem(powerLevel, level.theme,
-                                        ItemGenerator.LootCategory.GEM, rng);
-            if (gem == null) return;
-            placeItem(level, gem, p);
+            placeItem(level, GemSystem.createGem(species), p);
         }
+    }
+
+    /** Sample a count from an average: the integer part is guaranteed, the fractional part is
+     *  the probability of one extra (e.g. 0.75 -> 0 a quarter of the time, 1 otherwise). */
+    private static int sampleCount(double avg, Random rng) {
+        int n = (int) Math.floor(avg);
+        double frac = avg - n;
+        if (frac > 0 && rng.nextDouble() < frac) n++;
+        return n;
     }
 
     // -- Mobs ----------------------------------------------------------------

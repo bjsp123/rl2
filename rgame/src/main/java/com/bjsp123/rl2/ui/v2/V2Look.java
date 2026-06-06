@@ -145,6 +145,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         if (lookedItem != null) {
             Section item = new Section(ItemNames.displayName(lookedItem, null), INFO_ITEM);
+            // Flavor hint (one line) so the look popup says what the item *is*, not just
+            // its raw stats - tap the ⓘ for the full encyclopedia entry.
+            String hint = TextCatalog.itemDescription(lookedItem.type, "");
+            if (!hint.isEmpty()) item.details.add(hint);
             String detail = itemSummary(lookedItem);
             if (!detail.isEmpty()) item.details.add(detail);
             sections.add(item);
@@ -152,6 +156,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         if (lookedMob != null) {
             Section mob = new Section(mobName(lookedMob), INFO_MOB);
+            // Flavor hint (one line) describing the creature.
+            String mobHint = lookedMob.mobType == null ? ""
+                    : TextCatalog.mobDescription(lookedMob.mobType, "");
+            if (!mobHint.isEmpty()) mob.details.add(mobHint);
             // Mob HP - prominent bar + "23 / 64" numeric, shown for every
             // looked mob (including the player themselves when looking at
             // their own tile).
@@ -223,6 +231,8 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (lookedMob.buffs != null) {
                 for (Buff b : lookedMob.buffs) {
                     if (b == null || b.type == null) continue;
+                    // Cooldown buffs are internal accounting - not shown as clickable buff icons.
+                    if (com.bjsp123.rl2.logic.BuffSystem.isCooldownBuff(b.type)) continue;
                     TextureRegion r = BuffIcons.regionFor(b.type);
                     if (r != null) { mob.icons.add(r); mob.iconTypes.add(b.type); }
                 }
@@ -246,12 +256,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         mobInfoBtn.set(0, 0, 0, 0);
 
         float y = window.top() - HEADER_H - PAD;
-        for (Section sec : sections) {
+        for (int i = 0; i < sections.size(); i++) {
+            Section sec = sections.get(i);
             if (sec.infoKind != 0) {
                 infoRect(sec.infoKind).set(window.right() - PAD - INFO,
                         y - INFO + 5f, INFO, INFO);
             }
             y -= sec.height();
+            if (i < sections.size() - 1) y -= SECTION_GAP;
         }
     }
 
@@ -333,6 +345,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
             for (TextDraw.TextBlock detail : sec.detailBlocks) y -= detail.height();
             y -= sec.iconRowH();
+            // Consume any reserved padding (info-button minimum height) so the next
+            // section lines up with its info button.
+            y -= Math.max(0f, sec.height() - sec.contentHeight());
             if (i < sections.size() - 1) {
                 // Inked ruled line halfway through the gap so it visually
                 // separates this section from the next without crowding
@@ -400,6 +415,9 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 }
                 y -= sec.iconRowH();
             }
+            // Consume reserved padding so successive sections stay aligned with their
+            // info buttons (matches the shape pass + layoutRects).
+            y -= Math.max(0f, sec.height() - sec.contentHeight());
             if (i < sections.size() - 1) y -= SECTION_GAP;
         }
         ctx.batch.end();
@@ -704,11 +722,21 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             return hasHpBar ? HP_BAR_H + HP_BAR_GAP : 0f;
         }
 
-        float height() {
+        /** Height of the section's actual content (title + hp bar + details + icons). */
+        float contentHeight() {
             float h = titleBlock == null ? 0f : titleBlock.height();
             h += hpBarRowH();
             for (TextDraw.TextBlock block : detailBlocks) h += block.height();
             h += iconRowH();
+            return h;
+        }
+
+        /** Laid-out height. Sections with a 40px info button reserve at least that much
+         *  vertical space so a short section (e.g. terrain) can't let its info button
+         *  overlap the next section's button. */
+        float height() {
+            float h = contentHeight();
+            if (infoKind != 0) h = Math.max(h, INFO);
             return h;
         }
     }

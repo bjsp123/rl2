@@ -314,15 +314,6 @@ public final class ItemStats {
 
     // -- buff application --------------------------------------------------
 
-    /** Buff level applied by this item. {@code effLvl + 1} — a {@code +0}
-     *  item applies a level-1 buff, a {@code +5} item a level-6 buff. */
-    public static int effectiveBuffLevel(Item item) {
-        return effectiveBuffLevel(item, clampedLevel(item));
-    }
-    public static int effectiveBuffLevel(Item item, int level) {
-        return level + 1;
-    }
-
     /** Buff duration applied by this item, in <b>game ticks</b>. Derived from
      *  {@link Item#effectDuration} (standard turns) under the amount rule. */
     public static int effectiveBuffDuration(Item item) {

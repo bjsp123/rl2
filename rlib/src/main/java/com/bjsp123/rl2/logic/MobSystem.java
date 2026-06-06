@@ -60,18 +60,18 @@ public class MobSystem {
         THROWN,
         /** Ranged magical effect (e.g. magic missile). */
         MAGIC,
-        /** No attacker - pit trap, starvation, drowning, etc. */
+        /** No attacker - pit trap, drowning, etc. */
         ENVIRONMENTAL
     }
 
     /** Elemental class of damage. Routes mitigation: {@link Buff.BuffType#PROTECTION}
      *  resists {@link #PHYSICAL}; {@link Buff.BuffType#ANTI_MAGIC} resists
-     *  {@link #MAGIC} and {@link #FIRE}; {@link #POISON}, {@link #SHOCK}, and
-     *  {@link #STARVATION} are unmitigated by buffs. Independent of {@link AttackType}
+     *  {@link #MAGIC} and {@link #FIRE}; {@link #POISON} and {@link #SHOCK} are
+     *  unmitigated by buffs. Independent of {@link AttackType}
      *  (mechanism) - a fire bomb's impact damage is THROWN/PHYSICAL while its DOT is
      *  ENVIRONMENTAL/FIRE. */
     public enum DamageElement {
-        PHYSICAL, MAGIC, POISON, FIRE, SHOCK, STARVATION, COLD
+        PHYSICAL, MAGIC, POISON, FIRE, SHOCK, COLD
     }
 
     /** True if {@code m} is "wet" - carries the WET buff or stands on a water /
@@ -174,16 +174,14 @@ public class MobSystem {
     private static final Random RANDOM =
             com.bjsp123.rl2.util.SimRng.register("MobSystem", new Random());
 
-    /** Default duration in game ticks (3 standard turns) that the
-     *  {@link com.bjsp123.rl2.model.Buff.BuffType#OILY} buff lasts when a mob
-     *  steps onto an OIL surface. The buff system decrements per game tick - see
-     *  {@link BuffSystem#tickEveryGameTick}. */
-    public static final int OIL_STEP_BUFF_TICKS = 3 * TurnSystem.STANDARD_TURN_TICKS;
+    /** Stacks (= turns) the {@link com.bjsp123.rl2.model.Buff.BuffType#OILY} buff lasts
+     *  when a mob steps onto an OIL surface. Stacks count down 1/turn - see
+     *  {@link BuffSystem#tickPerTurn}. (Clamped to the OILY stack cap on apply.) */
+    public static final int OIL_STEP_BUFF_TURNS = 3;
 
-    /** Default duration in game ticks (3 standard turns) that the
-     *  {@link com.bjsp123.rl2.model.Buff.BuffType#WET} buff lasts when a mob
-     *  steps onto a WATER surface. */
-    public static final int WATER_STEP_BUFF_TICKS = 3 * TurnSystem.STANDARD_TURN_TICKS;
+    /** Stacks the {@link com.bjsp123.rl2.model.Buff.BuffType#WET} buff gets when a mob
+     *  treads a WATER surface - 2 (matches the WET stack cap). */
+    public static final int WATER_STEP_BUFF_TURNS = 2;
 
     /**
      * Use A* to move mob one tile toward its targetPosition, then apply move cost.
@@ -451,15 +449,15 @@ public class MobSystem {
                 && mob.perks.getOrDefault(com.bjsp123.rl2.model.Perk.BOMB_DODGER, 0) >= 1;
         if (level.surface[nx][ny] == Surface.OIL && !bombDodger) {
             BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.OILY,
-                    1, OIL_STEP_BUFF_TICKS, null);
+                    OIL_STEP_BUFF_TURNS, null);
         }
         // Water pickup: stepping into / over a WATER surface soaks the mob
-        // for WATER_STEP_BUFF_TICKS ticks (so they take double damage from
+        // for WATER_STEP_BUFF_TURNS turns (so they take double damage from
         // lightning until they dry off). Refreshes via the standard
         // max-merge so a long wade keeps resetting the clock.
         if (level.surface[nx][ny] == Surface.WATER && !bombDodger) {
             BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.WET,
-                    1, WATER_STEP_BUFF_TICKS, null);
+                    WATER_STEP_BUFF_TURNS, null);
         }
         // Oil drip: an oily medium-or-larger mob drags its slick onto the new tile a
         // fraction of the time (50% per the OILY-buff spec). Tiny mobs (size <
@@ -830,6 +828,24 @@ public class MobSystem {
         EventLog.add(Messages.mobWakesUp(nameForLog(level, mob), reason));
     }
 
+    /** Wake every non-player mob whose own {@code wakeRadius} reaches the loud event at
+     *  {@code center} - a bomb blast or a damage-dealing wand strike always rouses nearby
+     *  sleepers. Mobs already AWAKE are skipped. */
+    public static void wakeMobsNear(Level level, Point center, String reason) {
+        if (level == null || level.mobs == null || center == null) return;
+        int cx = center.tileX(), cy = center.tileY();
+        for (Mob m : level.mobs) {
+            if (m == null || m.position == null || m.hp <= 0) continue;
+            if (m.behavior == Behavior.PLAYER) continue;
+            if (m.stateOfMind == StateOfMind.AWAKE) continue;
+            int d = Math.max(Math.abs(m.position.tileX() - cx),
+                             Math.abs(m.position.tileY() - cy));
+            if (d <= Math.max(1.0, m.effectiveStats().wakeRadius)) {
+                wakeMob(level, m, reason);
+            }
+        }
+    }
+
     /** True if the tile at {@code pos} is currently lit + in the player's
      *  FOV. Defensive against null {@code level.visible} (transient field
      *  reset on load) and out-of-bounds positions. */
@@ -1013,24 +1029,15 @@ public class MobSystem {
     }
 
     /**
-     * Single rollup for a mob's effective stats. Copies the intrinsic block, then folds
-     * in every contributor in declaration order: character-level bonus, equipped items,
-     * active buffs. Writes into {@code dst} in place - no allocation beyond the MinMax
-     * record per per-stat plus.
+     * Single rollup for a mob's effective stats: copies the intrinsic block, then folds
+     * in level scaling, equipped items, and active buffs. Writes into {@code dst} in
+     * place. See {@link MobStats#writeEffectiveStats} for the full contributor order.
      *
      * <p>Called from {@link Mob#effectiveStats()} when {@link Mob#statsDirty} is set.
      * Don't invoke directly unless you want to bypass the cache.
      */
     public static void writeEffectiveStats(Mob mob, com.bjsp123.rl2.model.StatBlock dst) {
         MobStats.writeEffectiveStats(mob, dst);
-    }
-
-    /** Character-level contribution. Reads {@link Mob#characterLevel} and adds the
-     *  level-up bonuses owned by {@link MobProgression}; v1 leaves this as a no-op until
-     *  the per-level bonus table is moved here. The contributor is wired now so the
-     *  rollup shape is final and no future signature changes are needed. */
-    private static void characterLevelBonusInto(com.bjsp123.rl2.model.StatBlock dst, Mob mob) {
-        // Intentionally empty - placeholder for future MobProgression migration.
     }
 
     /** Roll to-hit, compute damage, apply, spawn floating text. Kills target if HP drops to 0.
@@ -1156,7 +1163,7 @@ public class MobSystem {
 
     /**
      * Single entry point for any damage done to a mob. Every path - melee, thrown item, magic
-     * missile, starvation or other environmental harm - routes through here so HP reduction,
+     * missile, or environmental harm - routes through here so HP reduction,
      * kill resolution, death-history bookkeeping, and flinch animation stay in lockstep.
      *
      * <p>Does NOT spawn floating text or particle bursts. Those vary per source (melee wants
@@ -1168,7 +1175,7 @@ public class MobSystem {
      * that is the single authoritative place combat history is written.
      *
      * @param attacker the mob credited with the blow. {@code null} for environmental damage
-     *                 like starvation; no XP or history is recorded in that case.
+     *                 (e.g. a chasm fall); no XP or history is recorded in that case.
      * @param target   the mob receiving the blow.
      * @param rawDealt non-negative pre-buff-mitigation damage. Stat-based resists (armor
      *                 for physical, magicResist for magic) are expected to have been
@@ -1233,6 +1240,10 @@ public class MobSystem {
         if (type == AttackType.MELEE) com.bjsp123.rl2.util.ActionTracker.bumpMelee(attacker);
         if (rawDealt < 0) rawDealt = 0;
         if (rawDealt > 0 && BuffSystem.hasBuff(target, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED)) return false;
+        // PHASE_DODGE: a mob with the dodge ability (wraiths) or the DODGE perk (player) slides
+        // to a free adjacent square and avoids the whole hit, then goes on cooldown. Only fires
+        // off-cooldown and when there's a suitable square to dash to.
+        if (rawDealt > 0 && tryPhaseDodge(level, target, attacker)) return false;
         // Stat-based per-element immunity: poisonImmune zeroes incoming POISON
         // before mitigation. The HIT event still fires below with dealt=0 so the
         // player sees "-0 poison" floating, signalling the immunity.
@@ -1240,11 +1251,11 @@ public class MobSystem {
             rawDealt = 0;
         }
         // Buff-based mitigation. PROTECTION blunts physical, ANTI_MAGIC blunts magic
-        // and fire. Other elements (POISON, SHOCK, STARVATION, COLD) ignore both buffs.
+        // and fire. Other elements (POISON, SHOCK, COLD) ignore both buffs.
         int dealt = switch (element) {
             case PHYSICAL          -> BuffSystem.mitigatePhysicalDamage(target, rawDealt);
             case MAGIC, FIRE       -> BuffSystem.mitigateMagicDamage(target, rawDealt);
-            case POISON, SHOCK, STARVATION, COLD -> rawDealt;
+            case POISON, SHOCK, COLD -> rawDealt;
         };
         // Wet vulnerability (RL-31): water conducts lightning (x2) and aggravates
         // cold (x4). Applied after mitigation so it scales the real hit.
@@ -1333,10 +1344,10 @@ public class MobSystem {
                     attacker, element, effectiveCause));
         }
         // HIGH-priority element-tagged log line for non-PHYSICAL damage. The
-        // PHYSICAL melee path emits its own playerHit/enemyHit/mobHit line via
+        // PHYSICAL melee path emits its own damageRoll line via
         // logAttackOutcome; PHYSICAL throws/wall-slams stay on the LOW-pri
         // damageRoll line as before. This line is the player-visible "X takes 3
-        // poison damage" feedback for DOT ticks, wand zaps, and starvation.
+        // poison damage" feedback for DOT ticks and wand zaps.
         if (dealt > 0 && element != DamageElement.PHYSICAL) {
             boolean playerInvolved = (attacker != null && attacker.behavior == Behavior.PLAYER)
                                   || target.behavior == Behavior.PLAYER;
@@ -1369,7 +1380,7 @@ public class MobSystem {
                 && !target.effectiveStats().poisonImmune) {
             int lvl = Math.max(1, attacker.characterLevel);
             BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.POISONED,
-                    lvl, lvl * 3 * TurnSystem.STANDARD_TURN_TICKS, attacker);
+                    lvl * 3, attacker);
         }
         // Reactive fire burst. Mobs with {@link Mob#fireSpreadOnAttack} (e.g. blazing
         // firemouse) ignite their own tile + the four cardinal neighbours when they take
@@ -1424,15 +1435,9 @@ public class MobSystem {
         return false;
     }
 
-    /** Legacy shim - kept callable so {@code MobSystem.attack} doesn't need a same-PR
-     *  rewrite. The actual lunge animation is scheduled by rgame's {@code Animator}
-     *  when it consumes the {@code MobMeleeAttacked} event. */
-    public static void startMeleeLunge(Level level, Mob attacker, Mob target) {
-        // Intentionally empty - Animator drives the visual.
-    }
-
-    /** Legacy shim - see {@link #startMeleeLunge}. {@code MobHitFlinched} is the event
-     *  that triggers rgame's flinch animation. */
+    /** Emits {@code MobHitFlinched}, the event that triggers rgame's flinch animation.
+     *  The flinch visual itself is scheduled by rgame's {@code Animator} when it
+     *  consumes the event - rlib only records that the hit happened. */
     public static void startHitFlinch(Level level, Mob target, Mob hitSource) {
         if (target == null || hitSource == null
                 || target.position == null || hitSource.position == null) return;
@@ -1524,10 +1529,10 @@ public class MobSystem {
             if (item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.POWERUP) {
                 continue;
             }
-            // RL-36: mobs must not pick up the teleport ORB (throwEffect TELEPORT) -
-            // thrown, it scatters everyone in its blast to a random level, so a mob
-            // grabbing one could fling the player away. Leave it on the floor.
-            if (item.throwEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
+            // RL-36: NON-player mobs must not pick up the teleport ORB (throwEffect
+            // TELEPORT) - thrown, it scatters everyone in its blast to a random level, so a
+            // mob grabbing one could fling the player away. The player may pick them up.
+            if (!isPlayer && item.throwEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
                 continue;
             }
             // Snapshot the floor position BEFORE addToBag clears it, so the
@@ -1602,19 +1607,17 @@ public class MobSystem {
             killer.score += reward;
             MobProgression.awardXp(level, killer, reward);
             // KILLER perk: every kill stacks the KILLER buff on the killer.
-            // Per perk-level math (see Perk.KILLER javadoc): stacks-per-kill
-            // is ceil(perkLvl/2), duration refresh is 8 + 2*ceil(perkLvl/2)
-            // turns. BuffSystem.apply contains a stacking carve-out for
-            // KILLER that adds the incoming level to existing.level and
-            // resets duration rather than max-merging.
+            // Each kill adds (2 + perkLvl) KILLER stacks (RL-43). BuffSystem.apply
+            // has a stacking carve-out for KILLER that ADDS the incoming stacks onto
+            // the existing count (capped at stackCap(KILLER) = 30); the speed effect
+            // saturates at KILLER_EFFECT_CAP. Stacks also serve as the lifetime, so a
+            // kill streak keeps the buff refreshed.
             if (killer.perks != null) {
                 int perkLvl = killer.perks.getOrDefault(com.bjsp123.rl2.model.Perk.KILLER, 0);
                 if (perkLvl > 0) {
-                    int stacks   = (perkLvl + 1) / 2;
-                    int durationTicks = (8 + 2 * stacks) * TurnSystem.STANDARD_TURN_TICKS;
                     BuffSystem.apply(level, killer,
                             com.bjsp123.rl2.model.Buff.BuffType.KILLER,
-                            stacks, durationTicks, killer);
+                            2 + perkLvl, killer);
                 }
             }
             if (killer.history != null) {
@@ -1785,76 +1788,52 @@ public class MobSystem {
     public static void fallToNextLevel(Level level, Mob mob) {
         if (level == null || mob == null) return;
         com.bjsp123.rl2.model.World world = level.world;
-        int srcIdx = -1;
         Level next = null;
         Point arrival = null;
         if (world != null && world.levels != null) {
-            for (int i = 0; i < world.levels.length; i++) {
-                if (world.levels[i] == level) { srcIdx = i; break; }
-            }
             int target = level.stairsDownTarget;
-            if (target >= 0 && target < world.levels.length) {
-                next = world.levels[target];
-                if (next != null && srcIdx >= 0) {
-                    arrival = com.bjsp123.rl2.model.WorldTopology
-                            .arrivalPointFrom(next, srcIdx, true);
-                }
-            }
-            // No down-stairs (or no arrival tile) - fall back to depth 1.
-            // Anything destroyed at the very bottom loops to the top of
-            // the dungeon rather than being annihilated.
-            if (next == null || arrival == null) {
+            if (target >= 0 && target < world.levels.length) next = world.levels[target];
+            // No down-stairs target (deepest level / topology hole) - loop to depth 1 so a
+            // fall with nowhere lower wraps to the top instead of annihilating.
+            if (next == null || next == level) {
                 Level depth1 = findDepth1Level(world);
-                if (depth1 != null && depth1 != level) {
-                    next = depth1;
-                    arrival = freeFloorNear(depth1, depth1.spawnPoint);
-                }
+                if (depth1 != null && depth1 != level) next = depth1;
             }
+            // Reappear at a RANDOM floor tile on the level below.
+            if (next != null) arrival = randomFreeFloor(next);
         }
 
         Point fromPos = mob.position;
         int dmg = Math.max(1, (int) Math.round(mob.effectiveStats().maxHp * 0.5));
         boolean canRelocate = next != null && arrival != null;
-        boolean wouldKill = !canRelocate || mob.hp - dmg <= 0;
 
-        // Revolve-shrink-fade visual at the source tile - same shape as
-        // a falling item, but driven by the mob's sprite.
+        // Revolve-shrink-fade visual at the source tile + log the plunge when seen.
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobFellThroughChasm(
                     mob, fromPos));
         }
-        // Log the chasm plunge whenever it's visible to the player (or it's
-        // the player themselves).
         if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
             EventLog.add(Messages.mobFellInChasm(nameForLog(level, mob),
                     mob.behavior == Behavior.PLAYER));
         }
 
-        // Player safety net: as long as a relocate destination exists, the
-        // PLAYER always survives the fall - capped at 1 HP - rather than
-        // dying-and-dumping-inventory. Without this a knockback into the
-        // void at <50% HP would silently strip the player's bag, weapon,
-        // armour, amulets, and gems before the death animation. NPCs keep
-        // the original kill-and-dump behaviour.
-        if (wouldKill && canRelocate && mob.behavior == Behavior.PLAYER) {
-            int safeDmg = Math.max(0, (int) Math.floor(mob.hp - 1));
-            transferMobToLevel(level, mob, next, arrival);
-            processAttack(next, null, mob, safeDmg,
-                    AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
-            return;
-        }
-
-        if (wouldKill) {
-            // Items into the chasm, mob dies on impact.
+        if (!canRelocate) {
+            // Nowhere below to land (single-level / unlinked world) - destroyed by the void.
             emitFallingItems(level, mob);
             processAttack(level, null, mob, dmg,
                     AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
             return;
         }
 
-        // Survivor - relocate to the next level + apply impact damage there.
+        // Reappear on the level below at the random floor tile, then take the fall damage
+        // there. The PLAYER is capped to survive at 1 HP so a void-knockback never silently
+        // strips their inventory; NPCs take the full hit and may die on arrival (their loot
+        // then drops on the level below via the normal death path).
+        int applied = mob.behavior == Behavior.PLAYER
+                ? Math.max(0, (int) Math.floor(mob.hp - 1))
+                : dmg;
         transferMobToLevel(level, mob, next, arrival);
-        processAttack(next, null, mob, dmg,
+        processAttack(next, null, mob, applied,
                 AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL);
     }
 
@@ -1885,7 +1864,8 @@ public class MobSystem {
             it.location = null;
             return;
         }
-        Point arrival = freeFloorNear(dst, dst.spawnPoint);
+        // Items reappear at a random floor tile on the level below.
+        Point arrival = randomFreeFloor(dst);
         if (arrival == null) {
             // Destination exists but no walkable landing - destroy the item.
             it.location = null;
@@ -2200,7 +2180,7 @@ public class MobSystem {
         }
 
         if (mob.behavior == Behavior.SMART) {
-            MobBrain brain = GameBalance.SMART_AI_ENABLED ? MobBrains.get(Behavior.SMART) : null;
+            MobBrains.Brain brain = GameBalance.SMART_AI_ENABLED ? MobBrains.get(Behavior.SMART) : null;
             if (brain != null) {
                 brain.run(mob, level);
             } else {
@@ -2235,6 +2215,8 @@ public class MobSystem {
         double vision = caster.effectiveStats().visionRadius;
         for (Mob.MobAbility ab : caster.abilities) {
             if (ab == null) continue;
+            // PHASE_DODGE is reactive (handled in processAttack), never cast proactively.
+            if (ab.kind == Mob.MobAbility.AbilityKind.PHASE_DODGE) continue;
             if (ab.cooldownTracker != null
                     && BuffSystem.hasBuff(caster, ab.cooldownTracker)) continue;
             Mob target = pickAbilityTarget(caster, level, ab, vision);
@@ -2259,9 +2241,7 @@ public class MobSystem {
                                 caster, target, caster.position, target.position));
                     }
                     BuffSystem.apply(level, target, ab.applies,
-                            Math.max(1, ab.appliedLevel),
-                            Math.max(1, ab.appliedDuration) * TurnSystem.STANDARD_TURN_TICKS,
-                            caster);
+                            Math.max(1, ab.appliedDuration), caster);
                 }
                 case HEAL -> {
                     if (level.events != null) {
@@ -2278,13 +2258,80 @@ public class MobSystem {
                 }
             }
             if (ab.cooldownTracker != null && ab.cooldownTurns > 0) {
-                BuffSystem.apply(level, caster, ab.cooldownTracker, 1,
-                        ab.cooldownTurns * TurnSystem.STANDARD_TURN_TICKS, caster);
+                BuffSystem.apply(level, caster, ab.cooldownTracker,
+                        ab.cooldownTurns, caster);
             }
             TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
             return true;
         }
         return false;
+    }
+
+    /** PHASE_DODGE cooldown length (turns) for {@code m}, or {@code -1} if it can't dodge.
+     *  The player gets it from the DODGE perk ({@code 11 - level}); other mobs from a
+     *  PHASE_DODGE ability's configured cooldown. */
+    private static int phaseDodgeCooldownTurns(Mob m) {
+        if (m == null) return -1;
+        if (m.perks != null) {
+            int lvl = m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.DODGE, 0);
+            if (lvl > 0) return Math.max(1, 11 - lvl);
+        }
+        if (m.abilities != null) {
+            for (Mob.MobAbility ab : m.abilities) {
+                if (ab != null && ab.kind == Mob.MobAbility.AbilityKind.PHASE_DODGE) {
+                    return Math.max(1, ab.cooldownTurns);
+                }
+            }
+        }
+        return -1;
+    }
+
+    /** Reactive phase-dodge: if {@code self} can dodge (ability/perk), is off cooldown, and a
+     *  free adjacent square exists, slide there (avoiding the incoming hit), start the cooldown,
+     *  and return true. Otherwise false (the attack resolves normally). */
+    private static boolean tryPhaseDodge(Level level, Mob self, Mob attacker) {
+        if (level == null || self == null || self.position == null || self.hp <= 0) return false;
+        int cooldownTurns = phaseDodgeCooldownTurns(self);
+        if (cooldownTurns < 0) return false;
+        if (BuffSystem.hasBuff(self, com.bjsp123.rl2.model.Buff.BuffType.PHASE_DODGE_COOLDOWN)) {
+            return false;
+        }
+        Point spot = pickDodgeTile(level, self, attacker);
+        if (spot == null) return false;   // no suitable square - can't dodge
+        Point from = self.position;
+        self.position = spot;
+        self.targetPosition = null;
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobPhaseDodged(self, from, spot));
+        }
+        BuffSystem.apply(level, self, com.bjsp123.rl2.model.Buff.BuffType.PHASE_DODGE_COOLDOWN,
+                cooldownTurns, self);
+        if (self.behavior == Behavior.PLAYER || isVisibleToPlayer(level, self)) {
+            EventLog.add(Messages.phaseDodged(nameForLog(level, self),
+                    self.behavior == Behavior.PLAYER));
+        }
+        return true;
+    }
+
+    /** Pick a free 8-neighbour floor tile for {@code self} to dodge to - floor-like, not
+     *  movement-blocking, unoccupied - preferring the tile FARTHEST from {@code attacker}
+     *  (dodge away). Returns null when no neighbour qualifies. */
+    private static Point pickDodgeTile(Level level, Mob self, Mob attacker) {
+        int sx = self.position.tileX(), sy = self.position.tileY();
+        int ax = attacker != null && attacker.position != null ? attacker.position.tileX() : sx;
+        int ay = attacker != null && attacker.position != null ? attacker.position.tileY() : sy;
+        Point best = null;
+        int bestDist = -1;
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = sx + dx, ny = sy + dy;
+                if (!isFreeFloor(level, nx, ny)) continue;
+                int d = Math.max(Math.abs(nx - ax), Math.abs(ny - ay));
+                if (d > bestDist) { bestDist = d; best = new Point(nx, ny); }
+            }
+        }
+        return best;
     }
 
     /** Nearest valid target within {@code vision} (Chebyshev) for {@code ab}.
@@ -2827,23 +2874,9 @@ public class MobSystem {
      * instead of stepping.
      */
     private static void processRangedMobDumbAi(Mob mob, Level level) {
-        if (mob.stateOfMind == StateOfMind.ASLEEP) {
-            if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
-                wakeMob(level, mob, "sensing something nearby");
-            } else {
-                mob.intent = Mob.Intent.IDLE;
-                TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
-                return;
-            }
-        }
+        // ASLEEP gating happens in processAiTurn before dispatch (see processMobAi).
         Mob.Intent prevIntent = mob.intent;
-        Point fleeAway = fleeTargetFor(mob, level);
-        if (fleeAway != null) {
-            mob.intent = Mob.Intent.FLEEING;
-            mob.targetPosition = fleeAway;
-            stepOrIdle(mob, level);
-            return;
-        }
+        if (tryFleeStep(mob, level, false)) return;
         Mob attackTarget = nearestAttackTarget(mob, level);
         if (attackTarget != null) {
             // Per-spec: DUMB shoots only when not adjacent - at adjacent it prefers
@@ -2861,20 +2894,7 @@ public class MobSystem {
             stepOrIdle(mob, level);
             return;
         }
-        if (isChaseCarryover(prevIntent, mob)) {
-            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
-            stepOrIdle(mob, level);
-            return;
-        }
-        if (tryFollowLeader(mob, level)) {
-            mob.intent = Mob.Intent.FOLLOWING_LEADER;
-            return;
-        }
-        if (mob.targetPosition == null) {
-            mob.targetPosition = randomFloorPoint(level);
-        }
-        mob.intent = Mob.Intent.WANDERING;
-        stepOrIdle(mob, level);
+        defaultAiTail(mob, level, prevIntent, false);
     }
 
     /**
@@ -2885,23 +2905,9 @@ public class MobSystem {
      * that, it closes to range like the dumb variant.
      */
     private static void processRangedMobStandoffAi(Mob mob, Level level) {
-        if (mob.stateOfMind == StateOfMind.ASLEEP) {
-            if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
-                wakeMob(level, mob, "sensing something nearby");
-            } else {
-                mob.intent = Mob.Intent.IDLE;
-                TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
-                return;
-            }
-        }
+        // ASLEEP gating happens in processAiTurn before dispatch (see processMobAi).
         Mob.Intent prevIntent = mob.intent;
-        Point fleeAway = fleeTargetFor(mob, level);
-        if (fleeAway != null) {
-            mob.intent = Mob.Intent.FLEEING;
-            mob.targetPosition = fleeAway;
-            stepOrIdle(mob, level);
-            return;
-        }
+        if (tryFleeStep(mob, level, false)) return;
         Mob attackTarget = nearestAttackTarget(mob, level);
         if (attackTarget != null) {
             int cheb = LevelFactoryUtils.chebyshev(mob.position, attackTarget.position);
@@ -2942,20 +2948,7 @@ public class MobSystem {
             stepOrIdle(mob, level);
             return;
         }
-        if (isChaseCarryover(prevIntent, mob)) {
-            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
-            stepOrIdle(mob, level);
-            return;
-        }
-        if (tryFollowLeader(mob, level)) {
-            mob.intent = Mob.Intent.FOLLOWING_LEADER;
-            return;
-        }
-        if (mob.targetPosition == null) {
-            mob.targetPosition = randomFloorPoint(level);
-        }
-        mob.intent = Mob.Intent.WANDERING;
-        stepOrIdle(mob, level);
+        defaultAiTail(mob, level, prevIntent, false);
     }
 
     /**
@@ -3002,8 +2995,8 @@ public class MobSystem {
         int cooldownTurns = Math.max(0, ss.rangedRateOfFire - 1);
         if (cooldownTurns > 0) {
             BuffSystem.apply(level, shooter,
-                    com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN, /*level=*/1,
-                    cooldownTurns * TurnSystem.STANDARD_TURN_TICKS, shooter);
+                    com.bjsp123.rl2.model.Buff.BuffType.RANGED_COOLDOWN,
+                    cooldownTurns, shooter);
         }
         TurnSystem.applyActionCost(shooter, ss.rangedCost > 0 ? ss.rangedCost : ss.attackCost);
         // Combat memory is recorded on impact (in processAttack) when the missile actually
@@ -3032,28 +3025,10 @@ public class MobSystem {
     }
 
     private static void processMobAi(Mob mob, Level level) {
-        // Wake gate: ASLEEP mobs only stir when anyone they care about (attack or flee)
-        // enters their wake radius. Before, we only checked the player; now any mob this
-        // one has an attitude toward counts, so dogs wake the cat sleeping in the next room.
-        if (mob.stateOfMind == StateOfMind.ASLEEP) {
-            if (hasAttitudeTargetWithin(mob, level, mob.effectiveStats().wakeRadius)) {
-                wakeMob(level, mob, "sensing something nearby");
-            } else {
-                mob.intent = Mob.Intent.IDLE;
-                TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
-                return;
-            }
-        }
-
+        // ASLEEP mobs are already gated in processAiTurn (the uniform wake check runs
+        // before behaviour dispatch), so by here the mob is awake.
         Mob.Intent prevIntent = mob.intent;
-
-        Point fleeAway = fleeTargetFor(mob, level);
-        if (fleeAway != null) {
-            mob.intent = Mob.Intent.FLEEING;
-            mob.targetPosition = fleeAway;
-            stepOrIdle(mob, level);
-            return;
-        }
+        if (tryFleeStep(mob, level, false)) return;
         Mob attackTarget = nearestAttackTarget(mob, level);
         if (attackTarget != null) {
             mob.intent = Mob.Intent.PURSUING;
@@ -3061,23 +3036,7 @@ public class MobSystem {
             stepOrIdle(mob, level);
             return;
         }
-        // Promotion: was pursuing last tick, target is no longer visible, but the
-        // remembered tile is still ahead. Keep walking toward it; we'll drop to
-        // wander once we arrive (or back to PURSUING if the target reappears).
-        if (isChaseCarryover(prevIntent, mob)) {
-            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
-            stepOrIdle(mob, level);
-            return;
-        }
-        if (tryFollowLeader(mob, level)) {
-            mob.intent = Mob.Intent.FOLLOWING_LEADER;
-            return;
-        }
-        if (mob.targetPosition == null) {
-            mob.targetPosition = randomFloorPoint(level);
-        }
-        mob.intent = Mob.Intent.WANDERING;
-        stepOrIdle(mob, level);
+        defaultAiTail(mob, level, prevIntent, false);
     }
 
     /** True iff this turn should continue an in-progress chase: the previous tick
@@ -3090,6 +3049,48 @@ public class MobSystem {
         if (mob.targetPosition == null || mob.position == null) return false;
         return mob.targetPosition.tileX() != mob.position.tileX()
             || mob.targetPosition.tileY() != mob.position.tileY();
+    }
+
+    /** Apply a behaviour's post-decision move. EXPLORE_HIDE mobs run the post-move-effects
+     *  path ({@link #stepAndApplyPostMoveEffects}); every other behaviour uses
+     *  {@link #stepOrIdle}. Selected per dispatcher via the {@code postMoveEffects} flag. */
+    private static void stepForBehavior(Mob mob, Level level, boolean postMoveEffects) {
+        if (postMoveEffects) stepAndApplyPostMoveEffects(mob, level);
+        else stepOrIdle(mob, level);
+    }
+
+    /** Shared FLEE check for the simple dispatchers (every behaviour except EXPLORE_HIDE,
+     *  which has its own hide-aware flee). Sets FLEEING toward the retreat tile and steps.
+     *  Returns {@code true} when the turn was spent fleeing. */
+    private static boolean tryFleeStep(Mob mob, Level level, boolean postMoveEffects) {
+        Point fleeAway = fleeTargetFor(mob, level);
+        if (fleeAway == null) return false;
+        mob.intent = Mob.Intent.FLEEING;
+        mob.targetPosition = fleeAway;
+        stepForBehavior(mob, level, postMoveEffects);
+        return true;
+    }
+
+    /** Shared fallback tail for every per-behaviour AI dispatcher once no flee/attack action
+     *  applied: continue an in-progress chase toward the last-known tile (so the mob keeps
+     *  heading where the enemy was last seen rather than immediately giving up), else follow
+     *  a leader, else wander to a random floor tile. */
+    private static void defaultAiTail(Mob mob, Level level, Mob.Intent prevIntent,
+                                      boolean postMoveEffects) {
+        if (isChaseCarryover(prevIntent, mob)) {
+            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
+            stepForBehavior(mob, level, postMoveEffects);
+            return;
+        }
+        if (tryFollowLeader(mob, level)) {
+            mob.intent = Mob.Intent.FOLLOWING_LEADER;
+            return;
+        }
+        if (mob.targetPosition == null) {
+            mob.targetPosition = randomFloorPoint(level);
+        }
+        mob.intent = Mob.Intent.WANDERING;
+        stepForBehavior(mob, level, postMoveEffects);
     }
 
     /**
@@ -3170,8 +3171,9 @@ public class MobSystem {
         return true;
     }
 
-    /** How many turns a just-hidden {@link Behavior#EXPLORE_HIDE} mob stays put. */
-    private static final int HIDING_DURATION_TICKS = 5 * TurnSystem.STANDARD_TURN_TICKS;
+    /** How many turns (= HIDING stacks) a just-hidden {@link Behavior#EXPLORE_HIDE} mob
+     *  stays put. */
+    private static final int HIDING_DURATION_TURNS = 5;
 
     /**
      * AI for {@link Behavior#EXPLORE_HIDE} mobs. The flee flavour of the mouse:
@@ -3215,7 +3217,7 @@ public class MobSystem {
             mob.targetPosition = null;
             mob.stateOfMind = StateOfMind.HIDING;
             BuffSystem.apply(level, mob, com.bjsp123.rl2.model.Buff.BuffType.HIDING,
-                    /*level=*/1, HIDING_DURATION_TICKS, mob);
+                    HIDING_DURATION_TURNS, mob);
             mob.intent = Mob.Intent.IDLE;
             TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
             return;
@@ -3237,20 +3239,7 @@ public class MobSystem {
             stepAndApplyPostMoveEffects(mob, level);
             return;
         }
-        if (isChaseCarryover(prevIntent, mob)) {
-            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
-            stepAndApplyPostMoveEffects(mob, level);
-            return;
-        }
-        if (tryFollowLeader(mob, level)) {
-            mob.intent = Mob.Intent.FOLLOWING_LEADER;
-            return;
-        }
-        if (mob.targetPosition == null) {
-            mob.targetPosition = randomFloorPoint(level);
-        }
-        mob.intent = Mob.Intent.WANDERING;
-        stepAndApplyPostMoveEffects(mob, level);
+        defaultAiTail(mob, level, prevIntent, true);
     }
 
     /**
@@ -3260,13 +3249,7 @@ public class MobSystem {
      */
     private static void processHunterAi(Mob mob, Level level) {
         Mob.Intent prevIntent = mob.intent;
-        Point fleeAway = fleeTargetFor(mob, level);
-        if (fleeAway != null) {
-            mob.intent = Mob.Intent.FLEEING;
-            mob.targetPosition = fleeAway;
-            stepOrIdle(mob, level);
-            return;
-        }
+        if (tryFleeStep(mob, level, false)) return;
         Mob target = nearestAttackTarget(mob, level);
         if (target != null) {
             mob.intent = Mob.Intent.PURSUING;
@@ -3274,20 +3257,7 @@ public class MobSystem {
             stepOrIdle(mob, level);
             return;
         }
-        if (isChaseCarryover(prevIntent, mob)) {
-            mob.intent = Mob.Intent.CHASING_LAST_KNOWN;
-            stepOrIdle(mob, level);
-            return;
-        }
-        if (tryFollowLeader(mob, level)) {
-            mob.intent = Mob.Intent.FOLLOWING_LEADER;
-            return;
-        }
-        if (mob.targetPosition == null) {
-            mob.targetPosition = randomFloorPoint(level);
-        }
-        mob.intent = Mob.Intent.WANDERING;
-        stepOrIdle(mob, level);
+        defaultAiTail(mob, level, prevIntent, false);
     }
 
     /**
@@ -3709,6 +3679,8 @@ public class MobSystem {
         if (it.inventoryCategory == Item.InventoryCategory.BOMB
                 && te != ItemEffect.CAPTURE && te != ItemEffect.TELEPORT) {
             EventLog.add(Messages.bombDetonates(it.name != null ? it.name : it.type));
+            // A blast is loud - always wake nearby sleepers within their wake radius.
+            wakeMobsNear(level, dst, "a nearby explosion");
         }
 
         // A thrown item landing on a closed door pops it open IF the door
@@ -3804,6 +3776,15 @@ public class MobSystem {
                     processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL,
                             null, new DamageCause(thrower, it, "throw"));
                     BrandSystem.applyBrandOnHit(level, thrower, target, it);
+                    // On-hit buffs for damage throwables (e.g. the ice dagger's CHILLED).
+                    // The struck target gets each of the item's appliesBuff entries, with
+                    // stacks = the item's effect duration (in turns).
+                    if (it.appliesBuff != null && !it.appliesBuff.isEmpty() && target.hp > 0) {
+                        int stacks = Math.max(1, ItemStats.effectiveDuration(it));
+                        for (com.bjsp123.rl2.model.Buff.BuffType b : it.appliesBuff) {
+                            BuffSystem.apply(level, target, b, stacks, thrower, it);
+                        }
+                    }
                 }
             }
         }
@@ -3851,10 +3832,7 @@ public class MobSystem {
                 BrandSystem.applyBrandOnHit(level, thrower, target, it);
                 if (!bombBuffsIgnored(target, it)) {
                     BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE,
-                            Math.max(1, lvl),
-                            Math.max(TurnSystem.STANDARD_TURN_TICKS,
-                                    (3 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                            thrower, it);
+                            3 + lvl, thrower, it);
                 }
             }
             for (Point p : disc) FireSystem.ignite(level, p.tileX(), p.tileY());
@@ -3868,10 +3846,7 @@ public class MobSystem {
                 if (m != null && m != thrower) {
                     if (!bombBuffsIgnored(m, it)) {
                         BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.WET,
-                                Math.max(1, lvl),
-                                Math.max(TurnSystem.STANDARD_TURN_TICKS,
-                                        WATER_STEP_BUFF_TICKS + lvl * TurnSystem.STANDARD_TURN_TICKS),
-                                thrower, it);
+                                WATER_STEP_BUFF_TURNS + lvl, thrower, it);
                     }
                     soaked.add(m);
                 }
@@ -3893,10 +3868,7 @@ public class MobSystem {
                 Mob m = MobQueries.mobAt(level, p);
                 if (m == null || bombBuffsIgnored(m, it)) continue;
                 BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.OILY,
-                        Math.max(1, lvl),
-                        Math.max(TurnSystem.STANDARD_TURN_TICKS,
-                                (5 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                        thrower, it);
+                        5 + lvl, thrower, it);
             }
         } else if (te == ItemEffect.BLAST && inBounds) {
             // Blast bomb: bomb damage to every mob in the blast disc, a
@@ -3934,15 +3906,14 @@ public class MobSystem {
         } else if (te == ItemEffect.APPLYBUFFS && inBounds
                 && it.appliesBuff != null && !it.appliesBuff.isEmpty()) {
             // APPLYBUFFS - every buff in the item's pipe-list is applied to
-            // every mob in the disc.
-            int buffLvl = ItemStats.effectiveBuffLevel(it);
-            int buffDur = ItemStats.effectiveBuffDuration(it);
+            // every mob in the disc. Stacks = the item's effect duration in turns.
+            int buffStacks = ItemStats.effectiveDuration(it);
             for (Point p : disc) {
                 Mob m = MobQueries.mobAt(level, p);
                 if (m == null || m.hp <= 0) continue;
                 if (bombBuffsIgnored(m, it)) continue;
                 for (com.bjsp123.rl2.model.Buff.BuffType b : it.appliesBuff) {
-                    BuffSystem.apply(level, m, b, buffLvl, buffDur, thrower, it);
+                    BuffSystem.apply(level, m, b, buffStacks, thrower, it);
                 }
             }
         } else if (te == ItemEffect.POISONCLOUD && inBounds) {
@@ -3994,10 +3965,7 @@ public class MobSystem {
                 Mob m = MobQueries.mobAt(level, p);
                 if (m == null || bombBuffsIgnored(m, it)) continue;
                 BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.CHILLED,
-                        Math.max(1, lvl),
-                        Math.max(TurnSystem.STANDARD_TURN_TICKS,
-                                (6 + lvl) * TurnSystem.STANDARD_TURN_TICKS),
-                        thrower, it);
+                        6 + lvl, thrower, it);
                 if (m != thrower) {
                     m.ticksTillMove += TurnSystem.STANDARD_TURN_TICKS;
                 }
@@ -4214,5 +4182,19 @@ public class MobSystem {
                 if (level.tiles[x][y] == Tile.FLOOR) floors.add(new Point(x, y));
         if (floors.isEmpty()) return null;
         return floors.get(RANDOM.nextInt(floors.size()));
+    }
+
+    /** A random unoccupied floor tile on {@code level}, or null if none. Landing spot for
+     *  mobs / items that fall through a chasm to the level below - chasm falls relocate to a
+     *  random floor rather than a fixed arrival point. */
+    private static Point randomFreeFloor(Level level) {
+        if (level == null) return null;
+        for (int tries = 0; tries < 40; tries++) {
+            Point p = randomFloorPoint(level);
+            if (p == null) return null;
+            if (isFreeFloor(level, p.tileX(), p.tileY())) return p;
+        }
+        Point p = randomFloorPoint(level);
+        return p == null ? null : freeFloorNear(level, p);
     }
 }

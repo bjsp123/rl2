@@ -195,8 +195,7 @@ public final class MobDefinition {
      *  jump lands 20 turns after spawn). */
     public static final class InitialBuff {
         public com.bjsp123.rl2.model.Buff.BuffType type;
-        public int level;
-        public int duration;
+        public int stacks;
     }
 
     /** One starter-inventory line: an item-type id (CSV row key in items.csv)
@@ -372,6 +371,11 @@ public final class MobDefinition {
                 a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.TELEPORT;
                 a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[1]);
                 a.cooldownTurns   = Integer.parseInt(parts[2]);
+            } else if ("phasedodge".equals(kind)) {
+                // phasedodge:<cooldownBuff>:<cooldownTurns>
+                a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.PHASE_DODGE;
+                a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[1]);
+                a.cooldownTurns   = Integer.parseInt(parts[2]);
             } else {
                 throw new IllegalArgumentException("unknown ability kind: " + kind);
             }
@@ -416,11 +420,10 @@ public final class MobDefinition {
     }
 
     /** Parse the {@code initialBuffs} cell. Format:
-     *  {@code TELEPORT_COOLDOWN:1:20 ; ANOTHER_BUFF:2:5}. Each entry is
-     *  {@code buffType:level:durationStandardTurns}. The parsed duration is
-     *  multiplied by {@link com.bjsp123.rl2.logic.TurnSystem#STANDARD_TURN_TICKS}
-     *  at load time so CSV authors keep writing human-readable standard-turn
-     *  counts even though the buff system stores duration in ticks. */
+     *  {@code TELEPORT_COOLDOWN:20 ; ANOTHER_BUFF:5}. Each entry is
+     *  {@code buffType:stacks} where stacks = the buff's lifetime in standard turns
+     *  (RL-43). A legacy {@code buffType:level:stacks} triple is still accepted - the
+     *  middle (old level) field is ignored and the last value taken as stacks. */
     private static List<InitialBuff> parseInitialBuffs(String cell) {
         List<InitialBuff> out = new ArrayList<>();
         if (cell == null || cell.isEmpty()) return out;
@@ -430,10 +433,8 @@ public final class MobDefinition {
             String[] parts = e.split(":");
             for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
             InitialBuff b = new InitialBuff();
-            b.type     = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[0]);
-            b.level    = Integer.parseInt(parts[1]);
-            b.duration = Integer.parseInt(parts[2])
-                    * com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS;
+            b.type   = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[0]);
+            b.stacks = Integer.parseInt(parts[parts.length - 1]);
             out.add(b);
         }
         return out;
@@ -528,12 +529,14 @@ public final class MobDefinition {
                         a.healAmount, a.cooldownTracker, a.cooldownTurns));
                 case TELEPORT -> m.abilities.add(Mob.MobAbility.teleport(
                         a.cooldownTracker, a.cooldownTurns));
+                case PHASE_DODGE -> m.abilities.add(Mob.MobAbility.phaseDodge(
+                        a.cooldownTracker, a.cooldownTurns));
             }
         }
 
         // Pre-seeded buffs (horror's TELEPORT_COOLDOWN start).
         for (InitialBuff b : initialBuffs) {
-            m.buffs.add(new com.bjsp123.rl2.model.Buff(b.type, b.level, b.duration, m));
+            m.buffs.add(new com.bjsp123.rl2.model.Buff(b.type, b.stacks, m));
         }
 
         // Starting inventory: build via ItemFactory, equip anything with a slot.

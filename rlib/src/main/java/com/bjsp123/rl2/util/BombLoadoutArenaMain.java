@@ -2,7 +2,6 @@ package com.bjsp123.rl2.util;
 
 import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.logic.CombatArena;
-import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.ItemFactory;
 import com.bjsp123.rl2.logic.MobFactory;
 import com.bjsp123.rl2.logic.MobProgression;
@@ -70,8 +69,8 @@ public final class BombLoadoutArenaMain {
 
     public static void main(String[] args) throws IOException {
         int trials = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_TRIALS;
-        Path assets = locateAssetsDir();
-        loadData(assets);
+        Path assets = ArenaHarness.locateAssetsDir();
+        ArenaHarness.loadData(assets);
 
         List<String> bombs = Registries.itemTypesMatching(
                 d -> d.inventoryCategory == Item.InventoryCategory.BOMB
@@ -80,7 +79,7 @@ public final class BombLoadoutArenaMain {
                         && d.throwEffect != Item.ItemEffect.CAPTURE);
         bombs.sort(String::compareTo);
 
-        List<String> opponents = pickOpponents();
+        List<String> opponents = ArenaHarness.fightableMobs(false);
 
         Path fightCsv = Paths.get("results", "bomb_loadout_arena.csv").toAbsolutePath();
         Files.createDirectories(fightCsv.getParent());
@@ -157,7 +156,7 @@ public final class BombLoadoutArenaMain {
             Mob m = MobFactory.spawn(opponentType, new Point(0, 0));
             if (m == null) return;
             MobProgression.setSpawnLevel(m, charLvl);
-            stripFromInventory(m, "TELEPORT_ORB");
+            ArenaHarness.stripFromInventory(m, "TELEPORT_ORB");
             if (m.behavior == Mob.Behavior.PLAYER) m.behavior = Mob.Behavior.MOB;
             m.stateOfMind = Mob.StateOfMind.AWAKE;
             opponents.add(m);
@@ -308,26 +307,6 @@ public final class BombLoadoutArenaMain {
         }
     }
 
-    private static List<String> pickOpponents() {
-        List<String> out = new ArrayList<>();
-        for (String type : Registries.mobTypes()) {
-            if (type.startsWith("PLAYER_")) continue;
-            com.bjsp123.rl2.logic.MobDefinition def = Registries.mob(type);
-            if (def == null) continue;
-            if (def.maxHp <= 0) continue;
-            boolean canHit = def.damage > 0 || def.rangedDamage > 0;
-            if (!canHit) continue;
-            out.add(type);
-        }
-        out.sort(String::compareTo);
-        return out;
-    }
-
-    private static void stripFromInventory(Mob m, String typeKey) {
-        if (m == null || m.inventory == null || m.inventory.bag == null) return;
-        m.inventory.bag.removeIf(it -> it != null && typeKey.equals(it.type));
-    }
-
     private static void writeSummary() throws IOException {
         Path p = Paths.get("results", "bomb_loadout_summary.csv").toAbsolutePath();
         Files.createDirectories(p.getParent());
@@ -390,31 +369,6 @@ public final class BombLoadoutArenaMain {
     }
 
     private static double winPct(Agg a) {
-        return a.fights == 0 ? 0.0 : 100.0 * (a.wins + 0.5 * a.draws) / a.fights;
-    }
-
-    /* ---------- asset loading (matches Arena1vNRankMain) ---------- */
-
-    private static Path locateAssetsDir() {
-        Path cwd = Paths.get("").toAbsolutePath();
-        for (Path p = cwd; p != null; p = p.getParent()) {
-            Path candidate = p.resolve("assets").resolve("data");
-            if (Files.isDirectory(candidate)) return candidate;
-        }
-        throw new IllegalStateException("Could not find assets/data starting from " + cwd);
-    }
-
-    private static void loadData(Path assets) throws IOException {
-        Path strings = assets.resolve("strings.csv");
-        if (Files.exists(strings))
-            com.bjsp123.rl2.logic.TextCatalog.load(Files.readString(strings));
-        Path config = assets.resolve("config.csv");
-        if (Files.exists(config))
-            GameBalance.load(Files.readString(config));
-        Registries.loadMobs(Files.readString(assets.resolve("mobs.csv")));
-        Registries.loadItems(Files.readString(assets.resolve("items.csv")));
-        Path themed = assets.resolve("themedrooms.csv");
-        if (Files.exists(themed))
-            Registries.loadThemedRooms(Files.readString(themed));
+        return ArenaHarness.winPct((int) a.wins, (int) a.losses, (int) a.draws);
     }
 }

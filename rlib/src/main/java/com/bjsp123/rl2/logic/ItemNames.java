@@ -23,23 +23,8 @@ public final class ItemNames {
         return displayName(item, null);
     }
 
-    public static String gemSizePrefix(int size) {
-        return switch (Math.max(1, Math.min(9, size))) {
-            case 1 -> "tiny";
-            case 2 -> "small";
-            case 3 -> "medium";
-            case 4 -> "large";
-            case 5 -> "fine";
-            case 6 -> "impressive";
-            case 7 -> "mighty";
-            case 8 -> "sublime";
-            default -> "exquisite";
-        };
-    }
-
     public static String gemDisplayName(Item item) {
         if (item == null || item.gemSpecies == null) return "gem";
-        return gemSizePrefix(item.gemSize) + " "
-                + item.gemSpecies.name().toLowerCase();
+        return item.gemSpecies.name().toLowerCase();
     }
 }

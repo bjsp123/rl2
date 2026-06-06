@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * Small CSV reader for the project's data files (mobs.csv, items.csv,
- * mob_sprites.csv, item_sprites.csv). Self-contained - no third-party
+ * themedrooms.csv, config.csv, ...). Self-contained - no third-party
  * dependency.
  *
  * <p>Format:

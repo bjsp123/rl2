@@ -33,8 +33,8 @@ public final class ItemSprites {
      *  (procedural items go through their own path; missing rows return null). */
     public static TextureRegion regionFor(Item item) {
         if (item == null) return null;
-        // Gems are procedural - species + size produce a unique colour-and-shape icon
-        // that the registry can't address. GemSprites caches per-(species, size).
+        // Gems aren't items.csv rows - each species maps to a fixed gems2.png cell that
+        // the registry can't address. GemSprites caches one region per species.
         if (item.isGem()) return GemSprites.regionFor(item);
         return regionFor(item.type);
     }

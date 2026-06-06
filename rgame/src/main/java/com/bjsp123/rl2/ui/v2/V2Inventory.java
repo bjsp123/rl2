@@ -128,7 +128,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     // Callbacks (mirror V1 InventoryRenderer surface).
     private BiConsumer<Mob, Item> onUse;
     private BiConsumer<Mob, Item> onThrow;
-    private BiConsumer<Mob, Item> onCombine;
     /** Optional jump target - when set, the item-detail popup grows a "?"
      *  button that closes the inventory and opens the encyclopaedia
      *  pre-selected to the chosen item. */
@@ -149,7 +148,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     public void setActionBar(ActionBar ab)                { this.actionBar = ab; }
     public void setOnUse(BiConsumer<Mob, Item> fn)        { this.onUse = fn; }
     public void setOnThrow(BiConsumer<Mob, Item> fn)      { this.onThrow = fn; }
-    public void setOnCombine(BiConsumer<Mob, Item> fn)    { this.onCombine = fn; }
     public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
     public void setEncyclopedia(V2Encyclopedia enc)       { this.encyclopedia = enc; }
 

@@ -3,77 +3,70 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.model.GemSpecies;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.Point;
+
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
- * Gem icons sourced from {@code sprites/gems.png}. {@link #regionFor} maps each
- * (species, size) to a fixed cell on the sheet; the on-floor renderer, inventory popup,
- * action bar, and crafting cells all go through this lookup so a gem looks the same
- * wherever it appears.
+ * Gem icons sourced from {@code sprites/gems2.png} (RL-47). {@link #regionFor} maps each
+ * species to a fixed {@code (row, col)} cell; the on-floor renderer, inventory popup, action
+ * bar, look popup, and encyclopedia all go through this lookup so a gem looks the same
+ * wherever it appears. No size system - one cell per species.
  */
 public final class GemSprites {
 
     private static Texture gemTex;
-    /** [col][row] cache of extracted regions; cols always first. */
-    private static final TextureRegion[][] gemRegions = new TextureRegion[10][10];
+    private static Map<GemSpecies, TextureRegion> cache;
 
-    /** Cell size on {@code sprites/gems.png}. */
+    /** Cell size on {@code sprites/gems2.png} (160x224 = 5 cols x 7 rows). */
     private static final int CELL = 32;
 
     private GemSprites() {}
 
     public static TextureRegion regionFor(Item item) {
         if (item == null || !item.isGem() || item.gemSpecies == null) return null;
-        return regionFor(item.gemSpecies, Math.max(1, item.gemSize));
-    };
-
-    public static TextureRegion regionFor(GemSpecies species, int size) {
-        loadGemTexture();
-        Point sq = switch (species) {
-            case BLAZINGSTAR -> new Point(size-1,0);
-            case AZURITE     -> new Point(size-1,1);
-            case AMBERGLEAM  -> new Point(size-1,2);
-            case LETTUSTONE -> new Point(size-1,3);
-            case PORQUOISE  -> new Point(size-1,4);
-            case HAMETHYST  -> new Point(size-1,5);
-            case CUPRIUM    -> new Point(4+size,3);
-            case ARGENTEL   -> new Point(4+size,5);
-            case AURELIUM   -> new Point(4+size,4);
-            case BLOODGLASS -> new Point(4+size,0);
-            case SLIPGLASS  -> new Point(4+size,1);
-            case JADEGLASS  -> new Point(4+size,2);
-            case SCINTILLIUM -> new Point(1,6);
-            case GLITTERSHARD -> new Point(7,6);
-            case PETRICHOR  -> new Point(5,6);
-            case STEELROCK  -> new Point(8,6);
-            case MILKSPAR   -> new Point(4,6);
-            case MALACHOR   -> new Point(6,6);
-            case FLUOROS    -> new Point(0,6);
-            case PYRIUM     -> new Point(3,6);
-            default   -> new Point(0,0);
-        };
-       
-        if (gemRegions[(int)sq.x()][(int)sq.y()] == null && gemTex != null) {
-            gemRegions[(int)sq.x()][(int)sq.y()] = new TextureRegion(gemTex,
-                    (int)sq.x() * CELL, SpriteAtlas.gemsY() + (int)sq.y() * CELL, CELL, CELL);
-        }
-
-        return gemRegions[(int)sq.x()][(int)sq.y()];
-        
+        return regionFor(item.gemSpecies);
     }
 
-    private static void loadGemTexture() {
-        if (gemTex == null) {
-            SpriteAtlas.load();
-            gemTex = SpriteAtlas.texture();
+    public static TextureRegion regionFor(GemSpecies species) {
+        if (species == null) return null;
+        if (cache == null) load();
+        return cache.get(species);
+    }
+
+    /** (col, row) of each species on gems2.png. */
+    private static int col(GemSpecies s) {
+        return switch (s) {
+            case LETTUSTONE, SILVER, BLOODHIVE -> 0;
+            case HAMETHYST,  COPPER, BLACKGLASS -> 1;
+            case SALAMITE,   GOLD,   MALACHOR   -> 2;
+            case ICELANDSPAR,        FLUORON    -> 3;
+        };
+    }
+
+    private static int row(GemSpecies s) {
+        return switch (s.gemClass) {
+            case BASIC  -> 0;
+            case METAL  -> 1;
+            case EXOTIC -> 4;
+        };
+    }
+
+    private static void load() {
+        cache = new EnumMap<>(GemSpecies.class);
+        SpriteAtlas.load();
+        gemTex = SpriteAtlas.texture();
+        if (gemTex == null) return;
+        for (GemSpecies s : GemSpecies.values()) {
+            int x = col(s) * CELL;
+            int y = SpriteAtlas.gemsY() + row(s) * CELL;
+            cache.put(s, new TextureRegion(gemTex, x, y, CELL, CELL));
         }
     }
 
     /** Release cached regions. Texture is owned by {@link SpriteAtlas}. */
     public static void disposeShared() {
         gemTex = null;
-        for (int i = 0; i < gemRegions.length; ++i)
-            for (int j = 0; j < gemRegions[i].length; ++j)
-                gemRegions[i][j] = null;
+        cache = null;
     }
 }

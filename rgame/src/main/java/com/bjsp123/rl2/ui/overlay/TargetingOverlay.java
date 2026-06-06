@@ -11,7 +11,6 @@ import com.bjsp123.rl2.logic.ItemStats;
 import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.MobQueries;
 import com.bjsp123.rl2.logic.MobStats;
-import com.bjsp123.rl2.logic.MobTargeting;
 import com.bjsp123.rl2.logic.TargetHistory;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
@@ -110,7 +109,7 @@ public class TargetingOverlay extends InputAdapter {
             Point p = history.pickInitial(level, player);
             if (p != null) return p;
         }
-        Mob hostile = MobTargeting.nearestHostile(player, level);
+        Mob hostile = MobQueries.nearestHostile(player, level);
         return hostile != null ? hostile.position : player.position;
     }
 

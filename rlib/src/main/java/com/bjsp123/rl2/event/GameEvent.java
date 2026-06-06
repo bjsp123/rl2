@@ -59,6 +59,7 @@ public sealed interface GameEvent permits
         GameEvent.MobFellThroughChasm,
         GameEvent.GrappleFired,
         GameEvent.MobJumped,
+        GameEvent.MobPhaseDodged,
         GameEvent.MobAbilityUsed,
         GameEvent.DoorOpened,
         GameEvent.DoorClosed,
@@ -237,6 +238,11 @@ public sealed interface GameEvent permits
      *  The animator slides the sprite across the intervening tiles as a
      *  non-blocking hop and emits departure/landing dust clouds. */
     record MobJumped(Mob mob, Point from, Point to) implements GameEvent {}
+
+    /** Mob phase-dodged an incoming attack: it slid from {@code from} to {@code to}
+     *  (an adjacent free square), negating the hit. The animator plays a quick smooth
+     *  slide rendered with the phasing shimmer. Non-blocking. */
+    record MobPhaseDodged(Mob mob, Point from, Point to) implements GameEvent {}
 
     /** Player (or future AI) fired a grappling rope from {@code from} to
      *  {@code target}. {@code success == true} -> the rope retracts and the

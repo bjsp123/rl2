@@ -219,8 +219,8 @@ public final class ItemLore {
         }
         int foodValue = com.bjsp123.rl2.logic.ItemStats.effectiveFoodValue(it, effLvl);
         if (foodValue > 0) {
-            // foodValue is denominated in millisatiety; both the live and
-            // per-level numbers divide by 1000 for the UI.
+            // foodValue is stored x1000; both the live and per-level numbers
+            // divide by 1000 for the UI.
             int fvPerLvl = com.bjsp123.rl2.logic.ItemStats.foodValuePerLevel(it) / 1000;
             line(bod, TextCatalog.get("lore.items.food"), "" + foodValue / 1000,
                     perLevel(fvPerLvl));
@@ -332,8 +332,12 @@ public final class ItemLore {
                 || it.throwResult == ThrowResult.CONSUME) {
             StringBuilder thr = new StringBuilder();
             if (it.isThrowable()) {
-                flag(thr, TextCatalog.format("item.throw.effect",
-                        TextCatalog.vars("effect", wandEffectVerb(it.throwEffect, it, effLvl))));
+                // Tame-bait throwables (e.g. the fish) are throwable but carry no
+                // throwEffect - their tame line below describes the throw instead.
+                if (it.throwEffect != null) {
+                    flag(thr, TextCatalog.format("item.throw.effect",
+                            TextCatalog.vars("effect", wandEffectVerb(it.throwEffect, it, effLvl))));
+                }
                 if (it.throwEffect == ItemEffect.APPLYBUFFS
                         && !it.appliesBuff.isEmpty()) {
                     flag(thr, TextCatalog.format("item.throw.applyBuffs",
@@ -387,6 +391,7 @@ public final class ItemLore {
 
 
     private static String wandEffectVerb(ItemEffect e, Item it, int effLvl) {
+        if (e == null) return "";
         return switch (e) {
             case DAMAGE -> TextCatalog.format("item.effect.DAMAGE",
                     TextCatalog.vars("damage",

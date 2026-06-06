@@ -227,6 +227,7 @@ public final class MobLore {
                 yield TextCatalog.format("mob.ability.BUFF", TextCatalog.vars("buff", name, "duration", dur, "cooldown", cd));
             }
             case TELEPORT -> TextCatalog.format("mob.ability.TELEPORT", TextCatalog.vars("cooldown", cd));
+            case PHASE_DODGE -> TextCatalog.format("mob.ability.PHASE_DODGE", TextCatalog.vars("cooldown", cd));
         };
     }
 

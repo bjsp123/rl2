@@ -45,6 +45,7 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.ItemPickedUp m)          animator.onItemPickedUp(level, m);
         else if (ev instanceof GameEvent.MobKnockedBack m)        animator.onMobKnockedBack(level, m);
         else if (ev instanceof GameEvent.MobJumped m)             animator.onMobJumped(level, m);
+        else if (ev instanceof GameEvent.MobPhaseDodged m)        animator.onMobPhaseDodged(level, m);
         else if (ev instanceof GameEvent.ItemFallingIntoChasm m)  animator.onItemFallingIntoChasm(m);
         else if (ev instanceof GameEvent.MobFellThroughChasm m)   animator.onMobFellThroughChasm(m);
         else if (ev instanceof GameEvent.GrappleFired m)          animator.onGrappleFired(level, m);

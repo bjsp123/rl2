@@ -80,7 +80,7 @@ public final class Messages {
     /** "{target} takes N {element} damage from {origin}." (or "..." with no
      *  attribution if {@code originName} is null/empty). Emitted by
      *  {@link MobSystem#processAttack} for every non-PHYSICAL damage element
-     *  (MAGIC / FIRE / POISON / SHOCK / STARVATION). The element name is
+     *  (MAGIC / FIRE / POISON / SHOCK / COLD). The element name is
      *  resolved via {@code eventlog.damageElement.<name>} so locales can map
      *  enum names ("POISON") to display strings ("poison" / "venom").
      *  {@code originName} is the formatted attribution string (e.g.
@@ -123,7 +123,6 @@ public final class Messages {
      *  <ul>
      *    <li>"Rogue burned to death in a fire caused by Kobold's fire wand."</li>
      *    <li>"Warrior was shoved into a wall by Kobold's blast bomb."</li>
-     *    <li>"Mage starved to death."</li>
      *    <li>"Mage was poisoned to death by Spider."</li>
      *    <li>"Warrior fell into a chasm."</li>
      *  </ul>
@@ -157,14 +156,7 @@ public final class Messages {
             case "missile"    -> verb = "was struck down";
             case "magic"      -> verb = "was killed by magic";
             case "throw"      -> verb = "was struck down";
-            case "blow"       -> {
-                if (element == MobSystem.DamageElement.STARVATION) {
-                    verb = "starved to death";
-                    attributable = false;
-                } else {
-                    verb = "was killed";
-                }
-            }
+            case "blow"       -> verb = "was killed";
             default -> verb = "was killed";
         }
         if (origin != null && !origin.isEmpty() && attributable) {
@@ -345,20 +337,6 @@ public final class Messages {
 
     // -- Mob combat (no player) ----------------------------------------------
 
-    public static LogEvent mobHit(String attacker, String target, int dmg) {
-        return mobHit(attacker, target, dmg, 0);
-    }
-
-    public static LogEvent mobHit(String attacker, String target, int dmg, int kbSquares) {
-        String key = kbSquares > 0
-                ? "eventlog.combat.mob.hit.knockback"
-                : "eventlog.combat.mob.hit";
-        return new LogEvent(TextCatalog.format(key,
-                                    TextCatalog.vars("attacker", attacker, "target", target,
-                                            "damage", dmg, "kb", kbSquares)),
-                            EventPriority.LOW, false);
-    }
-
     public static LogEvent mobMiss(String attacker, String target) {
         return new LogEvent(TextCatalog.format("eventlog.combat.mob.miss",
                                     TextCatalog.vars("attacker", attacker, "target", target)),
@@ -372,20 +350,6 @@ public final class Messages {
     }
 
     // -- Mob-on-player combat (involves player) ------------------------------
-
-    public static LogEvent enemyHit(String attacker, String playerName, int dmg) {
-        return enemyHit(attacker, playerName, dmg, 0);
-    }
-
-    public static LogEvent enemyHit(String attacker, String playerName, int dmg, int kbSquares) {
-        String key = kbSquares > 0
-                ? "eventlog.combat.enemy.hit.knockback"
-                : "eventlog.combat.enemy.hit";
-        return new LogEvent(TextCatalog.format(key,
-                                    TextCatalog.vars("attacker", attacker, "player", playerName,
-                                            "damage", dmg, "kb", kbSquares)),
-                            EventPriority.LOW, true);
-    }
 
     public static LogEvent enemyMiss(String attacker, String playerName) {
         return new LogEvent(TextCatalog.format("eventlog.combat.enemy.miss",
@@ -489,12 +453,6 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
-    public static LogEvent playerStarves(String playerName) {
-        return new LogEvent(TextCatalog.format("eventlog.player.starves",
-                                    TextCatalog.vars("player", playerName)),
-                            EventPriority.HIGH, true);
-    }
-
     /** "Adventurer eats the apple." - HIGH-priority so the player sees it
      *  in the default log filter; food is a meaningful resource event. */
     public static LogEvent playerEats(String playerName, String itemName) {
@@ -519,13 +477,17 @@ public final class Messages {
 
     // -- Buff / status messages ----------------------------------------------
 
-    /** "Adventurer is on fire." / "The kobold is poisoned." Fires when a fresh
-     *  buff is applied to a mob (not on duration / level refresh). HIGH
-     *  priority when the player is affected so the kill / death-screen log
-     *  picks it up; LOW otherwise to keep the rolling log readable. */
-    public static LogEvent buffApplied(String targetName, String buffName, boolean involvesPlayer) {
-        return new LogEvent(TextCatalog.format("eventlog.buff.applied",
-                                    TextCatalog.vars("target", targetName, "buff", buffName)),
+    /** "Adventurer is on fire." / "The kobold is poisoned (3)." Fires when a fresh
+     *  buff is applied to a mob (not on stack refresh). The applied {@code stacks}
+     *  count is shown in parentheses when greater than one, so a multi-stack apply
+     *  reads as e.g. "...is poisoned (3)". HIGH priority when the player is affected
+     *  so the kill / death-screen log picks it up; LOW otherwise. */
+    public static LogEvent buffApplied(String targetName, String buffName, int stacks,
+                                       boolean involvesPlayer) {
+        String key = stacks > 1 ? "eventlog.buff.applied.stacks" : "eventlog.buff.applied";
+        return new LogEvent(TextCatalog.format(key,
+                                    TextCatalog.vars("target", targetName, "buff", buffName,
+                                            "stacks", stacks)),
                             involvesPlayer ? EventPriority.HIGH : EventPriority.LOW,
                             involvesPlayer);
     }
@@ -557,6 +519,13 @@ public final class Messages {
         return new LogEvent(TextCatalog.format("eventlog.bomb.detonates",
                                     TextCatalog.vars("item", itemName)),
                             EventPriority.HIGH, true);
+    }
+
+    /** "{name} phases out of harm's way." - reactive PHASE_DODGE negated a hit. */
+    public static LogEvent phaseDodged(String name, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.phasedodge",
+                                    TextCatalog.vars("name", name)),
+                            EventPriority.HIGH, involvesPlayer);
     }
 
     /** "Adventurer snatches the fire bomb out of the air!" - BOMB_DODGER catch (RL-34). */

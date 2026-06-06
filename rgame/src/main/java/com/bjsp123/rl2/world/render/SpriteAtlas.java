@@ -42,7 +42,7 @@ final class SpriteAtlas {
             Pixmap mobs     = new Pixmap(Gdx.files.internal("sprites/mobs_simple.png"));
             Pixmap player   = new Pixmap(Gdx.files.internal("sprites/player.png"));
             Pixmap items    = new Pixmap(Gdx.files.internal("sprites/items.png"));
-            Pixmap gems     = new Pixmap(Gdx.files.internal("sprites/gems.png"));
+            Pixmap gems     = new Pixmap(Gdx.files.internal("sprites/gems2.png"));
             Pixmap buffs    = new Pixmap(Gdx.files.internal("sprites/buffs16.png"));
             Pixmap crystal  = new Pixmap(Gdx.files.internal("sprites/terrain_crystal.png"));
             Pixmap concrete = new Pixmap(Gdx.files.internal("sprites/terrain_concrete.png"));

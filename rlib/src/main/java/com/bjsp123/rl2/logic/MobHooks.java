@@ -32,7 +32,7 @@ public final class MobHooks {
      * the killer has {@code eatSpawnChance > 0} and the victim is flesh, roll the dice
      * and drop a freshly-spawned mob of {@code eatSpawnType} on a free adjacent tile.
      *
-     * <p>{@code killer} may be null (environmental damage, starvation, etc.); in that
+     * <p>{@code killer} may be null (environmental damage, e.g. a chasm fall); in that
      * case the hook does nothing.
      */
     public static void onKill(Level level, Mob victim, Mob killer) {
@@ -64,7 +64,7 @@ public final class MobHooks {
 
     /**
      * Fires when {@code victim} dies, regardless of whether a {@code killer} can be
-     * attributed (e.g. starvation has none). Placeholder for future death-triggers
+     * attributed (e.g. a chasm fall has none). Placeholder for future death-triggers
      * - corpse explosions, "in death I gain power" passives, etc. - that follow the
      * same flag-driven pattern as {@link #onKill}.
      */
