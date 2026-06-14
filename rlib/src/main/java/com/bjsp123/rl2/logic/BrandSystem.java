@@ -43,7 +43,7 @@ public final class BrandSystem {
         item.brand = pool.get(pool.size() - 1);
     }
 
-    private static boolean isBrandable(Item item) {
+    public static boolean isBrandable(Item item) {
         if (item == null || item.inventoryCategory == null) return false;
         return switch (item.inventoryCategory) {
             case WEAPON, OFFHAND, ARMOR, AMULET -> true;

@@ -70,6 +70,19 @@ final class PlayController {
     /** Wire the map-screen-open callback. */
     public void setOpenMapScreen(Runnable r) { this.openMapScreen = r; }
 
+    /** Opens the inventory as a target chooser for item-targeting scrolls
+     *  (enchant brands / level-ups). Wired by {@link PlayScreen} to
+     *  {@code V2Inventory.openPicker} so the controller stays free of a hard
+     *  dependency on the UI layer. */
+    public interface ItemPicker {
+        void open(java.util.function.Predicate<Item> eligible,
+                  java.util.function.BiConsumer<Mob, Item> onPick,
+                  Runnable onCancel);
+    }
+    private ItemPicker itemPicker;
+    /** Wire the inventory item-picker callback. */
+    public void setItemPicker(ItemPicker p) { this.itemPicker = p; }
+
     PlayController(World world,
                    Animator animator,
                    ActionBar actionBar,
@@ -258,24 +271,59 @@ final class PlayController {
      *  the effect actually fires; unforged stubs return false and are kept. */
     private void triggerCraftedGem(Mob user, Item gem) {
         Level level = world.currentLevel();
+        // Item-targeting scrolls (enchant brand / +1 level) open the inventory
+        // as a chooser; the effect applies to the picked item and only then is
+        // the scroll consumed. Cancelling keeps the scroll.
+        java.util.function.Predicate<Item> eligible = ItemSystem.gemItemTarget(gem);
+        // With no valid target, skip the all-grey chooser and fall through to
+        // the no-target path, which fizzles (logs, keeps the scroll).
+        if (eligible != null && itemPicker != null && hasEligibleItem(user, eligible)) {
+            itemPicker.open(eligible,
+                    (u, chosen) -> {
+                        Level cur = world.currentLevel();
+                        if (ItemSystem.triggerGemOnItem(cur, u, gem, chosen)) {
+                            com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(u, gem);
+                            afterMove(cur);
+                        }
+                    },
+                    () -> { /* cancelled - scroll kept */ });
+            return;
+        }
         if (gem.useBehavior == UseBehavior.WAND) {
-            targetingOverlay.setPlayer(user);
-            targetingOverlay.setLevel(level);
-            targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
-            targetingOverlay.activate(target -> {
-                Level cur = world.currentLevel();
-                if (ItemSystem.triggerGem(cur, user, gem, target)) {
-                    com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
-                    animator.consume(cur);
-                    afterMove(cur);
-                }
-            }, gem);
+            triggerCraftedGemWand(user, gem);
             return;
         }
         if (ItemSystem.triggerGem(level, user, gem, null)) {
             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
             afterMove(level);
         }
+    }
+
+    /** True if the player holds (bag or equipped) at least one item the picker
+     *  would accept - gates whether the chooser is worth opening. */
+    private static boolean hasEligibleItem(Mob user, java.util.function.Predicate<Item> elig) {
+        if (user == null || user.inventory == null) return false;
+        if (user.inventory.bag != null) {
+            for (Item it : user.inventory.bag) if (it != null && elig.test(it)) return true;
+        }
+        for (Item it : user.inventory.allEquipped()) if (it != null && elig.test(it)) return true;
+        return false;
+    }
+
+    /** WAND-flavoured crafted gem - gather a target tile, then fire + consume. */
+    private void triggerCraftedGemWand(Mob user, Item gem) {
+        Level level = world.currentLevel();
+        targetingOverlay.setPlayer(user);
+        targetingOverlay.setLevel(level);
+        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
+        targetingOverlay.activate(target -> {
+            Level cur = world.currentLevel();
+            if (ItemSystem.triggerGem(cur, user, gem, target)) {
+                com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
+                animator.consume(cur);
+                afterMove(cur);
+            }
+        }, gem);
     }
 
     /** Wand use entry point. Summon-style wands ({@code summonsWhenUsed != null})

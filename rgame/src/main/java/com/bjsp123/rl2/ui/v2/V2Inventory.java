@@ -135,6 +135,15 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private com.bjsp123.rl2.audio.SoundManager sounds;
 
+    /** Picker mode (e.g. an enchant scroll choosing its target). When
+     *  {@link #pickEligible} is non-null the inventory opens as a chooser:
+     *  eligible items stay lit and tap-to-pick, ineligible ones grey out and
+     *  ignore taps, and the detail popup never opens. A pick fires
+     *  {@link #onPick}; any other close fires {@link #onPickCancel}. */
+    private java.util.function.Predicate<Item> pickEligible;
+    private BiConsumer<Mob, Item> onPick;
+    private Runnable onPickCancel;
+
     public V2Inventory(UiCtx ctx) {
         this.ctx = ctx;
         for (int i = 0; i < equipRects.length;  i++) equipRects[i]  = new Rect();
@@ -155,12 +164,56 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     public void toggle() { if (open) close(); else openInv(); }
     public void close() {
+        // A close while a pick is still pending counts as a cancel - a
+        // successful pick clears the picker via endPicker() first, so reaching
+        // here with pickEligible still set means the chooser was dismissed.
+        if (pickEligible != null) {
+            Runnable cancel = onPickCancel;
+            endPicker();
+            open = false;
+            selectedItem = null;
+            if (cancel != null) cancel.run();
+            return;
+        }
         open = false;
         selectedItem = null;
     }
     private void openInv() {
         open = true;
         if (sounds != null) sounds.play("sfx.ui.popup.inventory");
+    }
+
+    /** Open the inventory as a target chooser. {@code eligible} lights the
+     *  tappable items (the rest grey out); {@code onPick} fires with the chosen
+     *  item, {@code onCancel} fires if the chooser is dismissed without a pick. */
+    public void openPicker(java.util.function.Predicate<Item> eligible,
+                           BiConsumer<Mob, Item> onPick, Runnable onCancel) {
+        this.pickEligible = eligible;
+        this.onPick = onPick;
+        this.onPickCancel = onCancel;
+        this.selectedItem = null;
+        this.currentTab = Tab.GEAR;   // enchant targets live in the gear bag
+        bagScroller.resetTop();
+        open = true;
+        if (sounds != null) sounds.play("sfx.ui.popup.inventory");
+    }
+
+    private boolean pickMode() { return pickEligible != null; }
+
+    private void endPicker() {
+        pickEligible = null;
+        onPick = null;
+        onPickCancel = null;
+    }
+
+    /** Commit a pick on {@code it} if it's eligible; ineligible taps are
+     *  swallowed so the chooser stays open. */
+    private void tryPick(Item it) {
+        if (it == null || pickEligible == null || !pickEligible.test(it)) return;
+        BiConsumer<Mob, Item> cb = onPick;
+        endPicker();
+        close();
+        if (cb != null && player != null) cb.accept(player, it);
     }
 
     /** {@link V2Popup#renderSelf} - renders the inventory body only.
@@ -174,6 +227,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         layoutRects();
         renderInventoryShapesPass();
         renderInventoryTextPass();
+        renderPickerDimPass();
     }
 
     /** Companion popup for the item-detail panel - open when
@@ -643,9 +697,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private void renderInventoryTextPass() {
         ctx.batch.begin();
 
-        // Header.
+        // Header. In picker mode it prompts the choice instead of the title.
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                TextCatalog.get("ui.inventory.title"),
+                TextCatalog.get(pickMode() ? "ui.inventory.choose" : "ui.inventory.title"),
                 headerRect.cx(), headerRect.y + headerRect.h * 0.75f);
 
         // Equipment cells - render the equipped item icons via SpriteBatch.
@@ -682,6 +736,34 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         }
 
         ctx.batch.end();
+    }
+
+    /** Picker-mode overlay: grey out every item cell whose item fails the
+     *  eligibility test, drawn AFTER the icon pass so the dim sits on top of
+     *  the sprite. Empty cells and eligible items are left bright. */
+    private void renderPickerDimPass() {
+        if (!pickMode() || player == null || player.inventory == null) return;
+        ctx.applyProjection();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ShapeRenderer s = ctx.shapes;
+        s.begin(ShapeRenderer.ShapeType.Filled);
+        Inventory inv = player.inventory;
+        Item[] equip = {inv.weapon, inv.offhand, inv.armor, inv.amulets[0], inv.amulets[1]};
+        for (int i = 0; i < equipRects.length; i++) dimIfIneligible(s, equipRects[i], equip[i]);
+        for (int i = 0; i < gemRects.length; i++)   dimIfIneligible(s, gemRects[i], inv.gems[i]);
+        for (BagCell c : bagCells)                  dimIfIneligible(s, c.rect, c.item);
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    /** Dim {@code r} when it holds an item that the active picker rejects. */
+    private void dimIfIneligible(ShapeRenderer s, Rect r, Item it) {
+        if (it == null) return;                       // empty cell: leave as-is
+        if (pickEligible != null && pickEligible.test(it)) return;  // eligible: bright
+        s.setColor(0f, 0f, 0f, 0.62f);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
     /** Detail-popup text - icon, name, body, action labels, bind labels.
@@ -1010,33 +1092,36 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         return true;
                     }
                 }
-                // Equipment-cell tap -> open item-detail popup.
+                // Equipment-cell tap -> pick (chooser) or open item-detail popup.
                 if (equipPressed >= 0) {
                     int idx = equipPressed;
                     equipPressed = -1;
                     if (idx < equipRects.length
                             && equipRects[idx].contains(vx, vy)) {
-                        selectedItem = equippedItemAt(idx);
+                        if (pickMode()) tryPick(equippedItemAt(idx));
+                        else selectedItem = equippedItemAt(idx);
                     }
                     return true;
                 }
-                // Gem-cell tap -> open item-detail popup.
+                // Gem-cell tap -> pick (chooser) or open item-detail popup.
                 if (gemPressed >= 0) {
                     int idx = gemPressed;
                     gemPressed = -1;
                     if (idx < gemRects.length
                             && gemRects[idx].contains(vx, vy)) {
-                        selectedItem = gemAt(idx);
+                        if (pickMode()) tryPick(gemAt(idx));
+                        else selectedItem = gemAt(idx);
                     }
                     return true;
                 }
-                // Bag-cell tap -> open item-detail popup.
+                // Bag-cell tap -> pick (chooser) or open item-detail popup.
                 if (bagPressed >= 0) {
                     int idx = bagPressed;
                     bagPressed = -1;
                     if (idx < bagCells.size()
                             && bagCells.get(idx).rect.contains(vx, vy)) {
-                        selectedItem = bagCells.get(idx).item;
+                        if (pickMode()) tryPick(bagCells.get(idx).item);
+                        else selectedItem = bagCells.get(idx).item;
                     }
                     return true;
                 }

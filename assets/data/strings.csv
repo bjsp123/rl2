@@ -1161,6 +1161,7 @@ ui.inventory.equip,Equip
 ui.inventory.quickslot,Quickslot
 ui.inventory.throw,Throw
 ui.inventory.title,Backpack
+ui.inventory.choose,Choose an item
 ui.inventory.unequip,Unequip
 ui.inventory.use,Use
 ui.levelInfo.chasms,Chasms    {value}

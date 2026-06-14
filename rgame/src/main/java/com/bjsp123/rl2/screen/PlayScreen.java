@@ -607,6 +607,8 @@ public class PlayScreen implements Screen {
         if (newRun) controller.seedDefaultActionBar(player, charClass);
         v2Inventory.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
+        controller.setItemPicker((eligible, onPick, onCancel) ->
+                v2Inventory.openPicker(eligible, onPick, onCancel));
         controller.setOpenMapScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
                 game, game.ui, game::popScreen, world)));
         v2Hud.setOnActionUse(controller::triggerActionSlot);

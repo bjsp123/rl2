@@ -1374,6 +1374,50 @@ public final class ItemSystem {
                 || t == com.bjsp123.rl2.model.Tile.LAMP;
     }
 
+    /**
+     * For a scroll that enchants an existing inventory item, the predicate of
+     * which items are valid targets - the controller opens the inventory in
+     * picker mode with eligible items lit and the rest greyed out. Returns
+     * {@code null} for scrolls that don't target an inventory item (those fire
+     * directly through {@link #triggerGem}).
+     */
+    public static java.util.function.Predicate<Item> gemItemTarget(Item gem) {
+        if (gem == null || gem.type == null) return null;
+        return switch (gem.type) {
+            case "ELEMENTAL_INSCRIPTION" -> BrandSystem::isBrandable;
+            case "FERVENT_ASPIRATION"   -> i -> i != null && i.isEquippable();
+            default -> null;
+        };
+    }
+
+    /**
+     * Apply an item-targeting scroll's effect to the player-chosen
+     * {@code targetItem}. Returns {@code true} when the effect applied (caller
+     * then consumes the scroll); {@code false} otherwise.
+     */
+    public static boolean triggerGemOnItem(Level level, Mob user, Item gem, Item targetItem) {
+        if (gem == null || gem.type == null || targetItem == null) return false;
+        switch (gem.type) {
+            case "ELEMENTAL_INSCRIPTION" -> {
+                if (!BrandSystem.isBrandable(targetItem)) return false;
+                for (int i = 0; i < 80 && targetItem.brand == null; i++) {
+                    BrandSystem.applyRandomBrand(targetItem, RANDOM);
+                }
+                if (user != null) user.statsDirty = true;
+                announceGemUse(user, gem);
+                return true;
+            }
+            case "FERVENT_ASPIRATION" -> {
+                if (!targetItem.isEquippable()) return false;
+                targetItem.level += 1;
+                if (user != null) user.statsDirty = true;
+                announceGemUse(user, gem);
+                return true;
+            }
+            default -> { return false; }
+        }
+    }
+
     /** Hostile, untamed, living mobs on the level (excludes {@code user},
      *  the player, allies, and inanimate scenery). Used by level-wide gem
      *  effects. */
