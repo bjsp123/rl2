@@ -56,6 +56,8 @@ public final class V2CharacterSelect extends V2Screen {
     private int startingLevel = 1;
     /** Seed the player with one of every non-unique item in the registry. */
     private boolean allItems;
+    /** Seed the player with one of every GEM-category crafted scroll. */
+    private boolean allScrolls;
     /** Grant +10 perk points on top of the character's normal allowance. */
     private boolean tenPerkPoints;
     /** Reveal-whole-world flag: every level pre-explored, every beacon
@@ -217,12 +219,15 @@ public final class V2CharacterSelect extends V2Screen {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float pw = Math.min(300f, vw - 32f);
-        float ph = Math.min(420f, vh - 144f);
+        // Compressed to fit eight toggles plus the Done button: shorter
+        // rows + tighter gaps, taller cap. headerBandH + 9*btnH + 7*gap +
+        // pad is the worst-case stack height (see buildOptionsPopup loop).
+        float ph = Math.min(440f, vh - 120f);
         optionsPopup.set((vw - pw) * 0.5f, (vh - ph) * 0.5f, pw, ph);
 
         float pad   = 16f;
-        float btnH  = 44f;
-        float gap   = 10f;
+        float btnH  = 32f;
+        float gap   = 6f;
         float btnW  = pw - 2 * pad;
         float yTop  = optionsPopup.top() - headerBandH() - btnH;
 
@@ -243,6 +248,9 @@ public final class V2CharacterSelect extends V2Screen {
                 new OptionRow(() -> TextCatalog.format("ui.characterSelect.allItems",
                         TextCatalog.vars("state", onOff(allItems))),
                         () -> { allItems = !allItems; show(); }),
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.allScrolls",
+                        TextCatalog.vars("state", onOff(allScrolls))),
+                        () -> { allScrolls = !allScrolls; show(); }),
                 new OptionRow(() -> TextCatalog.format("ui.characterSelect.tenPerkPoints",
                         TextCatalog.vars("state", onOff(tenPerkPoints))),
                         () -> { tenPerkPoints = !tenPerkPoints; show(); }),
@@ -290,7 +298,7 @@ public final class V2CharacterSelect extends V2Screen {
         game.saveSystem.clear(slot);
         game.setRootScreen(new PlayScreen(game, slot, selected,
                 customSeed, godMode, startingLevel, allItems, tenPerkPoints,
-                revealWholeWorld, startOnLanding));
+                revealWholeWorld, startOnLanding, allScrolls));
     }
 
     // -- Seed entry ------------------------------------------------------

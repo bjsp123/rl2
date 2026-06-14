@@ -1083,6 +1083,7 @@ ui.arenaHall.survivors,Survivors
 ui.arenaHall.title,Arena Hall
 ui.characterSelect.acc,Acc
 ui.characterSelect.allItems,All items: {state}
+ui.characterSelect.allScrolls,All scrolls: {state}
 ui.characterSelect.armor,Armor
 ui.characterSelect.atk,Atk
 ui.characterSelect.eva,Eva

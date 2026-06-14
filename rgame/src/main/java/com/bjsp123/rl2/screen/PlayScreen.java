@@ -61,6 +61,9 @@ public class PlayScreen implements Screen {
     /** Pre-game-options "all items" flag - seeds the spawned player's
      *  inventory with one of every non-unique item in the registry. */
     private final boolean allItemsRequested;
+    /** Pre-game-options "All scrolls" flag - seeds the bag with one of
+     *  every GEM-category crafted scroll item. */
+    private final boolean allScrollsRequested;
     /** Pre-game-options "+10 perk points" flag - adds 10 perk points to
      *  whatever the character normally starts with. */
     private final boolean tenPerkPointsRequested;
@@ -250,20 +253,28 @@ public class PlayScreen implements Screen {
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode, int startingLevel,
                       boolean allItems, boolean tenPerkPoints) {
-        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, false, false);
+        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, false, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode, int startingLevel,
                       boolean allItems, boolean tenPerkPoints,
                       boolean revealWholeWorld) {
-        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, revealWholeWorld, false);
+        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, revealWholeWorld, false, false);
     }
 
     public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
                       Long seed, boolean godMode, int startingLevel,
                       boolean allItems, boolean tenPerkPoints,
                       boolean revealWholeWorld, boolean startOnLanding) {
+        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints, revealWholeWorld, startOnLanding, false);
+    }
+
+    public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
+                      Long seed, boolean godMode, int startingLevel,
+                      boolean allItems, boolean tenPerkPoints,
+                      boolean revealWholeWorld, boolean startOnLanding,
+                      boolean allScrolls) {
         this.game = game;
         this.saveSlot = slot;
         this.charClass = cls;
@@ -272,6 +283,7 @@ public class PlayScreen implements Screen {
         this.godModeRequested = godMode;
         this.startingLevel = startingLevel;
         this.allItemsRequested = allItems;
+        this.allScrollsRequested = allScrolls;
         this.tenPerkPointsRequested = tenPerkPoints;
         this.revealWholeWorldRequested = revealWholeWorld;
         this.startOnLandingRequested = startOnLanding;
@@ -288,6 +300,7 @@ public class PlayScreen implements Screen {
         this.godModeRequested = false;
         this.startingLevel = 1;
         this.allItemsRequested = false;
+        this.allScrollsRequested = false;
         this.tenPerkPointsRequested = false;
         this.revealWholeWorldRequested = false;
         this.startOnLandingRequested = false;
@@ -432,6 +445,7 @@ public class PlayScreen implements Screen {
             }
             if (tenPerkPointsRequested) player.perkPoints += 10;
             if (allItemsRequested) grantOneOfEachItem(player);
+            if (allScrollsRequested) grantOneOfEachScroll(player);
             if (revealWholeWorldRequested) revealWholeWorld(player, levels);
             startLevel.mobs.add(player);
             String playerName = player.name != null ? player.name
@@ -657,6 +671,25 @@ public class PlayScreen implements Screen {
                     com.bjsp123.rl2.logic.InventorySystem.equip(player.inventory, it);
                     player.statsDirty = true;
                 }
+            } catch (RuntimeException ignored) {
+                // Defensive: skip any registry entry the factory refuses.
+            }
+        }
+    }
+
+    /** Seed {@code player}'s bag with one of every GEM-category crafted
+     *  scroll item (the 24 gem-hearth recipes). Gems go in the bag rather
+     *  than auto-equipping since there are only three gem slots. Used by
+     *  the "All scrolls" debug option on character creation. */
+    private static void grantOneOfEachScroll(Mob player) {
+        if (player == null || player.inventory == null) return;
+        for (String type : com.bjsp123.rl2.logic.Registries.itemTypesMatching(
+                def -> def.inventoryCategory
+                        == com.bjsp123.rl2.model.Item.InventoryCategory.GEM)) {
+            try {
+                com.bjsp123.rl2.model.Item it =
+                        com.bjsp123.rl2.logic.ItemFactory.build(type);
+                player.inventory.bag.add(it);
             } catch (RuntimeException ignored) {
                 // Defensive: skip any registry entry the factory refuses.
             }
