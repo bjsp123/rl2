@@ -252,10 +252,10 @@ final class PlayController {
         }
     }
 
-    /** Trigger a crafted gem-item (RL-50) the player equipped in a gem slot.
-     *  WAND-flavoured gems gather a target tile first; the rest fire at once.
-     *  The gem is destroyed (removed from its slot) only when the effect
-     *  actually fires - unforged stubs return false and stay equipped. */
+    /** Trigger a crafted gem-item (RL-50) - a read-once scroll. WAND-flavoured
+     *  gems gather a target tile first; the rest fire at once. The scroll is
+     *  consumed (removed from wherever it lives - bag or gem slot) only when
+     *  the effect actually fires; unforged stubs return false and are kept. */
     private void triggerCraftedGem(Mob user, Item gem) {
         Level level = world.currentLevel();
         if (gem.useBehavior == UseBehavior.WAND) {
@@ -265,7 +265,7 @@ final class PlayController {
             targetingOverlay.activate(target -> {
                 Level cur = world.currentLevel();
                 if (ItemSystem.triggerGem(cur, user, gem, target)) {
-                    com.bjsp123.rl2.logic.InventorySystem.removeFromGemSlots(user.inventory, gem);
+                    com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
                     animator.consume(cur);
                     afterMove(cur);
                 }
@@ -273,7 +273,7 @@ final class PlayController {
             return;
         }
         if (ItemSystem.triggerGem(level, user, gem, null)) {
-            com.bjsp123.rl2.logic.InventorySystem.removeFromGemSlots(user.inventory, gem);
+            com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
             afterMove(level);
         }
     }
