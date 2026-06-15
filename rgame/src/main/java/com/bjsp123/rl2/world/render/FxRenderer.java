@@ -120,7 +120,10 @@ final class FxRenderer {
         } else if (effect.type == EffectType.INWARD_SPIRAL) {
             if (!level.visible[ex][ey]) return;
             drawInwardSpiral(effect);
-        } else if (effect.type == EffectType.LEVEL_FLICKER) {
+        } else if (effect.type == EffectType.SCROLL_CAST) {
+            drawScrollCast(effect);
+        } else if (effect.type == EffectType.LEVEL_FLICKER
+                || effect.type == EffectType.ENCHANT_SHOWCASE) {
             // Screen-space; rendered once per frame by drawScreenSpaceEffects.
             return;
         } else if (effect.type == EffectType.ATTACK_FLASH) {
@@ -625,6 +628,8 @@ final class FxRenderer {
             if (e.startDelay > 0) continue;
             if (e.type == EffectType.LEVEL_FLICKER) {
                 drawLevelFlicker(e, camera);
+            } else if (e.type == EffectType.ENCHANT_SHOWCASE) {
+                drawEnchantShowcase(e, camera);
             } else if (e.type == EffectType.BUFF_ICON) {
                 // Buff icons render here (above fog). Still FOV-gated on the source tile so
                 // an icon for a mob that walked out of sight doesn't linger over the dark.
@@ -659,6 +664,96 @@ final class FxRenderer {
                 halfW * 2f, halfH * 2f);
         batch.setColor(Color.WHITE);
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+    }
+
+    /** Render a SCROLL_CAST (RL-50) around the reader's tile: sparks flying
+     *  outward, an expanding glow, or an inward whirlpool - all tinted by the
+     *  scroll's colour. Additive. */
+    private void drawScrollCast(Effect e) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float lifeT = Math.min(1f, e.frame / (float) total);
+        Color c = tintToColor(e.tint, Color.WHITE);
+        float baseX = e.location.tileX() * (float) CELL + CELL * 0.5f;
+        float baseY = e.location.tileY() * (float) CELL + CELL * 0.5f;
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        if (e.scrollStyle == Effect.SCROLL_GLOW) {
+            float r = 5f + lifeT * 42f;
+            float a = (1f - lifeT) * 0.55f;
+            if (a > 0f) {
+                batch.setColor(c.r, c.g, c.b, a);
+                batch.draw(whiteRegion, baseX - r, baseY - r, r * 2f, r * 2f);
+                float r2 = r * 0.45f;
+                batch.setColor(c.r, c.g, c.b, Math.min(1f, a * 1.4f));
+                batch.draw(whiteRegion, baseX - r2, baseY - r2, r2 * 2f, r2 * 2f);
+            }
+        } else if (e.particleX0 != null) {
+            boolean whirl = e.scrollStyle == Effect.SCROLL_WHIRLPOOL;
+            for (int i = 0; i < e.particleX0.length; i++) {
+                float speed = e.particleVX[i];
+                float angle, dist, a;
+                if (whirl) {
+                    angle = e.particleX0[i] + lifeT * speed * 7f;   // spin
+                    dist  = (1f - lifeT) * 46f;                     // pull inward
+                    a = (float) Math.sin(Math.PI * lifeT) * 0.85f;
+                } else {
+                    angle = e.particleX0[i];
+                    dist  = lifeT * speed * 46f;                    // fly outward
+                    a = (1f - lifeT) * 0.9f;
+                }
+                if (a <= 0f) continue;
+                float px = baseX + (float) Math.cos(angle) * dist;
+                float py = baseY + (float) Math.sin(angle) * dist;
+                batch.setColor(c.r, c.g, c.b, a);
+                batch.draw(whiteRegion, px - 1.5f, py - 1.5f, 3f, 3f);
+            }
+        }
+        batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+    }
+
+    /** Render an ENCHANT_SHOWCASE (RL-50): the chosen item blown up in the
+     *  screen centre with a pulsing glow halo and a spark shower. Screen-space
+     *  (camera-anchored), grows in, holds, fades out. */
+    private void drawEnchantShowcase(Effect e, com.badlogic.gdx.graphics.OrthographicCamera camera) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float lifeT = Math.min(1f, e.frame / (float) total);
+        float cx = camera.position.x, cy = camera.position.y;
+        float screenH = camera.viewportHeight * camera.zoom;
+        float grow = lifeT < 0.18f ? (lifeT / 0.18f) : 1f;
+        float fade = lifeT > 0.82f ? (1f - (lifeT - 0.82f) / 0.18f) : 1f;
+        float alpha = Math.max(0f, Math.min(grow, fade));
+        if (alpha <= 0f) return;
+        float size = screenH * 0.20f * (0.7f + 0.3f * grow);
+        Color glow = tintToColor(e.tint, Color.GOLD);
+        // Glow halo behind the item.
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        float gr = size * (1.1f + 0.08f * (float) Math.sin(lifeT * 24f));
+        batch.setColor(glow.r, glow.g, glow.b, alpha * 0.45f);
+        batch.draw(whiteRegion, cx - gr, cy - gr, gr * 2f, gr * 2f);
+        // Spark shower - each spark spawns at its phase and flies outward.
+        if (e.particleX0 != null) {
+            for (int i = 0; i < e.particleX0.length; i++) {
+                float t = (lifeT - e.particleY0[i]) / 0.5f;   // 0.5-life spark
+                if (t < 0f || t > 1f) continue;
+                float dist = t * size * 1.6f;
+                float px = cx + (float) Math.cos(e.particleX0[i]) * dist;
+                float py = cy + (float) Math.sin(e.particleX0[i]) * dist;
+                float sa = (1f - t) * alpha;
+                float sz = size * 0.05f;
+                batch.setColor(glow.r, glow.g, glow.b, sa);
+                batch.draw(whiteRegion, px - sz, py - sz, sz * 2f, sz * 2f);
+            }
+        }
+        // Item sprite on top (normal blend).
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        TextureRegion region = ItemSprites.regionFor(e.thrownItem);
+        if (region != null) {
+            batch.setColor(1f, 1f, 1f, alpha);
+            batch.draw(region, cx - size * 0.5f, cy - size * 0.5f, size, size);
+        }
+        batch.setColor(Color.WHITE);
     }
 
     /** Render a teleport streak burst - green vertical streaks moving purely along y. */

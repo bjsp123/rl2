@@ -124,7 +124,15 @@ public class Effect {
         /** Gem-hearth ember (RL-51): a dot that appears near a point above the
          *  hearth, rises while fading and elongating into a vertical line.
          *  Emitted continuously from GEM_HEARTH tiles in FOV. */
-        HEARTH_SPARK(70);
+        HEARTH_SPARK(70),
+        /** Gem-scroll cast (RL-50): a tinted burst around the reader. Style
+         *  ({@link Effect#scrollStyle}) selects sparks / expanding glow /
+         *  whirlpool; colour comes from {@link Effect#tint}. */
+        SCROLL_CAST(40),
+        /** Enchant/upgrade showcase (RL-50): screen-space - the chosen item
+         *  blown up in the centre with a glow behind and a spark shower. The
+         *  item is in {@link Effect#thrownItem}, the glow tint in {@link Effect#tint}. */
+        ENCHANT_SHOWCASE(80);
 
         public final int frameCount;
 
@@ -264,6 +272,11 @@ public class Effect {
     public float particleBounceDamping;
     /** BUFF_ICON only: which buff to render the icon for. */
     public Buff.BuffType buffType;
+
+    /** SCROLL_CAST style selector. */
+    public static final int SCROLL_SPARKS = 0, SCROLL_GLOW = 1, SCROLL_WHIRLPOOL = 2;
+    /** SCROLL_CAST only: which {@link #SCROLL_SPARKS}/{@code GLOW}/{@code WHIRLPOOL} style. */
+    public int scrollStyle;
 
     /** DAMAGE_FLOATER only: flat atlas index into {@code buffs16.png}'s buff-
      *  icon grid (col + row * 20). Negative means "no icon, draw text only". */
@@ -531,6 +544,19 @@ public class Effect {
                 /*riseSpeedMin*/ 0.25f, /*riseSpeedMax*/ 0.5f,
                 /*horizontalJitter*/ 0f, /*fadeToWhite*/ true,
                 /*positionJitterX*/ 32f, /*positionJitterY*/ 16f, rng);
+    }
+
+    /** Gem-scroll cast around the reader (RL-50): a {@code style}
+     *  ({@link #SCROLL_SPARKS}/{@code GLOW}/{@code WHIRLPOOL}) burst tinted by
+     *  the scroll's colour. */
+    public static Effect scrollCast(Point at, EffectTint tint, int style, Random rng) {
+        return EffectBuilder.scrollCast(at, tint, style, rng);
+    }
+
+    /** Enchant/upgrade showcase (RL-50): screen-space blow-up of the chosen
+     *  {@code item} with a {@code glow}-tinted halo and spark shower. */
+    public static Effect enchantShowcase(Item item, EffectTint glow, Random rng) {
+        return EffectBuilder.enchantShowcase(item, glow, rng);
     }
 
     public static Effect particleBurst(Point location, EffectTint tint, int count, Random rng) {

@@ -345,7 +345,12 @@ final class PlayController {
                     (u, chosen) -> {
                         Level cur = world.currentLevel();
                         if (ItemSystem.triggerGemOnItem(cur, u, gem, chosen)) {
-                            playScrollSound(gem);
+                            playScrollFx(u, gem);
+                            // Showcase the enchanted item centre-screen.
+                            if (animator != null) {
+                                animator.stage.add(com.bjsp123.rl2.world.render.Effect.enchantShowcase(
+                                        chosen, scrollTint(gem.type), FX_RNG));
+                            }
                             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(u, gem);
                             afterMove(cur);
                         } else {
@@ -360,7 +365,7 @@ final class PlayController {
             return;
         }
         if (ItemSystem.triggerGem(level, user, gem, null)) {
-            playScrollSound(gem);
+            playScrollFx(user, gem);
             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
             afterMove(level);
         } else {
@@ -374,12 +379,51 @@ final class PlayController {
         if (sounds != null) sounds.play("sfx.item.fail");
     }
 
-    /** Per-scroll read SFX (RL-50). Plays {@code sfx.item.use.gem.<type>}, which
-     *  SoundManager falls back to the any-scroll default {@code sfx.item.use.gem}
-     *  (then {@code sfx.item.use}) when no per-scroll entry exists. */
-    private void playScrollSound(Item gem) {
-        if (sounds == null || gem == null || gem.type == null) return;
-        sounds.play("sfx.item.use.gem." + gem.type.toLowerCase());
+    private static final java.util.Random FX_RNG = new java.util.Random();
+
+    /** Per-scroll read feedback (RL-50): the {@code sfx.item.use.gem.<type>}
+     *  sound (falling back to the any-scroll default) plus a colour-matched
+     *  SCROLL_CAST effect around the reader. */
+    private void playScrollFx(Mob user, Item gem) {
+        if (gem == null || gem.type == null) return;
+        if (sounds != null) sounds.play("sfx.item.use.gem." + gem.type.toLowerCase());
+        if (animator != null && user != null && user.position != null) {
+            animator.stage.add(com.bjsp123.rl2.world.render.Effect.scrollCast(
+                    user.position, scrollTint(gem.type), scrollStyle(gem.type), FX_RNG));
+        }
+    }
+
+    /** Colour for a scroll's cast effect, matching its emblem art. */
+    private static com.bjsp123.rl2.world.render.Effect.EffectTint scrollTint(String t) {
+        return switch (t) {
+            case "BLOOD_FLOWER", "INVOCATION_OF_MO_YE" -> com.bjsp123.rl2.world.render.Effect.EffectTint.RED;
+            case "FERVENT_ASPIRATION", "INVOCATION_OF_JIUTIAN", "EIGHTFOLD_MULTIPLICATION",
+                 "PILL_OF_IMMORTALITY" -> com.bjsp123.rl2.world.render.Effect.EffectTint.YELLOW;
+            case "BLIZZARD_PETAL", "THIRTY_SIX_STRATAGEMS", "GREATER_SEAL",
+                 "ELEMENTAL_INSCRIPTION" -> com.bjsp123.rl2.world.render.Effect.EffectTint.CYAN;
+            case "HARVEST_BLOSSOM", "POLYMORPH_SIGN" -> com.bjsp123.rl2.world.render.Effect.EffectTint.GREEN;
+            case "EIGHT_DIRECTIONS_DEFENCE", "INVOCATION_OF_RU_SHOU" -> com.bjsp123.rl2.world.render.Effect.EffectTint.BLUE;
+            case "HEAVENLY_PEACH", "CRYSTAL_OF_INVERSION" -> com.bjsp123.rl2.world.render.Effect.EffectTint.PINK;
+            case "BLIND_MASTER", "SYMBOL_OF_INSANITY" -> com.bjsp123.rl2.world.render.Effect.EffectTint.MAUVE;
+            case "INVOCATION_OF_CHIYOU", "INVOCATION_OF_THE_FOXES", "STONE_BURNER" -> com.bjsp123.rl2.world.render.Effect.EffectTint.ORANGE;
+            case "LESSER_SEAL", "INVOCATION_OF_TAISHAN" -> com.bjsp123.rl2.world.render.Effect.EffectTint.BROWN;
+            default -> com.bjsp123.rl2.world.render.Effect.EffectTint.WHITE;
+        };
+    }
+
+    /** Cast style per scroll: whirlpool for travel/transform/arcane, glow for
+     *  buffs/seals/creation-of-gear, sparks for offensive/elemental. */
+    private static int scrollStyle(String t) {
+        return switch (t) {
+            case "THIRTY_SIX_STRATAGEMS", "ELEMENTAL_INSCRIPTION", "POLYMORPH_SIGN",
+                 "EIGHTFOLD_MULTIPLICATION", "SYMBOL_OF_INSANITY", "PATH_THROUGH_OBLIVION"
+                    -> com.bjsp123.rl2.world.render.Effect.SCROLL_WHIRLPOOL;
+            case "FERVENT_ASPIRATION", "BLIND_MASTER", "EIGHT_DIRECTIONS_DEFENCE",
+                 "HEAVENLY_PEACH", "HARVEST_BLOSSOM", "LESSER_SEAL", "GREATER_SEAL",
+                 "INVOCATION_OF_TAISHAN", "INVOCATION_OF_RU_SHOU", "PILL_OF_IMMORTALITY"
+                    -> com.bjsp123.rl2.world.render.Effect.SCROLL_GLOW;
+            default -> com.bjsp123.rl2.world.render.Effect.SCROLL_SPARKS;
+        };
     }
 
     /** True if the player holds (bag or equipped) at least one item the picker
@@ -402,7 +446,7 @@ final class PlayController {
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             if (ItemSystem.triggerGem(cur, user, gem, target)) {
-                playScrollSound(gem);
+                playScrollFx(user, gem);
                 com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
                 animator.consume(cur);
                 afterMove(cur);

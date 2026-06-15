@@ -107,6 +107,44 @@ public final class EffectBuilder {
         return e;
     }
 
+    /** Gem-scroll cast (RL-50). For SPARKS/WHIRLPOOL fills per-particle data
+     *  ({@code particleX0}=angle, {@code particleVX}=speed/radius factor); GLOW
+     *  needs none (the renderer draws an expanding disc). Tint = scroll colour. */
+    public static Effect scrollCast(Point at, EffectTint tint, int style, Random rng) {
+        Effect e = new Effect(at, EffectType.SCROLL_CAST);
+        e.tint = tint;
+        e.scrollStyle = style;
+        e.ignoresFov = true;
+        int count = style == Effect.SCROLL_GLOW ? 0 : 28;
+        e.particleX0 = new float[count];
+        e.particleVX = new float[count];
+        for (int i = 0; i < count; i++) {
+            e.particleX0[i] = (float) (i * Math.PI * 2.0 / count) + (rng.nextFloat() - 0.5f) * 0.4f;
+            e.particleVX[i] = 0.7f + rng.nextFloat() * 0.6f;
+        }
+        return e;
+    }
+
+    /** Enchant/upgrade showcase (RL-50): screen-space. Carries the chosen item
+     *  + a spark shower (angle in {@code particleX0}, speed in {@code particleVX},
+     *  spawn phase in {@code particleY0}). */
+    public static Effect enchantShowcase(com.bjsp123.rl2.model.Item item, EffectTint glow, Random rng) {
+        Effect e = new Effect(new Point(0, 0), EffectType.ENCHANT_SHOWCASE);
+        e.thrownItem = item;
+        e.tint = glow;
+        e.ignoresFov = true;
+        int n = 32;
+        e.particleX0 = new float[n];
+        e.particleVX = new float[n];
+        e.particleY0 = new float[n];
+        for (int i = 0; i < n; i++) {
+            e.particleX0[i] = rng.nextFloat() * (float) (Math.PI * 2);
+            e.particleVX[i] = 0.5f + rng.nextFloat() * 1.2f;
+            e.particleY0[i] = rng.nextFloat();   // 0..1 spawn phase across lifetime
+        }
+        return e;
+    }
+
     // ====================================================================
     // 2. splash — upper-cone spray, gravity, optional bouncing.
     // ====================================================================
