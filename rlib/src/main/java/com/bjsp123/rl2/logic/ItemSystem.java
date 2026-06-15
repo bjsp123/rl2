@@ -1300,24 +1300,19 @@ public final class ItemSystem {
         return f < 0 ? 0 : (f > 1 ? 1 : f);
     }
 
-    /** Scatter rolled items onto floor tiles spiralling out from the player. */
     /** Hand freshly-created items straight to the player's bag (RL-50 creation
      *  scrolls) so they're immediately usable and noticed - scattering them on
      *  the floor read as "the scroll did nothing". Stackables merge; bag-limit
-     *  caps are bypassed (a reward scroll always delivers). */
+     *  caps are bypassed (a reward scroll always delivers). No item-burst here:
+     *  the scroll's own read SFX (PlayController) is the feedback. */
     private static void giveItemsToPlayer(Level level, Mob user, java.util.List<Item> items) {
         if (user == null || user.inventory == null || items == null || items.isEmpty()) return;
-        int given = 0;
         for (Item it : items) {
             if (it == null) continue;
             it.location = null;
             if (!InventorySystem.addToBag(user.inventory, it)) {
                 user.inventory.bag.add(it);   // over a category cap - deliver anyway
             }
-            given++;
-        }
-        if (given > 0 && user.position != null && level != null && level.events != null) {
-            level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(user.position, items.get(0)));
         }
     }
 

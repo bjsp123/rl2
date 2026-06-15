@@ -345,6 +345,7 @@ final class PlayController {
                     (u, chosen) -> {
                         Level cur = world.currentLevel();
                         if (ItemSystem.triggerGemOnItem(cur, u, gem, chosen)) {
+                            playScrollSound(gem);
                             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(u, gem);
                             afterMove(cur);
                         } else {
@@ -359,6 +360,7 @@ final class PlayController {
             return;
         }
         if (ItemSystem.triggerGem(level, user, gem, null)) {
+            playScrollSound(gem);
             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
             afterMove(level);
         } else {
@@ -370,6 +372,14 @@ final class PlayController {
      *  line (why it failed) is emitted by the rlib use/trigger path. */
     private void playInvocationFail() {
         if (sounds != null) sounds.play("sfx.item.fail");
+    }
+
+    /** Per-scroll read SFX (RL-50). Plays {@code sfx.item.use.gem.<type>}, which
+     *  SoundManager falls back to the any-scroll default {@code sfx.item.use.gem}
+     *  (then {@code sfx.item.use}) when no per-scroll entry exists. */
+    private void playScrollSound(Item gem) {
+        if (sounds == null || gem == null || gem.type == null) return;
+        sounds.play("sfx.item.use.gem." + gem.type.toLowerCase());
     }
 
     /** True if the player holds (bag or equipped) at least one item the picker
@@ -392,6 +402,7 @@ final class PlayController {
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             if (ItemSystem.triggerGem(cur, user, gem, target)) {
+                playScrollSound(gem);
                 com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
                 animator.consume(cur);
                 afterMove(cur);

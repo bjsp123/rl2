@@ -1587,6 +1587,7 @@ public final class Animator {
             case BOMB   -> "sfx.item.use.bomb"   + type;
             case POTION -> "sfx.item.use.potion" + type;
             case FOOD   -> "sfx.item.use.food"   + type;
+            case GEM    -> "sfx.item.use.gem"    + type;
             default     -> "sfx.item.use"        + type;
         };
     }
