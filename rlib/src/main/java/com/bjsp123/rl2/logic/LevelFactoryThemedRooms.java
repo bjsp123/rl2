@@ -45,12 +45,70 @@ public final class LevelFactoryThemedRooms {
         if (unique == null) return;
         if (level.layout == LevelFactory.Layout.VILLAGE) return;
 
+        // RL-51: gem hearth - rolled first so it gets first pick of a 6x6 room.
+        maybePlaceGemHearth(level, rooms, unique, rng);
         // Pass 1: at most one globally-unique room per world.
         stampOneSpecial(level, rooms, unique, rng, /*globalUnique=*/true);
         // Pass 2: at most one perLevelUnique room per level (independent of
         // pass 1 - a level may host both a globally-unique room AND a
         // perLevelUnique-tagged room, each claiming its own room rect).
         stampOneSpecial(level, rooms, unique, rng, /*globalUnique=*/false);
+    }
+
+    /**
+     * RL-51 gem hearth. Each level rolls for a hearth at a depth-escalating
+     * chance: 30% base, 50% if the previous depth produced none, 75% if neither
+     * of the previous two did. On success, claims a fitting (>=6x6) room, places
+     * the 2-wide hearth at its centre, rings it with statues, reserves it, and
+     * records the depth in {@link UniqueTracker#hearthDepths}.
+     */
+    private static void maybePlaceGemHearth(Level level, List<int[]> rooms,
+                                            UniqueTracker unique, Random rng) {
+        int d = level.depth;
+        boolean prev1Empty = d >= 2 && !unique.hearthDepths.contains(d - 1);
+        boolean prev2Empty = d >= 3 && !unique.hearthDepths.contains(d - 2);
+        double chance = !prev1Empty ? 0.30 : (!prev2Empty ? 0.50 : 0.75);
+        if (rng.nextDouble() >= chance) return;
+
+        // Claim the first fitting room (skip the stair rooms at 0 / last).
+        int last = rooms.size() - 1;
+        int[] chosen = null; int chosenIdx = -1;
+        for (int ri = 1; ri < last; ri++) {
+            int[] r = rooms.get(ri);
+            if (r[2] >= 6 && r[3] >= 6) { chosen = r; chosenIdx = ri; break; }
+        }
+        if (chosen == null) return;   // no room big enough; depth stays "empty"
+
+        int x = chosen[0], y = chosen[1], w = chosen[2], h = chosen[3];
+        int cx = x + (w - 2) / 2;     // left base column (hearth is 2 wide)
+        int cy = y + h / 2;           // base row; sprite overhangs row cy+1 (north)
+        if (level.tiles[cx][cy].canHoldItem()
+                && level.tiles[cx + 1][cy].canHoldItem()) {
+            level.tiles[cx][cy]     = com.bjsp123.rl2.model.Tile.GEM_HEARTH_L;
+            level.tiles[cx + 1][cy] = com.bjsp123.rl2.model.Tile.GEM_HEARTH_R;
+        } else {
+            return;   // centre not clear floor; bail without marking the depth
+        }
+        // Statue ring at the four inner corners.
+        placeHearthStatue(level, x + 1,     y + 1,     rng);
+        placeHearthStatue(level, x + w - 2, y + 1,     rng);
+        placeHearthStatue(level, x + 1,     y + h - 2, rng);
+        placeHearthStatue(level, x + w - 2, y + h - 2, rng);
+
+        level.reservedRects.add(new int[]{x, y, w, h});
+        tagSnapshotKind(level, chosen, "GEM_HEARTH");
+        unique.hearthDepths.add(d);
+        rooms.remove(chosenIdx);
+    }
+
+    /** Place a large statue on a clear floor cell (skips non-floor / near-door). */
+    private static void placeHearthStatue(Level level, int sx, int sy, Random rng) {
+        if (!LevelFactoryUtils.inBounds(level, sx, sy)) return;
+        if (!level.tiles[sx][sy].canHoldItem()) return;
+        if (LevelFactoryUtils.adjacentToDoor(level, sx, sy)) return;
+        level.tiles[sx][sy] = rng.nextBoolean()
+                ? com.bjsp123.rl2.model.Tile.STATUE_LARGE_L
+                : com.bjsp123.rl2.model.Tile.STATUE_LARGE_R;
     }
 
     /** Single-pass picker shared by global-unique and per-level-unique

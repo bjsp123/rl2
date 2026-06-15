@@ -37,7 +37,14 @@ public enum Tile {
     /** Active teleport beacon. Emits light like a LAMP and spawns ambient
      *  particle effects. Teleport destinations on the world map are picked
      *  from the set of active beacons. */
-    BEACON_ACTIVE;
+    BEACON_ACTIVE,
+    /** Gem forge (RL-51). A 64x64 (2-wide x 2-tall) sprite anchored at the
+     *  left base cell, drawn like a LAMP: the bottom row is the impassable
+     *  pedestal, the top half overhangs the cell to the north and just renders
+     *  on top of whatever floor/wall is behind it. {@code _L} is the anchor
+     *  (renders the sprite); {@code _R} is the right base cell (impassable,
+     *  drawn nothing - covered by the anchor sprite). */
+    GEM_HEARTH_L, GEM_HEARTH_R;
 
     /** True for any door state (open, closed, crystal, one-time). */
     public boolean isDoor() {
@@ -77,7 +84,8 @@ public enum Tile {
             || this == STATUE_LARGE_L || this == STATUE_LARGE_R
             || this == ALTAR
             || this == THRONE_L || this == THRONE_R
-            || this == BEACON_INACTIVE || this == BEACON_ACTIVE;
+            || this == BEACON_INACTIVE || this == BEACON_ACTIVE
+            || this == GEM_HEARTH_L || this == GEM_HEARTH_R;
     }
 
     /** True if the tile is a beacon (either state). */
@@ -114,6 +122,7 @@ public enum Tile {
     public boolean isFloorLike() {
         return this == FLOOR || this == FLOOR_WOOD || this == FLOOR_SPECIAL
             || this == LAMP
+            || this == GEM_HEARTH_L || this == GEM_HEARTH_R
             || this == STAIRS_UP || this == STAIRS_DOWN
             || this == DOOR_OPEN || this == CRYSTAL_DOOR_OPEN;
     }

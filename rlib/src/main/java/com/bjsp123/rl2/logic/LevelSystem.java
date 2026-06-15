@@ -139,7 +139,8 @@ public class LevelSystem {
 
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                if (level.tiles[x][y] != Tile.LAMP && level.tiles[x][y] != Tile.BEACON_ACTIVE) continue;
+                if (level.tiles[x][y] != Tile.LAMP && level.tiles[x][y] != Tile.BEACON_ACTIVE
+                        && level.tiles[x][y] != Tile.GEM_HEARTH_L) continue;
                 ShadowCaster.castShadow(x, y, w, temp, blocking, LAMP_LIGHT_RADIUS);
                 for (int i = 0; i < accum.length; i++) if (temp[i]) accum[i] = true;
             }

@@ -154,6 +154,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private TextureRegion currentSmallStatue;
     private TextureRegion currentLargeStatue;
     private TextureRegion currentLampOrnament;
+    private TextureRegion currentGemHearth;
     private TextureRegion currentStairsUp;
     private TextureRegion currentStairsDown;
     private TextureRegion currentAltar;
@@ -524,6 +525,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         currentSmallStatue  = TileSprites.smallStatue(level.theme);
         currentLargeStatue  = TileSprites.largeStatue(level.theme);
         currentLampOrnament = TileSprites.lampOrnament(level.theme);
+        currentGemHearth    = TileSprites.gemHearth(level.theme);
         currentStairsUp     = TileSprites.stairsUp(level.theme);
         currentStairsDown   = TileSprites.stairsDown(level.theme);
         currentAltar        = TileSprites.altar(level.theme);
@@ -624,6 +626,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 if (explored) {
                     drawRearVegetationAt(level, x, y);
                     drawLampAt(level, x, y);
+                    drawGemHearthAt(level, x, y);
                     drawBeaconAt(level, x, y);
                     drawStairsAt(level, x, y);
                     drawStatueAt(level, x, y);
@@ -1485,6 +1488,20 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.draw(currentLampOrnament, dx, dy, CELL, 2f * CELL);
     }
 
+    /** Gem hearth (RL-51): a 64x64 (2 cells wide x 2 cells tall) sprite anchored
+     *  at the GEM_HEARTH_L base cell, overhanging one row north - same baseline
+     *  convention as the lamp/large statue. Only the _L anchor draws; the _R base
+     *  cell is covered by this sprite. */
+    private void drawGemHearthAt(Level level, int x, int y) {
+        if (level.tiles[x][y] != Tile.GEM_HEARTH_L) return;
+        if (currentGemHearth == null) return;
+        float dx = x * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
+        outlines.drawRegion(batch, currentGemHearth, dx, dy, 2f * CELL, 2f * CELL);
+        batch.setColor(Color.WHITE);
+        batch.draw(currentGemHearth, dx, dy, 2f * CELL, 2f * CELL);
+    }
+
     /**
      * Beacon overlay for one cell. 1x2 sprite anchored at the floor cell (same
      * convention as the lamp). Both BEACON_INACTIVE and BEACON_ACTIVE render
@@ -1849,7 +1866,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
                  STATUE_LARGE_L, STATUE_LARGE_R,
                  ALTAR,
                  THRONE_L, THRONE_R,
-                 BEACON_INACTIVE, BEACON_ACTIVE -> TileSprites.floorVariant(hash);
+                 BEACON_INACTIVE, BEACON_ACTIVE,
+                 // Gem hearth sits on a floor base; the 64x64 sprite is layered
+                 // on top in drawGemHearthAt (anchored at the _L base cell).
+                 GEM_HEARTH_L, GEM_HEARTH_R -> TileSprites.floorVariant(hash);
         };
     }
 

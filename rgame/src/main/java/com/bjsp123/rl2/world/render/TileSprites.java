@@ -171,6 +171,13 @@ public final class TileSprites {
     private static final int LAMP_ROW         = 0;
     private static final int STATUE_LARGE_COL = 19;
     private static final int STATUE_LARGE_ROW = 0;
+    /** Gem hearth (RL-51): a 2x2-cell (64x64) sprite directly below the lamp +
+     *  large-statue ornaments, anchored at the lower-left base cell with the
+     *  upper half overhanging north (like the lamp, but 2 wide). */
+    private static final int GEM_HEARTH_COL     = 18;
+    private static final int GEM_HEARTH_ROW     = 2;
+    private static final int GEM_HEARTH_W_CELLS = 2;
+    private static final int GEM_HEARTH_H_CELLS = 2;
     /** Beacon ornament: 1x2 sprite anchored at the lower (floor) cell, upper
      *  half overhangs north. The same sprite is shared by BEACON_INACTIVE and
      *  BEACON_ACTIVE - the two tile values differ only behaviourally (light
@@ -237,6 +244,7 @@ public final class TileSprites {
     private static Map<VisualTheme, TextureRegion> altarByTheme;
     private static Map<VisualTheme, TextureRegion> throneByTheme;
     private static Map<VisualTheme, TextureRegion> beaconByTheme;
+    private static Map<VisualTheme, TextureRegion> gemHearthByTheme;
     /** Per-theme average floor + wall colours, sampled from the terrain atlas
      *  during {@link #load}. Used by the world map to tint level cards by
      *  theme. RGBA-packed via {@link com.badlogic.gdx.graphics.Color#toIntBits}. */
@@ -280,6 +288,12 @@ public final class TileSprites {
     public static TextureRegion lampOrnament(VisualTheme theme) {
         if (lampByTheme == null) load();
         return ornament(lampByTheme, theme);
+    }
+
+    /** Gem-hearth ornament region (2x2 cells, anchored at the lower-left base cell). */
+    public static TextureRegion gemHearth(VisualTheme theme) {
+        if (gemHearthByTheme == null) load();
+        return ornament(gemHearthByTheme, theme);
     }
 
     /** Up-ladder ornament region (2x2 cells, anchored at the bottom of the stair cell). */
@@ -399,6 +413,9 @@ public final class TileSprites {
             // Both beacon states share the same atlas cell - distinction is
             // purely behavioural (light + particles for ACTIVE).
             case BEACON_INACTIVE, BEACON_ACTIVE -> new int[]{BEACON_COL, BEACON_ROW, 1, 2};
+            // Both hearth base cells map to the 2x2 sprite anchored at _L.
+            case GEM_HEARTH_L, GEM_HEARTH_R ->
+                    new int[]{GEM_HEARTH_COL, GEM_HEARTH_ROW, GEM_HEARTH_W_CELLS, GEM_HEARTH_H_CELLS};
         };
     }
 
@@ -457,6 +474,7 @@ public final class TileSprites {
         altarByTheme       = new EnumMap<>(VisualTheme.class);
         throneByTheme      = new EnumMap<>(VisualTheme.class);
         beaconByTheme      = new EnumMap<>(VisualTheme.class);
+        gemHearthByTheme   = new EnumMap<>(VisualTheme.class);
         floorTintByTheme   = new EnumMap<>(VisualTheme.class);
         wallTintByTheme    = new EnumMap<>(VisualTheme.class);
         SpriteAtlas.load();
@@ -577,6 +595,14 @@ public final class TileSprites {
         if (beaconX + srcCell <= sheetW && beaconY + 2 * srcCell <= sheetH) {
             beaconByTheme.put(theme,
                     new TextureRegion(tex, beaconX, yOffset + beaconY, srcCell, 2 * srcCell));
+        }
+        int hearthX = GEM_HEARTH_COL * srcCell;
+        int hearthY = GEM_HEARTH_ROW * srcCell;
+        int hearthWPx = GEM_HEARTH_W_CELLS * srcCell;
+        int hearthHPx = GEM_HEARTH_H_CELLS * srcCell;
+        if (hearthX + hearthWPx <= sheetW && hearthY + hearthHPx <= sheetH) {
+            gemHearthByTheme.put(theme,
+                    new TextureRegion(tex, hearthX, yOffset + hearthY, hearthWPx, hearthHPx));
         }
     }
 

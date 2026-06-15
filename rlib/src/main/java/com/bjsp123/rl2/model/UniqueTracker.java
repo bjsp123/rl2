@@ -17,6 +17,11 @@ public final class UniqueTracker {
     public Set<String> mobs  = new HashSet<>();
     public Set<String> items = new HashSet<>();
 
+    /** Depths (1-based) that produced a gem hearth (RL-51). Drives the
+     *  escalating spawn odds: a depth with no hearth raises the next depth's
+     *  chance (30% -> 50% -> 75%). World-persistent. */
+    public Set<Integer> hearthDepths = new HashSet<>();
+
     /** Scratch set of perLevelUnique tags claimed during the level currently
      *  being generated. Cleared by {@link #resetForNewLevel} at the top of
      *  every {@code LevelFactory.createDungeonLevel} call so the constraint
