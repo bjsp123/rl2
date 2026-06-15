@@ -974,14 +974,11 @@ public final class ItemSystem {
             case "BLIND_MASTER" -> {
                 BuffSystem.apply(level, user, com.bjsp123.rl2.model.Buff.BuffType.ESP, 99, user, gem);
                 BuffSystem.apply(level, user, com.bjsp123.rl2.model.Buff.BuffType.INSIGHT, 99, user, gem);
-                if (user.position != null) {
-                    int px = user.position.tileX(), py = user.position.tileY();
-                    for (int x = px - 2; x <= px + 2; x++) {
-                        for (int y = py - 2; y <= py + 2; y++) {
-                            if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                            if (level.tiles[x][y].blocksMovement()) continue;
-                            CloudSystem.addCloud(level, x, y, com.bjsp123.rl2.model.Level.Cloud.SMOKE, 8);
-                        }
+                // Fill EVERY eligible (non-blocking) square on the level with smoke.
+                for (int x = 0; x < level.width; x++) {
+                    for (int y = 0; y < level.height; y++) {
+                        if (level.tiles[x][y].blocksMovement()) continue;
+                        CloudSystem.addCloud(level, x, y, com.bjsp123.rl2.model.Level.Cloud.SMOKE, 8);
                     }
                 }
                 announceGemUse(user, gem);
@@ -1043,7 +1040,7 @@ public final class ItemSystem {
                 java.util.List<Item> bombs = ItemGenerator.generateItems(10,
                         gemPowerForDepth(level, 2), level.theme,
                         ItemGenerator.LootCategory.BOMBS, RANDOM);
-                dropNearPlayer(level, user, bombs);
+                giveItemsToPlayer(level, user, bombs);
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1103,7 +1100,7 @@ public final class ItemSystem {
                     if (wand == null) wand = it;
                 }
                 if (wand == null) { gemFizzle(user, gem, "fails to conjure a wand"); return false; }
-                dropNearPlayer(level, user, java.util.List.of(wand));
+                giveItemsToPlayer(level, user, java.util.List.of(wand));
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1120,7 +1117,7 @@ public final class ItemSystem {
                     Item it = ItemGenerator.buildItem(tools.get(RANDOM.nextInt(tools.size())), power, RANDOM);
                     if (it != null) made.add(it);
                 }
-                dropNearPlayer(level, user, made);
+                giveItemsToPlayer(level, user, made);
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1210,7 +1207,7 @@ public final class ItemSystem {
                 java.util.List<Item> made = ItemGenerator.generateItems(3,
                         gemPowerForDepth(level, 6), level.theme,
                         ItemGenerator.LootCategory.NON_GEM, RANDOM);
-                dropNearPlayer(level, user, made);
+                giveItemsToPlayer(level, user, made);
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1225,7 +1222,7 @@ public final class ItemSystem {
                     if (armor == null) armor = it;
                 }
                 if (armor == null) { gemFizzle(user, gem, "fails to forge armour"); return false; }
-                dropNearPlayer(level, user, java.util.List.of(armor));
+                giveItemsToPlayer(level, user, java.util.List.of(armor));
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1234,7 +1231,7 @@ public final class ItemSystem {
                 Item sword = ItemGenerator.buildItem("SWORD", gemPowerForDepth(level, 10), RANDOM);
                 if (sword == null) { gemFizzle(user, gem, "fails to forge a blade"); return false; }
                 for (int i = 0; i < 80 && sword.brand == null; i++) BrandSystem.applyRandomBrand(sword, RANDOM);
-                dropNearPlayer(level, user, java.util.List.of(sword));
+                giveItemsToPlayer(level, user, java.util.List.of(sword));
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1304,30 +1301,23 @@ public final class ItemSystem {
     }
 
     /** Scatter rolled items onto floor tiles spiralling out from the player. */
-    private static void dropNearPlayer(Level level, Mob user, java.util.List<Item> drops) {
-        if (level == null || user == null || user.position == null
-                || drops == null || drops.isEmpty()) return;
-        int cx = user.position.tileX(), cy = user.position.tileY();
-        java.util.List<Point> spots = new java.util.ArrayList<>();
-        for (int r = 0; r <= 6 && spots.size() < drops.size(); r++) {
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dy = -r; dy <= r; dy++) {
-                    if (r > 0 && Math.abs(dx) != r && Math.abs(dy) != r) continue;
-                    int x = cx + dx, y = cy + dy;
-                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    if (!level.tiles[x][y].isFloorLike()) continue;
-                    spots.add(new Point(x, y));
-                }
+    /** Hand freshly-created items straight to the player's bag (RL-50 creation
+     *  scrolls) so they're immediately usable and noticed - scattering them on
+     *  the floor read as "the scroll did nothing". Stackables merge; bag-limit
+     *  caps are bypassed (a reward scroll always delivers). */
+    private static void giveItemsToPlayer(Level level, Mob user, java.util.List<Item> items) {
+        if (user == null || user.inventory == null || items == null || items.isEmpty()) return;
+        int given = 0;
+        for (Item it : items) {
+            if (it == null) continue;
+            it.location = null;
+            if (!InventorySystem.addToBag(user.inventory, it)) {
+                user.inventory.bag.add(it);   // over a category cap - deliver anyway
             }
+            given++;
         }
-        for (int i = 0; i < drops.size() && i < spots.size(); i++) {
-            Item drop = drops.get(i);
-            if (drop == null) continue;
-            drop.location = spots.get(i);
-            level.items.add(drop);
-            if (level.events != null) {
-                level.events.add(new GameEvent.LootDropped(drop, user.position, spots.get(i)));
-            }
+        if (given > 0 && user.position != null && level != null && level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(user.position, items.get(0)));
         }
     }
 
