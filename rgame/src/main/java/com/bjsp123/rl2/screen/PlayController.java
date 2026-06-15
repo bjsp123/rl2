@@ -62,6 +62,51 @@ final class PlayController {
      *  between steps, the path aborts. {@code -1} when no auto-path is in progress. */
     private double autoMoveLastHp = -1;
 
+    /** RL-53: auto-explore active. While on, each {@link #tick} drives one SMART
+     *  explore/pickup step for the player; stops on any visible hostile, damage,
+     *  or when nothing is left to explore. Never descends. */
+    private boolean autoExplore;
+
+    /** Toggle auto-explore. Cancels any manual auto-move and primes the HP
+     *  baseline so the first step doesn't false-trip the damage interrupt. */
+    public void toggleAutoExplore() {
+        autoExplore = !autoExplore;
+        autoMoveLastHp = -1;
+        if (autoExplore) {
+            Mob p = TurnSystem.findPlayer(world.currentLevel());
+            if (p != null) p.targetPosition = null;   // can't auto-explore mid auto-move
+        }
+    }
+
+    public boolean isAutoExploring() { return autoExplore; }
+
+    private void stopAutoExplore() {
+        autoExplore = false;
+        autoMoveLastHp = -1;
+    }
+
+    /** Hand-back test for auto-explore: stop on ANY visible hostile or on damage. */
+    private boolean autoExploreShouldStop(Level level, Mob player) {
+        Set<Mob> vis = currentlyVisibleHostiles(level, player);
+        if (!vis.isEmpty()) {
+            Mob m = vis.iterator().next();
+            String name = m.name != null ? m.name : m.mobType;
+            EventLog.add(new LogEvent(
+                    com.bjsp123.rl2.logic.TextCatalog.format("eventlog.path.hostileAppears",
+                            com.bjsp123.rl2.logic.TextCatalog.vars("mob", name)),
+                    LogEvent.EventPriority.HIGH, true));
+            return true;
+        }
+        if (autoMoveLastHp >= 0 && player.hp < autoMoveLastHp) {
+            EventLog.add(new LogEvent(
+                    com.bjsp123.rl2.logic.TextCatalog.get("eventlog.path.damage"),
+                    LogEvent.EventPriority.HIGH, true));
+            return true;
+        }
+        autoMoveLastHp = player.hp;
+        return false;
+    }
+
     /** Callback to push the world-map screen from the controller. Set by
      *  {@link PlayScreen} after the screen graph is wired so the controller
      *  can request map-open in response to using a teleport-orb item
@@ -114,20 +159,37 @@ final class PlayController {
                 for (Mob mob : level.mobs) mob.effectiveStats();
                 MobSystem.snapshotVisibleMobsAtTurnStart(level, player);
             }
-            if (player.targetPosition == null) return false;
-            if (shouldInterruptAutoMove(level, player)) {
-                player.targetPosition = null;
-                autoMoveSnapshotHostiles = null;
-                autoMoveLastHp = -1;
-                return false;
-            }
-            MobSystem.stepTowardTarget(player, level);
-            if (player.targetPosition == null && player.ticksTillMove == 0
-                    && currentlyVisibleHostiles(level, player).isEmpty()) {
-                int bagBefore = player.inventory.bag.size();
-                if (MobSystem.pickupAtFeet(level, player) > 0) {
-                    autoAssignNewPickups(player, bagBefore);
-                    TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+            if (autoExplore) {
+                // RL-53: drive one SMART explore/pickup step. Stops the instant
+                // a hostile is visible or the player takes damage, or when the
+                // planner has nothing left to explore (hands back, never descends).
+                if (autoExploreShouldStop(level, player)) { stopAutoExplore(); return false; }
+                com.bjsp123.rl2.logic.AutoExplore.Driver drv = com.bjsp123.rl2.logic.AutoExplore.get();
+                if (drv == null
+                        || drv.step(player, level) == com.bjsp123.rl2.logic.AutoExplore.Result.DONE) {
+                    EventLog.add(new LogEvent(
+                            com.bjsp123.rl2.logic.TextCatalog.get("eventlog.path.explored"),
+                            LogEvent.EventPriority.LOW, true));
+                    stopAutoExplore();
+                    return false;
+                }
+                // stepped — fall through to run enemy turns below.
+            } else {
+                if (player.targetPosition == null) return false;
+                if (shouldInterruptAutoMove(level, player)) {
+                    player.targetPosition = null;
+                    autoMoveSnapshotHostiles = null;
+                    autoMoveLastHp = -1;
+                    return false;
+                }
+                MobSystem.stepTowardTarget(player, level);
+                if (player.targetPosition == null && player.ticksTillMove == 0
+                        && currentlyVisibleHostiles(level, player).isEmpty()) {
+                    int bagBefore = player.inventory.bag.size();
+                    if (MobSystem.pickupAtFeet(level, player) > 0) {
+                        autoAssignNewPickups(player, bagBefore);
+                        TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+                    }
                 }
             }
             profiler.add("playerStep", playerTurnStart);

@@ -43,6 +43,20 @@ public final class MobQueries {
         return n;
     }
 
+    /** Count living hostiles on the level: excludes the player, its pets
+     *  (owned), and inanimate scenery. Drives the RL-54 renewing-enemy cap. */
+    public static int countLivingHostiles(Level level) {
+        if (level == null || level.mobs == null) return 0;
+        int n = 0;
+        for (Mob m : level.mobs) {
+            if (m == null || m.hp <= 0) continue;
+            if (m.isPlayer || m.owner != null) continue;
+            if (m.behavior == Mob.Behavior.INANIMATE) continue;
+            n++;
+        }
+        return n;
+    }
+
     /**
      * Nearest currently-visible hostile mob to {@code around}, by Chebyshev distance.
      * Used by AI and by UI/controller targeting helpers. Skips allies, INANIMATE mobs,

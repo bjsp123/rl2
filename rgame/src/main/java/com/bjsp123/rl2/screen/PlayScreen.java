@@ -612,6 +612,7 @@ public class PlayScreen implements Screen {
         controller.setOpenMapScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
                 game, game.ui, game::popScreen, world)));
         v2Hud.setOnActionUse(controller::triggerActionSlot);
+        v2Hud.setOnAutoExplore(controller::toggleAutoExplore);
 
         gameInput = new GameInput(world, camera, cameraController);
         gameInput.setStairHandlers(controller::tryStairsUp, controller::tryStairsDown);
@@ -972,6 +973,8 @@ public class PlayScreen implements Screen {
         // projection to V2's camera internally.
         span = frameProfiler.start();
         v2Hud.update(level.depth, animator.visualClockTick(level, world.tick));
+        v2Hud.setHazard(level.hazardLevel);
+        v2Hud.setAutoExploreActive(controller.isAutoExploring());
         frameProfiler.add("hudUpdate", span);
         span = frameProfiler.start();
         v2Hud.render();

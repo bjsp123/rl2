@@ -60,6 +60,32 @@ public final class SmartAi implements MobBrains.Brain {
     private static volatile DecisionTraceHook DECISION_TRACE;
     public static void setDecisionTraceHook(DecisionTraceHook hook) { DECISION_TRACE = hook; }
 
+    /**
+     * One auto-explore step for RL-53. Runs the planner on {@code player}
+     * (whose behavior stays {@code PLAYER}) and executes the chosen action only
+     * when it is pure exploration / pickup; otherwise hands back. Shares the
+     * static {@link #MEMORIES} side-table with {@link #run}, so the player's
+     * remembered map persists across calls.
+     */
+    public static com.bjsp123.rl2.logic.AutoExplore.Result autoExploreStep(Mob player, Level level) {
+        MobMemory mem = memoryFor(player);
+        int levelStamp = System.identityHashCode(level);
+        if (mem.levelStamp != levelStamp) mem.onLevelChange(levelStamp);
+        mem.ensureSized(level);
+        refreshMemory(player, level, mem);
+
+        WorldState state = new WorldState(player, level, mem);
+        Action step = Decider.decide(state);
+        String branch = Decider.LAST_BRANCH.get();
+        boolean exploring = "explore".equals(branch)
+                || "pickup-item".equals(branch)
+                || "pickup-powerup".equals(branch)
+                || "search".equals(branch);
+        if (!exploring) return com.bjsp123.rl2.logic.AutoExplore.Result.DONE;
+        step.execute(player, level);   // self-applies the move/pickup cost
+        return com.bjsp123.rl2.logic.AutoExplore.Result.STEPPED;
+    }
+
     @Override
     public void run(Mob mob, Level level) {
         MobMemory mem = memoryFor(mob);

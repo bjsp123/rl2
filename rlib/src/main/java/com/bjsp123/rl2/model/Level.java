@@ -288,6 +288,13 @@ public class Level {
      *  Zero until the level starts ticking (i.e. the player is on it). */
     public int turnsOnLevel;
 
+    /** RL-54 hazard level (0..HAZARD_MAX). Rises by 1 when the beacon is lit and
+     *  by 1 per HAZARD_TURNS_PER_POINT turns spent here; raises renewing-enemy
+     *  frequency + cap. Recomputed each standard turn by {@code TurnSystem}. */
+    public int hazardLevel;
+    /** True once this level's beacon has been lit (contributes +1 hazard). */
+    public boolean beaconLit;
+
     /** Optional data-driven mob spawner. {@code null} on levels that don't
      *  spawn - the per-turn handler ({@code MobSystem.runLevelSpawner}) is a
      *  no-op then. Set by the factory (e.g. the Horde floor). */

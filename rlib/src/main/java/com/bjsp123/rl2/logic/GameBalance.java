@@ -354,6 +354,18 @@ public final class GameBalance {
      *  created. */
     public static int MAX_MOBS_FROM_SPAWNER = 8;
 
+    // ------------------------- Renewing enemies (RL-54) ----------------------
+    /** Base standard turns between renewing-enemy spawns; each hazard point
+     *  reduces it by 2 (floored at 1). */
+    public static int RENEWING_SPAWN_CADENCE = 25;
+    /** Base cap of living hostiles before renewing spawns pause; each hazard
+     *  point raises it by 1. */
+    public static int RENEWING_ENEMY_CAP = 8;
+    /** Maximum hazard level a floor can reach. */
+    public static int HAZARD_MAX = 5;
+    /** Standard turns spent on a floor per +1 hazard. */
+    public static int HAZARD_TURNS_PER_POINT = 2000;
+
     // ------------------------- Throw range -----------------------------------
     /** Default Chebyshev throw range for the player targeting overlay. */
     public static int DEFAULT_THROW_RANGE = 6;

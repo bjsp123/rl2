@@ -80,12 +80,15 @@ public final class V2Hud {
     private Supplier<Mob> playerSupplier;
     private ActionBar actionBar;
     private int depth, tick;
+    /** RL-54 hazard level of the current floor, shown at the top of the HUD. */
+    private int hazard;
 
     // Callbacks - same shape as the V1 HudRenderer.setOn* setters, so
     // PlayScreen's existing wiring carries over with minimal changes.
     private IntConsumer onActionUse;
     private Runnable    onOpenInventory;
     private Runnable    onLook;
+    private Runnable    onAutoExplore;
     private Runnable    onPortraitTap;
     private Runnable    onOpenSettings;
     private Runnable    onOpenEncyclopedia;
@@ -107,6 +110,7 @@ public final class V2Hud {
     private final Rect[] actionRects = new Rect[ActionBar.SLOTS];
     private final Rect invRect      = new Rect();
     private final Rect lookRect     = new Rect();
+    private final Rect autoRect     = new Rect();
     private final Rect burgerRect   = new Rect();
     private final Rect menuPanelRect = new Rect();
     /** Per-menu-item rects, populated when the burger menu is open. */
@@ -119,6 +123,8 @@ public final class V2Hud {
     // -- Pressed state for visual feedback -----------------------------------
     private final boolean[] actionPressed = new boolean[ActionBar.SLOTS];
     private boolean invPressed, lookPressed, burgerPressed;
+    /** Auto-explore button (RL-53): pressed state + active highlight. */
+    private boolean autoPressed, autoActive;
 
     // -- Mana-gain flash state ------------------------------------------------
     private static final float CHARGE_FLASH_FRAMES = 45f;
@@ -157,6 +163,10 @@ public final class V2Hud {
     public void setOnActionUse(IntConsumer fn)      { this.onActionUse = fn; }
     public void setOnOpenInventory(Runnable fn)     { this.onOpenInventory = fn; }
     public void setOnLook(Runnable fn)              { this.onLook = fn; }
+    public void setOnAutoExplore(Runnable fn)       { this.onAutoExplore = fn; }
+    public void setHazard(int h)                    { this.hazard = h; }
+    /** Reflect auto-explore on/off so the button reads as toggled. */
+    public void setAutoExploreActive(boolean on)    { this.autoActive = on; }
     public void setOnPortraitTap(Runnable fn)       { this.onPortraitTap = fn; }
     public void setOnOpenSettings(Runnable fn)      { this.onOpenSettings = fn; }
     public void setOnOpenEncyclopedia(Runnable fn)  { this.onOpenEncyclopedia = fn; }
@@ -286,8 +296,9 @@ public final class V2Hud {
         burgerRect.set(w - MARGIN - Burger.SIZE, h - MARGIN - Burger.SIZE,
                 Burger.SIZE, Burger.SIZE);
 
-        // Look at bottom-left.
+        // Look at bottom-left; auto-explore stacked directly above it.
         lookRect.set(MARGIN, MARGIN, ACTION_BTN, ACTION_BTN);
+        autoRect.set(MARGIN, lookRect.y + lookRect.h + ACTION_GAP, ACTION_BTN, ACTION_BTN);
 
         // Bottom-right: inventory button at far right, action slots to its left.
         // If the single row would overlap the look button, fold into a grid.
@@ -380,6 +391,7 @@ public final class V2Hud {
         drawSlotBtn(s, invRect, invPressed);
         // Look + burger have no item icon - plain HUD chrome.
         drawBtn(s, lookRect,   lookPressed);
+        drawBtn(s, autoRect,   autoPressed || autoActive);
         drawBtn(s, burgerRect, burgerPressed);
 
         // Burger menu - modal column-of-buttons window centred on the
@@ -610,11 +622,27 @@ public final class V2Hud {
                     lookRect.w - 2 * ICON_PAD, lookRect.h - 2 * ICON_PAD);
         }
 
+        // Auto-explore button - map icon; tinted accent while active.
+        TextureRegion auto = IconSprites.regionFor(IconSprites.Icon.MAP);
+        if (auto != null) {
+            if (autoActive) ctx.batch.setColor(UIVars.ACCENT);
+            ctx.batch.draw(auto,
+                    autoRect.x + ICON_PAD, autoRect.y + ICON_PAD,
+                    autoRect.w - 2 * ICON_PAD, autoRect.h - 2 * ICON_PAD);
+            if (autoActive) ctx.batch.setColor(1f, 1f, 1f, 1f);
+        }
+
         // Status line + turn clock - under the XP bar.
         TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                 TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth)),
                 clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f + 5f,
                 Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
+
+        // Hazard level - top-centre of the HUD (RL-54). Brighter as it climbs.
+        TextDraw.centre(ctx, ctx.fontRegular,
+                hazard >= 3 ? UIVars.ACCENT : UIVars.TEXT_DIM,
+                TextCatalog.format("ui.hud.hazard", TextCatalog.vars("n", hazard)),
+                ctx.worldW() * 0.5f, ctx.worldH() - 8f);
 
         // Player buff icons row - under the status line, anchored at the
         // top-left edge so it shares the bars cluster's anchor. Caps at
@@ -746,6 +774,7 @@ public final class V2Hud {
 
                 if (burgerRect.contains(vx, vy))   { burgerPressed = true; return true; }
                 if (lookRect.contains(vx, vy))     { lookPressed = true;   return true; }
+                if (autoRect.contains(vx, vy))     { autoPressed = true;   return true; }
                 if (invRect.contains(vx, vy))      { invPressed = true;    return true; }
                 for (int i = 0; i < buffIconRects.size(); i++) {
                     if (buffIconRects.get(i).contains(vx, vy)) {
@@ -799,6 +828,11 @@ public final class V2Hud {
                 if (lookPressed) {
                     lookPressed = false;
                     if (lookRect.contains(vx, vy) && onLook != null) onLook.run();
+                    return true;
+                }
+                if (autoPressed) {
+                    autoPressed = false;
+                    if (autoRect.contains(vx, vy) && onAutoExplore != null) onAutoExplore.run();
                     return true;
                 }
                 if (invPressed) {

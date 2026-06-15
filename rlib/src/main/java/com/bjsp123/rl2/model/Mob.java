@@ -311,6 +311,10 @@ public class Mob {
      *  must read this, NOT {@code behavior == PLAYER}. */
     public boolean isPlayer;
 
+    /** When true this mob drops no loot on death (RL-54 renewing enemies).
+     *  Gated in {@link com.bjsp123.rl2.logic.LootSystem#dropLootOnDeath}. */
+    public boolean suppressLoot;
+
     // -- Combat ceiling ------------------------------------------------------
     // (was: maxHp, healRate, accuracy, evasion, damage, armor, apDamageMin/Max,
     //  magicResistMin/Max, attackCost, moveCost - all moved to {@link #intrinsic}.)

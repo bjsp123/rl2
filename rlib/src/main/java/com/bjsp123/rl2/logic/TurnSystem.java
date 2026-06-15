@@ -222,8 +222,57 @@ public class TurnSystem {
         // pipeline. Each is a cheap no-op unless the level opts in via a flag
         // / config, so regular floors pay only a boolean (or null) check.
         level.turnsOnLevel++;
+        tickHazardAndRenew(level);              // RL-54: hazard climb + renewing spawns
         LevelSystem.openExitIfCleared(level);   // no-op unless exitUnlocksOnClear
         MobSystem.runLevelSpawner(level);       // no-op unless level.spawner != null
+    }
+
+    /**
+     * RL-54: recompute the floor's hazard level and, on the hazard-scaled
+     * cadence, spawn a level-appropriate renewing enemy out of the player's
+     * sight. Hazard = min(HAZARD_MAX, beaconLit + turnsOnLevel/HAZARD_TURNS_PER_POINT);
+     * each point shortens the spawn cadence by 2, raises the enemy cap by 1, and
+     * gives a 5% chance per point of an extra wraith.
+     */
+    private static void tickHazardAndRenew(Level level) {
+        level.hazardLevel = Math.min(GameBalance.HAZARD_MAX,
+                (level.beaconLit ? 1 : 0)
+                        + level.turnsOnLevel / Math.max(1, GameBalance.HAZARD_TURNS_PER_POINT));
+        int cadence = Math.max(1, GameBalance.RENEWING_SPAWN_CADENCE - 2 * level.hazardLevel);
+        if (level.turnsOnLevel % cadence != 0) return;
+        if (MobQueries.countLivingHostiles(level)
+                >= GameBalance.RENEWING_ENEMY_CAP + level.hazardLevel) return;
+        Mob player = findPlayer(level);
+        if (player == null || player.position == null) return;
+        spawnRenewing(level, LevelFactoryPopulate.pickTypicalMob(level, TURN_SPAWN_RNG), player);
+        if (level.hazardLevel > 0 && TURN_SPAWN_RNG.nextDouble() < 0.05 * level.hazardLevel) {
+            spawnRenewing(level, "WRAITH", player);
+        }
+    }
+
+    /** Spawn one awake, non-dropping renewing enemy of {@code type} on a floor
+     *  tile outside the player's FOV and >= 20 tiles away. No-op if no spot. */
+    private static void spawnRenewing(Level level, String type, Mob player) {
+        if (type == null) return;
+        int px = player.position.tileX(), py = player.position.tileY();
+        for (int tries = 0; tries < 80; tries++) {
+            int x = TURN_SPAWN_RNG.nextInt(level.width);
+            int y = TURN_SPAWN_RNG.nextInt(level.height);
+            if (!level.tiles[x][y].isFloorLike()) continue;
+            if (level.visible != null && level.visible[x][y]) continue;
+            if (Math.max(Math.abs(x - px), Math.abs(y - py)) < 20) continue;
+            Point spot = new Point(x, y);
+            if (MobQueries.mobAt(level, spot) != null) continue;
+            Mob m = LevelFactoryPopulate.spawnMobAt(level, type, spot, 1 + level.depth,
+                    TURN_SPAWN_RNG, false);
+            if (m == null) return;
+            m.stateOfMind = Mob.StateOfMind.AWAKE;
+            m.suppressLoot = true;
+            if (level.events != null) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(m, spot));
+            }
+            return;
+        }
     }
 
     public static boolean isPlayerTurn(Level level) {

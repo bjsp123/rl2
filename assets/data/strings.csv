@@ -311,6 +311,7 @@ eventlog.mobaction.usesItem,The {mob} uses the {item}.
 eventlog.mobaction.wakes,The {mob} wakes up{reason}.
 eventlog.path.damage,Path interrupted: you took damage.
 eventlog.path.hostileAppears,Path interrupted: a {mob} comes into view.
+eventlog.path.explored,Nothing left to explore here.
 eventlog.player.charges,{player} charges at {target}.
 eventlog.player.eats,{player} eats the {item}.
 eventlog.player.grappleBlocked,The rope can't pull the {target}.
@@ -1157,6 +1158,7 @@ ui.hud.menu.main,Main Menu
 ui.hud.menu.map,Map
 ui.hud.menu.settings,Settings
 ui.hud.status,Lvl {depth}
+ui.hud.hazard,Hazard {n}
 ui.inventory.equip,Equip
 ui.inventory.quickslot,Quickslot
 ui.inventory.throw,Throw

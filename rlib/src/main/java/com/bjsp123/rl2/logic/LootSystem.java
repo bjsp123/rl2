@@ -118,6 +118,9 @@ public final class LootSystem {
         // The player's death ends the run; their corpse is never inspected so
         // the inventory dump would be wasted work. Skip.
         if (mob.isPlayer) return;
+        // Per-instance non-dropping gate (RL-54 renewing enemies): they exist to
+        // apply pressure, not to feed the player loot.
+        if (mob.suppressLoot) return;
         // Data-driven "drop absolutely nothing" gate: a mobs.csv row with
         // dropQuality=NOTHING_AT_ALL suppresses both the rolled drop table
         // (rollAndStashLoot already skips) AND the inventory dump that would

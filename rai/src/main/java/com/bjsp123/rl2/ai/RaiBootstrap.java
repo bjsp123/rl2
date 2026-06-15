@@ -20,6 +20,8 @@ public final class RaiBootstrap {
     public static synchronized void init() {
         if (initialised) return;
         MobBrains.register(Mob.Behavior.SMART, new SmartAi());
+        // RL-53: drive the player's auto-explore with the same SMART planner.
+        com.bjsp123.rl2.logic.AutoExplore.register(SmartAi::autoExploreStep);
         initialised = true;
     }
 }

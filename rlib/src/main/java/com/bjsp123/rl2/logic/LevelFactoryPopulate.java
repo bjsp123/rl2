@@ -110,6 +110,15 @@ public final class LevelFactoryPopulate {
      *  Rows whose {@code powerLevel} band is {@code 0_0} are also excluded - the
      *  zero-zero band is the convention for "summon / retainer only" mobs (kobold
      *  spearmen, kittens, etc.) that should never appear via random scatter. */
+    /** A weighted-random level-appropriate mob type, using the same eligibility
+     *  + weighting as normal level population. Null if no candidate fits. Used by
+     *  RL-54 renewing spawns so they match the floor's natural roster. */
+    public static String pickTypicalMob(Level level, Random rng) {
+        double[][] w = new double[1][];
+        List<String> pool = eligibleMobs(level, w);
+        return pickWeighted(pool, w[0], rng);
+    }
+
     private static List<String> eligibleMobs(Level level, double[][] weightOut) {
         List<String> keys = new ArrayList<>();
         List<Double>  ws  = new ArrayList<>();

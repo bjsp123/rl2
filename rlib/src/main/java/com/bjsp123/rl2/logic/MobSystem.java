@@ -434,6 +434,7 @@ public class MobSystem {
                     if (bx < 0 || by < 0 || bx >= level.width || by >= level.height) continue;
                     if (level.tiles[bx][by] != Tile.BEACON_INACTIVE) continue;
                     level.tiles[bx][by] = Tile.BEACON_ACTIVE;
+                    level.beaconLit = true;   // RL-54: lighting the beacon raises hazard
                     if (level.events != null) level.events.add(
                             new com.bjsp123.rl2.event.GameEvent.BeaconActivated(new Point(bx, by)));
                     EventLog.add(Messages.beaconActivated(nameForLog(level, mob)));

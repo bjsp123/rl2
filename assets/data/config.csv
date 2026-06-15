@@ -1,5 +1,9 @@
 kind,key,value
 gamebalance,MOBFIGHT_DEFAULT_TRIALS,10000
+gamebalance,RENEWING_SPAWN_CADENCE,25
+gamebalance,RENEWING_ENEMY_CAP,8
+gamebalance,HAZARD_MAX,5
+gamebalance,HAZARD_TURNS_PER_POINT,2000
 gamebalance,MAX_CHARACTER_LEVEL,32
 gamebalance,XP_PER_LEVEL_STEP,7
 gamebalance,PERK_POINTS_PER_LEVEL,1
