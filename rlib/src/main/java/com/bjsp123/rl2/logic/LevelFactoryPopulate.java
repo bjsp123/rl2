@@ -556,7 +556,7 @@ public final class LevelFactoryPopulate {
     /** Apply random brands to a non-player mob's starting inventory items.
      *  Player starting kits are left unbranded for a consistent game start. */
     private static void brandStartingInventory(Mob m, Random rng) {
-        if (m.behavior == Mob.Behavior.PLAYER || m.inventory == null) return;
+        if (m.isPlayer || m.inventory == null) return;
         for (Item it : m.inventory.bag) BrandSystem.applyRandomBrand(it, rng);
         for (Item it : m.inventory.allEquipped()) BrandSystem.applyRandomBrand(it, rng);
     }

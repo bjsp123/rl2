@@ -29,10 +29,11 @@ public class MobFactory {
         }
         Mob m = new Mob();
         def.apply(m, pos);
-        // mobType keeps the row key. The "is this the player?" question is
-        // answered by behavior == PLAYER (or characterClass != null), so no
-        // engine-reserved string is needed.
+        // mobType keeps the row key. Player IDENTITY is the dedicated
+        // {@link Mob#isPlayer} flag (decoupled from behavior, which may later be
+        // flipped to SMART for autoplay/auto-explore without losing identity).
         m.characterClass = cls;
+        m.isPlayer = true;
         seedPlayerHostility(m);
         return m;
     }

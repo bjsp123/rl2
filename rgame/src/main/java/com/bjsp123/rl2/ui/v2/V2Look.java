@@ -510,7 +510,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (player != null && player != m) {
             bits.add(attitudeLabel(player, m));
         }
-        if (m.behavior == Mob.Behavior.PLAYER) {
+        if (m.isPlayer) {
             bits.add(TextCatalog.get("ui.look.state.player"));
         } else if (m.stateOfMind != null) {
             bits.add(switch (m.stateOfMind) {

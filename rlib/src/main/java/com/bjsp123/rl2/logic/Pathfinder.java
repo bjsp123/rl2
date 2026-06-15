@@ -116,7 +116,7 @@ public class Pathfinder {
         // system resolves the contact (attack hostile / swap places with ally) on
         // arrival. Default-AI mobs (MOB/HUNTER/...) still need strict-larger-size
         // to push past, so swarms of equal-size mobs don't auto-trample each other.
-        if (mover.behavior == Behavior.PLAYER || mover.behavior == Behavior.SMART) return true;
+        if (mover.isPlayer) return true;
         // Non-player: can push past only a strictly smaller mob (swap-places on arrival)
         return moverSize > (ws.mobSize[idx] & 0xFF);
     }

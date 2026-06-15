@@ -192,7 +192,7 @@ public class TurnSystem {
             // INSIGHT: while the buff is active, re-stamp every tile as
             // explored so the player's map stays revealed for the duration.
             // Player-only - NPCs don't have a personal map.
-            if (mob.behavior == Behavior.PLAYER
+            if (mob.isPlayer
                     && BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.INSIGHT)) {
                 LevelSystem.markAllExplored(level);
             }

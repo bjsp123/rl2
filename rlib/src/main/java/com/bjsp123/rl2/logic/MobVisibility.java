@@ -94,7 +94,7 @@ public final class MobVisibility {
 
     public static boolean isVisibleToPlayer(Level level, Mob mob) {
         if (level == null || mob == null || mob.position == null) return false;
-        if (mob.behavior == Mob.Behavior.PLAYER) return true;
+        if (mob.isPlayer) return true;
         if (level.visible == null) return false;
         int x = mob.position.tileX(), y = mob.position.tileY();
         return tileVisible(level, x, y);
@@ -102,7 +102,7 @@ public final class MobVisibility {
 
     public static String nameForLog(Level level, Mob mob) {
         if (mob == null) return "something";
-        if (mob.behavior == Mob.Behavior.PLAYER) {
+        if (mob.isPlayer) {
             return mob.name != null ? mob.name : "?";
         }
         if (!isVisibleToPlayer(level, mob)) return "something";

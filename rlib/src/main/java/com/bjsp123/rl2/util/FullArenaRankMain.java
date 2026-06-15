@@ -192,8 +192,8 @@ public final class FullArenaRankMain {
         // PLAYER behaviour stalls the turn loop on isPlayerTurn. Convert to
         // MOB so the AI drives them; this lets HUNTER-like target acquisition
         // through {@code attackTypes} pursue the opponent.
-        if (a.behavior == Mob.Behavior.PLAYER) a.behavior = Mob.Behavior.MOB;
-        if (b.behavior == Mob.Behavior.PLAYER) b.behavior = Mob.Behavior.MOB;
+        if (a.behavior == Mob.Behavior.PLAYER) { a.behavior = Mob.Behavior.MOB; a.isPlayer = false; }
+        if (b.behavior == Mob.Behavior.PLAYER) { b.behavior = Mob.Behavior.MOB; b.isPlayer = false; }
         a.stateOfMind = Mob.StateOfMind.AWAKE;
         b.stateOfMind = Mob.StateOfMind.AWAKE;
 

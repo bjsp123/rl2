@@ -129,7 +129,7 @@ public final class SoundManager {
     private static Mob findPlayer(Level level) {
         if (level.mobs == null) return null;
         for (Mob m : level.mobs) {
-            if (m != null && m.behavior == Mob.Behavior.PLAYER) return m;
+            if (m != null && m.isPlayer) return m;
         }
         return null;
     }

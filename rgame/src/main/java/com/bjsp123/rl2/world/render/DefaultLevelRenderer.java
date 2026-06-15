@@ -2271,13 +2271,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
         // Equipped gems bob around the player's head. The orbit + bob math is purely
         // visual; we leave the rest of the per-mob block alone.
-        if (mob.behavior == Behavior.PLAYER) {
+        if (mob.isPlayer) {
             drawPlayerGems(mob, mx, my, ox, oy, alpha);
         }
         // Wounded enemy mobs get a small HP bar over their head. Skip the player (they
         // see HP via the HUD) and full-HP mobs.
         double maxHp = mob.effectiveStats().maxHp;
-        if (mob.behavior != Behavior.PLAYER && maxHp > 0 && mob.hp < maxHp) {
+        if (!mob.isPlayer && maxHp > 0 && mob.hp < maxHp) {
             drawMobHpBar(mob, mx, my, ox, oy, alpha);
         }
         // Over-head buff icons are drawn in drawBuffOverheadIconsPass (above the fog).

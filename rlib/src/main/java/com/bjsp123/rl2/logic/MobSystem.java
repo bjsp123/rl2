@@ -206,7 +206,7 @@ public class MobSystem {
         // Jump perk - player can leap directly to any tile within Chebyshev radius 2
         // for one move tick, ignoring intervening obstacles. Falls through to normal
         // pathing if the destination tile itself is blocked or occupied.
-        if (mob.behavior == Behavior.PLAYER
+        if (mob.isPlayer
                 && mob.perks != null
                 && mob.perks.getOrDefault(com.bjsp123.rl2.model.Perk.JUMP, 0) > 0) {
             int jdx = tx - cx, jdy = ty - cy;
@@ -238,7 +238,7 @@ public class MobSystem {
         // toward any visible terrifying mob. Hands control back to the player so they
         // can pick a different escape route. Uses Chebyshev distance: if the proposed
         // tile is strictly closer to a terrifying source than the current tile, abort.
-        if (mob.behavior == Behavior.PLAYER
+        if (mob.isPlayer
                 && BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FRIGHTENED)
                 && stepWouldApproachTerror(mob, level, cx, cy, nx, ny)) {
             mob.targetPosition = null;
@@ -261,7 +261,7 @@ public class MobSystem {
             // impassable to any non-hostile mob: even a FLEE / NOTHING swap is blocked,
             // so friendly critters can never end up shoving the player into a wall by
             // accident. The mover gives up its step and pays a regular move tick.
-            if (occupant.behavior == Behavior.PLAYER || occupant.behavior == Behavior.SMART) {
+            if (occupant.isPlayer) {
                 mob.targetPosition = null;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
                 return;
@@ -271,7 +271,7 @@ public class MobSystem {
             // - the mover idles for one tick. PLAYER and SMART (the autoplay/AI driver
             // for a player-class character) ignore the size gate so a non-hostile
             // critter never blocks a player-style mover's intended move.
-            if (mob.behavior != Behavior.PLAYER && mob.behavior != Behavior.SMART
+            if (!mob.isPlayer
                     && mob.effectiveStats().size <= occupant.effectiveStats().size) {
                 mob.targetPosition = null;
                 TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
@@ -326,7 +326,7 @@ public class MobSystem {
     private static void onMobLeftTile(Level level, Mob mob, int oldX, int oldY) {
         if (oldX < 0 || oldY < 0 || oldX >= level.width || oldY >= level.height) return;
         Tile t = level.tiles[oldX][oldY];
-        boolean isPlayer = mob.behavior == Behavior.PLAYER;
+        boolean isPlayer = mob.isPlayer;
         // Auto-close any open-door variant that has a defined closed state.
         // ONETIME doors don't have a closedVariant so they're naturally
         // skipped (they don't auto-close - they're already broken to FLOOR).
@@ -393,7 +393,7 @@ public class MobSystem {
     private static void onMobEnteredTile(Level level, Mob mob, int nx, int ny) {
         if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) return;
         Tile t = level.tiles[nx][ny];
-        boolean isPlayer = mob.behavior == Behavior.PLAYER;
+        boolean isPlayer = mob.isPlayer;
         // Door entry - delegate to DoorBehavior. The TileQuery.blocksMovementAt
         // gate has already verified the mob is allowed to cross (passRule),
         // so here we just apply the on-cross effect: open, break, or nothing.
@@ -426,7 +426,7 @@ public class MobSystem {
         // inactive beacon flips it to active and emits a one-shot activation
         // effect. Beacons themselves block movement, so the player never
         // stands ON one - only adjacent.
-        if (mob.behavior == Mob.Behavior.PLAYER) {
+        if (mob.isPlayer) {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     if (dx == 0 && dy == 0) continue;
@@ -484,7 +484,7 @@ public class MobSystem {
         // item destroys the item and applies its wandEffect to the
         // stepper. PLAYER and SMART (autoplay driver standing in for the
         // player) both trigger; other mobs walk over them.
-        if (mob.behavior == Behavior.PLAYER || mob.behavior == Behavior.SMART) {
+        if (mob.isPlayer) {
             applyPowerupsAt(level, mob, nx, ny);
         }
     }
@@ -594,7 +594,7 @@ public class MobSystem {
         if (a.owner != null && a.owner == b.owner)   return Attitude.ALLY;
         // Frightened mobs flee everything. Player exempt: their intent comes from
         // user input, not AI; the buff is cosmetic on the player side.
-        if (a.behavior != Behavior.PLAYER
+        if (!a.isPlayer
                 && BuffSystem.hasBuff(a, com.bjsp123.rl2.model.Buff.BuffType.FRIGHTENED)) {
             return Attitude.FLEE;
         }
@@ -672,8 +672,8 @@ public class MobSystem {
         boolean aBecameHostile = aLearned && aPriorAttitude != Attitude.ATTACK;
         boolean bBecameHostile = bLearned && bPriorAttitude != Attitude.ATTACK;
         if (!aBecameHostile && !bBecameHostile) return;
-        boolean aPlayer = a.behavior == Behavior.PLAYER;
-        boolean bPlayer = b.behavior == Behavior.PLAYER;
+        boolean aPlayer = a.isPlayer;
+        boolean bPlayer = b.isPlayer;
         String aName = nameForLog(level, a);
         String bName = nameForLog(level, b);
         if (!aPlayer && bPlayer && aBecameHostile) {
@@ -822,7 +822,7 @@ public class MobSystem {
         StateOfMind prev = mob.stateOfMind;
         if (prev == StateOfMind.AWAKE) return;
         mob.stateOfMind = StateOfMind.AWAKE;
-        if (mob.behavior == Behavior.PLAYER) return;
+        if (mob.isPlayer) return;
         if (prev != StateOfMind.ASLEEP) return;
         if (!isVisibleToPlayer(level, mob)) return;
         EventLog.add(Messages.mobWakesUp(nameForLog(level, mob), reason));
@@ -836,7 +836,7 @@ public class MobSystem {
         int cx = center.tileX(), cy = center.tileY();
         for (Mob m : level.mobs) {
             if (m == null || m.position == null || m.hp <= 0) continue;
-            if (m.behavior == Behavior.PLAYER) continue;
+            if (m.isPlayer) continue;
             if (m.stateOfMind == StateOfMind.AWAKE) continue;
             int d = Math.max(Math.abs(m.position.tileX() - cx),
                              Math.abs(m.position.tileY() - cy));
@@ -966,8 +966,8 @@ public class MobSystem {
     }
 
     private static void emitSurpriseAttack(Level level, Mob attacker, Mob target) {
-        boolean playerInvolved = (attacker != null && attacker.behavior == Behavior.PLAYER)
-                || (target != null && target.behavior == Behavior.PLAYER);
+        boolean playerInvolved = (attacker != null && attacker.isPlayer)
+                || (target != null && target.isPlayer);
         EventLog.add(Messages.surpriseAttack(nameForLog(level, attacker),
                 nameForLog(level, target), playerInvolved));
         if (level != null && level.events != null && target != null) {
@@ -1290,7 +1290,7 @@ public class MobSystem {
         // Capture the most recent damaging hit on the player for the death
         // screen headline (E1). Cleared via {@link #resetLastPlayerHit} on
         // new run.
-        if (dealt > 0 && target.behavior == Behavior.PLAYER) {
+        if (dealt > 0 && target.isPlayer) {
             lastPlayerCause     = effectiveCause;
             lastPlayerElement   = element;
             lastPlayerHitDealt  = dealt;
@@ -1349,8 +1349,8 @@ public class MobSystem {
         // damageRoll line as before. This line is the player-visible "X takes 3
         // poison damage" feedback for DOT ticks and wand zaps.
         if (dealt > 0 && element != DamageElement.PHYSICAL) {
-            boolean playerInvolved = (attacker != null && attacker.behavior == Behavior.PLAYER)
-                                  || target.behavior == Behavior.PLAYER;
+            boolean playerInvolved = (attacker != null && attacker.isPlayer)
+                                  || target.isPlayer;
             String originName = Messages.formatCauseOrigin(level, effectiveCause);
             EventLog.add(Messages.elementalDamage(
                     nameForLog(level, target), element, dealt, originName, playerInvolved));
@@ -1452,9 +1452,9 @@ public class MobSystem {
     private static void emitKillLog(Level level, Mob attacker, Mob target) {
         String atkName = nameForLog(level, attacker);
         String tgtName = nameForLog(level, target);
-        if (attacker.behavior == Behavior.PLAYER) {
+        if (attacker.isPlayer) {
             EventLog.add(Messages.playerKill(atkName, tgtName));
-        } else if (target.behavior == Behavior.PLAYER) {
+        } else if (target.isPlayer) {
             EventLog.add(Messages.enemyKill(atkName, tgtName));
         } else {
             EventLog.add(Messages.mobKill(atkName, tgtName));
@@ -1496,8 +1496,8 @@ public class MobSystem {
         String atk = effectiveAttacker == null ? null : nameForLog(level, effectiveAttacker);
         String tgt = target == null ? "?" : nameForLog(level, target);
         boolean attackerIsPlayer = effectiveAttacker != null
-                && effectiveAttacker.behavior == Behavior.PLAYER;
-        boolean targetIsPlayer = target != null && target.behavior == Behavior.PLAYER;
+                && effectiveAttacker.isPlayer;
+        boolean targetIsPlayer = target != null && target.isPlayer;
         boolean playerInv = attackerIsPlayer || targetIsPlayer;
         String itemName = (bk.cause != null && bk.cause.originItem() != null
                 && bk.cause.originItem().name != null)
@@ -1515,7 +1515,7 @@ public class MobSystem {
     public static int pickupAtFeet(Level level, Mob mob) {
         if (!mob.effectiveStats().canPickUp) return 0;
         int x = mob.position.tileX(), y = mob.position.tileY();
-        boolean isPlayer = mob.behavior == Behavior.PLAYER;
+        boolean isPlayer = mob.isPlayer;
         String pickerName = mob.name != null ? mob.name : "?";
         int picked = 0;
         Iterator<Item> it = level.items.iterator();
@@ -1720,14 +1720,14 @@ public class MobSystem {
                 int slamDmg = remaining * 4 + wallSlamBonus;
                 processAttack(level, null, mob, slamDmg,
                         AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL, null, slamCause);
-                if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+                if (mob.isPlayer || isVisibleToPlayer(level, mob)) {
                     // No {@code intoName} - picks the "wall" variant.
                     // Origin only shows on attributable (non-melee) chains
                     // since the melee chain's preceding hit line already
                     // attributes the push.
                     EventLog.add(Messages.knockbackSlam(nameForLog(level, mob), slamDmg,
                             Messages.formatCauseOrigin(level, slamCause), null, 0,
-                            mob.behavior == Behavior.PLAYER));
+                            mob.isPlayer));
                 }
                 return;
             }
@@ -1739,14 +1739,14 @@ public class MobSystem {
                 int slamDmg = remaining * 4 + wallSlamBonus;
                 processAttack(level, null, mob, slamDmg,
                         AttackType.ENVIRONMENTAL, DamageElement.PHYSICAL, null, slamCause);
-                if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+                if (mob.isPlayer || isVisibleToPlayer(level, mob)) {
                     // Cascade kb = the {@code remaining} push that the
                     // collided mob will inherit. Reads as "...knocking the
                     // rat back 2" in the slam log.
                     int cascadeKb = (collided.hp > 0) ? remaining : 0;
                     EventLog.add(Messages.knockbackSlam(nameForLog(level, mob), slamDmg,
                             null, nameForLog(level, collided), cascadeKb,
-                            mob.behavior == Behavior.PLAYER));
+                            mob.isPlayer));
                 }
                 if (collided.hp > 0) {
                     processAttack(level, null, collided, remaining * 4,
@@ -1812,9 +1812,9 @@ public class MobSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobFellThroughChasm(
                     mob, fromPos));
         }
-        if (mob.behavior == Behavior.PLAYER || isVisibleToPlayer(level, mob)) {
+        if (mob.isPlayer || isVisibleToPlayer(level, mob)) {
             EventLog.add(Messages.mobFellInChasm(nameForLog(level, mob),
-                    mob.behavior == Behavior.PLAYER));
+                    mob.isPlayer));
         }
 
         if (!canRelocate) {
@@ -1829,7 +1829,7 @@ public class MobSystem {
         // there. The PLAYER is capped to survive at 1 HP so a void-knockback never silently
         // strips their inventory; NPCs take the full hit and may die on arrival (their loot
         // then drops on the level below via the normal death path).
-        int applied = mob.behavior == Behavior.PLAYER
+        int applied = mob.isPlayer
                 ? Math.max(0, (int) Math.floor(mob.hp - 1))
                 : dmg;
         transferMobToLevel(level, mob, next, arrival);
@@ -1992,7 +1992,7 @@ public class MobSystem {
         }
         mob.position = arrivalPos;
         mob.targetPosition = null;
-        if (mob.behavior == Mob.Behavior.PLAYER || mob.behavior == Mob.Behavior.SMART) {
+        if (mob.isPlayer) {
             com.bjsp123.rl2.model.World world = srcLevel.world;
             if (world != null) {
                 int idx = indexOf(world, dstLevel);
@@ -2005,7 +2005,7 @@ public class MobSystem {
         // Levels that seal behind the player vanish their stairs-up the first
         // time the player sets foot on them. Generic + idempotent (once sealed
         // stairsUp is null), so no per-level "entered" bookkeeping needed.
-        if (mob.behavior == Mob.Behavior.PLAYER && dstLevel.sealOnEntry
+        if (mob.isPlayer && dstLevel.sealOnEntry
                 && dstLevel.stairsUp != null) {
             LevelSystem.sealStairsUp(dstLevel);
         }
@@ -2109,7 +2109,7 @@ public class MobSystem {
         java.util.Arrays.fill(mob.inventory.amulets, null);
         java.util.Arrays.fill(mob.inventory.gems,    null);
         boolean tileVisible = tileVisibleToPlayer(level, mob.position);
-        boolean involvesPlayer = mob.behavior == Behavior.PLAYER;
+        boolean involvesPlayer = mob.isPlayer;
         for (Item item : falling) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemFallingIntoChasm(
                     item, mob.position));
@@ -2229,8 +2229,8 @@ public class MobSystem {
                         : (ab.applies != null
                                 ? "a " + ab.applies.name().toLowerCase() + " ability"
                                 : "an ability");
-                boolean inv = caster.behavior == Behavior.PLAYER
-                        || target.behavior == Behavior.PLAYER;
+                boolean inv = caster.isPlayer
+                        || target.isPlayer;
                 EventLog.add(Messages.mobUsesAbility(nameForLog(level, caster),
                         abilityDesc, nameForLog(level, target), inv));
             }
@@ -2306,9 +2306,9 @@ public class MobSystem {
         }
         BuffSystem.apply(level, self, com.bjsp123.rl2.model.Buff.BuffType.PHASE_DODGE_COOLDOWN,
                 cooldownTurns, self);
-        if (self.behavior == Behavior.PLAYER || isVisibleToPlayer(level, self)) {
+        if (self.isPlayer || isVisibleToPlayer(level, self)) {
             EventLog.add(Messages.phaseDodged(nameForLog(level, self),
-                    self.behavior == Behavior.PLAYER));
+                    self.isPlayer));
         }
         return true;
     }
@@ -3547,7 +3547,7 @@ public class MobSystem {
         // hidden (RL-35). Other thrown items remain player-only in the log.
         EventLog.add(Messages.itemThrown(nameForLog(level, thrower),
                 it.name != null ? it.name : it.type,
-                thrower.behavior == Behavior.PLAYER
+                thrower.isPlayer
                         || it.inventoryCategory == Item.InventoryCategory.BOMB));
         // Thrown items are always consumed from the thrower's bag. (The old
         // BOMB_DODGER "bomb survives the throw" regeneration is gone - RL-34
@@ -3752,7 +3752,7 @@ public class MobSystem {
                             : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
                     String vn = nameForLog(level, target);
                     boolean attackerIsPlayer = thrower != null
-                            && thrower.behavior == Behavior.PLAYER;
+                            && thrower.isPlayer;
                     boolean victimIsPlayer   = target.behavior  == Behavior.PLAYER;
                     EventLog.add(attackerIsPlayer
                             ? Messages.playerMiss(cn, vn)

@@ -41,12 +41,9 @@ public record DoorBehavior(
                 // not your own party. A mob owned by something that ISN'T the
                 // player (e.g. a cat's kittens) is not loyal and stays blocked.
                 case PLAYER_ONLY -> mob != null && (
-                        mob.behavior == Mob.Behavior.PLAYER
-                        || (mob.behavior == Mob.Behavior.SMART && mob.owner == null)
+                        mob.isPlayer
                         || "PLAYER".equals(mob.faction)
-                        || (mob.owner != null
-                            && (mob.owner.behavior == Mob.Behavior.PLAYER
-                                || mob.owner.behavior == Mob.Behavior.SMART)));
+                        || (mob.owner != null && mob.owner.isPlayer));
                 case NONE        -> false;
             };
         }

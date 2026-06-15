@@ -245,11 +245,11 @@ public final class Arena1vNRankMain {
             if (m == null) return 0;
             MobProgression.setSpawnLevel(m, charLvl);
             ArenaHarness.stripFromInventory(m, "TELEPORT_ORB");
-            if (m.behavior == Mob.Behavior.PLAYER) m.behavior = Mob.Behavior.MOB;
+            if (m.behavior == Mob.Behavior.PLAYER) { m.behavior = Mob.Behavior.MOB; m.isPlayer = false; }
             m.stateOfMind = Mob.StateOfMind.AWAKE;
             mobs.add(m);
         }
-        if (player.behavior == Mob.Behavior.PLAYER) player.behavior = Mob.Behavior.MOB;
+        if (player.behavior == Mob.Behavior.PLAYER) { player.behavior = Mob.Behavior.MOB; player.isPlayer = false; }
         player.stateOfMind = Mob.StateOfMind.AWAKE;
 
         // Place player on the left edge, mobs clustered on the right.

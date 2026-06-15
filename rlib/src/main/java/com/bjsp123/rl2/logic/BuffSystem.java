@@ -141,7 +141,7 @@ public final class BuffSystem {
         if (!isCooldownBuff(type)) {
             String name = MobSystem.nameForLog(level, target);
             EventLog.add(Messages.buffApplied(name, displayName(type), newStacks,
-                    target.behavior == Mob.Behavior.PLAYER));
+                    target.isPlayer));
         }
         // Hope wipes any active fear - adding hope after a fright should free the mob.
         if (type == BuffType.HOPE) {
@@ -296,7 +296,7 @@ public final class BuffSystem {
                 if (!isCooldownBuff(b.type)) {
                     String name = MobSystem.nameForLog(level, m);
                     EventLog.add(Messages.buffExpired(name, displayName(b.type),
-                            m.behavior == Mob.Behavior.PLAYER));
+                            m.isPlayer));
                     // Emit a BuffRemoved event so the renderer can show a brief
                     // "buff faded" floater above the mob.
                     if (level != null && level.events != null) {
@@ -452,6 +452,9 @@ public final class BuffSystem {
                 }
                 case INVISIBLE -> dst.evasion += 40;
                 case GHOSTLY   -> dst.evasion += 20;
+                // Levitation grants flight: the mob floats over chasms (and
+                // other ground hazards gated on flying) for the buff's duration.
+                case LEVITATING -> dst.flying = true;
                 case PHASE -> {
                     dst.evasion += 40;
                     moveMultiplier *= 0.3;
@@ -528,7 +531,7 @@ public final class BuffSystem {
      *  framing routed through the existing event-log helpers. */
     private static void logDotDeath(Mob deadMob, String verbPhrase) {
         if (deadMob == null) return;
-        boolean player = deadMob.behavior == Mob.Behavior.PLAYER;
+        boolean player = deadMob.isPlayer;
         String name = deadMob.name != null ? deadMob.name
                     : (player ? "Adventurer" : "the creature");
         EventLog.add(new com.bjsp123.rl2.model.LogEvent(

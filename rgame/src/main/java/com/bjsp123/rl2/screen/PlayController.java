@@ -221,7 +221,7 @@ final class PlayController {
         }
         switch (ub) {
             case EAT, DRINK, GRANT_PERK, APPLYBUFF -> {
-                ItemSystem.useItem(level, player, bound);
+                if (!ItemSystem.useItem(level, player, bound)) playInvocationFail();
                 afterMove(level);
             }
             case WAND     -> beginWand(level, player, bound);
@@ -251,8 +251,9 @@ final class PlayController {
         }
         switch (item.useBehavior) {
             case EAT, DRINK, GRANT_PERK, APPLYBUFF -> {
-                ItemSystem.useItem(level, user, item);
-                if (item.useBehavior == Item.UseBehavior.EAT && sounds != null)
+                boolean acted = ItemSystem.useItem(level, user, item);
+                if (!acted) playInvocationFail();
+                else if (item.useBehavior == Item.UseBehavior.EAT && sounds != null)
                     sounds.play("sfx.player.action.eat");
                 afterMove(level);
             }
@@ -284,6 +285,8 @@ final class PlayController {
                         if (ItemSystem.triggerGemOnItem(cur, u, gem, chosen)) {
                             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(u, gem);
                             afterMove(cur);
+                        } else {
+                            playInvocationFail();
                         }
                     },
                     () -> { /* cancelled - scroll kept */ });
@@ -296,7 +299,15 @@ final class PlayController {
         if (ItemSystem.triggerGem(level, user, gem, null)) {
             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
             afterMove(level);
+        } else {
+            playInvocationFail();
         }
+    }
+
+    /** Audible feedback that an item could not be invoked. The matching log
+     *  line (why it failed) is emitted by the rlib use/trigger path. */
+    private void playInvocationFail() {
+        if (sounds != null) sounds.play("sfx.item.fail");
     }
 
     /** True if the player holds (bag or equipped) at least one item the picker
@@ -322,6 +333,8 @@ final class PlayController {
                 com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
                 animator.consume(cur);
                 afterMove(cur);
+            } else {
+                playInvocationFail();
             }
         }, gem);
     }

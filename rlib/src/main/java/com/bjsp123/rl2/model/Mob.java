@@ -302,6 +302,15 @@ public class Mob {
      *  player-only renderer + starting-kit branches. */
     public CharacterClass characterClass;
 
+    /** Canonical "this mob is the actual player avatar" marker - the single
+     *  source of truth for player IDENTITY, deliberately decoupled from
+     *  {@link #behavior} (which only encodes how a turn is driven: human input
+     *  vs an AI brain). Set true by {@link com.bjsp123.rl2.logic.MobFactory#player}
+     *  and by the autoplay agent; false for every other mob. Identity checks
+     *  (FOV, party/door rules, loot suppression, log attribution, rendering)
+     *  must read this, NOT {@code behavior == PLAYER}. */
+    public boolean isPlayer;
+
     // -- Combat ceiling ------------------------------------------------------
     // (was: maxHp, healRate, accuracy, evasion, damage, armor, apDamageMin/Max,
     //  magicResistMin/Max, attackCost, moveCost - all moved to {@link #intrinsic}.)

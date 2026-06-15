@@ -718,6 +718,7 @@ public final class AutoplayGame {
     private static boolean canReach(Level level, Point from, Point to) {
         Mob probe = new Mob();
         probe.behavior = Mob.Behavior.PLAYER;
+        probe.isPlayer = true;
         probe.faction = "PLAYER";
         probe.position = from;
         return com.bjsp123.rl2.logic.Pathfinder.nextStep(level, probe, to) != null;

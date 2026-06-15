@@ -128,7 +128,7 @@ public class PlayScreen implements Screen {
         // your face" - that's when the tip is relevant and well-timed.
         for (com.bjsp123.rl2.model.Mob mob : level.mobs) {
             if (mob == null || mob.position == null || mob.mobType == null) continue;
-            if (mob.behavior == com.bjsp123.rl2.model.Mob.Behavior.PLAYER) continue;
+            if (mob.isPlayer) continue;
             int mx = mob.position.tileX(), my = mob.position.tileY();
             int cheb = Math.max(Math.abs(mx - px), Math.abs(my - py));
             if (cheb != 1) continue;

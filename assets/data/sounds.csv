@@ -1,6 +1,7 @@
 key,sfx
 sfx.game.start,sfx/t_magic_spell_healing_07.wav
 sfx.item.use,sfx/t_magic_spell_potion_01.wav
+sfx.item.fail,sfx/t_ui_confirm_cancel_01.wav
 sfx.item.use.wand,sfx/t_magic_spell_black_01.wav
 sfx.item.use.wand.wand_magic_missile,sfx/t_magic_spell_electro_04.wav
 sfx.item.use.wand.wand_lightning,sfx/t_magic_spell_electro_04.wav

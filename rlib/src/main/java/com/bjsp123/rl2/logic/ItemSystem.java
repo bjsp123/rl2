@@ -51,7 +51,7 @@ public final class ItemSystem {
         applyConsumableBuff(level, eater, item);
         applyManaFountRecharge(level, eater);
         MobSystem.removeFromInventory(eater, item);
-        if (eater.behavior == Behavior.PLAYER) {
+        if (eater.isPlayer) {
             EventLog.add(Messages.playerEats(actorName(eater), item.name));
         } else if (eater.name != null && item.name != null) {
             EventLog.add(Messages.mobUsesItem(eater.name, item.name, false));
@@ -173,7 +173,7 @@ public final class ItemSystem {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(
                     picker.position, eff));
         }
-        if (picker.behavior == Behavior.PLAYER) {
+        if (picker.isPlayer) {
             EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                     TextCatalog.format("eventlog.item.powerupAbsorb",
                             TextCatalog.vars("actor", actorName(picker),
@@ -196,7 +196,7 @@ public final class ItemSystem {
         applyManaFountRecharge(level, drinker);
         emitPotionBurst(level, drinker.position, item);
         MobSystem.removeFromInventory(drinker, item);
-        if (drinker.behavior == Behavior.PLAYER) {
+        if (drinker.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(drinker),
                     useVerb(item, "eventlog.item.verb.drink"), item.name));
         } else if (drinker.name != null && item.name != null) {
@@ -307,7 +307,7 @@ public final class ItemSystem {
         if (level != null && level.events != null && user.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.XPGainBurst(user.position));
         }
-        if (user.behavior == Behavior.PLAYER) {
+        if (user.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(user),
                     useVerb(item, "eventlog.item.verb.use"), item.name));
         }
@@ -623,7 +623,7 @@ public final class ItemSystem {
         java.util.List<Mob> snapshot = new java.util.ArrayList<>(level.mobs);
         for (Mob m : snapshot) {
             if (m == null || m.position == null || m.hp <= 0) continue;
-            if (m.behavior == Behavior.PLAYER) continue;
+            if (m.isPlayer) continue;
             int mdx = Math.abs(m.position.tileX() - tx);
             int mdy = Math.abs(m.position.tileY() - ty);
             if (Math.max(mdx, mdy) > radius) continue;
@@ -837,7 +837,7 @@ public final class ItemSystem {
         // The summoning branch shares the same gate so a depleted wand of
         // dog won't yip out a free puppy on use.
         if (wand.useBehavior == Item.UseBehavior.WAND && wand.charge < 1f) {
-            if (caster.behavior == Behavior.PLAYER) {
+            if (caster.isPlayer) {
                 EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                         TextCatalog.format("eventlog.item.fizzleOutOfCharge",
                                 TextCatalog.vars("item",
@@ -851,7 +851,7 @@ public final class ItemSystem {
         if (wand.summonsWhenUsed != null) {
             castSummonWand(level, caster, wand);
             wand.charge = Math.max(0f, wand.charge - 1f);
-            if (caster.behavior == Behavior.PLAYER) {
+            if (caster.isPlayer) {
                 EventLog.add(Messages.playerUses(actorName(caster),
                         useVerb(wand, "eventlog.item.verb.use"), wand.name));
             } else if (caster.name != null && wand.name != null) {
@@ -873,7 +873,7 @@ public final class ItemSystem {
                         caster, teleportOrigin.tileX(), teleportOrigin.tileY(), tx, ty));
             }
             wand.charge = Math.max(0f, wand.charge - 1f);
-            if (caster.behavior == Behavior.PLAYER) {
+            if (caster.isPlayer) {
                 EventLog.add(Messages.playerUses(actorName(caster),
                         useVerb(wand, "eventlog.item.verb.use"), wand.name));
             } else if (caster.name != null && wand.name != null) {
@@ -899,7 +899,7 @@ public final class ItemSystem {
         }
         // Charge consumed once the wand has actually fired the projectile.
         wand.charge = Math.max(0f, wand.charge - 1f);
-        if (caster.behavior == Behavior.PLAYER) {
+        if (caster.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(caster),
                     useVerb(wand, "eventlog.item.verb.use"), wand.name));
         } else if (caster.name != null && wand.name != null) {
@@ -927,17 +927,18 @@ public final class ItemSystem {
      * the dispatch table lives in one place. WAND and throw require a target
      * and use {@link #fireWand} / {@link MobSystem#throwItem} instead.
      */
-    public static void useItem(Level level, Mob user, Item item) {
-        if (level == null || user == null || item == null || item.useBehavior == null) return;
+    public static boolean useItem(Level level, Mob user, Item item) {
+        if (level == null || user == null || item == null || item.useBehavior == null) return false;
         boolean acted = true;
         switch (item.useBehavior) {
             case EAT         -> eat(level, user, item);
             case DRINK       -> drinkPotion(level, user, item);
             case GRANT_PERK  -> grantXP(level, user, item);
             case APPLYBUFF   -> acted = useChargedBuffTool(level, user, item);
-            case WAND, GRAPPLE, JUMP, CHARGE, TELEPORT, NONE -> { return; } // need a target or a specialized caller
+            case WAND, GRAPPLE, JUMP, CHARGE, TELEPORT, NONE -> { return false; } // need a target or a specialized caller
         }
         if (acted) TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+        return acted;
     }
 
     /**
@@ -1238,13 +1239,28 @@ public final class ItemSystem {
                 return true;
             }
             case "PATH_THROUGH_OBLIVION" -> {
-                // Eight turns of levitation, then floor within 8 squares becomes chasm.
+                // Eight turns of levitation, then floor within 8 squares becomes
+                // chasm. The caster is levitating (flying) so they stay aloft;
+                // any non-flying mob now standing over the void falls in.
                 BuffSystem.apply(level, user, Buff.BuffType.LEVITATING, 8, user, gem);
                 if (user.position != null) {
                     int px = user.position.tileX(), py = user.position.tileY();
                     for (int x = Math.max(0, px - 8); x <= Math.min(level.width - 1, px + 8); x++) {
                         for (int y = Math.max(0, py - 8); y <= Math.min(level.height - 1, py + 8); y++) {
                             if (level.tiles[x][y].isFloorLike()) level.tiles[x][y] = com.bjsp123.rl2.model.Tile.CHASM;
+                        }
+                    }
+                }
+                // Drop anyone left standing on the new void (snapshot first -
+                // fallToNextLevel relocates mobs off this level's list).
+                if (level.mobs != null) {
+                    for (Mob m : new java.util.ArrayList<>(level.mobs)) {
+                        if (m == null || m == user || m.position == null || m.hp <= 0) continue;
+                        int mx = m.position.tileX(), my = m.position.tileY();
+                        if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
+                        if (level.tiles[mx][my] == com.bjsp123.rl2.model.Tile.CHASM
+                                && !m.effectiveStats().flying) {
+                            MobSystem.fallToNextLevel(level, m);
                         }
                     }
                 }
@@ -1258,7 +1274,7 @@ public final class ItemSystem {
             }
             default -> {
                 // Effect not forged yet (RL-50 body). Log a stub; do NOT consume.
-                if (user.behavior == Behavior.PLAYER) {
+                if (user.isPlayer) {
                     EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                             "The " + (gem.name != null ? gem.name : gem.type)
                                     + " shimmers, but its power is not yet forged.",
@@ -1272,7 +1288,7 @@ public final class ItemSystem {
     /** Log a "the scroll fizzles" line for a read that found nothing to act on;
      *  the caller returns false so the scroll is NOT consumed. */
     private static void gemFizzle(Mob user, Item gem, String why) {
-        if (user.behavior == Behavior.PLAYER) {
+        if (user.isPlayer) {
             EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                     "The " + (gem.name != null ? gem.name : gem.type) + " " + why + ".",
                     com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
@@ -1427,7 +1443,7 @@ public final class ItemSystem {
         for (Mob m : level.mobs) {
             if (m == null || m == user || m.hp <= 0) continue;
             if (m.owner != null) continue;
-            if (m.behavior == Behavior.PLAYER || m.behavior == Behavior.SMART
+            if (m.isPlayer
                     || m.behavior == Behavior.INANIMATE) continue;
             out.add(m);
         }
@@ -1436,7 +1452,7 @@ public final class ItemSystem {
 
     /** Standard "player invokes the gem" log line. */
     private static void announceGemUse(Mob user, Item gem) {
-        if (user.behavior == Behavior.PLAYER) {
+        if (user.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(user),
                     useVerb(gem, "eventlog.item.verb.use"), gem.name));
         }
@@ -1444,7 +1460,7 @@ public final class ItemSystem {
 
     private static boolean useChargedBuffTool(Level level, Mob user, Item item) {
         if (item.baseChargeMax > 0 && item.charge < 1f) {
-            if (user.behavior == Behavior.PLAYER) {
+            if (user.isPlayer) {
                 EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                         TextCatalog.format("eventlog.item.fizzleOutOfCharge",
                                 TextCatalog.vars("item",
@@ -1459,7 +1475,7 @@ public final class ItemSystem {
         if (level != null && level.events != null && user.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(user.position, item));
         }
-        if (user.behavior == Behavior.PLAYER) {
+        if (user.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(user),
                     useVerb(item, "eventlog.item.verb.use"), item.name));
         } else if (user.name != null && item.name != null) {
@@ -1491,7 +1507,7 @@ public final class ItemSystem {
         if (level == null || caster == null || item == null || target == null) return;
         if (caster.position == null) return;
         if (item.baseChargeMax > 0 && item.charge < 1f) {
-            if (caster.behavior == Behavior.PLAYER) {
+            if (caster.isPlayer) {
                 EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                         TextCatalog.format("eventlog.item.noCharge",
                                 TextCatalog.vars("item",
@@ -1508,7 +1524,7 @@ public final class ItemSystem {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
                             caster, caster.position, target, false));
                 }
-                if (caster.behavior == Behavior.PLAYER) {
+                if (caster.isPlayer) {
                     EventLog.add(Messages.grappleBlocked(
                             targetMob.name != null ? targetMob.name
                                     : TextCatalog.get("eventlog.fallback.creature")));
@@ -1534,7 +1550,7 @@ public final class ItemSystem {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
                         caster, caster.position, target, true));
             }
-            if (caster.behavior == Behavior.PLAYER) {
+            if (caster.isPlayer) {
                 EventLog.add(Messages.playerUses(actorName(caster),
                         useVerb(item, "eventlog.item.verb.use"), item.name));
             } else if (caster.name != null && item.name != null) {
@@ -1554,7 +1570,7 @@ public final class ItemSystem {
             grapplePullMob(level, targetMob, landing, landingIsChasm);
         }
         grapplePullFloorItems(level, target, landing, landingIsChasm);
-        if (caster.behavior == Behavior.PLAYER) {
+        if (caster.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(caster),
                     useVerb(item, "eventlog.item.verb.use"), item.name));
         } else if (caster.name != null && item.name != null) {
@@ -1574,7 +1590,7 @@ public final class ItemSystem {
         if (level == null || user == null || item == null || target == null) return;
         if (user.position == null) return;
         if (item.baseChargeMax > 0 && item.charge < 1f) {
-            if (user.behavior == Behavior.PLAYER) {
+            if (user.isPlayer) {
                 EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                         TextCatalog.format("eventlog.item.noCharge",
                                 TextCatalog.vars("item",
@@ -1601,7 +1617,7 @@ public final class ItemSystem {
         if (arrival == null) {
             // No solid floor beside the target to land on - the charge fizzles without
             // spending the charge or the turn (never strand the charger on a chasm).
-            if (user.behavior == Behavior.PLAYER) {
+            if (user.isPlayer) {
                 EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                         TextCatalog.get("eventlog.charge.noRoom"),
                         com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
@@ -1613,12 +1629,12 @@ public final class ItemSystem {
         // line. Emitted BEFORE the swing so the log reads "charges at X"
         // then "hits X for N". HIGH priority since it flags a deliberate
         // commitment of a turn.
-        if (user.behavior == Behavior.PLAYER) {
+        if (user.isPlayer) {
             String targetName = victim.name != null
                     ? victim.name
                     : (victim.mobType != null ? victim.mobType.toLowerCase() : "?");
             EventLog.add(Messages.playerCharges(actorName(user),
-                    targetName, victim.behavior == Behavior.PLAYER));
+                    targetName, victim.isPlayer));
         }
 
         // Dash visual + position update.
@@ -1698,7 +1714,7 @@ public final class ItemSystem {
         if (level == null || jumper == null || item == null || target == null) return;
         if (jumper.position == null) return;
         if (item.baseChargeMax > 0 && item.charge < 1f) {
-            if (jumper.behavior == Behavior.PLAYER) {
+            if (jumper.isPlayer) {
                 EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                         TextCatalog.format("eventlog.item.noCharge",
                                 TextCatalog.vars("item",
@@ -1726,7 +1742,7 @@ public final class ItemSystem {
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobJumped(jumper, from, target));
         }
-        if (jumper.behavior == Behavior.PLAYER) {
+        if (jumper.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(jumper),
                     useVerb(item, "eventlog.item.verb.use"), item.name));
         } else if (jumper.name != null && item.name != null) {

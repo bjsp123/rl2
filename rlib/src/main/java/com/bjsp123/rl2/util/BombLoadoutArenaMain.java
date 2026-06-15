@@ -148,7 +148,7 @@ public final class BombLoadoutArenaMain {
         MobProgression.setSpawnLevel(warrior, charLvl);
         equipLoadout(warrior, weapon, bomb);
         MobProgression.autoLevelUpPerks(warrior, rng);
-        if (warrior.behavior == Mob.Behavior.PLAYER) warrior.behavior = Mob.Behavior.MOB;
+        if (warrior.behavior == Mob.Behavior.PLAYER) { warrior.behavior = Mob.Behavior.MOB; warrior.isPlayer = false; }
         warrior.stateOfMind = Mob.StateOfMind.AWAKE;
 
         List<Mob> opponents = new ArrayList<>(MOBS_PER_TEAM);
@@ -157,7 +157,7 @@ public final class BombLoadoutArenaMain {
             if (m == null) return;
             MobProgression.setSpawnLevel(m, charLvl);
             ArenaHarness.stripFromInventory(m, "TELEPORT_ORB");
-            if (m.behavior == Mob.Behavior.PLAYER) m.behavior = Mob.Behavior.MOB;
+            if (m.behavior == Mob.Behavior.PLAYER) { m.behavior = Mob.Behavior.MOB; m.isPlayer = false; }
             m.stateOfMind = Mob.StateOfMind.AWAKE;
             opponents.add(m);
         }

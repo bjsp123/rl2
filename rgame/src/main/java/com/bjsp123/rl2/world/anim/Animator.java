@@ -84,7 +84,7 @@ public final class Animator {
         if (level == null || level.mobs == null) return baseTick;
         Mob player = null;
         for (Mob m : level.mobs) {
-            if (m != null && m.behavior == Mob.Behavior.PLAYER) {
+            if (m != null && m.isPlayer) {
                 player = m;
                 break;
             }
@@ -290,7 +290,7 @@ public final class Animator {
         if (level == null || level.mobs == null) return;
         Mob player = null;
         for (Mob m : level.mobs) {
-            if (m != null && m.behavior == Mob.Behavior.PLAYER) { player = m; break; }
+            if (m != null && m.isPlayer) { player = m; break; }
         }
         if (player == null || player.position == null) return;
         // Levitating / flying movers don't kick up dust.
@@ -411,7 +411,7 @@ public final class Animator {
      *  ghost - works for live runs and for the pre-death state. */
     public boolean playerDeathAnimComplete() {
         for (Ghost g : ghosts) {
-            if (g.mob != null && g.mob.behavior == Mob.Behavior.PLAYER) return false;
+            if (g.mob != null && g.mob.isPlayer) return false;
         }
         return true;
     }
@@ -433,7 +433,7 @@ public final class Animator {
         s.stepFrame  = 0;
         s.stepTotal  = frames;
         s.delayFrames = queue.concurrent(frames);
-        if (sounds != null && m.mob() != null && m.mob().behavior == Mob.Behavior.PLAYER) {
+        if (sounds != null && m.mob() != null && m.mob().isPlayer) {
             String step = "." + footstepStep;
             footstepStep = footstepStep == 1 ? 2 : 1;
             Level.Vegetation veg = (level.vegetation != null) ? level.vegetation[m.toX()][m.toY()] : null;
@@ -452,7 +452,7 @@ public final class Animator {
                 case ICE   -> Effect.EffectTint.WHITE;
             };
             stage.add(Effect.footSplash(new Point(m.toX(), m.toY()), tint, RNG));
-        } else if (m.mob() != null && m.mob().behavior == Mob.Behavior.PLAYER
+        } else if (m.mob() != null && m.mob().isPlayer
                 && level.vegetation != null
                 && level.vegetation[m.toX()][m.toY()] == Level.Vegetation.GRASS) {
             // Player stepping into grass kicks up a pale-green splash. Green tint
@@ -483,7 +483,7 @@ public final class Animator {
         // same tick, each one's lunge is queued sequentially (different start delays
         // on the AnimQueue), and we use the same start delay for the slash so the
         // flashes appear in sequence with their lunges instead of overlapping.
-        boolean isPlayer = attacker.behavior == Mob.Behavior.PLAYER;
+        boolean isPlayer = attacker.isPlayer;
         float flashDelay = (n > 0f) ? stateOf(attacker).delayFrames : 0;
         stage.add(Effect.attackFlash(attacker.position, isPlayer,
                 attacker.facingEast, (int) flashDelay));
@@ -537,7 +537,7 @@ public final class Animator {
     void onMobKilled(Level level, GameEvent.MobKilled m) {
         if (!m.visibleAtKill()) return;
         if (sounds != null) {
-            boolean playerDied = m.mob() != null && m.mob().behavior == Mob.Behavior.PLAYER;
+            boolean playerDied = m.mob() != null && m.mob().isPlayer;
             sounds.playAt(playerDied ? "sfx.player.combat.die" : "sfx.mob.combat.die",
                     level, new Point(m.x(), m.y()));
         }
@@ -689,7 +689,7 @@ public final class Animator {
             // wording since that's what the player will see most often, but
             // a tossed potion / orb fires the same hook.
             Mob thrower = m.thrower();
-            if (thrower != null && thrower.behavior != Mob.Behavior.PLAYER) {
+            if (thrower != null && !thrower.isPlayer) {
                 com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
                         "concept:enemyThrows", "concept.enemyThrows.tip",
                         "concept.enemyThrows.name", null);
@@ -722,7 +722,7 @@ public final class Animator {
         if (m.item() == null || m.from() == null) return;
         stage.add(Effect.pickupToss(m.from(), m.item()));
         if (sounds != null && m.picker() != null) {
-            if (m.picker().behavior == Mob.Behavior.PLAYER) {
+            if (m.picker().isPlayer) {
                 Item it = m.item();
                 String pickupKey = (it != null && it.inventoryCategory == Item.InventoryCategory.GEM) ? "sfx.player.pickup.gem"
                         : (it != null && it.type != null) ? "sfx.player.pickup." + it.type.toLowerCase()
@@ -735,7 +735,7 @@ public final class Animator {
         // First-encounter tip: when the PLAYER picks up an item type for
         // the first time this run, queue its tip. TipSystem.maybeShow
         // dedupes by key so repeat pickups are silent.
-        if (m.picker() != null && m.picker().behavior == Mob.Behavior.PLAYER
+        if (m.picker() != null && m.picker().isPlayer
                 && m.item() != null && m.item().type != null) {
             com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
                     "item:" + m.item().type,
@@ -801,7 +801,7 @@ public final class Animator {
         boolean visible = MobSystem.isVisibleToPlayer(level, mob)
                 || visibleAt(level, from) || visibleAt(level, to);
         if (!visible) return;
-        if (sounds != null && mob.behavior == Mob.Behavior.PLAYER) sounds.playAt("sfx.item.use.frog", level, from);
+        if (sounds != null && mob.isPlayer) sounds.playAt("sfx.item.use.frog", level, from);
         int ddx = from.tileX() - to.tileX();
         int ddy = from.tileY() - to.tileY();
         int dist = Math.max(Math.abs(ddx), Math.abs(ddy));
@@ -902,7 +902,7 @@ public final class Animator {
         // POST-hit HP is at or below 20% of max, fire the HUD's hit-flash
         // hook. Threshold is a snapshot - a blow that drops them through the
         // line trips it; a blow taken while already below it also trips.
-        if (target.behavior == Mob.Behavior.PLAYER && m.amount() > 0
+        if (target.isPlayer && m.amount() > 0
                 && onPlayerLowHpHit != null) {
             double maxHp = target.effectiveStats().maxHp;
             if (maxHp > 0
@@ -932,7 +932,7 @@ public final class Animator {
                 } else {
                     stage.add(Effect.damageFloater(target.position, m.amount(), el));
                 }
-                if (sounds != null) sounds.playAt(target.behavior == Mob.Behavior.PLAYER
+                if (sounds != null) sounds.playAt(target.isPlayer
                         ? "sfx.player.combat.hit" : "sfx.combat.result.hit", level, target.position);
             }
             case MISS  -> {
@@ -993,7 +993,7 @@ public final class Animator {
         // First-encounter tip: buffs trigger their tip the first time the
         // player is on the receiving end. Other-mob buff applications stay
         // silent (would spam the popup in busy rooms).
-        if (mob.behavior == Mob.Behavior.PLAYER && m.type() != null) {
+        if (mob.isPlayer && m.type() != null) {
             com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
                     "buff:" + m.type().name(),
                     "buff." + m.type().name() + ".tip",
@@ -1298,8 +1298,8 @@ public final class Animator {
                 String cn = caster.name != null ? caster.name
                         : TextCatalog.get("eventlog.fallback.adventurer");
                 String vn = MobSystem.nameForLog(level, victim);
-                boolean attackerIsPlayer = caster.behavior == com.bjsp123.rl2.model.Mob.Behavior.PLAYER;
-                boolean victimIsPlayer   = victim.behavior  == com.bjsp123.rl2.model.Mob.Behavior.PLAYER;
+                boolean attackerIsPlayer = caster.isPlayer;
+                boolean victimIsPlayer   = victim.isPlayer;
                 com.bjsp123.rl2.logic.EventLog.add(attackerIsPlayer
                         ? com.bjsp123.rl2.logic.Messages.playerMiss(cn, vn)
                         : (victimIsPlayer

@@ -46,7 +46,7 @@ public final class LootSystem {
      *  pickups even when their stack keys match an existing inventory item. */
     public static void rollAndStashLoot(Level level, Mob mob, Random rng) {
         if (level == null || mob == null || mob.inventory == null) return;
-        if (mob.behavior == Mob.Behavior.PLAYER) return;
+        if (mob.isPlayer) return;
         MobDefinition def = Registries.mob(mob.mobType);
         if (def == null || def.drops == null || def.drops.isEmpty()) return;
 
@@ -117,7 +117,7 @@ public final class LootSystem {
         if (level == null || mob == null || mob.position == null) return;
         // The player's death ends the run; their corpse is never inspected so
         // the inventory dump would be wasted work. Skip.
-        if (mob.behavior == Mob.Behavior.PLAYER) return;
+        if (mob.isPlayer) return;
         // Data-driven "drop absolutely nothing" gate: a mobs.csv row with
         // dropQuality=NOTHING_AT_ALL suppresses both the rolled drop table
         // (rollAndStashLoot already skips) AND the inventory dump that would

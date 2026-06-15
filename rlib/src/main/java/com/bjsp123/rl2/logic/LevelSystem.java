@@ -102,12 +102,9 @@ public class LevelSystem {
      *  locked exit opens exactly when every ENEMY is dead - not held open by the
      *  player's pets or, in autoplay, by miscounting the agent as a hostile. */
     private static boolean isPlayerSide(Mob m) {
-        return m.behavior == Behavior.PLAYER
-                || (m.behavior == Behavior.SMART && m.owner == null)
+        return m.isPlayer
                 || "PLAYER".equals(m.faction)
-                || (m.owner != null
-                    && (m.owner.behavior == Behavior.PLAYER
-                        || m.owner.behavior == Behavior.SMART));
+                || (m.owner != null && m.owner.isPlayer);
     }
 
     public static void computeLighting(Level level) {
@@ -294,7 +291,7 @@ public class LevelSystem {
 
         TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
         for (Mob other : next.mobs) other.effectiveStats();
-        if (mob.behavior == Behavior.PLAYER) {
+        if (mob.isPlayer) {
             String name = MobSystem.nameForLog(cur, mob);
             EventLog.add(direction > 0
                     ? Messages.stairsDescended(name, next.depth)
@@ -312,7 +309,7 @@ public class LevelSystem {
         // cinematic before any animation can play.
         boolean hasPlayer = false;
         for (Mob mob : level.mobs) {
-            if (mob.behavior == Behavior.PLAYER) { hasPlayer = true; break; }
+            if (mob.isPlayer) { hasPlayer = true; break; }
         }
         if (!hasPlayer) return;
 
@@ -321,7 +318,7 @@ public class LevelSystem {
         boolean[] temp  = scratchTemp(level);
 
         for (Mob mob : level.mobs) {
-            if (mob.behavior != Behavior.PLAYER) continue;
+            if (!mob.isPlayer) continue;
             int cx = mob.position.tileX();
             int cy = mob.position.tileY();
             if (cx < 0 || cy < 0 || cx >= w || cy >= h) continue;
@@ -344,7 +341,7 @@ public class LevelSystem {
         // pairs this with explored=true for those cells so the mob sprite doesn't render
         // over an unexplored void.
         for (Mob mob : level.mobs) {
-            if (mob.behavior != Behavior.PLAYER) continue;
+            if (!mob.isPlayer) continue;
             if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(mob,
                     com.bjsp123.rl2.model.Buff.BuffType.ESP)) {
                 for (Mob other : level.mobs) {
