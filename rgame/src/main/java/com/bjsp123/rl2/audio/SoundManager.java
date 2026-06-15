@@ -22,9 +22,9 @@ public final class SoundManager {
     /** Minimum milliseconds between two plays of the same sound key.
      *  Keeps a rapid burst of identical events (e.g. 5 mobs attacking in one
      *  render frame) from stacking concurrent instances and exhausting the
-     *  OpenAL source pool. 150 ms is short enough to feel responsive for a
-     *  single action while still collapsing back-to-back repeats. */
-    private static final long COOLDOWN_MS = 150;
+     *  OpenAL source pool. 60 ms lets a run-over of several powerups rattle off
+     *  distinct dings while still collapsing true same-frame bursts. */
+    private static final long COOLDOWN_MS = 60;
 
     private final Map<String, Sound> fileCache    = new LinkedHashMap<>();
     private final Map<String, Sound> keyMap       = new HashMap<>();
