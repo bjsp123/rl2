@@ -114,6 +114,9 @@ final class FxRenderer {
         } else if (effect.type == EffectType.LIGHT_MOTE) {
             if (!level.visible[ex][ey]) return;
             drawLightMote(effect);
+        } else if (effect.type == EffectType.HEARTH_SPARK) {
+            if (!level.visible[ex][ey]) return;
+            drawHearthSpark(effect);
         } else if (effect.type == EffectType.INWARD_SPIRAL) {
             if (!level.visible[ex][ey]) return;
             drawInwardSpiral(effect);
@@ -525,6 +528,37 @@ final class FxRenderer {
         batch.draw(sprite, px - 2f, py - 2f, 4f, 4f);
         batch.setColor(1f, 1f, 0.9f, alpha);
         batch.draw(sprite, px - 1f, py - 1f, 2f, 2f);
+        batch.setColor(Color.WHITE);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+    }
+
+    /** Render one HEARTH_SPARK (RL-51): a dot scattered around a point ~16 px
+     *  above the hearth's sprite centre that rises while fading and stretching
+     *  into a vertical line. Additive, warm ember colour. */
+    private void drawHearthSpark(Effect e) {
+        if (e.particleX0 == null || e.particleX0.length == 0) return;
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float lifeT = Math.min(1f, e.frame / (float) total);
+        float phase   = e.particleX0[0];
+        float scatter = e.particleY0[0];
+        float speed   = e.particleVX != null && e.particleVX.length > 0 ? e.particleVX[0] : 1f;
+        // Origin: centre of the 2-wide hearth, lifted to its sprite centre plus
+        // the builder's pixelOffsetY (the "16 px up from sprite centre").
+        float baseX = e.location.tileX() * (float) CELL + CELL;
+        float baseY = e.location.tileY() * (float) CELL + CELL + e.pixelOffsetY;
+        float sway = (float) Math.sin(phase + lifeT * 5f) * 1.5f;
+        float px = baseX + scatter + sway;
+        float py = baseY + speed * lifeT * 22f;            // rises
+        float alpha = (lifeT < 0.2f ? (lifeT / 0.2f) : (1f - (lifeT - 0.2f) / 0.8f)) * 0.7f;
+        if (alpha <= 0f) return;
+        float h = 2f + lifeT * lifeT * 14f;                // dot -> elongating line
+        float w = Math.max(1f, 2f - lifeT * 1.2f);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        batch.setColor(1f, 0.82f, 0.45f, alpha);
+        batch.draw(whiteRegion, px - w / 2f, py, w, h);
+        batch.setColor(1f, 0.95f, 0.75f, alpha);
+        batch.draw(whiteRegion, px - w / 4f, py, Math.max(1f, w / 2f), h);
         batch.setColor(Color.WHITE);
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
     }

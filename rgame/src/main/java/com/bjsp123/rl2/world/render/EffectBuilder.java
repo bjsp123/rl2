@@ -654,6 +654,19 @@ public final class EffectBuilder {
         return e;
     }
 
+    /** Gem-hearth ember (RL-51). One dot scattered around a point ~16 px above
+     *  the hearth's sprite centre; it rises while fading and elongating into a
+     *  vertical line. {@code particleX0[0]} = sway phase, {@code particleY0[0]}
+     *  = horizontal scatter, {@code particleVX[0]} = rise speed. */
+    public static Effect hearthSpark(Point at, Random rng) {
+        Effect e = new Effect(at, EffectType.HEARTH_SPARK);
+        e.particleX0 = new float[]{ rng.nextFloat() * (float)(Math.PI * 2) };
+        e.particleY0 = new float[]{ (rng.nextFloat() - 0.5f) * 16f };
+        e.particleVX = new float[]{ 0.7f + rng.nextFloat() * 0.7f };
+        e.pixelOffsetY = 16f;
+        return e;
+    }
+
     /** Teleport-orb palette for {@link #inwardSpiralParticle}. Cool
      *  white/cyan/blue mix matching the teleport-bomb sprite's colours
      *  so the swirl reads as the same arcane energy. WHITE appears twice

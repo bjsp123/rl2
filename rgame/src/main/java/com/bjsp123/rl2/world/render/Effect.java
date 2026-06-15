@@ -120,7 +120,11 @@ public class Effect {
          *  {@code FxRenderer.drawScreenSpaceEffects} once per render
          *  frame, AFTER the per-cell content pass. Used by beacon
          *  activation. */
-        LEVEL_FLICKER(60);
+        LEVEL_FLICKER(60),
+        /** Gem-hearth ember (RL-51): a dot that appears near a point above the
+         *  hearth, rises while fading and elongating into a vertical line.
+         *  Emitted continuously from GEM_HEARTH tiles in FOV. */
+        HEARTH_SPARK(70);
 
         public final int frameCount;
 
@@ -443,6 +447,12 @@ public class Effect {
 
     public static Effect lightMote(Point location, Random rng) {
         return EffectBuilder.lightMote(location, rng);
+    }
+
+    /** Gem-hearth ember (RL-51): rises from ~16 px above the hearth's sprite
+     *  centre, fading and stretching into a vertical line as it climbs. */
+    public static Effect hearthSpark(Point location, Random rng) {
+        return EffectBuilder.hearthSpark(location, rng);
     }
 
     /** Single inward-spiral particle anchored at {@code location}'s tile

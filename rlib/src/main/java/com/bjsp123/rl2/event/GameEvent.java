@@ -42,6 +42,7 @@ public sealed interface GameEvent permits
         GameEvent.BlastEffect,
         GameEvent.ExplosionEffect,
         GameEvent.LightMoteSpawn,
+        GameEvent.HearthSparkSpawn,
         GameEvent.HealApplied,
         GameEvent.MobTamed,
         GameEvent.WandImpactBurst,
@@ -158,6 +159,11 @@ public sealed interface GameEvent permits
      *  centre - e.g. lamps emit at the lit upper half of their 2-tile-tall
      *  sprite (16 px) while glowing items emit from the tile centre (0). */
     record LightMoteSpawn(Point pos, float pixelOffsetY) implements GameEvent {}
+
+    /** Gem-hearth ember spawn (RL-51). Real-time-driven (like
+     *  {@link LightMoteSpawn}); the renderer turns it into a rising,
+     *  elongating HEARTH_SPARK effect. */
+    record HearthSparkSpawn(Point pos) implements GameEvent {}
 
     /** Mob recovered HP - drives the "+N" green heal-text floater. */
     record HealApplied(Mob mob, int amount) implements GameEvent {}

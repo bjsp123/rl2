@@ -187,6 +187,14 @@ public class LevelSystem {
                         level.events.add(new com.bjsp123.rl2.event.GameEvent.LightMoteSpawn(
                                 new com.bjsp123.rl2.model.Point(x, y), /*pixelOffsetY*/ 16f));
                     }
+                } else if (t == Tile.GEM_HEARTH_L) {
+                    // Gem hearth (RL-51) emits rising embers from its anchor
+                    // (left base) cell on the lamp cadence; the dispatcher lifts
+                    // them to ~16 px above the 2x2 sprite's centre.
+                    if (LIGHT_MOTE_RNG.nextDouble() < pPerLamp) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.HearthSparkSpawn(
+                                new com.bjsp123.rl2.model.Point(x, y)));
+                    }
                 } else if (t == Tile.BEACON_ACTIVE) {
                     // Active beacons emit InwardSpiralSpawn at the faster
                     // spiral cadence; the dispatcher spawns BOTH a spiral

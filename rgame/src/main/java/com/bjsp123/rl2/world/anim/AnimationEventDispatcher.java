@@ -33,6 +33,9 @@ final class AnimationEventDispatcher {
             mote.pixelOffsetY = m.pixelOffsetY();
             animator.stage.add(mote);
         }
+        else if (ev instanceof GameEvent.HearthSparkSpawn m)      {
+            animator.stage.add(Effect.hearthSpark(m.pos(), Animator.RNG));
+        }
         else if (ev instanceof GameEvent.WandImpactBurst m)       animator.onWandImpactBurst(level, m);
         else if (ev instanceof GameEvent.PotionBurst m)           animator.onPotionBurst(level, m);
         else if (ev instanceof GameEvent.MobSpawned m)            animator.onMobSpawned(level, m);

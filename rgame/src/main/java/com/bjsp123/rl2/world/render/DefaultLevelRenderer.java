@@ -1767,8 +1767,20 @@ public class DefaultLevelRenderer implements LevelRenderer {
             case BEACON_INACTIVE, BEACON_ACTIVE -> {
                 if (currentBeacon != null) drawLampShadow(x, y);
             }
+            case GEM_HEARTH_L -> { if (currentGemHearth != null) drawHearthShadow(x, y); }
             default -> {}
         }
+    }
+
+    /** Wide contact shadow under the 2-cell gem-hearth base, centred between
+     *  its two base cells. */
+    private void drawHearthShadow(int gx, int gy) {
+        float cx = gx * CELL + CELL;                 // centre between L and R cells
+        float by = gy * CELL + ENTITY_Y_OFFSET;
+        float w = LAMP_SHADOW_W * 1.8f, h = LAMP_SHADOW_H * 1.15f;
+        batch.setColor(Color.BLACK);
+        batch.draw(lampShadowRegion, cx - w / 2f, by - h / 2f, w, h);
+        batch.setColor(Color.WHITE);
     }
 
     private static Surface surfaceAt(Level level, int x, int y) {
