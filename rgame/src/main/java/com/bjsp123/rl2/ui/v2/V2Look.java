@@ -173,8 +173,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             if (player != null && player != lookedMob) {
                 mob.details.add(TextCatalog.format("ui.look.mobHitRates",
                         TextCatalog.vars("player", playerName(player),
-                                "toHit", percent(MobStats.hitChance(player, lookedMob)),
-                                "beHit", percent(MobStats.hitChance(lookedMob, player)))));
+                                // {toHit} = "to hit {player}" -> this mob hitting the
+                                // player; {beHit} = "to be hit" -> this mob being hit by
+                                // the player. (Were crossed: the player's evasion drop
+                                // showed under the wrong label.)
+                                "toHit", percent(MobStats.hitChance(lookedMob, player)),
+                                "beHit", percent(MobStats.hitChance(player, lookedMob)))));
             }
             StatBlock s = lookedMob.effectiveStats();
             if (!s.damage.isZero()) {
