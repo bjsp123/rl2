@@ -10,6 +10,13 @@
     "notion": {
       "type": "http",
       "url": "https://mcp.notion.com/mcp"
+    },
+    "sprite-ai": {
+      "type": "http",
+      "url": "https://www.sprite-ai.art/api/mcp",
+      "headers": {
+        "Authorization": "Bearer sai_sk_ceabd47f36e2898d75ba9f5c89ddd8008edcab704acb51ae4c66a05f21b3040d"
+      }
     }
   }
 }
