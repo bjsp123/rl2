@@ -95,27 +95,4 @@ public final class Scroller {
     public void onScrolled(float amountY) {
         onScrolled(amountY, DEFAULT_WHEEL_STEP_PX);
     }
-
-    /** True when there is anything to scroll (content taller than the viewport). */
-    public boolean scrollable() { return maxScrollY > 0f; }
-
-    /** Draw the shared V2 scrollbar - a thin track + accent thumb down the
-     *  right edge of {@code viewport} - reflecting the current scroll position.
-     *  No-op when nothing is scrollable. Call inside a {@link ShapeRenderer}
-     *  {@code Filled} batch. Every scrollable panel uses this so the affordance
-     *  reads identically everywhere. */
-    public void drawScrollbar(com.badlogic.gdx.graphics.glutils.ShapeRenderer s, Rect viewport) {
-        if (maxScrollY <= 0f) return;
-        float w = 4f;
-        float x = viewport.right() - w - 1f;
-        s.setColor(UIVars.BORDER_INNER);
-        s.rect(x, viewport.y, w, viewport.h);
-        float contentH = viewport.h + maxScrollY;
-        float thumbH = Math.max(14f, viewport.h * (viewport.h / contentH));
-        float travel = viewport.h - thumbH;
-        float frac = scrollY / maxScrollY;           // 0 at top, 1 fully scrolled
-        float thumbY = viewport.y + travel * (1f - frac);
-        s.setColor(UIVars.ACCENT);
-        s.rect(x, thumbY, w, thumbH);
-    }
 }

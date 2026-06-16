@@ -49,8 +49,11 @@ public final class V2Forge extends V2Screen {
     private final Runnable onBack;
 
     private final Rect window = new Rect();
-    private final Rect listClip = new Rect();
-    private final Scroller scroller = new Scroller();
+    /** Shared scroll component (clip + scrollbar + input) for the recipe list. */
+    private final ScrollBand band = new ScrollBand();
+
+    private static final float ROW_H = 46f;
+    private static final float ROW_GAP = 4f;
 
     /** One built sample output per recipe (for icon + name), recipe order. */
     private final List<Row> allRows = new ArrayList<>();
@@ -131,7 +134,7 @@ public final class V2Forge extends V2Screen {
             }
             allRows.add(new Row(r, sample));
         }
-        scroller.resetTop();
+        band.scroller.resetTop();
     }
 
     /** Distinct raw-gem species currently in the bag, in encounter order. */
@@ -178,26 +181,27 @@ public final class V2Forge extends V2Screen {
         }
 
         // List area below the chip strip, down to the bottom padding.
-        float rowH = 46f;
-        float rowGap = 4f;
         float listTop = chipY - 10f;
         float listBottom = window.y + pad;
-        listClip.set(contentX, listBottom, contentW, listTop - listBottom);
-
-        float total = visible.size() * (rowH + rowGap) - rowGap;
-        scroller.setMaxScroll(total - listClip.h);
+        band.set(contentX, listBottom, contentW, listTop - listBottom);
+        band.update(listContentH());
 
         for (int i = 0; i < visible.size(); i++) {
-            float cellTop = listTop - i * (rowH + rowGap) + scroller.scrollY();
-            float cellY = cellTop - rowH;
+            float cellTop = band.top() - i * (ROW_H + ROW_GAP) + band.scroller.scrollY();
+            float cellY = cellTop - ROW_H;
             Row row = visible.get(i);
-            row.rect.set(contentX, cellY, contentW, rowH);
+            row.rect.set(contentX, cellY, contentW, ROW_H);
             row.affordable = (p != null)
                     && RecipeSystem.canAfford(row.recipe, p.inventory);
-            // Only fully-inside-the-clip rows draw, so the list never spills past
+            // Only fully-inside-the-band rows draw, so the list never spills past
             // the window onto the HUD below; the scrollbar reveals the rest.
-            row.onScreen = cellTop <= listTop && cellY >= listBottom;
+            row.onScreen = cellTop <= band.top() && cellY >= band.bottom();
         }
+    }
+
+    /** Total height of all recipe rows stacked. */
+    private float listContentH() {
+        return visible.isEmpty() ? 0f : visible.size() * (ROW_H + ROW_GAP) - ROW_GAP;
     }
 
     @Override
@@ -244,7 +248,7 @@ public final class V2Forge extends V2Screen {
         }
 
         // Shared scrollbar affordance on the right edge of the list.
-        scroller.drawScrollbar(s, listClip);
+        band.drawScrollbar(s, listContentH());
     }
 
     @Override
@@ -345,7 +349,7 @@ public final class V2Forge extends V2Screen {
     // -- Input ----------------------------------------------------------------
     @Override
     protected boolean onTouchDownInBody(float vx, float vy) {
-        scroller.onTouchDown(vy);
+        band.touchDown(vx, vy);
         for (int i = 0; i < chips.size(); i++) {
             if (chips.get(i).rect.contains(vx, vy)) { pressedChip = i; return true; }
         }
@@ -358,7 +362,7 @@ public final class V2Forge extends V2Screen {
 
     @Override
     protected boolean onTouchDragged(float vx, float vy) {
-        if (scroller.onTouchDragged(vy)) {
+        if (band.touchDragged(vy)) {
             pressedRow = -1;
             pressedChip = -1;
             return true;
@@ -368,7 +372,7 @@ public final class V2Forge extends V2Screen {
 
     @Override
     protected boolean onScrolled(float amountY) {
-        scroller.onScrolled(amountY);
+        band.scrolled(amountY);
         return true;
     }
 
@@ -380,7 +384,7 @@ public final class V2Forge extends V2Screen {
             if (idx < chips.size() && chips.get(idx).rect.contains(vx, vy)) {
                 GemSpecies sp = chips.get(idx).species;
                 if (!placed.remove(sp)) placed.add(sp);
-                scroller.resetTop();
+                band.scroller.resetTop();
             }
             return true;
         }

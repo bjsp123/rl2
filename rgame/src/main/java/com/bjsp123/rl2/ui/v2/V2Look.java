@@ -71,6 +71,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private final List<Section> sections = new ArrayList<>();
 
+    /** Looked-at mob's carried (bag) items, shown in their own scrollable frame
+     *  so a long inventory isn't truncated into one detail line. */
+    private final List<Item> carried = new ArrayList<>();
+    private final ScrollBand carriedBand = new ScrollBand();
+    private float carriedLabelY = Float.NaN;   // set in layoutRects when carried is non-empty
+    /** Max carried rows shown before the frame scrolls. */
+    private static final int MAX_CARRIED_ROWS = 5;
+
     public V2Look(UiCtx ctx) { this.ctx = ctx; }
 
     public void setLookMode(LookMode lm)            { this.lookMode = lm; }
@@ -133,6 +141,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
     private void buildSections() {
         sections.clear();
+        carried.clear();
         if (!inBounds()) {
             sections.add(new Section(TextCatalog.get("ui.look.noTile"), INFO_TERRAIN));
             return;
@@ -219,18 +228,10 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             TextCatalog.vars("items", sb.toString())));
                 }
                 // Carried (un-equipped) bag items - e.g. an enemy player's
-                // bombs / wands / potions. Equipped gear is listed separately
-                // above; this surfaces what they might throw or drink.
-                List<Item> bag = lookedMob.inventory.bag;
-                if (bag != null && !bag.isEmpty()) {
-                    StringBuilder cb = new StringBuilder();
-                    for (int gi = 0; gi < bag.size(); gi++) {
-                        if (gi > 0) cb.append(" · ");
-                        cb.append(ItemNames.displayName(bag.get(gi), null));
-                    }
-                    mob.details.add(TextCatalog.format("ui.look.mobCarrying",
-                            TextCatalog.vars("items", cb.toString())));
-                }
+                // bombs / wands / potions. These go into a dedicated scrollable
+                // frame at the bottom (built in layoutRects / rendered below the
+                // sections) instead of a single truncated detail line.
+                if (lookedMob.inventory.bag != null) carried.addAll(lookedMob.inventory.bag);
             }
             if (lookedMob.buffs != null) {
                 for (Buff b : lookedMob.buffs) {
@@ -251,7 +252,18 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         float winW = Math.min(430f, vw - 28f);
         float textW = Math.max(20f, winW - PAD * 2f - INFO - 8f);
         float detailW = Math.max(20f, winW - PAD * 2f - DETAIL_INDENT);
-        float contentH = measureSections(textW, detailW) + PAD * 2f;
+        float sectionsH = measureSections(textW, detailW);
+        float rowH = ctx.lineH();
+        // Reserve a fixed-height scrollable frame for carried items (label +
+        // up to MAX_CARRIED_ROWS visible rows; the rest scroll).
+        boolean hasCarried = !carried.isEmpty();
+        float carriedFrameH = 0f, carriedBlockH = 0f;
+        if (hasCarried) {
+            int visRows = Math.min(carried.size(), MAX_CARRIED_ROWS);
+            carriedFrameH = visRows * rowH;
+            carriedBlockH = SECTION_GAP + rowH /*"Carried:" label*/ + carriedFrameH;
+        }
+        float contentH = sectionsH + carriedBlockH + PAD * 2f;
         float winH = Math.min(vh - 92f, HEADER_H + contentH);
         window.set((vw - winW) * 0.5f, vh - 78f - winH, winW, winH);
 
@@ -268,6 +280,17 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
             y -= sec.height();
             if (i < sections.size() - 1) y -= SECTION_GAP;
+        }
+
+        carriedLabelY = Float.NaN;
+        if (hasCarried) {
+            y -= SECTION_GAP;
+            carriedLabelY = y;                       // "Carried:" label baseline
+            float frameX = window.x + PAD + DETAIL_INDENT;
+            float frameW = window.right() - PAD - frameX;
+            float frameTop = y - rowH - 2f;          // just below the label
+            carriedBand.set(frameX, frameTop - carriedFrameH, frameW, carriedFrameH);
+            carriedBand.update(carried.size() * rowH);
         }
     }
 
@@ -363,6 +386,13 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
         }
 
+        // Carried-items frame: 1-px border + the shared scrollbar.
+        if (!carried.isEmpty() && carriedBand.height() > 0f) {
+            Edges.drawTriLine(s, carriedBand.rect.x, carriedBand.rect.y,
+                    carriedBand.rect.w, carriedBand.rect.h, 1f);
+            carriedBand.drawScrollbar(s, carried.size() * ctx.lineH());
+        }
+
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
@@ -423,6 +453,24 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             // info buttons (matches the shape pass + layoutRects).
             y -= Math.max(0f, sec.height() - sec.contentHeight());
             if (i < sections.size() - 1) y -= SECTION_GAP;
+        }
+
+        // Carried-items frame: label above, then the scrollable item list
+        // clipped to the band (one item per row).
+        if (!carried.isEmpty() && !Float.isNaN(carriedLabelY)) {
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    TextCatalog.get("ui.look.carried"), window.x + PAD, carriedLabelY);
+            float rowH = ctx.lineH();
+            carriedBand.clip(ctx, () -> {
+                for (int i = 0; i < carried.size(); i++) {
+                    float rowTop = carriedBand.rowTop(i, rowH);
+                    if (!carriedBand.rowVisible(rowTop, rowH)) continue;
+                    TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                            ItemNames.displayName(carried.get(i), null),
+                            carriedBand.rect.x + 2f, rowTop - rowH + 4f,
+                            carriedBand.rect.w - 6f);
+                }
+            });
         }
         ctx.batch.end();
     }
@@ -621,6 +669,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 float vy = ctx.unprojectY(sx, sy);
                 pressedInfo = 0;
                 pressedBuff = -1;
+                carriedBand.touchDown(vx, vy);   // prime carried-list drag
                 if (encyclopedia != null && lookedTile != null && terrainInfoBtn.contains(vx, vy)) {
                     pressedInfo = INFO_TERRAIN;
                     return true;
@@ -683,6 +732,19 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     encyclopedia.openTo(bt);
                     return true;
                 }
+                return true;
+            }
+
+            @Override
+            public boolean touchDragged(int sx, int sy, int pointer) {
+                if (!isOpen()) return false;
+                return carriedBand.touchDragged(ctx.unprojectY(sx, sy));
+            }
+
+            @Override
+            public boolean scrolled(float amountX, float amountY) {
+                if (!isOpen()) return false;
+                carriedBand.scrolled(amountY);
                 return true;
             }
 

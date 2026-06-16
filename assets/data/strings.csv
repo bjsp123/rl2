@@ -1233,6 +1233,7 @@ ui.look.intent.wandering, - wandering
 ui.look.intent.wandering,wandering
 ui.look.itemArmor,armor {armor}
 ui.look.itemDamage,damage {damage}
+ui.look.carried,Carried:
 ui.look.loyalTo,Loyal to: {owner}
 ui.look.mobCarrying,Holding: {items}
 ui.look.mobEquipment,Carries: {items}

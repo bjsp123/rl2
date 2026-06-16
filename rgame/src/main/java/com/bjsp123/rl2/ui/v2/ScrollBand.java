@@ -73,14 +73,20 @@ public final class ScrollBand {
         }
     }
 
+    /** The shared V2 scrollbar - a thin track + accent thumb down the right
+     *  edge of the band - reflecting the current scroll position. No-op when
+     *  nothing is scrollable. Call inside a {@link ShapeRenderer} Filled batch.
+     *  This is the single scrollbar affordance for every scrollable panel. */
     public void drawScrollbar(ShapeRenderer s, float contentH) {
         if (contentH <= rect.h || contentH <= 0f) return;
-        float barW = 3f;
-        float ratio = rect.h / contentH;
-        float barH = Math.max(12f, rect.h * ratio);
+        float barW = 4f;
+        float x = rect.right() - barW - 1f;
+        s.setColor(UIVars.BORDER_INNER);          // track
+        s.rect(x, rect.y, barW, rect.h);
+        float barH = Math.max(14f, rect.h * (rect.h / contentH));
         float scrollFrac = scroller.scrollY() / Math.max(1f, contentH - rect.h);
-        float barY = rect.y + (rect.h - barH) * scrollFrac;
-        s.setColor(UIVars.BORDER_MID);
-        s.rect(rect.right() - barW, barY, barW, barH);
+        float barY = rect.y + (rect.h - barH) * (1f - scrollFrac);
+        s.setColor(UIVars.ACCENT);                // thumb
+        s.rect(x, barY, barW, barH);
     }
 }
