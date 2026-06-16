@@ -161,7 +161,12 @@ public final class LevelFactorySpecial {
         // spawn level ramping +1 every 10 turns (reproduces the old curve).
         Level.Spawner spawner = new Level.Spawner();
         spawner.chancePerTurn = 0.5;
-        spawner.speciesPool = java.util.List.of("SPIDER", "RED_ANT", "BLACK_ANT");
+        // Mutable ArrayList, NOT List.of(...): the spawner is serialized into the
+        // save, and libGDX Json can't reconstruct an immutable List on load
+        // ("missing no-arg constructor: ImmutableCollections$ListN") - which made
+        // any save with this spawner unloadable.
+        spawner.speciesPool = new java.util.ArrayList<>(
+                java.util.List.of("SPIDER", "RED_ANT", "BLACK_ANT"));
         spawner.placement = Level.Spawner.Placement.MIDPOINT_TO_EXIT;
         spawner.spawnAwake = true;
         spawner.levelRampPer10Turns = 1;

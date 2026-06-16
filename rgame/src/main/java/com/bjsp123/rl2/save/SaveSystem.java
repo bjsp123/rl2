@@ -25,7 +25,15 @@ public class SaveSystem {
 
     public SaveSystem(Persistence persistence) {
         this.persistence = persistence;
-        this.json = new Json();
+        this.json = buildJson();
+    }
+
+    /** Build the configured {@link Json} used for save round-trips. Static so
+     *  offline diagnostics ({@code SaveLoadDebugMain}) can reproduce a load with
+     *  the identical serializer set. */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static Json buildJson() {
+        Json json = new Json();
         // Point is a record (no setters / final fields); spell out serialization.
         json.setSerializer(Point.class, new Json.Serializer<Point>() {
             @Override
@@ -44,7 +52,6 @@ public class SaveSystem {
         // default reflective instantiation throws on load. We persist the key class
         // name alongside the entries so the map round-trips for any enum-keyed field.
         // Currently only Mob.perks (EnumMap<Perk, Integer>) uses this.
-        @SuppressWarnings({"rawtypes", "unchecked"})
         Json.Serializer<EnumMap> enumMapSerializer = new Json.Serializer<EnumMap>() {
             @Override
             public void write(Json json, EnumMap m, Class knownType) {
@@ -119,6 +126,7 @@ public class SaveSystem {
                 catch (Exception e) { return null; }
             }
         });
+        return json;
     }
 
     private static String worldKey(int slot) { return "rl2-save-"  + slot; }
@@ -145,6 +153,7 @@ public class SaveSystem {
         lastLoadError = null;
         String raw = persistence.load(worldKey(slot));
         if (raw == null || raw.isEmpty()) { lastLoadError = "save slot is empty"; return null; }
+        raw = migrateLegacy(raw);
         try {
             World w = json.fromJson(World.class, raw);
             if (w == null || w.levels == null) { lastLoadError = "save has no level data"; return null; }
@@ -164,6 +173,23 @@ public class SaveSystem {
     /** Reason the most recent {@link #load} returned null, or {@code null} if the
      *  last load succeeded. */
     public String lastLoadError() { return lastLoadError; }
+
+    /** Rewrite save JSON written by older builds so it still deserialises.
+     *  Immutable collections (from {@code List.of(...)} / {@code Stream.toList()})
+     *  were serialised with their concrete class - which libGDX can't
+     *  instantiate on load (no no-arg constructor). Retag them as the mutable
+     *  equivalent so the {@code items:[...]} array reads into an ArrayList.
+     *  Cheap string pass; the class names never occur as save data values. */
+    private static String migrateLegacy(String raw) {
+        if (raw.indexOf("java.util.ImmutableCollections$") < 0) return raw;
+        return raw
+                .replace("java.util.ImmutableCollections$ListN",  "java.util.ArrayList")
+                .replace("java.util.ImmutableCollections$List12", "java.util.ArrayList")
+                .replace("java.util.ImmutableCollections$SetN",   "java.util.HashSet")
+                .replace("java.util.ImmutableCollections$Set12",  "java.util.HashSet")
+                .replace("java.util.ImmutableCollections$MapN",   "java.util.HashMap")
+                .replace("java.util.ImmutableCollections$Map1",   "java.util.HashMap");
+    }
 
     public SaveMetadata metadata(int slot) {
         String raw = persistence.load(metaKey(slot));

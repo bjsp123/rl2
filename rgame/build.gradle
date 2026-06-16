@@ -31,3 +31,13 @@ tasks.register('dumpItemLore', JavaExec) {
     classpath   = sourceSets.main.runtimeClasspath
     workingDir  = rootProject.projectDir
 }
+
+// [DEV] Round-trip an on-disk save through SaveSystem's Json to surface a load
+// failure offline. Optional save key: --args="rl2-save-0"
+tasks.register('debugSave', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Deserialize an on-disk save and print any load exception'
+    mainClass   = 'com.bjsp123.rl2.util.SaveLoadDebugMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+}
