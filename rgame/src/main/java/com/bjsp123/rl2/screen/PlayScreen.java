@@ -218,6 +218,10 @@ public class PlayScreen implements Screen {
      *  overlay's alpha is {@code deathFadeFrame / DEATH_FADE_FRAMES}. */
     private int deathFadeFrame;
 
+    /** Camera zoom the death outro pulls back to as the screen fades (RL-56).
+     *  Larger = more zoomed out; the pull-back mirrors the intro zoom-in. */
+    private static final float DEATH_ZOOM_OUT = 1.4f;
+
     // --- Intro cinematic (RL-56, Stage 1: camera zoom-in + arrival message) --
     /** Camera zoom the new-game intro starts at (far out) before easing down to
      *  {@link #DEFAULT_ZOOM}. Larger = more zoomed out. */
@@ -930,6 +934,12 @@ public class PlayScreen implements Screen {
             game.currentPlay = null;
             deathTransitionPending = true;
             deathFadeFrame = 0;
+            // Death outro: a column of light + rising sparkles erupts from the
+            // fallen player's tile, beneath the slow-mo death anim and zoom-out.
+            if (animator != null) {
+                com.bjsp123.rl2.world.render.Effect.columnOfLight(
+                        animator.stage, player.position, animator.rng());
+            }
             // Killing-blow cinematic: drop the animation speed for the next
             // few seconds so the player's ghost flicker / fade plays in slow
             // motion. Cleared just before the V2GameOver transition fires.
@@ -965,6 +975,8 @@ public class PlayScreen implements Screen {
         // Intro overrides the follow camera: ease zoom from far-out to play
         // zoom, locked on the player, until done or skipped.
         if (introActive) updateIntro(delta);
+        // Death outro: pull the camera back as the screen fades to black.
+        if (deathTransitionPending) updateDeathCamera();
         frameProfiler.add("camera", span);
 
         // Audit action slots EVERY frame, not just inside afterMove. Any path that consumes
@@ -1082,6 +1094,17 @@ public class PlayScreen implements Screen {
         camera.zoom = INTRO_START_ZOOM + (DEFAULT_ZOOM - INTRO_START_ZOOM) * eased;
         recenterCameraOnPlayer();
         if (t >= 1f) endIntro();
+    }
+
+    /** Ease the camera back from play zoom toward {@link #DEATH_ZOOM_OUT} as the
+     *  death fade ramps, so the view pulls away from the fallen player. The
+     *  camera stays where it last followed the player (who is now removed). */
+    private void updateDeathCamera() {
+        float t = DEATH_FADE_FRAMES <= 0 ? 1f
+                : Math.min(1f, deathFadeFrame / (float) DEATH_FADE_FRAMES);
+        float eased = t * t * (3f - 2f * t); // smoothstep
+        camera.zoom = DEFAULT_ZOOM + (DEATH_ZOOM_OUT - DEFAULT_ZOOM) * eased;
+        camera.update();
     }
 
     /** Snap to play zoom and hand control to the player. Fires the arrival
