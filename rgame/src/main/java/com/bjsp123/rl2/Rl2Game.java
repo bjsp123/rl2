@@ -293,5 +293,20 @@ public class Rl2Game extends Game {
         if (sounds != null) sounds.dispose();
         if (music  != null) music.dispose();
         if (ui != null) ui.dispose();
+
+        // HARD EXIT to dodge a native teardown crash. On GL stacks that go
+        // through Microsoft's OpenGLOn12 / D3D12 mapping layer (used when no
+        // native OpenGL driver is present - e.g. ARM Windows, and even under
+        // ANGLE here), glfwDestroyWindow reliably access-violates during window
+        // teardown. That's a native EXCEPTION_ACCESS_VIOLATION the JVM can't
+        // catch with try/catch - it aborts the process with a crash dump.
+        // This dispose() is the ApplicationListener teardown, which libGDX runs
+        // BEFORE glfwDestroyWindow, and all our own cleanup (window-size save,
+        // audio/UI dispose) has just completed - so halt the JVM right here and
+        // never reach the buggy native destroy. The OS reclaims the GL context,
+        // window, and memory on process exit. Exit code 0 = clean shutdown.
+        System.out.flush();
+        System.err.flush();
+        Runtime.getRuntime().halt(0);
     }
 }
