@@ -179,6 +179,8 @@ public class SaveSystem {
         }
         m.depth           = world.currentLevel().depth;
         m.timestampMillis = System.currentTimeMillis();
+        m.version         = com.bjsp123.rl2.util.AppVersion.VERSION;
+        m.build           = com.bjsp123.rl2.util.AppVersion.BUILD;
         return m;
     }
 }

@@ -137,14 +137,54 @@ public final class V2Saves extends V2Screen {
             game.setRootScreen(game.currentPlay);
             return;
         }
+        // Version gate: a save stamped by a different app version/build may not
+        // deserialise cleanly. Warn (with a "load anyway" escape hatch) instead
+        // of the old behaviour - load() returning null and the tap doing
+        // nothing, which read as "saves can't be loaded".
+        SaveMetadata m = game.saveSystem.metadata(slot);
+        if (m != null && !com.bjsp123.rl2.util.AppVersion.matches(m.version, m.build)) {
+            openVersionWarning(slot, m);
+            return;
+        }
+        doResume(slot);
+    }
+
+    /** Perform the actual load + screen swap; surfaces a warning popup when the
+     *  load fails rather than silently doing nothing. */
+    private void doResume(int slot) {
         if (game.currentPlay != null) {
             game.currentPlay.dispose();
             game.currentPlay = null;
         }
         com.bjsp123.rl2.model.World loaded = game.saveSystem.load(slot);
-        if (loaded == null) return;
+        if (loaded == null) { openLoadError(); return; }
         game.setRootScreen(
                 new com.bjsp123.rl2.screen.PlayScreen(game, slot, loaded));
+    }
+
+    /** Modal warning that a save's version stamp doesn't match the running app,
+     *  with a "load anyway" path for the brave. */
+    private void openVersionWarning(int slot, SaveMetadata m) {
+        deletePopup.configure(
+                TextCatalog.get("ui.saves.versionTitle"),
+                TextCatalog.format("ui.saves.versionBody", TextCatalog.vars(
+                        "saved", com.bjsp123.rl2.util.AppVersion.describe(m.version, m.build),
+                        "current", com.bjsp123.rl2.util.AppVersion.label())),
+                TextCatalog.get("ui.saves.loadAnyway"),
+                TextCatalog.get("ui.common.cancel"),
+                () -> doResume(slot));
+        deletePopup.open();
+    }
+
+    /** Modal "this save could not be loaded" notice. */
+    private void openLoadError() {
+        deletePopup.configure(
+                TextCatalog.get("ui.saves.loadFailTitle"),
+                TextCatalog.get("ui.saves.loadFailBody"),
+                TextCatalog.get("ui.common.ok"),
+                TextCatalog.get("ui.common.cancel"),
+                () -> {});
+        deletePopup.open();
     }
 
     private void newGame(int slot) {

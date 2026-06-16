@@ -166,7 +166,9 @@ public final class V2Forge extends V2Screen {
             row.rect.set(contentX, cellY, contentW, rowH);
             row.affordable = (p != null)
                     && RecipeSystem.canAfford(row.recipe, p.inventory);
-            row.onScreen = cellY <= listTop && cellTop >= listBottom;
+            // Only fully-inside-the-clip rows draw, so the list never spills past
+            // the window onto the HUD below; the scrollbar reveals the rest.
+            row.onScreen = cellTop <= listTop && cellY >= listBottom;
         }
     }
 
@@ -210,6 +212,9 @@ public final class V2Forge extends V2Screen {
             s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
                     r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
+
+        // Shared scrollbar affordance on the right edge of the list.
+        scroller.drawScrollbar(s, listClip);
     }
 
     @Override
@@ -282,20 +287,25 @@ public final class V2Forge extends V2Screen {
             }
             return;
         }
-        // Silhouette - a representative gem sprite drawn in a flat tier tint so
-        // the player reads "any gem of this kind".
+        // Silhouette - a dimmed representative gem sprite with the constraint
+        // word ("any" / "metal" / "exotic") overlaid, so the player reads
+        // "any gem of this kind" rather than mistaking it for a specific gem.
         GemSpecies rep;
         Color tintC;
+        String label;
         switch (slot.kind) {
-            case EXOTIC          -> { rep = GemSpecies.BLOODHIVE; tintC = UIVars.ACCENT; }
-            case METAL_OR_EXOTIC -> { rep = GemSpecies.GOLD;      tintC = new Color(0.85f, 0.7f, 0.3f, 1f); }
-            default              -> { rep = GemSpecies.LETTUSTONE; tintC = UIVars.TEXT_DIM; }
+            case EXOTIC          -> { rep = GemSpecies.BLOODHIVE; tintC = UIVars.ACCENT; label = "exotic"; }
+            case METAL_OR_EXOTIC -> { rep = GemSpecies.GOLD;      tintC = new Color(0.85f, 0.7f, 0.3f, 1f); label = "metal"; }
+            default              -> { rep = GemSpecies.LETTUSTONE; tintC = UIVars.TEXT_DIM; label = "any"; }
         }
         TextureRegion reg = GemSprites.regionFor(rep);
         if (reg == null) return;
-        ctx.batch.setColor(tintC.r, tintC.g, tintC.b, alpha * 0.8f);
+        ctx.batch.setColor(tintC.r, tintC.g, tintC.b, alpha * 0.55f);   // dimmed
         ctx.batch.draw(reg, x, y, sz, sz);
         ctx.batch.setColor(1f, 1f, 1f, 1f);
+        // Word centred over the dimmed gem.
+        TextDraw.centre(ctx, ctx.fontRegular, tint(UIVars.TEXT_BODY, alpha),
+                label, x + sz * 0.5f, y + sz * 0.5f + 4f);
     }
 
     private static Color tint(Color base, float alpha) {

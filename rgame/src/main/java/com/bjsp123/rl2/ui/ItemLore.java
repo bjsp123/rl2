@@ -200,8 +200,7 @@ public final class ItemLore {
             if (b.attackSpeed != 1.0) line(bnd, "atkSpd", speedLabel(b.attackSpeed), "");
             if (b.moveSpeed   != 1.0) line(bnd, "movSpd", speedLabel(b.moveSpeed),   "");
             if (b.element != null) {
-                String elem = b.element.name().toLowerCase();
-                line(bnd, "on hit", elem + (bEpw > 0 ? " (" + bEpw + ")" : ""),
+                line(bnd, "on hit", readableBrandEffect(b.element) + (bEpw > 0 ? " (" + bEpw + ")" : ""),
                         perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.elementpower)));
             }
             if (b.sorcery)      flag(bnd, "+sorcery");
@@ -455,6 +454,20 @@ public final class ItemLore {
     /** Format the "(+N/lvl)" trailing hint when a stat has a non-zero
      *  per-level increment. Empty string when {@code delta <= 0} so the
      *  caller can pass it straight to {@link #line} for flat stats too. */
+    /** Readable phrase for a brand's on-hit element, instead of the raw enum
+     *  name ("poisoncloud", "freeze"). Unknown elements fall back to a
+     *  de-underscored lowercase form so nothing reads as a code token. */
+    private static String readableBrandEffect(Item.ItemEffect element) {
+        if (element == null) return "";
+        return switch (element) {
+            case FIRE        -> "burns the target";
+            case LIGHTNING   -> "shocks the target";
+            case FREEZE      -> "chills the target";
+            case POISONCLOUD -> "poisons the target";
+            default          -> element.name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+        };
+    }
+
     private static String perLevel(int delta) {
         if (delta <= 0) return "";
         return "(+" + delta + "/lvl)";

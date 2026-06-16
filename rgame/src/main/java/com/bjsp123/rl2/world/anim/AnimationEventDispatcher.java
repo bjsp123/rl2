@@ -45,6 +45,7 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.XPGainBurst m)           animator.onXPGainBurst(level, m);
         else if (ev instanceof GameEvent.PeriodicBuffDamage m)    animator.onPeriodicBuffDamage(level, m);
         else if (ev instanceof GameEvent.LootDropped m)           animator.onLootDropped(m);
+        else if (ev instanceof GameEvent.ItemCreated m)           animator.onItemCreated(m);
         else if (ev instanceof GameEvent.ItemPickedUp m)          animator.onItemPickedUp(level, m);
         else if (ev instanceof GameEvent.MobKnockedBack m)        animator.onMobKnockedBack(level, m);
         else if (ev instanceof GameEvent.MobJumped m)             animator.onMobJumped(level, m);

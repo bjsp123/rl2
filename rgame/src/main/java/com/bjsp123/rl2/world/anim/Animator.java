@@ -715,6 +715,13 @@ public final class Animator {
         stage.add(Effect.lootToss(m.from(), m.to(), m.item()));
     }
 
+    /** Item conjured onto the floor by a creation scroll - glow + spark birth
+     *  burst behind the item sprite at its drop tile. Non-blocking. */
+    void onItemCreated(GameEvent.ItemCreated m) {
+        if (m.item() == null || m.at() == null) return;
+        stage.add(Effect.itemBirth(m.at(), m.item(), Effect.EffectTint.YELLOW, RNG));
+    }
+
     /** Item picked up by a mob - arc the item off its tile toward the bottom-
      *  right of the screen so it reads as flying into the inventory.
      *  Non-blocking. Skipped when the picker isn't visible. */

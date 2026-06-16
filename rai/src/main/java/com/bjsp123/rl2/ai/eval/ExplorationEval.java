@@ -144,6 +144,65 @@ public final class ExplorationEval {
         return null;
     }
 
+    /** Committed variant of {@link #nearestExploreTarget}: caches the chosen
+     *  frontier cell on {@link MobMemory#exploreTarget} so the agent walks the
+     *  whole way to one frontier instead of re-picking the BFS-nearest every tick
+     *  and ping-ponging between two equidistant cells. The cache is dropped on
+     *  arrival, when the cached cell is no longer a frontier, when it goes stale
+     *  (50 ticks), or when it's no longer reachable.
+     *
+     *  <p>Pocket draining: when the agent has REACHED the cached target but its
+     *  unknown FLOOR neighbours are still unknown (FOV from the adjacent cell
+     *  can't see them - they sit behind a wall / across a chasm), those neighbours
+     *  are unreachable-by-sight and are marked {@code known} so they stop being
+     *  frontiers forever. Without this an unrevealable pocket keeps two adjacent
+     *  cells permanently "adjacent to unknown floor" and the agent flips between
+     *  them indefinitely. Draining guarantees {@link #nearestExploreTarget}
+     *  converges to {@code null} only when no reachable+revealable floor remains. */
+    public static Point committedExploreTarget(Mob mob, Level level, MobMemory mem) {
+        if (mem == null || mem.knownTiles == null || mob == null || mob.position == null) {
+            return nearestExploreTarget(mob, level, mem);
+        }
+        Point cached = mem.exploreTarget;
+        if (cached != null) {
+            boolean reached = mob.position.equals(cached);
+            if (reached) drainUnrevealableNeighbours(level, mem, cached.tileX(), cached.tileY());
+            boolean stale = mem.exploreTargetAge > 50;
+            boolean notFrontier = !hasUnknownFloorNeighbour(level, mem, cached.tileX(), cached.tileY());
+            boolean unreachable = nextStepToTarget(mob, level, mem, cached) == null;
+            if (reached || stale || notFrontier || unreachable) {
+                mem.exploreTarget = null;
+                mem.exploreTargetAge = 0;
+            }
+        }
+        if (mem.exploreTarget == null) {
+            mem.exploreTarget = nearestExploreTarget(mob, level, mem);
+            mem.exploreTargetAge = 0;
+        } else {
+            mem.exploreTargetAge++;
+        }
+        return mem.exploreTarget;
+    }
+
+    /** Mark every still-unknown FLOOR-class 8-neighbour of ({@code x},{@code y})
+     *  as known. Called only when the agent stands ON ({@code x},{@code y}) and its
+     *  FOV still hasn't revealed those tiles - so they are genuinely sight-blocked
+     *  from the closest cell the agent could reach. */
+    private static void drainUnrevealableNeighbours(Level level, MobMemory mem, int x, int y) {
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                if (mem.knownTiles[nx][ny]) continue;
+                Tile t = level.tiles[nx][ny];
+                if (t == Tile.FLOOR || t == Tile.FLOOR_WOOD || t == Tile.FLOOR_SPECIAL) {
+                    mem.knownTiles[nx][ny] = true;
+                }
+            }
+        }
+    }
+
     private static boolean hasUnknownFloorNeighbour(Level level, MobMemory mem, int x, int y) {
         for (int dy = -1; dy <= 1; dy++) {
             for (int dx = -1; dx <= 1; dx++) {

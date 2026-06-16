@@ -935,7 +935,14 @@ public final class ItemSystem {
             case DRINK       -> drinkPotion(level, user, item);
             case GRANT_PERK  -> grantXP(level, user, item);
             case APPLYBUFF   -> acted = useChargedBuffTool(level, user, item);
-            case WAND, GRAPPLE, JUMP, CHARGE, TELEPORT, NONE -> { return false; } // need a target or a specialized caller
+            case TELEPORT    -> {
+                // Teleport orb (used, not thrown): self-teleport to a random tile
+                // on this level, avoiding landing within 10 Chebyshev tiles of a
+                // hostile unless 100 draws all fail. Consumes the orb on success.
+                acted = MobSystem.teleportRandomlyOnLevel(level, user, 10, 100);
+                if (acted) MobSystem.removeFromInventory(user, item);
+            }
+            case WAND, GRAPPLE, JUMP, CHARGE, NONE -> { return false; } // need a target or a specialized caller
         }
         if (acted) TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
         return acted;
@@ -1036,17 +1043,17 @@ public final class ItemSystem {
                 return true;
             }
             case "INVOCATION_OF_CHIYOU" -> {
-                // Two sets of five bombs, as if found two levels deeper.
+                // Two sets of five bombs, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
                 java.util.List<Item> bombs = ItemGenerator.generateItems(10,
-                        gemPowerForDepth(level, 2), level.theme,
+                        gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS), level.theme,
                         ItemGenerator.LootCategory.BOMBS, RANDOM);
-                giveItemsToPlayer(level, user, bombs);
+                dropItemsNearPlayer(level, user, bombs);
                 announceGemUse(user, gem);
                 return true;
             }
             case "HARVEST_BLOSSOM" -> {
                 // Destroy visible grass/trees; leave a healing or mana pill behind.
-                double power = gemPowerForDepth(level, 0);
+                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
                 int reaped = 0;
                 for (int x = 0; x < level.width; x++) {
                     for (int y = 0; y < level.height; y++) {
@@ -1090,17 +1097,18 @@ public final class ItemSystem {
                 return true;
             }
             case "INVOCATION_OF_JIUTIAN" -> {
-                // A random wand, as if found two levels deeper.
-                double power = gemPowerForDepth(level, 2);
+                // A random wand, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
+                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
                 Item wand = null;
                 for (int i = 0; i < 30; i++) {
                     Item it = ItemGenerator.generateItem(power, level.theme,
                             ItemGenerator.LootCategory.MAGIC_ITEMS, RANDOM);
+                    if (isJadeItem(it)) continue;   // scrolls never forge jade
                     if (it != null && it.useBehavior == Item.UseBehavior.WAND) { wand = it; break; }
                     if (wand == null) wand = it;
                 }
                 if (wand == null) { gemFizzle(user, gem, "fails to conjure a wand"); return false; }
-                giveItemsToPlayer(level, user, java.util.List.of(wand));
+                dropItemsNearPlayer(level, user, java.util.List.of(wand));
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1111,13 +1119,13 @@ public final class ItemSystem {
                                 d.inventoryCategory == Item.InventoryCategory.TOOL));
                 tools.removeIf(t -> t.startsWith("JADE"));
                 if (tools.isEmpty()) { gemFizzle(user, gem, "fails to summon the foxes"); return false; }
-                double power = gemPowerForDepth(level, 0);
+                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
                 java.util.List<Item> made = new java.util.ArrayList<>();
                 for (int i = 0; i < 2; i++) {
                     Item it = ItemGenerator.buildItem(tools.get(RANDOM.nextInt(tools.size())), power, RANDOM);
                     if (it != null) made.add(it);
                 }
-                giveItemsToPlayer(level, user, made);
+                dropItemsNearPlayer(level, user, made);
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1203,35 +1211,36 @@ public final class ItemSystem {
                 return true;
             }
             case "INVOCATION_OF_TAISHAN" -> {
-                // Three objects, as if found six levels deeper.
+                // Three objects, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
                 java.util.List<Item> made = ItemGenerator.generateItems(3,
-                        gemPowerForDepth(level, 6), level.theme,
+                        gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS), level.theme,
                         ItemGenerator.LootCategory.NON_GEM, RANDOM);
-                giveItemsToPlayer(level, user, made);
+                dropItemsNearPlayer(level, user, made);
                 announceGemUse(user, gem);
                 return true;
             }
             case "INVOCATION_OF_RU_SHOU" -> {
-                // A piece of armour, as if found ten levels deeper.
-                double power = gemPowerForDepth(level, 10);
+                // A piece of armour, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
+                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
                 Item armor = null;
                 for (int i = 0; i < 30; i++) {
                     Item it = ItemGenerator.generateItem(power, level.theme,
                             ItemGenerator.LootCategory.EQUIPMENT, RANDOM);
+                    if (isJadeItem(it)) continue;   // scrolls never forge jade
                     if (it != null && it.inventoryCategory == Item.InventoryCategory.ARMOR) { armor = it; break; }
                     if (armor == null) armor = it;
                 }
                 if (armor == null) { gemFizzle(user, gem, "fails to forge armour"); return false; }
-                giveItemsToPlayer(level, user, java.util.List.of(armor));
+                dropItemsNearPlayer(level, user, java.util.List.of(armor));
                 announceGemUse(user, gem);
                 return true;
             }
             case "INVOCATION_OF_MO_YE" -> {
-                // A branded sword, as if found ten levels deeper.
-                Item sword = ItemGenerator.buildItem("SWORD", gemPowerForDepth(level, 10), RANDOM);
+                // A branded sword, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
+                Item sword = ItemGenerator.buildItem("SWORD", gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS), RANDOM);
                 if (sword == null) { gemFizzle(user, gem, "fails to forge a blade"); return false; }
                 for (int i = 0; i < 80 && sword.brand == null; i++) BrandSystem.applyRandomBrand(sword, RANDOM);
-                giveItemsToPlayer(level, user, java.util.List.of(sword));
+                dropItemsNearPlayer(level, user, java.util.List.of(sword));
                 announceGemUse(user, gem);
                 return true;
             }
@@ -1292,6 +1301,11 @@ public final class ItemSystem {
         }
     }
 
+    /** Flat depth bonus for creation scrolls: every conjured item is generated
+     *  as if found {@code current_depth + 4} levels down, so the reward scales
+     *  smoothly with progress instead of saturating to max-tier on early floors. */
+    private static final int CREATION_SCROLL_DEPTH_BONUS = 4;
+
     /** Power-level (0..1) for an item "found {@code deeper} levels below" this one. */
     private static double gemPowerForDepth(Level level, int deeper) {
         int total = Math.max(2, GameBalance.DUNGEON_DEPTH);
@@ -1300,20 +1314,75 @@ public final class ItemSystem {
         return f < 0 ? 0 : (f > 1 ? 1 : f);
     }
 
-    /** Hand freshly-created items straight to the player's bag (RL-50 creation
-     *  scrolls) so they're immediately usable and noticed - scattering them on
-     *  the floor read as "the scroll did nothing". Stackables merge; bag-limit
-     *  caps are bypassed (a reward scroll always delivers). No item-burst here:
-     *  the scroll's own read SFX (PlayController) is the feedback. */
-    private static void giveItemsToPlayer(Level level, Mob user, java.util.List<Item> items) {
-        if (user == null || user.inventory == null || items == null || items.isEmpty()) return;
+    /** Conjure freshly-created items onto the floor as close to the player as
+     *  possible (RL-50 creation scrolls): nearest free floor tile first,
+     *  spiralling outward, one item per tile so a multi-item scroll lands a
+     *  small visible cluster the player can walk onto. Each item emits an
+     *  {@link GameEvent.ItemCreated} burst so the renderer plays a glow + spark
+     *  "birth" behind it - dropping them silently into the bag read as "the
+     *  scroll did nothing", and far-flung placement (the previous bug) left a
+     *  3-item scroll looking like it never fired. Falls back to the player's
+     *  own tile when no nearby floor is free. */
+    private static void dropItemsNearPlayer(Level level, Mob user, java.util.List<Item> items) {
+        if (level == null || user == null || user.position == null
+                || items == null || items.isEmpty() || level.items == null) return;
+        int px = user.position.tileX(), py = user.position.tileY();
         for (Item it : items) {
-            if (it == null) continue;
-            it.location = null;
-            if (!InventorySystem.addToBag(user.inventory, it)) {
-                user.inventory.bag.add(it);   // over a category cap - deliver anyway
+            // Scrolls never conjure jade, nor teleport orbs (a teleport-effect
+            // bomb the bomb-scroll could otherwise roll - thrown by anyone it
+            // scatters the player away).
+            if (it == null || isJadeItem(it) || it.scattersOnThrow()) continue;
+            Point spot = nearestFreeDropTile(level, px, py);
+            if (spot == null) spot = user.position;
+            it.location = spot;
+            level.items.add(it);
+            if (level.events != null) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemCreated(it, spot));
             }
         }
+    }
+
+    /** Creation scrolls must never conjure a Jade companion item (RL-50). For
+     *  now this is a simple name/type match on "jade" - every jade item carries
+     *  it in both. */
+    private static boolean isJadeItem(Item it) {
+        if (it == null) return false;
+        if (it.type != null && it.type.toUpperCase(java.util.Locale.ROOT).contains("JADE")) return true;
+        return it.name != null && it.name.toLowerCase(java.util.Locale.ROOT).contains("jade");
+    }
+
+    /** Nearest floor-like tile to ({@code px},{@code py}) not already holding an
+     *  item, searched in expanding Chebyshev rings (adjacent tiles first, the
+     *  player's own tile only as a last resort) out to a small radius. Returns
+     *  {@code null} if every nearby tile is occupied or non-floor. */
+    private static Point nearestFreeDropTile(Level level, int px, int py) {
+        for (int r = 1; r <= 8; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;   // ring edge only
+                    int x = px + dx, y = py + dy;
+                    if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                    if (!level.tiles[x][y].isFloorLike()) continue;
+                    if (itemAtTile(level, x, y)) continue;
+                    return new Point(x, y);
+                }
+            }
+        }
+        // Last resort: the player's own tile if it's clear.
+        if (level.tiles[px][py].isFloorLike() && !itemAtTile(level, px, py)) {
+            return new Point(px, py);
+        }
+        return null;
+    }
+
+    /** True if any item already rests on tile ({@code x},{@code y}). */
+    private static boolean itemAtTile(Level level, int x, int y) {
+        if (level.items == null) return false;
+        for (Item it : level.items) {
+            if (it == null || it.location == null) continue;
+            if (it.location.tileX() == x && it.location.tileY() == y) return true;
+        }
+        return false;
     }
 
     /** Hostile mobs (per {@link #enemiesOnLevel}) that are currently in the

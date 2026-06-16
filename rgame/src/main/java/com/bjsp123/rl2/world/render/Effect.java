@@ -132,7 +132,11 @@ public class Effect {
         /** Enchant/upgrade showcase (RL-50): screen-space - the chosen item
          *  blown up in the centre with a glow behind and a spark shower. The
          *  item is in {@link Effect#thrownItem}, the glow tint in {@link Effect#tint}. */
-        ENCHANT_SHOWCASE(80);
+        ENCHANT_SHOWCASE(80),
+        /** Item-birth burst (RL-50): tile-anchored glow halo + spark shower
+         *  behind a conjured item sprite. The item is in {@link Effect#thrownItem},
+         *  the glow tint in {@link Effect#tint}; drawn in the world pass. */
+        ITEM_BIRTH(54);
 
         public final int frameCount;
 
@@ -557,6 +561,13 @@ public class Effect {
      *  {@code item} with a {@code glow}-tinted halo and spark shower. */
     public static Effect enchantShowcase(Item item, EffectTint glow, Random rng) {
         return EffectBuilder.enchantShowcase(item, glow, rng);
+    }
+
+    /** Item-birth burst (RL-50 creation scrolls): a tile-anchored {@code glow}
+     *  halo + spark shower behind the conjured {@code item} sprite at
+     *  {@code tile}, so the player sees what was created and where it landed. */
+    public static Effect itemBirth(Point tile, Item item, EffectTint glow, Random rng) {
+        return EffectBuilder.itemBirth(tile, item, glow, rng);
     }
 
     public static Effect particleBurst(Point location, EffectTint tint, int count, Random rng) {

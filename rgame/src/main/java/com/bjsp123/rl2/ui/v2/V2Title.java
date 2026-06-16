@@ -112,6 +112,9 @@ public final class V2Title extends V2Screen {
         float headerY = window.top() - WINDOW_PAD;
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                         TextCatalog.get("ui.title.logo"), window.cx(), headerY);
+        // App version / build, bottom-left corner.
+        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                "v" + com.bjsp123.rl2.util.AppVersion.label(), 10f, 10f + ctx.lineH());
     }
 
     private void drawButtonGlow(ShapeRenderer s, Btn b) {

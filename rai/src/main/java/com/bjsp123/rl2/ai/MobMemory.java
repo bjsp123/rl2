@@ -57,6 +57,11 @@ public final class MobMemory {
      *  reachable down-stair is known, the agent abandons frontier exploration and
      *  commits to descending - breaks the early-floor dwell livelock. */
     public int    exploreStallTurns;
+    /** Consecutive manual auto-explore steps that neither moved the player nor
+     *  revealed a new tile. Backstop guard in {@link SmartAi#autoExploreStep} so
+     *  manual explore can never livelock even if commitment + pocket-draining miss
+     *  a pathological case. Reset on any productive step and on level change. */
+    public int    autoExploreStuckTurns;
 
     /** Discard everything tied to a specific level - called when the mob descends. */
     public void onLevelChange(int newLevelStamp) {
@@ -72,6 +77,7 @@ public final class MobMemory {
         ticksOnCurrentLevel = 0;
         consecutiveWaitTurns = 0;
         exploreStallTurns = 0;
+        autoExploreStuckTurns = 0;
         levelStamp = newLevelStamp;
     }
 

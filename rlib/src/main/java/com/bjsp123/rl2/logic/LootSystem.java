@@ -67,7 +67,13 @@ public final class LootSystem {
 
             for (int i = 0; i < n; i++) {
                 Item it = resolveItem(level, spec, powerLevel, rng);
-                if (it != null) mob.inventory.bag.add(it);
+                if (it == null) continue;
+                // RL-36 mirror: a non-player mob must never carry the teleport
+                // orb. A STUFF / NON_GEM / BOMBS drop roll can surface one (it
+                // isn't restrictedDrop), and the AI would then fling the player
+                // to a random level - the same reason floor pickup skips it.
+                if (it.scattersOnThrow()) continue;
+                mob.inventory.bag.add(it);
             }
         }
     }

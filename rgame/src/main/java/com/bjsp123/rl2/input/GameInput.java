@@ -111,8 +111,23 @@ public class GameInput extends InputAdapter {
         };
 
         if (target == null) return false;
+        // Stepping into the (impassable) gem hearth activates it rather than
+        // bonking - onInteract opens the forge when the player is adjacent.
+        if (isGemHearth(target.tileX(), target.tileY())) {
+            if (onInteract != null) { onInteract.run(); return true; }
+        }
         player.targetPosition = target;
         return true;
+    }
+
+    /** True when ({@code x},{@code y}) on the current level is a gem-hearth tile. */
+    private boolean isGemHearth(int x, int y) {
+        com.bjsp123.rl2.model.Level lvl = world.currentLevel();
+        if (lvl == null || lvl.tiles == null) return false;
+        if (x < 0 || y < 0 || x >= lvl.width || y >= lvl.height) return false;
+        com.bjsp123.rl2.model.Tile t = lvl.tiles[x][y];
+        return t == com.bjsp123.rl2.model.Tile.GEM_HEARTH_L
+                || t == com.bjsp123.rl2.model.Tile.GEM_HEARTH_R;
     }
 
     /** Maps the number-row keys to action-slot indices: 1..9 -> 0..8 and
@@ -159,6 +174,12 @@ public class GameInput extends InputAdapter {
         if (tileX == player.position.tileX() && tileY == player.position.tileY()) {
             if (onInteract != null) { onInteract.run(); return true; }
             return false;
+        }
+        // Tapping an adjacent gem hearth activates it (move-onto semantics).
+        if (isGemHearth(tileX, tileY)
+                && Math.max(Math.abs(tileX - player.position.tileX()),
+                            Math.abs(tileY - player.position.tileY())) == 1) {
+            if (onInteract != null) { onInteract.run(); return true; }
         }
 
         player.targetPosition = new Point(tileX, tileY);

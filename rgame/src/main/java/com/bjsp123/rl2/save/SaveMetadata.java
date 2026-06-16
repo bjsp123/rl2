@@ -8,4 +8,9 @@ public class SaveMetadata {
     public int    hp;
     public int    maxHp;
     public long   timestampMillis;
+    /** App version that wrote this save (e.g. "0.1"). Empty on legacy/unstamped
+     *  saves, which the loader then treats as incompatible. */
+    public String version = "";
+    /** App build that wrote this save. {@code -1} on legacy/unstamped saves. */
+    public int    build   = -1;
 }

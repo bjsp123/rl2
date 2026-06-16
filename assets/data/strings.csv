@@ -790,6 +790,12 @@ mob.DEVELOPED_MASK_IMP.tip,Ranged magical attacks tend to ignore your armor.
 mob.DOG.description,"A loyal and fierce dog, trained to hunt and protect.  Who's a good boy?  This dog is."
 mob.DOG.name,hound
 mob.DOG.tip,Perhaps you could throw it some meat.
+mob.ENEMY_PLAYER_MAGE.description,A rival wand-user who fights alongside a shielding Jade Crab. Best dealt with before he can fling spells.
+mob.ENEMY_PLAYER_MAGE.name,Rival Mage
+mob.ENEMY_PLAYER_ROGUE.description,"A rival adventurer with the elusive Jade Fish, striking from stealth with bombs and blades."
+mob.ENEMY_PLAYER_ROGUE.name,Rival Rogue
+mob.ENEMY_PLAYER_WARRIOR.description,A rival warrior who charges in behind his Jade Bull with powerful blows.
+mob.ENEMY_PLAYER_WARRIOR.name,Rival Warrior
 mob.enemyOf,Enemy of: {value}
 mob.equipped,Equipped: {items}
 mob.faction,Faction: {value}
@@ -1124,6 +1130,7 @@ ui.common.clear,Clear
 ui.common.close,x
 ui.common.delete,Delete
 ui.common.done,Done
+ui.common.ok,OK
 ui.common.play,PLAY
 ui.credits.line.code,Code by hwacha
 ui.credits.line.engine,Built with libgdx
@@ -1275,8 +1282,13 @@ ui.saves.deleteBody,This removes the saved game in slot {slot}.
 ui.saves.deleteTitle,Delete save?
 ui.saves.depth,Depth {depth}
 ui.saves.level,Lvl {level}
+ui.saves.loadAnyway,Load anyway
+ui.saves.loadFailBody,"This save could not be loaded. It may be corrupt or from an incompatible version."
+ui.saves.loadFailTitle,Could not load
 ui.saves.newGame,New Game
 ui.saves.title,Saved Games
+ui.saves.versionBody,"Saved by {saved}; this game is {current}. It may not load correctly."
+ui.saves.versionTitle,Incompatible save
 ui.settings.animationSpeed,Animation Speed
 ui.settings.clearHall,Clear Hall of Fame
 ui.settings.clearHallBody,This removes all hero records.

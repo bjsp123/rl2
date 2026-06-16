@@ -1530,10 +1530,10 @@ public class MobSystem {
             if (item.useBehavior == com.bjsp123.rl2.model.Item.UseBehavior.POWERUP) {
                 continue;
             }
-            // RL-36: NON-player mobs must not pick up the teleport ORB (throwEffect
-            // TELEPORT) - thrown, it scatters everyone in its blast to a random level, so a
-            // mob grabbing one could fling the player away. The player may pick them up.
-            if (!isPlayer && item.throwEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
+            // RL-36: NON-player mobs must not pick up the teleport ORB - thrown,
+            // it scatters everyone in its blast to a random level, so a mob
+            // grabbing one could fling the player away. The player may pick them up.
+            if (!isPlayer && item.scattersOnThrow()) {
                 continue;
             }
             // Snapshot the floor position BEFORE addToBag clears it, so the
@@ -2579,7 +2579,7 @@ public class MobSystem {
 
     /** Heuristic for "would firing this wand at this target plausibly deal
      *  damage?". Returns 0 when the target is fundamentally immune to the
-     *  effect (flying / fireImmune vs FIRE, non-banishable vs BANISHMENT)
+     *  effect (fireImmune vs FIRE, non-banishable vs BANISHMENT)
      *  and otherwise nets the wand's stat-based damage against the target's
      *  magic-resist range. AI uses the zero return as an "don't bother
      *  firing" gate; comparators use the magnitude for melee comparison.
@@ -2597,12 +2597,15 @@ public class MobSystem {
             // Treat as a one-shot kill when applicable; otherwise no effect.
             return target.banishable ? 999.0 : 0.0;
         }
-        // FIRE wand vs flying or fireImmune target: the projectile's small
-        // direct damage is far less useful than the lost surface contribution,
-        // and a 3-damage hit isn't enough to chip down anything. Treat the
-        // matchup as "wrong wand for this target" and reject outright.
+        // FIRE wand vs fireImmune target: the projectile leaves a burning patch
+        // rather than landing a meaningful direct hit, and a fireImmune mob
+        // ignores the patch entirely, so the matchup is "wrong wand for this
+        // target" - reject outright. Flying targets are NOT exempt: the wand
+        // ignites the ground beneath them and a flyer standing on burning
+        // vegetation still catches fire (FireSystem.tickPerTurn spares only
+        // fireImmune mobs), so a fire wand stays worth casting at a flyer.
         if (eff == com.bjsp123.rl2.model.Item.ItemEffect.FIRE
-                && (ts.flying || ts.fireImmune)) {
+                && ts.fireImmune) {
             return 0;
         }
         int effLvl = ItemStats.effectiveLevel(wand, caster);
@@ -2639,7 +2642,7 @@ public class MobSystem {
      *  much damage as the caster's straight-up melee swing. Out-of-melee
      *  targets (Chebyshev > 1) auto-pass since melee output is 0 from there.
      *  Uses {@link #expectedWandDamage} so resistances / immunities feed
-     *  into the comparison too: a fire wand against a flying ghost reports
+     *  into the comparison too: a fire wand against a fireImmune mob reports
      *  zero expected damage and loses to even a 1-damage dagger. */
     private static boolean wandBeatsMelee(Mob caster, com.bjsp123.rl2.model.Item wand,
                                           Mob target) {
@@ -3531,6 +3534,31 @@ public class MobSystem {
      *  that's a renderer-side concern and does NOT change the fact that the
      *  rlib world state is fully mutated here, synchronously, at throw
      *  time. */
+    /** Max Chebyshev tiles a mob can throw: the base range plus its Hurler perk
+     *  bonus. Single source of truth shared by the targeting overlay (which
+     *  tiles to highlight) and {@link #throwItem} (clamping the actual flight). */
+    public static int throwRangeFor(Mob thrower) {
+        int range = GameBalance.DEFAULT_THROW_RANGE;
+        if (thrower != null && thrower.perks != null) {
+            range += thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.HURLER, 0)
+                    * GameBalance.HURLER_RANGE_PER_LEVEL;
+        }
+        return range;
+    }
+
+    /** Clamp {@code dst} to within Chebyshev {@code range} of {@code origin},
+     *  sliding it back along the aim line when it's too far. Returns {@code dst}
+     *  unchanged when already in range (or inputs are degenerate). */
+    private static Point clampToRange(Point origin, Point dst, int range) {
+        if (origin == null || dst == null || range <= 0) return dst;
+        int dx = dst.tileX() - origin.tileX();
+        int dy = dst.tileY() - origin.tileY();
+        int dist = Math.max(Math.abs(dx), Math.abs(dy));
+        if (dist <= range) return dst;
+        return new Point(origin.tileX() + dx * range / dist,
+                         origin.tileY() + dy * range / dist);
+    }
+
     public static void throwItem(Level level, Mob thrower, Item it, Point dst) {
         if (thrower == null || it == null || dst == null) return;
         // Single authoritative throw-eligibility gate: only THROWN weapons and
@@ -3554,6 +3582,11 @@ public class MobSystem {
         // BOMB_DODGER "bomb survives the throw" regeneration is gone - RL-34
         // reworks the perk into catching ENEMY bombs instead; see applyThrowImpact.)
         removeFromInventory(thrower, it);
+        // Range cap: a throw can't travel beyond the thrower's Chebyshev range
+        // (base + Hurler). The player's targeting overlay already refuses to aim
+        // past this, but clamp here too so AI throws - and any other caller -
+        // obey the same limit rather than lobbing a bomb clear across the level.
+        dst = clampToRange(thrower.position, dst, throwRangeFor(thrower));
         // Clip the trajectory at the first mob / wall / statue between
         // thrower and the user-picked tile. Bombs detonate against the
         // obstacle rather than ghosting through it.
@@ -3971,6 +4004,26 @@ public class MobSystem {
                     m.ticksTillMove += TurnSystem.STANDARD_TURN_TICKS;
                 }
             }
+        } else if (te == ItemEffect.LIGHTNING && inBounds) {
+            // Shock bomb: a SHOCK jolt to every mob in the disc. MAGIC attack
+            // type so magic-resist applies; SHOCK element so processAttack's
+            // wet/blood x2 kicks in. Each struck tile emits a lightning burst
+            // so the renderer marks every hit. (Without this branch the bomb
+            // resolved to a silent no-op - LIGHTNING was only handled on the
+            // wand path, never the throw path.)
+            for (Point p : disc) {
+                Mob m = MobQueries.mobAt(level, p);
+                if (m == null || m == thrower || m.hp <= 0) continue;
+                processAttack(level, thrower, m,
+                        scaledBombDamage(m, it, bombDamage),
+                        AttackType.MAGIC, DamageElement.SHOCK,
+                        null, new DamageCause(thrower, it, "lightning"));
+                BrandSystem.applyBrandOnHit(level, thrower, m, it);
+                if (level.events != null && m.position != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(
+                            m.position, ItemEffect.LIGHTNING));
+                }
+            }
         } else if (te == ItemEffect.VOID && inBounds) {
             ItemSystem.applyVoidImpact(level, dst, lvl);
         } else if (te == ItemEffect.TELEPORT && inBounds) {
@@ -4034,6 +4087,55 @@ public class MobSystem {
      *  on the level where the mob ends up so the existing teleport-fade
      *  visual plays. Falls back gracefully (no-op) if no walkable tile can
      *  be found after a bounded number of tries. */
+    /** Teleport {@code mob} to a random walkable tile on its CURRENT level,
+     *  preferring a landing at least {@code minEnemyDist} Chebyshev tiles from
+     *  every live hostile. After {@code maxTries} draws fail that distance test
+     *  it settles for the first walkable tile it saw. Emits a
+     *  {@link com.bjsp123.rl2.event.GameEvent.MobTeleported} for the visual.
+     *  Returns {@code false} only when the level has no usable tile at all
+     *  (in which case the mob hasn't moved). */
+    public static boolean teleportRandomlyOnLevel(Level level, Mob mob,
+                                                  int minEnemyDist, int maxTries) {
+        if (level == null || mob == null || mob.position == null
+                || level.tiles == null) return false;
+        Point from = mob.position;
+        Point chosen = null, fallback = null;
+        for (int attempt = 0; attempt < Math.max(1, maxTries); attempt++) {
+            int x = RANDOM.nextInt(level.width);
+            int y = RANDOM.nextInt(level.height);
+            if (!level.tiles[x][y].isFloorLike()) continue;
+            if (MobQueries.mobAt(level, new Point(x, y)) != null) continue;
+            if (fallback == null) fallback = new Point(x, y);
+            if (farFromHostiles(level, mob, x, y, minEnemyDist)) {
+                chosen = new Point(x, y);
+                break;
+            }
+        }
+        if (chosen == null) chosen = fallback;   // no enemy-safe tile in budget
+        if (chosen == null) return false;        // level has nowhere to land
+        mob.position = chosen;
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobTeleported(
+                    mob, from.tileX(), from.tileY(), chosen.tileX(), chosen.tileY()));
+        }
+        return true;
+    }
+
+    /** True when ({@code x},{@code y}) is at least {@code minDist} Chebyshev
+     *  tiles from every live mob hostile to {@code mob}. */
+    private static boolean farFromHostiles(Level level, Mob mob, int x, int y, int minDist) {
+        if (minDist <= 0 || level.mobs == null) return true;
+        for (Mob other : level.mobs) {
+            if (other == null || other == mob || other.position == null || other.hp <= 0) continue;
+            if (getAttitudeToMob(other, mob) != Attitude.ATTACK
+                    && getAttitudeToMob(mob, other) != Attitude.ATTACK) continue;
+            int d = Math.max(Math.abs(other.position.tileX() - x),
+                             Math.abs(other.position.tileY() - y));
+            if (d < minDist) return false;
+        }
+        return true;
+    }
+
     private static void scatterMobAcrossWorld(Level srcLevel, Mob mob) {
         if (srcLevel == null || srcLevel.world == null || mob == null) return;
         com.bjsp123.rl2.model.Level[] levels = srcLevel.world.levels;
@@ -4062,6 +4164,16 @@ public class MobSystem {
         if (dst == null) return;
 
         Point fromPoint = mob.position;
+        // Departure visual on the SOURCE level - emitted BEFORE the transfer so
+        // the player (who usually stays put when scattering an enemy with a
+        // teleport orb) actually sees the enemy vanish in a streak burst. The
+        // arrival visual below fires on the destination level for the case where
+        // the player follows (e.g. SMART agent scattered with the camera).
+        if (srcLevel.events != null && fromPoint != null) {
+            srcLevel.events.add(new com.bjsp123.rl2.event.GameEvent.MobTeleported(
+                    mob, fromPoint.tileX(), fromPoint.tileY(),
+                    fromPoint.tileX(), fromPoint.tileY()));
+        }
         // Cross-level scatter goes through the shared mob/level transfer
         // helper so the World.currentLevelIndex follows PLAYER / SMART agents
         // and doesn't leave the autoplay looking at an empty source level.

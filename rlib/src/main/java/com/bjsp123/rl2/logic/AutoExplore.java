@@ -20,8 +20,13 @@ public final class AutoExplore {
     public enum Result {
         /** An explore/pickup action was taken this call (the player's turn advanced). */
         STEPPED,
-        /** Nothing left to explore or pick up - auto-explore should stop. */
-        DONE
+        /** No reachable unexplored floor remains - the level is fully explored. The
+         *  caller should report "nothing left to explore". */
+        DONE_EXPLORED,
+        /** Auto-explore handed back for a reason other than completion - the planner
+         *  wants to do something the player should decide (heal, fight, flee, ...).
+         *  The caller should stop quietly rather than claim the level is explored. */
+        DONE_BUSY
     }
 
     public interface Driver {

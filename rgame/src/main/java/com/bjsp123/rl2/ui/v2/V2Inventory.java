@@ -609,12 +609,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             }
         }
 
-        // Action buttons.
-        drawBtn(s, detailUseBtn,   detailUsePressed);
-        drawBtn(s, detailEquipBtn, detailEquipPressed);
-        drawBtn(s, detailThrowBtn, detailThrowPressed);
+        // Action buttons. Each greys out when it doesn't apply to the selected
+        // item (e.g. Equip on a non-equippable blinkstone, Throw on a wand).
+        drawBtn(s, detailUseBtn,   detailUsePressed,   canUseSelected());
+        drawBtn(s, detailEquipBtn, detailEquipPressed, canEquipSelected());
+        drawBtn(s, detailThrowBtn, detailThrowPressed, canThrowSelected());
         if (encyclopedia != null) {
-            drawBtn(s, detailInfoBtn, detailInfoPressed);
+            drawBtn(s, detailInfoBtn, detailInfoPressed, true);
         }
         // Horizontal rule between the bright flavor blurb and the
         // dim mechanical-details body.
@@ -687,9 +688,17 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
 
-    private void drawBtn(ShapeRenderer s, Rect r, boolean pressed) {
-        ButtonChrome.shape(ctx, r, pressed, false, false, UIVars.BTN_BG);
+    private void drawBtn(ShapeRenderer s, Rect r, boolean pressed, boolean enabled) {
+        ButtonChrome.shape(ctx, r, pressed, false, false,
+                enabled ? UIVars.BTN_BG : UIVars.SLOT_BG);
     }
+
+    /** Whether each detail-popup action applies to the selected item. Drive
+     *  both the greyed-out chrome/label and the press gate so a disabled button
+     *  is fully inert. */
+    private boolean canUseSelected()   { return selectedItem != null && selectedItem.isUsable(); }
+    private boolean canEquipSelected() { return selectedItem != null && selectedItem.isEquippable(); }
+    private boolean canThrowSelected() { return selectedItem != null && selectedItem.isThrowable(); }
 
     /** Inventory body text - header, equipment icons, tab icons, bag-grid
      *  icons + count badges. Drawn before the detail popup's chrome so the
@@ -813,7 +822,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     ? TextCatalog.capitalize(selectedItem.useVerb)
                     : TextCatalog.get("ui.inventory.use");
             TextDraw.centre(ctx, ctx.fontRegular,
-                    detailUsePressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
+                    detailUsePressed ? UIVars.ACCENT : (canUseSelected() ? UIVars.TEXT_BODY : UIVars.TEXT_DIM),
                     TextDraw.ellipsize(ctx.fontRegular, useLabel, detailUseBtn.w - 8f),
                     detailUseBtn.cx(), detailUseBtn.cy() + 6f);
             String equipLabel;
@@ -825,11 +834,11 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 equipLabel = TextCatalog.get("ui.inventory.equip");
             }
             TextDraw.centre(ctx, ctx.fontRegular,
-                    detailEquipPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
+                    detailEquipPressed ? UIVars.ACCENT : (canEquipSelected() ? UIVars.TEXT_BODY : UIVars.TEXT_DIM),
                     TextDraw.ellipsize(ctx.fontRegular, equipLabel, detailEquipBtn.w - 8f),
                     detailEquipBtn.cx(), detailEquipBtn.cy() + 6f);
             TextDraw.centre(ctx, ctx.fontRegular,
-                    detailThrowPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
+                    detailThrowPressed ? UIVars.ACCENT : (canThrowSelected() ? UIVars.TEXT_BODY : UIVars.TEXT_DIM),
                     TextDraw.ellipsize(ctx.fontRegular,
                             TextCatalog.get("ui.inventory.throw"), detailThrowBtn.w - 8f),
                     detailThrowBtn.cx(), detailThrowBtn.cy() + 6f);
@@ -897,9 +906,11 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             }
                         }
                     }
-                    if (detailUseBtn.contains(vx, vy))   { detailUsePressed = true;   return true; }
-                    if (detailEquipBtn.contains(vx, vy)) { detailEquipPressed = true; return true; }
-                    if (detailThrowBtn.contains(vx, vy)) { detailThrowPressed = true; return true; }
+                    // Only depress a button that actually applies - disabled
+                    // (greyed) actions swallow the tap without reacting.
+                    if (detailUseBtn.contains(vx, vy))   { if (canUseSelected())   detailUsePressed = true;   return true; }
+                    if (detailEquipBtn.contains(vx, vy)) { if (canEquipSelected()) detailEquipPressed = true; return true; }
+                    if (detailThrowBtn.contains(vx, vy)) { if (canThrowSelected()) detailThrowPressed = true; return true; }
                     // Tap outside the detail window closes it without firing anything.
                     if (!detailWindow.contains(vx, vy)) {
                         selectedItem = null;

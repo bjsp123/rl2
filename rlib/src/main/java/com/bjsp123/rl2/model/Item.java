@@ -371,6 +371,12 @@ public class Item {
     }
     public boolean isUsable()     { return useBehavior != null && useBehavior != UseBehavior.NONE; }
 
+    /** Thrown, this item scatters every mob in its blast to a random level (the
+     *  teleport orb). Non-player mobs must never acquire one: thrown at the
+     *  player it would fling them away (RL-36). Gates both floor pickup and the
+     *  spawn-time loot roll. Classified by throw-effect, not by item type. */
+    public boolean scattersOnThrow() { return throwEffect == ItemEffect.TELEPORT; }
+
     /** Authorial "value" rank used by mob AI item-pick, kit pickers, and any
      *  future tooltip / comparison surface. Three contributors:
      *  <ul>

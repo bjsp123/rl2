@@ -25,6 +25,16 @@ tasks.register('dumpWorld', JavaExec) {
     workingDir  = rootProject.projectDir
 }
 
+// [DEV] Headless loot-density sampler: avg potions/weapons/armor/amulets/bombs
+// per level across a batch of worlds. Optional world count: --args="200"
+tasks.register('lootStats', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Sample worlds and report average loot per level by category'
+    mainClass   = 'com.bjsp123.rl2.util.LootStatsMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+}
+
 // [DEV] Headless gem-recipe validator + balance report (RL-50).
 tasks.register('dumpRecipes', JavaExec) {
     group       = 'diagnostics'

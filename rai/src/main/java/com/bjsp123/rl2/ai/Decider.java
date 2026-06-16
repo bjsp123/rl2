@@ -292,7 +292,10 @@ public final class Decider {
      *  user's spec: "the *nearest* square that is adjacent to unexplored floor.
      *  Not random. Nearest"). Last leaf - if nothing left to explore, descend. */
     static Action planExplore(WorldState s) {
-        Point f = ExplorationEval.nearestExploreTarget(s.mob, s.level, s.memory);
+        // Committed frontier (cached on MobMemory) so the agent walks the whole way
+        // to one target instead of re-picking the BFS-nearest each tick and flipping
+        // between two equidistant cells. Also drains unrevealable pockets on arrival.
+        Point f = ExplorationEval.committedExploreTarget(s.mob, s.level, s.memory);
         if (f == null) return planDescend(s);
         return new ActionMoveToward(f, "explore", 0.6, true);
     }

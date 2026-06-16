@@ -671,18 +671,39 @@ public final class LevelFactoryPopulate {
     /** True if (x, y) falls inside the room the player will occupy on arrival —
      *  the room containing the stairs-up tile, or on depth 1 (no stairs up) the
      *  room containing {@code level.spawnPoint}. Kept mob-free so the player
-     *  isn't dropped right next to a hostile. */
+     *  isn't dropped right next to a hostile.
+     *
+     *  <p>VILLAGE layouts get special handling: room 0 is the village green, a
+     *  bounding box that spans nearly the whole level. Treating it as the safe
+     *  room would reject every spawn candidate (the green wraps every building),
+     *  leaving the level mob-free. So on VILLAGE we skip room 0 and match only
+     *  the building rects (indices 1..N); when the anchor sits on the open green
+     *  rather than inside a building, we fall back to a small radius around it. */
     private static boolean inStairsUpRoom(Level level, int x, int y) {
         if (level.rooms == null) return false;
         Point anchor = level.stairsUp != null ? level.stairsUp : level.spawnPoint;
         if (anchor == null) return false;
         int sx = anchor.tileX();
         int sy = anchor.tileY();
-        for (Level.RoomSnapshot r : level.rooms) {
+        boolean village = level.layout == LevelFactory.Layout.VILLAGE;
+        int firstRoom = village ? 1 : 0;   // skip the village green (room 0)
+        for (int i = firstRoom; i < level.rooms.size(); i++) {
+            Level.RoomSnapshot r = level.rooms.get(i);
             if (sx >= r.x && sx < r.x + r.w && sy >= r.y && sy < r.y + r.h) {
                 return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
             }
         }
+        // Anchor isn't inside any qualifying room. On a village the player likely
+        // landed on the open green - protect a small area around the anchor so the
+        // arrival tile stays clear without sterilising the whole green.
+        if (village) {
+            return Math.abs(x - sx) <= VILLAGE_SAFE_RADIUS
+                    && Math.abs(y - sy) <= VILLAGE_SAFE_RADIUS;
+        }
         return false;
     }
+
+    /** Chebyshev radius of the mob-free zone around the player's arrival tile on
+     *  a village whose anchor sits on the open green (no enclosing building). */
+    private static final int VILLAGE_SAFE_RADIUS = 3;
 }

@@ -145,6 +145,24 @@ public final class EffectBuilder {
         return e;
     }
 
+    /** Item-birth burst (RL-50 creation scrolls): tile-anchored. Carries the
+     *  conjured item + a spark shower (angle in {@code particleX0}, spawn phase
+     *  in {@code particleY0}). Drawn world-space at the drop tile. */
+    public static Effect itemBirth(Point tile, com.bjsp123.rl2.model.Item item, EffectTint glow, Random rng) {
+        Effect e = new Effect(tile, EffectType.ITEM_BIRTH);
+        e.thrownItem = item;
+        e.tint = glow;
+        e.ignoresFov = true;   // conjured next to the player - always show it
+        int n = 24;
+        e.particleX0 = new float[n];
+        e.particleY0 = new float[n];
+        for (int i = 0; i < n; i++) {
+            e.particleX0[i] = rng.nextFloat() * (float) (Math.PI * 2);
+            e.particleY0[i] = rng.nextFloat() * 0.4f;   // spawn early in the lifetime
+        }
+        return e;
+    }
+
     // ====================================================================
     // 2. splash — upper-cone spray, gravity, optional bouncing.
     // ====================================================================
@@ -322,7 +340,10 @@ public final class EffectBuilder {
                 e.particleY0[i] = rng.nextFloat() * 4f;
                 e.particleVY[i] = +speed;
             } else {
-                e.particleY0[i] = TILE_PX - 4f + rng.nextFloat() * 4f;
+                // Arrival rain: begin ABOVE the destination cell and fall into
+                // it as the mob fades in, so the streaks read as the mob
+                // dropping back into place rather than just sitting on the tile.
+                e.particleY0[i] = TILE_PX + rng.nextFloat() * TILE_PX;
                 e.particleVY[i] = -speed;
             }
             e.particleVX[i] = 0f;

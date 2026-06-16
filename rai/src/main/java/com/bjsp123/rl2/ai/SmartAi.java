@@ -81,10 +81,45 @@ public final class SmartAi implements MobBrains.Brain {
                 || "pickup-item".equals(branch)
                 || "pickup-powerup".equals(branch)
                 || "search".equals(branch);
-        if (!exploring) return com.bjsp123.rl2.logic.AutoExplore.Result.DONE;
+        if (!exploring) {
+            if (!branch.startsWith("descend")) {
+                // heal / fight / flee — a genuine hand-back the player should act on.
+                mem.autoExploreStuckTurns = 0;
+                return com.bjsp123.rl2.logic.AutoExplore.Result.DONE_BUSY;
+            }
+            // The SMART planner commits to descending the moment a down-stair is
+            // reachable, but the player's manual auto-explore must map the WHOLE
+            // floor first and never descend on its own. If any reachable frontier
+            // remains, explore toward it; only when none is left is the floor done.
+            Point frontier = com.bjsp123.rl2.ai.eval.ExplorationEval
+                    .committedExploreTarget(player, level, mem);
+            if (frontier == null) {
+                mem.autoExploreStuckTurns = 0;
+                return com.bjsp123.rl2.logic.AutoExplore.Result.DONE_EXPLORED;
+            }
+            step = new com.bjsp123.rl2.ai.action.ActionMoveToward(frontier, "explore", 0.6, true);
+        }
+        // Backstop livelock guard: commitment + pocket-draining should prevent the
+        // two-square flip, but if a step neither moves the player nor reveals a new
+        // tile for several consecutive turns, stop rather than spin forever.
+        Point posBefore = player.position;
+        int stallBefore = mem.exploreStallTurns;
         step.execute(player, level);   // self-applies the move/pickup cost
+        boolean moved = posBefore != null && !posBefore.equals(player.position);
+        boolean revealed = mem.exploreStallTurns < stallBefore || mem.exploreStallTurns == 0;
+        if (moved || revealed) {
+            mem.autoExploreStuckTurns = 0;
+        } else if (++mem.autoExploreStuckTurns > AUTO_EXPLORE_STUCK_LIMIT) {
+            mem.autoExploreStuckTurns = 0;
+            return com.bjsp123.rl2.logic.AutoExplore.Result.DONE_EXPLORED;
+        }
         return com.bjsp123.rl2.logic.AutoExplore.Result.STEPPED;
     }
+
+    /** Consecutive no-progress auto-explore steps after which manual explore stops.
+     *  Pure backstop; the commitment + pocket-drain path should reach it only in
+     *  pathological geometry. */
+    private static final int AUTO_EXPLORE_STUCK_LIMIT = 12;
 
     @Override
     public void run(Mob mob, Level level) {

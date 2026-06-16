@@ -54,6 +54,7 @@ public sealed interface GameEvent permits
         GameEvent.XPGainBurst,
         GameEvent.PeriodicBuffDamage,
         GameEvent.LootDropped,
+        GameEvent.ItemCreated,
         GameEvent.ItemPickedUp,
         GameEvent.MobKnockedBack,
         GameEvent.ItemFallingIntoChasm,
@@ -214,6 +215,11 @@ public sealed interface GameEvent permits
      *  from the dying mob's tile to the item's resting spot. The animation is
      *  non-blocking (runs in parallel with whatever animation comes next). */
     record LootDropped(Item item, Point from, Point to) implements GameEvent {}
+
+    /** An item was conjured onto the floor by a creation scroll (RL-50). The
+     *  renderer plays a glow + spark "birth" burst behind the item sprite at
+     *  {@code at} so the player sees what was created and where it landed. */
+    record ItemCreated(Item item, Point at) implements GameEvent {}
 
     /** A single item was just picked up by a mob - the renderer plays a brief
      *  arc from the item's tile toward the bottom-right of the screen (where the

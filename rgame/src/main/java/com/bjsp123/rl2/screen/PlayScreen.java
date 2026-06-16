@@ -611,6 +611,8 @@ public class PlayScreen implements Screen {
                 v2Inventory.openPicker(eligible, onPick, onCancel));
         controller.setOpenMapScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
                 game, game.ui, game::popScreen, world)));
+        controller.setOpenForgeScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Forge(
+                game, game.ui, game::popScreen)));
         v2Hud.setOnActionUse(controller::triggerActionSlot);
         v2Hud.setOnAutoExplore(controller::toggleAutoExplore);
 

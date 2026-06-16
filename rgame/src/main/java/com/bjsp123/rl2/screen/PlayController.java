@@ -115,6 +115,13 @@ final class PlayController {
     /** Wire the map-screen-open callback. */
     public void setOpenMapScreen(Runnable r) { this.openMapScreen = r; }
 
+    /** Callback to push the gem-forge screen when the player interacts beside a
+     *  GEM_HEARTH tile. Wired by {@link PlayScreen} so the controller can open
+     *  the forge without a hard dependency on the UI layer. */
+    private Runnable openForgeScreen;
+    /** Wire the forge-screen-open callback. */
+    public void setOpenForgeScreen(Runnable r) { this.openForgeScreen = r; }
+
     /** Opens the inventory as a target chooser for item-targeting scrolls
      *  (enchant brands / level-ups). Wired by {@link PlayScreen} to
      *  {@code V2Inventory.openPicker} so the controller stays free of a hard
@@ -165,11 +172,17 @@ final class PlayController {
                 // planner has nothing left to explore (hands back, never descends).
                 if (autoExploreShouldStop(level, player)) { stopAutoExplore(); return false; }
                 com.bjsp123.rl2.logic.AutoExplore.Driver drv = com.bjsp123.rl2.logic.AutoExplore.get();
-                if (drv == null
-                        || drv.step(player, level) == com.bjsp123.rl2.logic.AutoExplore.Result.DONE) {
-                    EventLog.add(new LogEvent(
-                            com.bjsp123.rl2.logic.TextCatalog.get("eventlog.path.explored"),
-                            LogEvent.EventPriority.LOW, true));
+                com.bjsp123.rl2.logic.AutoExplore.Result res = drv == null
+                        ? com.bjsp123.rl2.logic.AutoExplore.Result.DONE_EXPLORED
+                        : drv.step(player, level);
+                if (res != com.bjsp123.rl2.logic.AutoExplore.Result.STEPPED) {
+                    // Only claim the level is explored when that's actually why we
+                    // stopped; a BUSY hand-back (heal, etc.) stops quietly.
+                    if (res == com.bjsp123.rl2.logic.AutoExplore.Result.DONE_EXPLORED) {
+                        EventLog.add(new LogEvent(
+                                com.bjsp123.rl2.logic.TextCatalog.get("eventlog.path.explored"),
+                                LogEvent.EventPriority.LOW, true));
+                    }
                     stopAutoExplore();
                     return false;
                 }
@@ -244,6 +257,11 @@ final class PlayController {
         long auditStart = profiler.start();
         auditActionSlots(TurnSystem.findPlayer(level));
         profiler.add("auditAfterMove", auditStart);
+        // Rebuild the cached fog / remembered-terrain + item/mob cell buckets so
+        // terrain and surface changes from non-movement actions (VOID / fire /
+        // creation & terraforming scrolls, bombs) are reflected immediately
+        // rather than lingering until the next move or tick rebuild.
+        levelRenderer.markDirty();
         profiler.add("afterMove", start);
     }
 
@@ -290,7 +308,10 @@ final class PlayController {
             case GRAPPLE  -> beginGrapple(level, player, bound);
             case JUMP     -> beginJump(level, player, bound);
             case CHARGE   -> beginCharge(level, player, bound);
-            case TELEPORT -> { if (openMapScreen != null) openMapScreen.run(); }
+            case TELEPORT -> {
+                if (!ItemSystem.useItem(level, player, bound)) playInvocationFail();
+                afterMove(level);
+            }
             case NONE -> { /* handled above */ }
         }
     }
@@ -323,7 +344,10 @@ final class PlayController {
             case GRAPPLE  -> beginGrapple(level, user, item);
             case JUMP     -> beginJump(level, user, item);
             case CHARGE   -> beginCharge(level, user, item);
-            case TELEPORT -> { if (openMapScreen != null) openMapScreen.run(); }
+            case TELEPORT -> {
+                if (!ItemSystem.useItem(level, user, item)) playInvocationFail();
+                afterMove(level);
+            }
             case NONE -> { /* unreachable - the popup gates Use on isUsable() */ }
         }
     }
@@ -442,7 +466,7 @@ final class PlayController {
         Level level = world.currentLevel();
         targetingOverlay.setPlayer(user);
         targetingOverlay.setLevel(level);
-        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
+        targetingOverlay.setValidTiles(lineOfFireGrid(level, user), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             if (ItemSystem.triggerGem(cur, user, gem, target)) {
@@ -480,7 +504,7 @@ final class PlayController {
         }
         targetingOverlay.setPlayer(user);
         targetingOverlay.setLevel(level);
-        targetingOverlay.setValidTiles(visibleGrid(level), level.width, level.height);
+        targetingOverlay.setValidTiles(lineOfFireGrid(level, user), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
             ItemSystem.fireWand(cur, user, wand, target);
@@ -573,32 +597,46 @@ final class PlayController {
         return grid;
     }
 
-    /** Grid of valid throw targets: visible + within Chebyshev throw range (base + Hurler bonus). */
+    /** Grid of valid throw targets: any tile the thrown item could actually land
+     *  on - a clear line-of-FIRE (no wall/mob clips the flight first), capped at
+     *  the thrower's Chebyshev throw range (base + Hurler). NOT gated on FOV: a
+     *  tile down an unlit but open corridor is hittable even if currently dark. */
     private static boolean[][] throwGrid(Level level, Mob thrower) {
         boolean[][] grid = new boolean[level.width][level.height];
-        if (thrower.position == null || level.visible == null) return grid;
-        int range = com.bjsp123.rl2.logic.GameBalance.DEFAULT_THROW_RANGE;
-        if (thrower.perks != null)
-            range += thrower.perks.getOrDefault(com.bjsp123.rl2.model.Perk.HURLER, 0)
-                     * com.bjsp123.rl2.logic.GameBalance.HURLER_RANGE_PER_LEVEL;
+        if (thrower.position == null) return grid;
+        int range = com.bjsp123.rl2.logic.MobSystem.throwRangeFor(thrower);
         int px = thrower.position.tileX(), py = thrower.position.tileY();
         for (int x = Math.max(0, px - range); x <= Math.min(level.width - 1, px + range); x++) {
             for (int y = Math.max(0, py - range); y <= Math.min(level.height - 1, py + range); y++) {
                 if (Math.max(Math.abs(x - px), Math.abs(y - py)) > range) continue;
-                grid[x][y] = level.visible[x][y];
+                grid[x][y] = hasClearShot(level, thrower, x, y);
             }
         }
         return grid;
     }
 
-    /** Grid of tiles currently visible to the player - valid targets for wand/grapple/throw. */
-    private static boolean[][] visibleGrid(Level level) {
+    /** Grid of tiles a wand can actually hit: any tile with a clear line-of-FIRE
+     *  from the caster (the projectile clips at the first wall/mob, so the impact
+     *  lands exactly there). Unlimited range, NOT gated on FOV - matches what
+     *  {@link com.bjsp123.rl2.logic.ItemSystem#fireWand} resolves at fire-time. */
+    private static boolean[][] lineOfFireGrid(Level level, Mob caster) {
         boolean[][] grid = new boolean[level.width][level.height];
-        if (level.visible == null) return grid;
+        if (caster == null || caster.position == null) return grid;
         for (int x = 0; x < level.width; x++)
             for (int y = 0; y < level.height; y++)
-                grid[x][y] = level.visible[x][y];
+                grid[x][y] = hasClearShot(level, caster, x, y);
         return grid;
+    }
+
+    /** True when a projectile aimed at ({@code tx},{@code ty}) from {@code shooter}
+     *  would actually land on that tile - i.e. nothing intercepts the flight
+     *  first. Uses the same {@code firstMobBlocking} clip the throw / wand
+     *  resolution uses, so the highlighted set matches real reach exactly. */
+    private static boolean hasClearShot(Level level, Mob shooter, int tx, int ty) {
+        if (shooter == null || shooter.position == null) return false;
+        com.bjsp123.rl2.model.Point impact = com.bjsp123.rl2.logic.MobSystem.firstMobBlocking(
+                level, shooter.position, new com.bjsp123.rl2.model.Point(tx, ty), shooter);
+        return impact != null && impact.tileX() == tx && impact.tileY() == ty;
     }
 
     /** Grid of valid jump destinations: within Chebyshev radius, passable, unoccupied.
@@ -799,7 +837,31 @@ final class PlayController {
         Tile here = cur.tiles[player.position.tileX()][player.position.tileY()];
         if (here == Tile.STAIRS_UP)   { tryStairsUp();   return; }
         if (here == Tile.STAIRS_DOWN) { tryStairsDown(); return; }
+        // Gem hearth is impassable, so the player stands beside it; interacting
+        // while adjacent opens the forge crafting screen (no turn cost - it's a
+        // menu, same as the stairs transitions above).
+        if (openForgeScreen != null && adjacentToGemHearth(cur, player.position)) {
+            openForgeScreen.run();
+            return;
+        }
         TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+    }
+
+    /** True when any 8-neighbour of {@code at} is a gem-hearth tile
+     *  ({@link Tile#GEM_HEARTH_L} / {@link Tile#GEM_HEARTH_R}). */
+    private static boolean adjacentToGemHearth(Level level, Point at) {
+        if (at == null) return false;
+        int px = at.tileX(), py = at.tileY();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int x = px + dx, y = py + dy;
+                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                Tile t = level.tiles[x][y];
+                if (t == Tile.GEM_HEARTH_L || t == Tile.GEM_HEARTH_R) return true;
+            }
+        }
+        return false;
     }
 
     /** After {@link MobSystem#pickupAtFeet} adds items to the bag, walk the new tail

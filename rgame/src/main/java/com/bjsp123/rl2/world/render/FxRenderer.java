@@ -111,6 +111,9 @@ final class FxRenderer {
         } else if (effect.type == EffectType.TELEPORT_STREAKS) {
             if (!level.visible[ex][ey]) return;
             drawTeleportStreaks(effect);
+        } else if (effect.type == EffectType.ITEM_BIRTH) {
+            if (!effect.ignoresFov && !level.visible[ex][ey]) return;
+            drawItemBirth(effect);
         } else if (effect.type == EffectType.LIGHT_MOTE) {
             if (!level.visible[ex][ey]) return;
             drawLightMote(effect);
@@ -469,10 +472,10 @@ final class FxRenderer {
         }
         if (alpha <= 0f || reachT <= 0f) return;
         float drawLen = fullLen * reachT;
-        // Brown rope on success, red-tinged on failure (so the heavy-target
+        // Green vine on success, red-tinged on failure (so the heavy-target
         // outcome reads distinct from a clean pull).
         Color tint = e.grappleSuccess
-                ? tintToColor(EffectTint.BROWN, Color.WHITE)
+                ? tintToColor(EffectTint.GREEN, Color.WHITE)
                 : tintToColor(EffectTint.RED,   Color.WHITE);
         // Soft outline (1.5x thickness, 35% alpha) under a crisp core line.
         batch.setColor(tint.r * 0.4f, tint.g * 0.3f, tint.b * 0.25f, alpha * 0.5f);
@@ -727,11 +730,14 @@ final class FxRenderer {
         if (alpha <= 0f) return;
         float size = screenH * 0.20f * (0.7f + 0.3f * grow);
         Color glow = tintToColor(e.tint, Color.GOLD);
-        // Glow halo behind the item.
+        // Soft radial glow halo behind the item - the same beacon glow sprite,
+        // additive so it reads as emissive (a plain quad looked like a square).
+        TextureRegion glowTex = BuffIcons.beaconGlowRegion();
+        if (glowTex == null) glowTex = whiteRegion;
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         float gr = size * (1.1f + 0.08f * (float) Math.sin(lifeT * 24f));
         batch.setColor(glow.r, glow.g, glow.b, alpha * 0.45f);
-        batch.draw(whiteRegion, cx - gr, cy - gr, gr * 2f, gr * 2f);
+        batch.draw(glowTex, cx - gr, cy - gr, gr * 2f, gr * 2f);
         // Spark shower - each spark spawns at its phase and flies outward.
         if (e.particleX0 != null) {
             for (int i = 0; i < e.particleX0.length; i++) {
@@ -742,6 +748,53 @@ final class FxRenderer {
                 float py = cy + (float) Math.sin(e.particleX0[i]) * dist;
                 float sa = (1f - t) * alpha;
                 float sz = size * 0.05f;
+                batch.setColor(glow.r, glow.g, glow.b, sa);
+                batch.draw(whiteRegion, px - sz, py - sz, sz * 2f, sz * 2f);
+            }
+        }
+        // Item sprite on top (normal blend).
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        TextureRegion region = ItemSprites.regionFor(e.thrownItem);
+        if (region != null) {
+            batch.setColor(1f, 1f, 1f, alpha);
+            batch.draw(region, cx - size * 0.5f, cy - size * 0.5f, size, size);
+        }
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Render an ITEM_BIRTH (RL-50 creation scroll): a tile-anchored glow halo
+     *  + spark shower behind the conjured item sprite, grows in then fades out.
+     *  World-space (drawn in the per-cell content pass). */
+    private void drawItemBirth(Effect e) {
+        int total = e.totalFrames();
+        if (total <= 0) return;
+        float lifeT = Math.min(1f, e.frame / (float) total);
+        float cx = e.location.tileX() * (float) CELL + CELL * 0.5f;
+        float cy = e.location.tileY() * (float) CELL + CELL * 0.5f;
+        float grow = lifeT < 0.2f ? (lifeT / 0.2f) : 1f;
+        float fade = lifeT > 0.7f ? (1f - (lifeT - 0.7f) / 0.3f) : 1f;
+        float alpha = Math.max(0f, Math.min(grow, fade));
+        if (alpha <= 0f) return;
+        float size = CELL * (0.85f + 0.25f * grow);
+        Color glow = tintToColor(e.tint, Color.GOLD);
+        // Soft radial glow halo behind the item - the same beacon glow sprite,
+        // additive so it reads as emissive (a plain quad looked like a square).
+        TextureRegion glowTex = BuffIcons.beaconGlowRegion();
+        if (glowTex == null) glowTex = whiteRegion;
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        float gr = size * (0.85f + 0.08f * (float) Math.sin(lifeT * 24f));
+        batch.setColor(glow.r, glow.g, glow.b, alpha * 0.5f);
+        batch.draw(glowTex, cx - gr, cy - gr, gr * 2f, gr * 2f);
+        // Spark shower flying outward.
+        if (e.particleX0 != null) {
+            for (int i = 0; i < e.particleX0.length; i++) {
+                float t = (lifeT - e.particleY0[i]) / 0.5f;   // 0.5-life spark
+                if (t < 0f || t > 1f) continue;
+                float dist = t * size * 1.5f;
+                float px = cx + (float) Math.cos(e.particleX0[i]) * dist;
+                float py = cy + (float) Math.sin(e.particleX0[i]) * dist;
+                float sa = (1f - t) * alpha;
+                float sz = Math.max(1f, size * 0.06f);
                 batch.setColor(glow.r, glow.g, glow.b, sa);
                 batch.draw(whiteRegion, px - sz, py - sz, sz * 2f, sz * 2f);
             }
