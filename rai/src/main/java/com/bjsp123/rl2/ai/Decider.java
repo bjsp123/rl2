@@ -107,8 +107,13 @@ public final class Decider {
                 LAST_BRANCH.set("flee");
                 return planFlee(s);
             }
-            LAST_BRANCH.set("fight");
-            return planFight(s);
+            Action fight = planFight(s);
+            if (!isWait(fight)) { LAST_BRANCH.set("fight"); return fight; }
+            // Visible but un-engageable: every fight option (melee / ranged /
+            // charge / reachable close-step) came back empty - the foe is a
+            // flyer across a chasm, sealed off, or otherwise un-hittable. Fall
+            // through to descend / explore instead of freezing in place (which
+            // was burning the whole turn budget on a fight<->stall oscillation).
         }
 
         // 2.5 Exploration stalled OR we've dwelt too long on this floor, and a

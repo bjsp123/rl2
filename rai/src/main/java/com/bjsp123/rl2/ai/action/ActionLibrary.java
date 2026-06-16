@@ -156,6 +156,14 @@ public final class ActionLibrary {
                 com.bjsp123.rl2.model.Buff.BuffType.HASTED);
         for (Mob e : targets) {
             if (e == null || e.position == null || e.hp <= 0) continue;
+            // Reachability gate (SMART-timeout fix): a walk toward an enemy with
+            // no reachable approach - a sealed pocket, or a flyer across a chasm -
+            // makes no progress yet is still a non-Wait action, so the agent
+            // spins on it forever and never falls through to a Wait (which is
+            // what triggers SmartAi's deadlock escape). Skip the futile walk;
+            // in-range ranged / charge / grapple candidates are added separately
+            // and still cover a foe we can hit but not walk to.
+            if (nearestWalkableNeighbour(s, e.position) == null) continue;
             double maxHp = Math.max(1.0, e.effectiveStats().maxHp);
             double hpFrac = e.hp / maxHp;
             double woundedBonus = hpFrac < 0.4 ? (0.4 - hpFrac) * 0.5 : 0.0;
