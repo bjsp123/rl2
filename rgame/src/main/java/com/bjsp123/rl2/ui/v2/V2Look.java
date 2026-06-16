@@ -156,7 +156,11 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             Section item = new Section(ItemNames.displayName(lookedItem, null), INFO_ITEM);
             // Flavor hint (one line) so the look popup says what the item *is*, not just
             // its raw stats - tap the ⓘ for the full encyclopedia entry.
-            String hint = TextCatalog.itemDescription(lookedItem.type, "");
+            // Gems are procedural (null type); their description is stamped on
+            // the instance from strings.csv, so read it directly.
+            String hint = lookedItem.isGem()
+                    ? (lookedItem.description == null ? "" : lookedItem.description)
+                    : TextCatalog.itemDescription(lookedItem.type, "");
             if (!hint.isEmpty()) item.details.add(hint);
             String detail = itemSummary(lookedItem);
             if (!detail.isEmpty()) item.details.add(detail);

@@ -25,6 +25,7 @@ public final class ItemNames {
 
     public static String gemDisplayName(Item item) {
         if (item == null || item.gemSpecies == null) return "gem";
-        return item.gemSpecies.name().toLowerCase();
+        String key = item.gemSpecies.name();
+        return TextCatalog.gemName(key, key.toLowerCase());
     }
 }

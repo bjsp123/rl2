@@ -321,6 +321,28 @@ eventlog.powerup.absorbed,{player} absorbs the {item}.
 eventlog.reason.parenthesized, ({reason})
 eventlog.stairs.ascended,{player} climbs to depth {depth}.
 eventlog.stairs.descended,{player} descends to depth {depth}.
+gem.BLACKGLASS.description,"A very rare exotic gem of polished void-glass, prized at the hearth."
+gem.BLACKGLASS.name,Blackglass
+gem.BLOODHIVE.description,A very rare exotic gem that pulses with crimson life.
+gem.BLOODHIVE.name,Bloodhive
+gem.COPPER.description,"A rare metal gem, warm and ruddy; a sturdier forge reagent."
+gem.COPPER.name,Copper
+gem.FLUORON.description,A very rare exotic gem glowing electric cyan.
+gem.FLUORON.name,Fluoron
+gem.GOLD.description,A rare metal gem; the most prized of the forge's ingots.
+gem.GOLD.name,Gold
+gem.HAMETHYST.description,A common violet keystone attuned to crystal.
+gem.HAMETHYST.name,Hamethyst
+gem.ICELANDSPAR.description,A common clear keystone attuned to the shining halls.
+gem.ICELANDSPAR.name,Iceland Spar
+gem.LETTUSTONE.description,A common green keystone attuned to stone; the hearth's workhorse reagent.
+gem.LETTUSTONE.name,Lettustone
+gem.MALACHOR.description,A very rare exotic gem veined with green fire.
+gem.MALACHOR.name,Malachor
+gem.SALAMITE.description,A common ember-red keystone attuned to the gothic depths.
+gem.SALAMITE.name,Salamite
+gem.SILVER.description,"A rare metal gem, cool and bright; a sturdier forge reagent."
+gem.SILVER.name,Silver
 help.001.para1,*Potions* are good.
 help.001.para2,So is *food*.
 help.001.title,Potions and food

@@ -78,6 +78,7 @@ public final class GemSystem {
         it.inventoryCategory = InventoryCategory.GEM;
         it.gemSpecies = species;
         it.name = ItemNames.gemDisplayName(it);
+        it.description = TextCatalog.gemDescription(species.name(), "");
         return it;
     }
 }
