@@ -46,7 +46,16 @@ public final class SmartArenaRankMain {
     private static PlayerGearProvider GEAR;
 
     public static void main(String[] args) throws IOException {
-        int trials = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_TRIALS;
+        // Spec: "TRIALS" or "TRIALSxCLUSTER" (also accepts a comma) - a single
+        // token so it survives shells that won't pass a space inside --args.
+        // CLUSTER = opponents per fight (1 = classic 1v1; 3 = a 1-vs-3 pack,
+        // mirroring rank1vN but with the SMART brain).
+        int trials = DEFAULT_TRIALS, cluster = 1;
+        if (args.length > 0 && !args[0].isEmpty()) {
+            String[] parts = args[0].split("[x,]");
+            trials = Integer.parseInt(parts[0].trim());
+            if (parts.length > 1) cluster = Math.max(1, Integer.parseInt(parts[1].trim()));
+        }
         Path assets = locateAssetsDir();
         loadData(assets);
         RaiBootstrap.init();
@@ -54,7 +63,7 @@ public final class SmartArenaRankMain {
 
         List<String> opponents = pickOpponents();
         System.out.println("[smart-arena] player classes: 3, opponents: " + opponents.size()
-                + ", trials per pair: " + trials);
+                + ", trials per pair: " + trials + ", opponents per fight: " + cluster);
 
         // One-time inventory dump so we can see what each class actually carries
         // at lvl 1 and lvl 10 - quick sanity check that the gear-world picker is
@@ -86,7 +95,7 @@ public final class SmartArenaRankMain {
             csv.println("player,char_level,brain,opponent,trial,outcome,turns,player_hp,opp_hp");
             for (int lvl : LEVELS) {
                 long t0 = System.currentTimeMillis();
-                runMatrix(opponents, lvl, trials, csv);
+                runMatrix(opponents, lvl, trials, cluster, csv);
                 long elapsed = System.currentTimeMillis() - t0;
                 System.out.println("  (level " + lvl + " run took " + (elapsed / 1000) + "s)");
             }
@@ -111,7 +120,7 @@ public final class SmartArenaRankMain {
     }
 
     private static void runMatrix(List<String> opponents, int charLvl, int trials,
-                                  java.io.PrintWriter csv) {
+                                  int cluster, java.io.PrintWriter csv) {
         long baseSeed = 0xA15Eb00BBeefcafeL ^ charLvl;
         // For each player class + opponent + brain mode, run `trials` fights.
         // Tally wins/draws/losses and dump per-fight rows for downstream slicing.
@@ -124,7 +133,7 @@ public final class SmartArenaRankMain {
                     String opp = opponents.get(oi);
                     for (int t = 0; t < trials; t++) {
                         int outcome = simulateMatch(playerType, opp, charLvl, brain,
-                                baseSeed + (long) oi * 1009L + t + brainOffset, t, csv);
+                                baseSeed + (long) oi * 1009L + t + brainOffset, t, cluster, csv);
                         if      (outcome == +1) { wins++; }
                         else if (outcome == -1) { losses++; }
                         else                    { draws++; }
@@ -156,7 +165,7 @@ public final class SmartArenaRankMain {
 
     private static int simulateMatch(String playerType, String oppType, int charLvl,
                                      Mob.Behavior playerBrain, long seed, int trial,
-                                     java.io.PrintWriter csv) {
+                                     int cluster, java.io.PrintWriter csv) {
         Random rng = new Random(seed);
         Level level = CombatArena.buildArenaLevel(ARENA_W, ARENA_H, rng);
         World world = new World();
@@ -165,23 +174,36 @@ public final class SmartArenaRankMain {
         world.levels = new Level[] { level };
 
         Mob a = buildFighter(playerType);
-        Mob b = buildFighter(oppType);
-        if (a == null || b == null) return 0;
+        if (a == null) return 0;
         MobProgression.setSpawnLevel(a, charLvl);
-        MobProgression.setSpawnLevel(b, charLvl);
         GEAR.applyKit(a, GEAR.kitForCharLvl(charLvl));
         MobProgression.autoLevelUpPerks(a, rng);
         stripFromInventory(a, "TELEPORT_ORB");
-
         // Flip player from PLAYER (turn-loop stall) to either MOB (baseline) or SMART.
         a.behavior = playerBrain;
         a.stateOfMind = Mob.StateOfMind.AWAKE;
-        b.stateOfMind = Mob.StateOfMind.AWAKE;
 
+        // Spawn `cluster` opponents stacked vertically around the far side.
+        List<Mob> foes = new ArrayList<>();
+        List<Point> positions = new ArrayList<>();
         Point aPos = new Point(2, ARENA_H / 2);
-        Point bPos = new Point(ARENA_W - 3, ARENA_H / 2);
-        CombatArena.placeMobs(level, List.of(a, b), List.of(aPos, bPos));
-        CombatArena.seedTeamHostility(List.of(a), List.of(b));
+        positions.add(aPos);
+        List<Mob> all = new ArrayList<>();
+        all.add(a);
+        for (int k = 0; k < cluster; k++) {
+            Mob b = buildFighter(oppType);
+            if (b == null) continue;
+            MobProgression.setSpawnLevel(b, charLvl);
+            b.stateOfMind = Mob.StateOfMind.AWAKE;
+            int dy = (k % 2 == 0 ? 1 : -1) * ((k + 1) / 2);
+            int y = Math.max(1, Math.min(ARENA_H - 2, ARENA_H / 2 + dy));
+            foes.add(b);
+            all.add(b);
+            positions.add(new Point(ARENA_W - 3, y));
+        }
+        if (foes.isEmpty()) return 0;
+        CombatArena.placeMobs(level, all, positions);
+        CombatArena.seedTeamHostility(List.of(a), foes);
 
         int maxTicks = MAX_STANDARD_TURNS *
                 com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS;
@@ -191,18 +213,19 @@ public final class SmartArenaRankMain {
             CombatArena.tickHeadless(level, world, 16);
             if (level.events != null) level.events.clear();
             boolean aDead = a.hp <= 0 || !level.mobs.contains(a);
-            boolean bDead = b.hp <= 0 || !level.mobs.contains(b);
-            if (aDead && bDead) { result =  0; ticksElapsed = t; break; }
-            if (aDead)          { result = -1; ticksElapsed = t; break; }
-            if (bDead)          { result = +1; ticksElapsed = t; break; }
+            boolean foesDead = foes.stream().allMatch(f -> f.hp <= 0 || !level.mobs.contains(f));
+            if (aDead && foesDead) { result =  0; ticksElapsed = t; break; }
+            if (aDead)             { result = -1; ticksElapsed = t; break; }
+            if (foesDead)          { result = +1; ticksElapsed = t; break; }
             if (!CombatArena.hostilePairExists(level)) { ticksElapsed = t; break; }
         }
         String outcome = result == +1 ? "win" : result == -1 ? "loss" : "draw";
         int turns = ticksElapsed / com.bjsp123.rl2.logic.TurnSystem.STANDARD_TURN_TICKS;
         if (csv != null) {
+            double foeHp = foes.stream().mapToDouble(f -> Math.max(0, f.hp)).sum();
             csv.printf("%s,%d,%s,%s,%d,%s,%d,%.2f,%.2f%n",
                     playerType, charLvl, playerBrain.name(), oppType, trial, outcome, turns,
-                    Math.max(0, a.hp), Math.max(0, b.hp));
+                    Math.max(0, a.hp), foeHp);
         }
         return result;
     }
