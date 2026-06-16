@@ -82,15 +82,23 @@ public final class SmartAi implements MobBrains.Brain {
                 || "pickup-powerup".equals(branch)
                 || "search".equals(branch);
         if (!exploring) {
-            if (!branch.startsWith("descend")) {
-                // heal / fight / flee — a genuine hand-back the player should act on.
+            // Genuine combat hand-backs (an enemy the player must deal with) stop
+            // auto-explore so the player takes over. These are effectively
+            // unreachable here - PlayController.autoExploreShouldStop already halts
+            // on ANY visible hostile before the driver runs - but guard anyway.
+            boolean combat = branch.equals("fight") || branch.equals("flee")
+                    || branch.equals("clear-fight") || branch.equals("clear-hunt");
+            if (combat) {
                 mem.autoExploreStuckTurns = 0;
                 return com.bjsp123.rl2.logic.AutoExplore.Result.DONE_BUSY;
             }
-            // The SMART planner commits to descending the moment a down-stair is
-            // reachable, but the player's manual auto-explore must map the WHOLE
-            // floor first and never descend on its own. If any reachable frontier
-            // remains, explore toward it; only when none is left is the floor done.
+            // Every other non-exploring branch (descend / heal / search-miss) is a
+            // suggestion the SMART agent would act on for itself but manual
+            // auto-explore must not: it never auto-descends, never auto-drinks a
+            // potion to heal, and never stops just because HP dipped below the AI's
+            // caution threshold while nothing is threatening it. Instead keep
+            // mapping the floor toward the nearest reachable frontier; only when no
+            // frontier remains is the floor genuinely done.
             Point frontier = com.bjsp123.rl2.ai.eval.ExplorationEval
                     .committedExploreTarget(player, level, mem);
             if (frontier == null) {
