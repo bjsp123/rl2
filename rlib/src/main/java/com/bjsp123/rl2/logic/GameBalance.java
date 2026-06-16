@@ -357,7 +357,7 @@ public final class GameBalance {
     // ------------------------- Renewing enemies (RL-54) ----------------------
     /** Base standard turns between renewing-enemy spawns; each hazard point
      *  reduces it by 2 (floored at 1). */
-    public static int RENEWING_SPAWN_CADENCE = 25;
+    public static int RENEWING_SPAWN_CADENCE = 50;
     /** Base cap of living hostiles before renewing spawns pause; each hazard
      *  point raises it by 1. */
     public static int RENEWING_ENEMY_CAP = 8;
