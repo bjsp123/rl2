@@ -1521,71 +1521,101 @@ public class DefaultLevelRenderer implements LevelRenderer {
         drawStairLabelAt(level, x, y);
     }
 
-    /** Pulsing glow-text overlay on a stair tile. Reads which of the four named stair points
-     *  ({@code stairs(Up|Down)(Alt)}) this cell is, looks up the corresponding target level
-     *  on the {@link #world}, and draws "up/down lvl N W/E/?" with a sine-modulated alpha so the
-     *  writing fades in and out. Drawn twice - a wide dim outer pass + a tight bright inner
-     *  pass - for a soft halo. No-op if the world reference isn't set or the cell isn't a
-     *  named stair point on this level. */
+    /** Gently-bobbing 3-line sign above a stair tile (RL-55). Reads which of the
+     *  four named stair points this cell is, looks up the destination level, and
+     *  draws a small panel reading "Stairs Up/Down" / "Depth N, &lt;theme or
+     *  special kind&gt;" / "N% explored" (explored % of the DESTINATION level).
+     *  No-op if the world isn't set or this cell isn't a named stair. */
     private void drawStairLabelAt(Level level, int x, int y) {
         if (world == null) return;
         boolean ascending;
         int target;
-        if (matches(level.stairsUp, x, y))         { ascending = true;  target = level.stairsUpTarget; }
-        else if (matches(level.stairsUpAlt, x, y)) { ascending = true;  target = level.stairsUpAltTarget; }
-        else if (matches(level.stairsDown, x, y))  { ascending = false; target = level.stairsDownTarget; }
+        if (matches(level.stairsUp, x, y))          { ascending = true;  target = level.stairsUpTarget; }
+        else if (matches(level.stairsUpAlt, x, y))  { ascending = true;  target = level.stairsUpAltTarget; }
+        else if (matches(level.stairsDown, x, y))   { ascending = false; target = level.stairsDownTarget; }
         else if (matches(level.stairsDownAlt, x, y)){ ascending = false; target = level.stairsDownAltTarget; }
         else return;
         if (target < 0 || target >= world.levels.length) return;
         Level dst = world.levels[target];
         if (dst == null) return;
 
-        String text = stairLabelText(ascending, dst);
-        // Per-stair phase derived from cell coords so neighbouring stairs don't pulse in
-        // perfect lockstep. Cycle period ~2.4 s; alpha sweeps through [0.25, 0.95].
-        float phase = (x * 0.37f + y * 0.61f);
-        float pulse = 0.5f + 0.5f * (float) Math.sin(stairLabelTime * 2.6f + phase);
-        float alpha = 0.25f + 0.70f * pulse;
+        String l1 = ascending ? "Stairs Up" : "Stairs Down";
+        String l2 = "Depth " + dst.depth + ", " + stairDestName(dst);
+        String l3 = exploredPercent(dst) + "% explored";
 
-        // Position: centred horizontally on the stair cell, just above the sprite top so it
-        // floats over the staircase like a sign nailed to the wall above the entrance.
-        com.badlogic.gdx.graphics.g2d.GlyphLayout layout =
+        // Gently bob the whole sign; per-stair phase so neighbours don't sync.
+        float phase = x * 0.7f + y * 1.3f;
+        float bob = (float) Math.sin(stairLabelTime * 1.8f + phase) * 2.5f;
+
+        com.badlogic.gdx.graphics.g2d.GlyphLayout gl =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout();
-        layout.setText(font, text);
-        float wx = x * (float) CELL + CELL / 2f - layout.width  / 2f;
-        float wy = y * (float) CELL + 2f * CELL + 4f;   // just above the 32-px sprite
+        float lineH = font.getLineHeight();
+        gl.setText(font, l1); float w = gl.width;
+        gl.setText(font, l2); w = Math.max(w, gl.width);
+        gl.setText(font, l3); w = Math.max(w, gl.width);
 
-        // Outer glow - dim warm halo at 1.6x scale.
-        float prevScaleX = font.getData().scaleX;
-        float prevScaleY = font.getData().scaleY;
-        font.getData().setScale(prevScaleX * 1.6f);
-        font.setColor(1f, 0.85f, 0.45f, alpha * 0.35f);
-        com.badlogic.gdx.graphics.g2d.GlyphLayout glow = new com.badlogic.gdx.graphics.g2d.GlyphLayout();
-        glow.setText(font, text);
-        font.draw(batch, text,
-                x * (float) CELL + CELL / 2f - glow.width / 2f,
-                wy + (glow.height - layout.height) * 0.5f);
-        // Inner crisp text.
-        font.getData().setScale(prevScaleX, prevScaleY);
-        font.setColor(1f, 0.95f, 0.7f, alpha);
-        font.draw(batch, text, wx, wy);
+        float padX = 6f, padY = 4f;
+        float panelW = w + 2f * padX;
+        float panelH = 3f * lineH + 2f * padY;
+        float cx = x * (float) CELL + CELL / 2f;
+        float panelX = cx - panelW / 2f;
+        float panelY = y * (float) CELL + 2f * CELL + 6f + bob;   // above the staircase sprite
+
+        // Sign panel: dark translucent fill + thin warm border.
+        batch.setColor(0f, 0f, 0f, 0.66f);
+        batch.draw(whiteRegion, panelX, panelY, panelW, panelH);
+        batch.setColor(0.85f, 0.7f, 0.4f, 0.9f);
+        batch.draw(whiteRegion, panelX, panelY, panelW, 1f);
+        batch.draw(whiteRegion, panelX, panelY + panelH - 1f, panelW, 1f);
+        batch.draw(whiteRegion, panelX, panelY, 1f, panelH);
+        batch.draw(whiteRegion, panelX + panelW - 1f, panelY, 1f, panelH);
+
+        // Three lines, centred, top-down (font.draw y = top of the line).
+        float top = panelY + panelH - padY;
+        drawSignLine(gl, l1, cx, top,              1f,    0.95f, 0.70f);
+        drawSignLine(gl, l2, cx, top - lineH,      0.86f, 0.86f, 0.86f);
+        drawSignLine(gl, l3, cx, top - 2f * lineH, 0.70f, 0.88f, 0.70f);
         font.setColor(Color.WHITE);
+        batch.setColor(Color.WHITE);
+    }
+
+    private void drawSignLine(com.badlogic.gdx.graphics.g2d.GlyphLayout gl,
+                              String s, float cx, float topY, float r, float g, float b) {
+        gl.setText(font, s);
+        font.setColor(r, g, b, 1f);
+        font.draw(batch, s, cx - gl.width / 2f, topY);
     }
 
     private static boolean matches(com.bjsp123.rl2.model.Point p, int x, int y) {
         return p != null && p.tileX() == x && p.tileY() == y;
     }
 
-    /** Build the floating label string: arrow + "lvl N" + slot character (W / E / ?). */
-    private static String stairLabelText(boolean ascending, Level dst) {
-        char slot = switch (dst.side == null ? Level.Side.CENTER : dst.side) {
-            case WEST   -> 'W';
-            case EAST   -> 'E';
-            case CENTER -> '?';
-        };
-        // ASCII arrows so the default bitmap font renders them reliably across platforms.
-        String arrow = ascending ? "^" : "v";
-        return arrow + " lvl " + dst.depth + " " + slot;
+    /** Destination descriptor: the special-level kind (e.g. "Landing") when the
+     *  level isn't a regular floor, otherwise its visual theme (e.g. "Crystal"). */
+    private static String stairDestName(Level dst) {
+        if (dst.kind != null && dst.kind != Level.LevelKind.REGULAR) return prettify(dst.kind.name());
+        return prettify(dst.theme == null ? "" : dst.theme.name());
+    }
+
+    /** "CRYSTAL" -> "Crystal", "MIRRORMATCH" -> "Mirrormatch". */
+    private static String prettify(String enumName) {
+        if (enumName == null || enumName.isEmpty()) return "";
+        return enumName.charAt(0) + enumName.substring(1).toLowerCase().replace('_', ' ');
+    }
+
+    /** Percent of {@code dst}'s floor-like tiles the player has explored - 0 when
+     *  the level has never been visited. */
+    private static int exploredPercent(Level dst) {
+        if (dst.explored == null || dst.tiles == null) return 0;
+        int total = 0, seen = 0;
+        for (int x = 0; x < dst.width; x++) {
+            for (int y = 0; y < dst.height; y++) {
+                if (dst.tiles[x][y] == null || !dst.tiles[x][y].isFloorLike()) continue;
+                total++;
+                if (dst.explored[x][y]) seen++;
+            }
+        }
+        return total == 0 ? 0 : Math.round(100f * seen / total);
     }
 
     /**
