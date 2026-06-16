@@ -97,10 +97,12 @@ public final class Decider {
             // No enemy remains; the exit stamps this turn - fall through to descend.
         }
 
-        // 1. Level fully explored → descend.
-        if (levelFullyExplored(s)) { LAST_BRANCH.set("descend"); return planDescend(s); }
-
-        // 2. Enemies in sight.
+        // 1. Enemies in sight - engage (or flee) FIRST, before descending. A
+        //    fully-explored level still has fightable foes to clear; checking
+        //    "fully explored -> descend" ahead of this made the agent walk to the
+        //    stairs (or, in a stairless arena, Wait) while enemies hit it - the
+        //    SMART 1v3 draw pathology. Falls through only when the foe is
+        //    genuinely un-engageable.
         if (!s.visibleEnemies.isEmpty()) {
             if (anyEnemyStrongerThanPlayer(s)
                     && CombatEval.canEscapeFrom(s.mob, s.visibleEnemies, s.level)) {
@@ -112,9 +114,11 @@ public final class Decider {
             // Visible but un-engageable: every fight option (melee / ranged /
             // charge / reachable close-step) came back empty - the foe is a
             // flyer across a chasm, sealed off, or otherwise un-hittable. Fall
-            // through to descend / explore instead of freezing in place (which
-            // was burning the whole turn budget on a fight<->stall oscillation).
+            // through to descend / explore instead of freezing in place.
         }
+
+        // 2. Level fully explored → descend.
+        if (levelFullyExplored(s)) { LAST_BRANCH.set("descend"); return planDescend(s); }
 
         // 2.5 Exploration stalled OR we've dwelt too long on this floor, and a
         //     reachable down-stair is known -> commit to descent instead of
