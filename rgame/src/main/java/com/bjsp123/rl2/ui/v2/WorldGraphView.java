@@ -203,13 +203,23 @@ public final class WorldGraphView {
     /** Paint a "?" glyph over each unvisited box. Caller invokes this from its
      *  batch/text pass (the lists are filled by {@link #draw}). */
     public void drawUnvisitedGlyphs(UiCtx ctx) {
+        if (unvisitedCenters.isEmpty()) return;
+        // Scissor-clip the glyphs to the same viewport the shape pass clips the
+        // boxes to, so a "?" near the edge is cut smoothly at the viewport
+        // boundary (rather than popping in/out whole) and can't bleed onto the
+        // surrounding chrome.
+        ctx.batch.flush();
+        scissorIn.set(viewport.x, viewport.y, viewport.w, viewport.h);
+        ctx.viewport.calculateScissors(ctx.batch.getTransformMatrix(), scissorIn, scissorOut);
+        boolean clipped = com.badlogic.gdx.scenes.scene2d.utils.ScissorStack
+                .pushScissors(scissorOut);
         for (float[] cxy : unvisitedCenters) {
-            // The shape pass scissor-clips the boxes to the viewport, but this
-            // text pass has no scissor - skip glyphs whose box centre is outside
-            // the viewport so a "?" can't bleed onto the title / chrome.
-            if (!viewport.contains(cxy[0], cxy[1])) continue;
             TextDraw.centre(ctx, ctx.fontHeader, UIVars.BORDER_MID,
                     "?", cxy[0], cxy[1] + ctx.headerLineH() * 0.35f);
+        }
+        ctx.batch.flush();
+        if (clipped) {
+            com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.popScissors();
         }
     }
 
