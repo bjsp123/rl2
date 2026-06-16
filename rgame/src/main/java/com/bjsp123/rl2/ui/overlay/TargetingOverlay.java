@@ -105,12 +105,45 @@ public class TargetingOverlay extends InputAdapter {
     }
 
     private Point pickInitialTarget() {
-        if (history != null) {
-            Point p = history.pickInitial(level, player);
-            if (p != null) return p;
+        // Charge (Jade Bull) defaults straight to the nearest CHARGEABLE hostile
+        // - a foe standing on a valid (highlighted) tile - so the reticle starts
+        // on something the player can actually dash into, not on history or a
+        // foe that's too near / too far.
+        if (sourceKey instanceof Item it && it.useBehavior == Item.UseBehavior.CHARGE) {
+            Point c = nearestValidTileHostile();
+            if (c != null) return c;
         }
         Mob hostile = MobQueries.nearestHostile(player, level);
+        // Honour the remembered reticle only when it still sits on a mob, or
+        // there's no visible hostile to aim at - never start on an empty tile
+        // while a hostile is in view, even if the last shot hit empty ground.
+        if (history != null) {
+            Point p = history.pickInitial(level, player);
+            if (p != null && (hostile == null || MobQueries.mobAt(level, p) != null)) {
+                return p;
+            }
+        }
         return hostile != null ? hostile.position : player.position;
+    }
+
+    /** Nearest live mob standing on a currently-valid target tile (Chebyshev),
+     *  or {@code null}. For charge the valid-tiles set is exactly the chargeable
+     *  hostiles, so this picks the nearest one the player can dash into. */
+    private Point nearestValidTileHostile() {
+        if (validTiles == null || player == null || player.position == null
+                || level == null || level.mobs == null) return null;
+        int px = player.position.tileX(), py = player.position.tileY();
+        Mob best = null;
+        int bestD = Integer.MAX_VALUE;
+        for (Mob m : level.mobs) {
+            if (m == null || m == player || m.position == null || m.hp <= 0) continue;
+            int mx = m.position.tileX(), my = m.position.tileY();
+            if (mx < 0 || my < 0 || mx >= validW || my >= validH) continue;
+            if (!validTiles[mx][my]) continue;
+            int d = Math.max(Math.abs(mx - px), Math.abs(my - py));
+            if (d < bestD) { best = m; bestD = d; }
+        }
+        return best != null ? best.position : null;
     }
 
     public void cancel() {
