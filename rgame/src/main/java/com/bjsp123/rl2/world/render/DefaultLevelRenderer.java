@@ -700,6 +700,18 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (animator != null) {
             fxRenderer.drawScreenSpaceEffects(animator.stage, camera, level);
         }
+        // Stair signs - drawn LAST so each explored staircase's destination sign
+        // sits on top of walls, fog, mobs, and overhead icons, and shows in its
+        // entirety (RL-55). Only explored stair tiles get a sign.
+        for (int y = view.maxY; y >= view.minY; y--) {
+            for (int x = view.minX; x <= view.maxX; x++) {
+                if (!level.explored[x][y]) continue;
+                Tile t = level.tiles[x][y];
+                if (t == Tile.STAIRS_UP || t == Tile.STAIRS_DOWN) {
+                    drawStairLabelAt(level, x, y);
+                }
+            }
+        }
         gameFbo.endWorldPass(batch);
         long _t5 = System.nanoTime();
 
@@ -1518,7 +1530,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float drawX = x * (float) CELL + CELL / 2f - dispW / 2f;   // centered horizontally
         float drawY = y * (float) CELL;                             // base at floor cell
         batch.draw(r, drawX, drawY, dispW, dispH);
-        drawStairLabelAt(level, x, y);
+        // Sign is NOT drawn here - it renders in a final overlay pass (after
+        // walls, fog, and overhead icons) so it sits on top of every feature.
     }
 
     /** Gently-bobbing 3-line sign above a stair tile (RL-55). Reads which of the
@@ -1547,6 +1560,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float phase = x * 0.7f + y * 1.3f;
         float bob = (float) Math.sin(stairLabelTime * 1.8f + phase) * 2.5f;
 
+        // Half-size sign: scale the font down for both measurement and draw,
+        // restored at the end of this method.
+        font.getData().setScale(0.5f);
+
         com.badlogic.gdx.graphics.g2d.GlyphLayout gl =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout();
         float lineH = font.getLineHeight();
@@ -1554,7 +1571,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         gl.setText(font, l2); w = Math.max(w, gl.width);
         gl.setText(font, l3); w = Math.max(w, gl.width);
 
-        float padX = 6f, padY = 4f;
+        float padX = 3f, padY = 2f;
         float panelW = w + 2f * padX;
         float panelH = 3f * lineH + 2f * padY;
         float cx = x * (float) CELL + CELL / 2f;
@@ -1577,6 +1594,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         drawSignLine(gl, l3, cx, top - 2f * lineH, 0.70f, 0.88f, 0.70f);
         font.setColor(Color.WHITE);
         batch.setColor(Color.WHITE);
+        font.getData().setScale(1f);   // restore for every other font user
     }
 
     private void drawSignLine(com.badlogic.gdx.graphics.g2d.GlyphLayout gl,
