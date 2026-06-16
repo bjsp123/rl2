@@ -242,6 +242,24 @@ public class PlayScreen implements Screen {
     /** Real-time accumulator (seconds) driving the arrival flash fade-out. */
     private float arrivalFlashTime;
 
+    // --- Intro stage 4: world-graph prefix -----------------------------------
+    /** Shared world-graph renderer for the intro fly-in (same look as the map
+     *  screen). Drawn full-screen while {@link #introGraphPhase} is set. */
+    private final com.bjsp123.rl2.ui.v2.WorldGraphView introGraph =
+            new com.bjsp123.rl2.ui.v2.WorldGraphView();
+    /** First sub-phase of the new-game intro: show the world graph and fly into
+     *  the current-level node. Followed by the level zoom-in ({@link #introActive}
+     *  with this false). Never set for resumed runs. */
+    private boolean introGraphPhase;
+    /** Real-time accumulator (seconds) driving the graph fly-in. */
+    private float graphIntroTime;
+    /** Length of the world-graph fly-in, in seconds. */
+    private static final float GRAPH_INTRO_SEC = 1.8f;
+    /** Graph zoom at the start of the fly-in (whole graph visible) and end
+     *  (current node fills the view). Larger = more zoomed in. */
+    private static final float GRAPH_ZOOM_START = 0.6f;
+    private static final float GRAPH_ZOOM_END   = 2.6f;
+
     /** Shared cursor-memory for Look and targeting. Records the most recent mob and the
      *  most recent non-mob tile the player interacted with; {@link TargetHistory#pickInitial}
      *  turns that into a "best guess" starting cell for every new cursor-picking flow. */
@@ -666,7 +684,9 @@ public class PlayScreen implements Screen {
         // Fresh runs (no preloaded world) open on the intro cinematic: start far
         // out and ease in to play zoom. Resumed runs jump straight to play.
         introActive = (preloadedWorld == null);
+        introGraphPhase = introActive;   // graph fly-in precedes the level zoom-in
         introTime = 0f;
+        graphIntroTime = 0f;
         camera.zoom = introActive ? INTRO_START_ZOOM : DEFAULT_ZOOM;
         recenterCameraOnPlayer();
     }
@@ -777,6 +797,12 @@ public class PlayScreen implements Screen {
 
     @Override
     public void render(float delta) {
+        // Intro stage 4: world-graph fly-in plays before anything else, on its
+        // own minimal render path (graph only, no world / HUD / profiler).
+        if (introActive && introGraphPhase) {
+            renderIntroGraph(delta);
+            return;
+        }
         Level level  = world.currentLevel();
         frameProfiler.begin(delta, level, animator.queue.freezeFrames);
 
@@ -1096,6 +1122,59 @@ public class PlayScreen implements Screen {
         if (t >= 1f) endIntro();
     }
 
+    /** Intro stage 4 render path: draw the world graph full-screen and fly the
+     *  view from "whole graph visible" into the current-level node, then hand
+     *  off (white-flash + level zoom-in). Runs instead of the normal frame
+     *  while {@link #introGraphPhase} is set; the world stays paused. */
+    private void renderIntroGraph(float delta) {
+        graphIntroTime += delta;
+        float t = GRAPH_INTRO_SEC <= 0f ? 1f
+                : Math.min(1f, graphIntroTime / GRAPH_INTRO_SEC);
+        float eased = t * t * (3f - 2f * t); // smoothstep
+
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        com.bjsp123.rl2.ui.v2.UiCtx ctx = game.ui;
+        com.bjsp123.rl2.ui.v2.Rect full =
+                new com.bjsp123.rl2.ui.v2.Rect(0f, 0f, ctx.worldW(), ctx.worldH());
+        introGraph.world        = world;
+        introGraph.layoutArea   = full;
+        introGraph.viewport     = full;
+        introGraph.zoom         = GRAPH_ZOOM_START + (GRAPH_ZOOM_END - GRAPH_ZOOM_START) * eased;
+        introGraph.selected     = -1;
+        introGraph.currentIndex = world.currentLevelIndex;
+        introGraph.swirlT      += delta;
+        introGraph.beaconPulseT += delta;
+        float[] p = introGraph.panToCenter(world.currentLevelIndex);
+        introGraph.panX = p[0];
+        introGraph.panY = p[1];
+
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
+        s.setProjectionMatrix(ctx.camera.combined);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        introGraph.draw(ctx);
+        s.end();
+
+        ctx.applyProjection();
+        ctx.batch.begin();
+        introGraph.drawUnvisitedGlyphs(ctx);
+        ctx.batch.end();
+
+        if (t >= 1f) endGraphPhase();
+    }
+
+    /** Hand off from the graph fly-in to the level zoom-in: arm the level
+     *  camera at its far zoom and fire the bridging white-flash. */
+    private void endGraphPhase() {
+        introGraphPhase = false;
+        introTime = 0f;
+        camera.zoom = INTRO_START_ZOOM;
+        recenterCameraOnPlayer();
+        arrivalFlashActive = true;   // white-flash bridges graph -> dungeon
+        arrivalFlashTime = 0f;
+    }
+
     /** Ease the camera back from play zoom toward {@link #DEATH_ZOOM_OUT} as the
      *  death fade ramps, so the view pulls away from the fallen player. The
      *  camera stays where it last followed the player (who is now removed). */
@@ -1113,6 +1192,7 @@ public class PlayScreen implements Screen {
     private void endIntro() {
         if (!introActive) return;
         introActive = false;
+        introGraphPhase = false;   // a skip during the graph fly-in lands here too
         camera.zoom = DEFAULT_ZOOM;
         recenterCameraOnPlayer();
         // Arrival: flash to white and bloom a dust cloud around the player.
