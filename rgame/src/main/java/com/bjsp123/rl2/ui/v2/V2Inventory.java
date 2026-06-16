@@ -602,8 +602,11 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 } else {
                     Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
                 }
+                // Shared vocabulary: the slot this item is bound to reads as
+                // active (darker fill + accent border above); the rest as
+                // inactive grey.
                 s.setColor(pressed ? UIVars.BTN_PRESSED_BG
-                        : UIVars.SLOT_BG);
+                        : (bound ? UIVars.BTN_BG : UIVars.BTN_DISABLED_BG));
                 s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
                         r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
             }
@@ -689,8 +692,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     }
 
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed, boolean enabled) {
-        ButtonChrome.shape(ctx, r, pressed, false, false,
-                enabled ? UIVars.BTN_BG : UIVars.SLOT_BG);
+        ButtonChrome.shapeEnabled(ctx, r, pressed, enabled);
     }
 
     /** Whether each detail-popup action applies to the selected item. Drive

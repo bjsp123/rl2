@@ -41,6 +41,11 @@ public final class UIVars {
     public static Color BTN_BG          = hex(0x5a4040);
     public static Color BTN_PRESSED_BG  = hex(0x6e5050);
     public static Color SLOT_BG         = hex(0x806060);
+    /** Resting fill for a DISABLED button: a flat desaturated grey so an
+     *  inactive control reads as greyed-out (low contrast with TEXT_DIM text)
+     *  rather than like the lighter, saturated SLOT_BG. Shared vocabulary:
+     *  active = darker {@link #BTN_BG} + bright text; inactive = this + TEXT_DIM. */
+    public static Color BTN_DISABLED_BG = hex(0x4a4644);
     public static Color ICON_FRAME_BG   = hex(0xa48080);
     public static Color HUD_BG          = hex(0x665544);
     public static Color SLOT_RECESS     = hex(0x2a1f1f);

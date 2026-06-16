@@ -455,7 +455,7 @@ public final class ItemSystem {
                     BrandSystem.applyBrandOnHit(level, caster, victim, wand);
                 }
             }
-            case VOID -> applyVoidImpact(level, target, effectiveLevel);
+            case VOID -> applyVoidImpact(level, target, Math.max(1, (effectiveLevel / 2) + 1));
             case POLYMORPH -> applyPolymorphImpact(level, target, radiusForTileCount(targetTiles));
         }
         // A damage-dealing wand strike is loud - wake nearby sleepers within their wake
@@ -484,10 +484,10 @@ public final class ItemSystem {
      *  a fresh chasm tile fall through via
      *  {@link com.bjsp123.rl2.logic.MobSystem#fallToNextLevel}. */
     static void applyVoidImpact(Level level, com.bjsp123.rl2.model.Point target,
-                                int effectiveLevel) {
+                                int requestedRadius) {
         int tx = target.tileX(), ty = target.tileY();
         if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
-        int radius = Math.max(1, (effectiveLevel / 2) + 1);
+        int radius = Math.max(1, requestedRadius);
         int r2 = radius * radius;
 
         // Tile conversion pass - floor-like + small statues become CHASM.

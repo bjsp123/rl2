@@ -1,9 +1,13 @@
 package com.bjsp123.rl2.ui.v2;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.ui.ItemLore;
+import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
 import com.bjsp123.rl2.logic.EventLog;
 import com.bjsp123.rl2.logic.GemRecipe;
 import com.bjsp123.rl2.logic.InventorySystem;
@@ -61,10 +65,31 @@ public final class V2Forge extends V2Screen {
     private int pressedRow = -1;
     private int pressedChip = -1;
 
+    /** Preview/confirm popup shown before a recipe is actually forged, so the
+     *  player can read what the scroll does first. */
+    private final ConfirmPopup preview;
+    private final V2PopupActor previewActor;
+
     public V2Forge(Rl2Game game, UiCtx ctx, Runnable onBack) {
         super(ctx);
         this.game = game;
         this.onBack = onBack;
+        this.preview = new ConfirmPopup(ctx);
+        this.previewActor = new V2PopupActor(preview);
+    }
+
+    @Override
+    public void show() {
+        super.show();
+        ctx.v2Stage.remove(previewActor);
+        ctx.v2Stage.addToSubPopup(previewActor);
+        Gdx.input.setInputProcessor(new InputMultiplexer(preview.input(), baseInput()));
+    }
+
+    @Override
+    public void hide() {
+        super.hide();
+        ctx.v2Stage.remove(previewActor);
     }
 
     private Mob player() {
@@ -73,10 +98,13 @@ public final class V2Forge extends V2Screen {
     }
 
     @Override
-    protected Rect modalWindow() { return window; }
+    protected Rect modalWindow() { return preview.isOpen() ? preview.window() : window; }
 
     @Override
-    protected void onEscape() { onBack.run(); }
+    protected void onEscape() {
+        if (preview.isOpen()) { preview.cancel(); return; }
+        onBack.run();
+    }
 
     @Override
     protected void buildLayout() {
@@ -206,8 +234,10 @@ public final class V2Forge extends V2Screen {
             Rect r = row.rect;
             Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             boolean pressed = i == pressedRow && row.affordable;
+            // Shared vocabulary: affordable = darker active fill (pressed lighter);
+            // unaffordable = flat grey so it clearly reads as disabled.
             Color bg = pressed ? UIVars.BTN_PRESSED_BG
-                    : (row.affordable ? UIVars.BTN_BG : UIVars.SLOT_BG);
+                    : (row.affordable ? UIVars.BTN_BG : UIVars.BTN_DISABLED_BG);
             s.setColor(bg);
             s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
                     r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
@@ -360,12 +390,23 @@ public final class V2Forge extends V2Screen {
             if (idx < visible.size()) {
                 Row row = visible.get(idx);
                 if (row.onScreen && row.rect.contains(vx, vy) && row.affordable) {
-                    craft(row.recipe);
+                    openPreview(row);
                 }
             }
             return true;
         }
         return false;
+    }
+
+    /** Show the scroll's description with a Make / Cancel choice before forging,
+     *  so the player can see what they're about to create. */
+    private void openPreview(Row row) {
+        String name = ItemNames.displayName(row.sample, player());
+        if (name == null || name.isEmpty()) name = row.recipe.output;
+        String desc = ItemLore.describeFlavor(row.sample);
+        if (desc == null || desc.isEmpty()) desc = "Forge this item at the gem hearth?";
+        preview.configure(name, desc, "Make", null, () -> craft(row.recipe));
+        preview.open();
     }
 
     /** Consume the recipe's gems and add the built item to the bag. */

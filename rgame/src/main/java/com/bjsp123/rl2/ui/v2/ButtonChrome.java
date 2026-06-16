@@ -27,6 +27,22 @@ public final class ButtonChrome {
                 rect.w - 2 * UIVars.HUD_BORDER, rect.h - 2 * UIVars.HUD_BORDER);
     }
 
+    /** Shared enabled/disabled button vocabulary: an active button gets the
+     *  darker {@link UIVars#BTN_BG} (pressed -> {@link UIVars#BTN_PRESSED_BG});
+     *  a disabled one gets the flat grey {@link UIVars#BTN_DISABLED_BG} and
+     *  never shows a pressed state. Pair with {@link #labelColor} for text. */
+    public static void shapeEnabled(UiCtx ctx, Rect rect, boolean pressed, boolean enabled) {
+        shape(ctx, rect, enabled && pressed, false, false,
+                enabled ? UIVars.BTN_BG : UIVars.BTN_DISABLED_BG);
+    }
+
+    /** Text colour matching {@link #shapeEnabled}: bright when active (accent
+     *  while pressed), light-grey {@link UIVars#TEXT_DIM} when disabled. */
+    public static Color labelColor(boolean enabled, boolean pressed) {
+        if (!enabled) return UIVars.TEXT_DIM;
+        return pressed ? UIVars.ACCENT : UIVars.TEXT_BODY;
+    }
+
     public static void icon(UiCtx ctx, Rect rect, TextureRegion icon,
                             boolean hot, boolean warn) {
         if (icon == null) return;

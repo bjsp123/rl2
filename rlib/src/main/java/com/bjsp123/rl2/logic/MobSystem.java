@@ -4025,7 +4025,10 @@ public class MobSystem {
                 }
             }
         } else if (te == ItemEffect.VOID && inBounds) {
-            ItemSystem.applyVoidImpact(level, dst, lvl);
+            // Radius comes from the bomb's effectSize (like every other bomb),
+            // not its enchant level - a level-0 void bomb was collapsing to a
+            // single-tile hole that "did nothing but remove floor".
+            ItemSystem.applyVoidImpact(level, dst, ItemSystem.radiusForTileCount(bombTiles));
         } else if (te == ItemEffect.TELEPORT && inBounds) {
             // Teleport orb: every non-thrower mob inside the disc is
             // scattered to a random walkable tile on a random level. The

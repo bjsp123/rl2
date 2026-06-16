@@ -129,6 +129,9 @@ public final class V2Map extends V2Screen {
     /** Pan offset applied to the level graph (post-zoom). Drag-in-body
      *  shifts these. Zero by default - graph centred on the window. */
     private float panX, panY;
+    /** Set when the map is (re)shown so the next frame pans the graph to
+     *  centre the player's current level in the viewport. Cleared once done. */
+    private boolean needsCenter = true;
     /** Zoom factor for the level graph. Snapped to one of {@link #ZOOM_STEPS}
      *  so the map jumps cleanly between four well-defined sizes instead of
      *  drifting through continuous factors. */
@@ -174,6 +177,7 @@ public final class V2Map extends V2Screen {
         back   = new BackBtn(ctx, onBack);
         burger = makeBurger();
         addStandardBurgerItems(game);
+        needsCenter = true;   // centre on the current level next frame
     }
 
     @Override
@@ -293,6 +297,24 @@ public final class V2Map extends V2Screen {
             if (lvl.depth     > maxD)   maxD   = lvl.depth;
         }
         if (minCol == Float.POSITIVE_INFINITY) return;
+
+        // One-shot centring: offset the pan so the player's current level sits
+        // in the middle of the viewport when the map is opened.
+        if (needsCenter && world.levels != null
+                && world.currentLevelIndex >= 0
+                && world.currentLevelIndex < world.levels.length
+                && world.levels[world.currentLevelIndex] != null) {
+            Level cur = world.levels[world.currentLevelIndex];
+            float logCx = boxX(cur, minCol, maxCol) + BOX_W * 0.5f;
+            float logCy = boxY(cur, minD,   maxD)   + BOX_H * 0.5f;
+            Rect vp = graphViewport();
+            // Invert transformBox so the level's transformed centre lands on the
+            // viewport centre (the zoom pivot): scrC = pivot + (logC-pivot)*zoom + pan.
+            panX = -(logCx - vp.cx()) * zoom;
+            panY = -(logCy - vp.cy()) * zoom;
+            clampPan();
+            needsCenter = false;
+        }
 
         ShapeRenderer s = ctx.shapes;
         Gdx.gl.glEnable(GL20.GL_BLEND);
