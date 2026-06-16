@@ -221,6 +221,55 @@ public class TargetingOverlay extends InputAdapter {
         // Only fires when the target tile holds a hostile mob.
         renderTargetingChip();
         renderCycleHighlight();
+        renderChargeLabels();
+    }
+
+    /** For a CHARGE source (Jade Bull), label every visible hostile that is NOT
+     *  chargeable with a small yellow "too near" (needs a 2+ tile runway) or
+     *  "too far" (beyond charge range). Chargeable enemies are already lit by
+     *  the valid-tiles highlight, so they get no label. */
+    private void renderChargeLabels() {
+        if (player == null || player.position == null || level == null
+                || level.visible == null || uiCtx == null || worldCamera == null) return;
+        if (!(sourceKey instanceof Item it)
+                || it.useBehavior != Item.UseBehavior.CHARGE) return;
+        int radius = Math.max(1, ItemStats.effectiveRange(it, ItemStats.effectiveLevel(it, player)));
+        int px = player.position.tileX(), py = player.position.tileY();
+        List<ChipPlacement> labels = new ArrayList<>();
+        for (Mob m : level.mobs) {
+            if (m == null || m == player || m.position == null || m.hp <= 0) continue;
+            int mx = m.position.tileX(), my = m.position.tileY();
+            if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
+            if (!level.visible[mx][my]) continue;
+            if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(player, m)
+                    != com.bjsp123.rl2.logic.MobSystem.Attitude.ATTACK) continue;
+            int d = Math.max(Math.abs(mx - px), Math.abs(my - py));
+            String label = d < 2 ? "too near" : (d > radius ? "too far" : null);
+            if (label != null) labels.add(new ChipPlacement(m.position, label));
+        }
+        if (labels.isEmpty()) return;
+
+        uiCtx.applyProjection();
+        BitmapFont font = uiCtx.fontRegular;
+        float prevScale = font.getScaleX();
+        font.getData().setScale(prevScale * UIVars.CHIP_SCALE);
+        uiCtx.batch.begin();
+        font.setColor(UIVars.ACCENT);   // small yellow letters
+        for (ChipPlacement cp : labels) {
+            projectBuf.set(cp.tile.tileX() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE * 0.5f,
+                    cp.tile.tileY() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE, 0f);
+            worldCamera.project(projectBuf);
+            int sx = Math.round(projectBuf.x);
+            int sy = Gdx.graphics.getHeight() - Math.round(projectBuf.y);
+            float vx = uiCtx.unprojectX(sx, sy);
+            float vy = uiCtx.unprojectY(sx, sy);
+            uiCtx.layout.setText(font, cp.text);
+            font.draw(uiCtx.batch, cp.text, vx - uiCtx.layout.width * 0.5f,
+                    vy + UIVars.CHIP_LIFT + uiCtx.layout.height);
+        }
+        font.setColor(Color.WHITE);
+        uiCtx.batch.end();
+        font.getData().setScale(prevScale);
     }
 
     /** True when the active source action travels along a line that can be
