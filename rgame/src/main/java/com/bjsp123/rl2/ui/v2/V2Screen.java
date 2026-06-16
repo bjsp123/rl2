@@ -346,7 +346,8 @@ public abstract class V2Screen extends ScreenAdapter {
                     game.currentPlay.getWorld())));
             // Stub entry for the gem hearth / forge (RL-52). RL-51 will replace
             // this with a real hearth room the player steps into.
-            addBurgerItem("Gem Hearth", () -> game.pushScreen(new V2Forge(game, ctx, game::popScreen)));
+            addBurgerItem("Gem Hearth", () -> game.pushScreen(
+                    new V2Forge(game, ctx, game::popScreen, null)));
             addBurgerItem(TextCatalog.get("ui.menu.log"), () -> game.setRootScreen(game.currentPlay));
         }
     }

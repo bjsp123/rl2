@@ -612,7 +612,10 @@ public class PlayScreen implements Screen {
         controller.setOpenMapScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
                 game, game.ui, game::popScreen, world)));
         controller.setOpenForgeScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Forge(
-                game, game.ui, game::popScreen)));
+                game, game.ui, game::popScreen,
+                // Recycle: leave the forge and open the inventory picker to choose
+                // an item to break down into gems.
+                () -> { game.popScreen(); controller.openRecyclePicker(); })));
         v2Hud.setOnActionUse(controller::triggerActionSlot);
         v2Hud.setOnAutoExplore(controller::toggleAutoExplore);
 

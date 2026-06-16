@@ -1342,6 +1342,42 @@ public final class ItemSystem {
         }
     }
 
+    /** Gemforge "recycle": destroy {@code item} and return a handful of gems
+     *  scaled by the item's power level (tier + enchant). Higher-power items
+     *  yield more gems and a better chance of metal / exotic species. Gems land
+     *  in the bag. Returns false on a null/missing item. */
+    public static boolean recycleIntoGems(Level level, Mob user, Item item) {
+        if (user == null || user.inventory == null || item == null) return false;
+        double power = Math.min(1.0,
+                Math.max(0.0, item.minPowerLevel) + Math.max(0, item.level) * 0.1);
+        int count = Math.max(1, Math.min(5, 1 + (int) Math.round(power * 4)));
+        var theme = level != null ? level.theme : null;
+        MobSystem.removeFromInventory(user, item);
+        int made = 0;
+        for (int i = 0; i < count; i++) {
+            com.bjsp123.rl2.model.GemSpecies.GemClass cls = rollRecycleClass(power);
+            com.bjsp123.rl2.model.GemSpecies sp = GemSystem.rollSpeciesOfClass(cls, theme, RANDOM);
+            if (sp == null) sp = GemSystem.rollSpeciesWeighted(theme, RANDOM);
+            if (sp != null) { InventorySystem.addToBag(user.inventory, GemSystem.createGem(sp)); made++; }
+        }
+        if (user.isPlayer) {
+            String name = item.name != null ? item.name : item.type;
+            EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                    "You recycle the " + name + " into " + made + (made == 1 ? " gem." : " gems."),
+                    com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+        }
+        return true;
+    }
+
+    /** Rarity class for one recycled gem: better odds of metal / exotic the
+     *  higher the source item's power. */
+    private static com.bjsp123.rl2.model.GemSpecies.GemClass rollRecycleClass(double power) {
+        double r = RANDOM.nextDouble();
+        if (power >= 0.7 && r < power - 0.5) return com.bjsp123.rl2.model.GemSpecies.GemClass.EXOTIC;
+        if (power >= 0.4 && r < power)       return com.bjsp123.rl2.model.GemSpecies.GemClass.METAL;
+        return com.bjsp123.rl2.model.GemSpecies.GemClass.BASIC;
+    }
+
     /** Creation scrolls must never conjure a Jade companion item (RL-50). For
      *  now this is a simple name/type match on "jade" - every jade item carries
      *  it in both. */

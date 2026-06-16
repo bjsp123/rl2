@@ -403,6 +403,23 @@ final class PlayController {
         if (sounds != null) sounds.play("sfx.item.fail");
     }
 
+    /** Gem-hearth "recycle" recipe: open the inventory as a picker to choose any
+     *  non-gem item, then break it down into gems. Invoked from the forge screen
+     *  (which pops itself first so the inventory picker is the front-most modal). */
+    void openRecyclePicker() {
+        Mob user = TurnSystem.findPlayer(world.currentLevel());
+        if (user == null || itemPicker == null) return;
+        java.util.function.Predicate<Item> eligible = it -> it != null && !it.isGem();
+        if (!hasEligibleItem(user, eligible)) { playInvocationFail(); return; }
+        itemPicker.open(eligible,
+                (u, chosen) -> {
+                    Level cur = world.currentLevel();
+                    ItemSystem.recycleIntoGems(cur, u, chosen);
+                    afterMove(cur);
+                },
+                () -> { /* cancelled */ });
+    }
+
     private static final java.util.Random FX_RNG = new java.util.Random();
 
     /** Per-scroll read feedback (RL-50): the {@code sfx.item.use.gem.<type>}
