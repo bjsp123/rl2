@@ -1324,22 +1324,66 @@ public final class ItemSystem {
      *  3-item scroll looking like it never fired. Falls back to the player's
      *  own tile when no nearby floor is free. */
     private static void dropItemsNearPlayer(Level level, Mob user, java.util.List<Item> items) {
-        if (level == null || user == null || user.position == null
-                || items == null || items.isEmpty() || level.items == null) return;
-        int px = user.position.tileX(), py = user.position.tileY();
+        if (user == null || user.position == null) return;
+        dropItemsNear(level, user.position.tileX(), user.position.tileY(), items,
+                /*filterConjure*/ true);
+    }
+
+    /** Drop {@code items} on the floor as near as possible to the gem hearth the
+     *  {@code user} is standing beside (used for forge output + recycled gems, so
+     *  they land at the forge rather than wherever the player happens to be).
+     *  Falls back to the user's tile if no hearth is found. No conjure filter -
+     *  the forge's own output is always dropped. */
+    public static void dropItemsNearForge(Level level, Mob user, java.util.List<Item> items) {
+        if (level == null || user == null) return;
+        Point hearth = nearestGemHearth(level, user);
+        int ax = hearth != null ? hearth.tileX()
+                : (user.position != null ? user.position.tileX() : 0);
+        int ay = hearth != null ? hearth.tileY()
+                : (user.position != null ? user.position.tileY() : 0);
+        dropItemsNear(level, ax, ay, items, /*filterConjure*/ false);
+    }
+
+    /** Core drop: place each item on the nearest free floor tile to anchor
+     *  ({@code ax},{@code ay}), spreading across expanding rings (each placed
+     *  item marks its tile occupied so the next lands one ring out). When
+     *  {@code filterConjure} is set, jade companions and scatter-on-throw items
+     *  are skipped (creation-scroll safety). */
+    private static void dropItemsNear(Level level, int ax, int ay,
+                                      java.util.List<Item> items, boolean filterConjure) {
+        if (level == null || items == null || items.isEmpty() || level.items == null) return;
         for (Item it : items) {
-            // Scrolls never conjure jade, nor teleport orbs (a teleport-effect
-            // bomb the bomb-scroll could otherwise roll - thrown by anyone it
-            // scatters the player away).
-            if (it == null || isJadeItem(it) || it.scattersOnThrow()) continue;
-            Point spot = nearestFreeDropTile(level, px, py);
-            if (spot == null) spot = user.position;
+            if (it == null) continue;
+            if (filterConjure && (isJadeItem(it) || it.scattersOnThrow())) continue;
+            Point spot = nearestFreeDropTile(level, ax, ay);
+            if (spot == null) spot = new Point(ax, ay);
             it.location = spot;
             level.items.add(it);
             if (level.events != null) {
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemCreated(it, spot));
             }
         }
+    }
+
+    /** Tile of the gem hearth ({@link com.bjsp123.rl2.model.Tile#GEM_HEARTH_L})
+     *  nearest the {@code user}, or {@code null} if the level has none. The user
+     *  forges while standing beside it, so this resolves to that hearth. */
+    private static Point nearestGemHearth(Level level, Mob user) {
+        if (level == null || level.tiles == null || user == null || user.position == null) {
+            return null;
+        }
+        int px = user.position.tileX(), py = user.position.tileY();
+        Point best = null;
+        int bestD = Integer.MAX_VALUE;
+        for (int y = 0; y < level.height; y++) {
+            for (int x = 0; x < level.width; x++) {
+                if (level.tiles[x][y] == com.bjsp123.rl2.model.Tile.GEM_HEARTH_L) {
+                    int d = Math.max(Math.abs(x - px), Math.abs(y - py));
+                    if (d < bestD) { bestD = d; best = new Point(x, y); }
+                }
+            }
+        }
+        return best;
     }
 
     /** Gemforge "recycle": destroy {@code item} and return a handful of gems
@@ -1353,17 +1397,22 @@ public final class ItemSystem {
         int count = Math.max(1, Math.min(5, 1 + (int) Math.round(power * 4)));
         var theme = level != null ? level.theme : null;
         MobSystem.removeFromInventory(user, item);
-        int made = 0;
+        java.util.List<Item> gems = new java.util.ArrayList<>();
         for (int i = 0; i < count; i++) {
             com.bjsp123.rl2.model.GemSpecies.GemClass cls = rollRecycleClass(power);
             com.bjsp123.rl2.model.GemSpecies sp = GemSystem.rollSpeciesOfClass(cls, theme, RANDOM);
             if (sp == null) sp = GemSystem.rollSpeciesWeighted(theme, RANDOM);
-            if (sp != null) { InventorySystem.addToBag(user.inventory, GemSystem.createGem(sp)); made++; }
+            if (sp != null) gems.add(GemSystem.createGem(sp));
         }
+        // Gems land on the floor beside the hearth, not in the bag.
+        dropItemsNearForge(level, user, gems);
+        int made = gems.size();
         if (user.isPlayer) {
             String name = item.name != null ? item.name : item.type;
             EventLog.add(new com.bjsp123.rl2.model.LogEvent(
-                    "You recycle the " + name + " into " + made + (made == 1 ? " gem." : " gems."),
+                    "You recycle the " + name + " into " + made
+                            + (made == 1 ? " gem, scattered by the hearth."
+                                         : " gems, scattered by the hearth."),
                     com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
         }
         return true;

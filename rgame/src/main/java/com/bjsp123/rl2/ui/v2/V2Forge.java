@@ -10,7 +10,6 @@ import com.bjsp123.rl2.ui.ItemLore;
 import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
 import com.bjsp123.rl2.logic.EventLog;
 import com.bjsp123.rl2.logic.GemRecipe;
-import com.bjsp123.rl2.logic.InventorySystem;
 import com.bjsp123.rl2.logic.ItemFactory;
 import com.bjsp123.rl2.logic.ItemNames;
 import com.bjsp123.rl2.logic.RecipeSystem;
@@ -308,7 +307,7 @@ public final class V2Forge extends V2Screen {
         float x = r.x + 8f;
         float cy = r.cy();
         // Input: any item (question mark).
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, "?", x + icon * 0.5f, cy + 6f);
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, "any item", x + icon * 0.5f, cy + 6f);
         x += icon;
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "->", x + 12f, cy + 6f);
         x += 26f;
@@ -479,12 +478,16 @@ public final class V2Forge extends V2Screen {
     private void craft(GemRecipe recipe) {
         Mob p = player();
         if (p == null || p.inventory == null) return;
+        if (game.currentPlay == null) return;
         if (!RecipeSystem.consume(recipe, p.inventory)) return;
         Item out = ItemFactory.build(recipe.output);
-        InventorySystem.addToBag(p.inventory, out);
+        // The forged scroll drops on the floor by the hearth, not into the bag.
+        com.bjsp123.rl2.logic.ItemSystem.dropItemsNearForge(
+                game.currentPlay.getWorld().currentLevel(), p, java.util.List.of(out));
         String name = ItemNames.displayName(out, p);
         if (name == null || name.isEmpty()) name = recipe.output;
-        EventLog.add(new LogEvent("You forge the " + name + " at the gem hearth.",
+        EventLog.add(new LogEvent("You forge the " + name
+                + " at the gem hearth; it lands at your feet.",
                 LogEvent.EventPriority.HIGH, true));
         if (sounds != null) sounds.play("sfx.ui.click");
     }

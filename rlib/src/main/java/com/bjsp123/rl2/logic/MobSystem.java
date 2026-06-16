@@ -2307,7 +2307,12 @@ public class MobSystem {
         }
         BuffSystem.apply(level, self, com.bjsp123.rl2.model.Buff.BuffType.PHASE_DODGE_COOLDOWN,
                 cooldownTurns, self);
-        if (self.isPlayer || isVisibleToPlayer(level, self)) {
+        // Log whenever the player could witness the dodge - either the tile it
+        // left or the tile it blinked to was in view. (Checking only the new
+        // tile missed dodges that ended just outside the player's FOV.)
+        if (self.isPlayer
+                || tileVisibleToPlayer(level, from)
+                || tileVisibleToPlayer(level, spot)) {
             EventLog.add(Messages.phaseDodged(nameForLog(level, self),
                     self.isPlayer));
         }
