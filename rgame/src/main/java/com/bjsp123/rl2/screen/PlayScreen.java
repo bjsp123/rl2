@@ -218,6 +218,19 @@ public class PlayScreen implements Screen {
      *  overlay's alpha is {@code deathFadeFrame / DEATH_FADE_FRAMES}. */
     private int deathFadeFrame;
 
+    // --- Intro cinematic (RL-56, Stage 1: camera zoom-in + arrival message) --
+    /** Camera zoom the new-game intro starts at (far out) before easing down to
+     *  {@link #DEFAULT_ZOOM}. Larger = more zoomed out. */
+    private static final float INTRO_START_ZOOM = 2.5f;
+    /** Real-time length of the intro zoom-in, in seconds. */
+    private static final float INTRO_DURATION_SEC = 1.4f;
+    /** True from a fresh new-game spawn until the intro zoom completes or the
+     *  player taps to skip. While set, the world is paused and gameplay input is
+     *  swallowed by {@link #introSkipInput()}. Never set for resumed runs. */
+    private boolean introActive;
+    /** Real-time accumulator (seconds) driving the intro zoom ease. */
+    private float introTime;
+
     /** Shared cursor-memory for Look and targeting. Records the most recent mob and the
      *  most recent non-mob tile the player interacted with; {@link TargetHistory#pickInitial}
      *  turns that into a "best guess" starting cell for every new cursor-picking flow. */
@@ -332,6 +345,7 @@ public class PlayScreen implements Screen {
         // handlers. V2 popups come BEFORE the HUD so an open popup eats taps
         // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
+                introSkipInput(),
                 cameraController,
                 tipPopupDismissInput(),
                 v2BuffInfo.input(),
@@ -638,7 +652,11 @@ public class PlayScreen implements Screen {
         gameInput.setActionSlotHandler(controller::triggerActionSlot);
 
         camera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        camera.zoom = DEFAULT_ZOOM;
+        // Fresh runs (no preloaded world) open on the intro cinematic: start far
+        // out and ease in to play zoom. Resumed runs jump straight to play.
+        introActive = (preloadedWorld == null);
+        introTime = 0f;
+        camera.zoom = introActive ? INTRO_START_ZOOM : DEFAULT_ZOOM;
         recenterCameraOnPlayer();
     }
 
@@ -798,6 +816,7 @@ public class PlayScreen implements Screen {
         // they used to be. Waiting one more frame lets the impact resolve first.
         boolean ticked = !overlayOpen
                 && !deathTransitionPending
+                && !introActive
                 && (com.bjsp123.rl2.ui.skin.Settings.instantActions()
                         || (animator.queue.freezeFrames == 0 && !animator.hasPendingImpacts()))
                 && controller.tick(level);
@@ -936,6 +955,9 @@ public class PlayScreen implements Screen {
         span = frameProfiler.start();
         cameraController.followPlayer(playerAfter);
         camera.update();
+        // Intro overrides the follow camera: ease zoom from far-out to play
+        // zoom, locked on the player, until done or skipped.
+        if (introActive) updateIntro(delta);
         frameProfiler.add("camera", span);
 
         // Audit action slots EVERY frame, not just inside afterMove. Any path that consumes
@@ -1022,8 +1044,79 @@ public class PlayScreen implements Screen {
             drawDeathFadeOverlay(alpha);
         }
 
+        // Intro arrival message - a bottom banner naming the goal, shown over
+        // the world while the camera eases in. Drawn last so it sits on top.
+        if (introActive) drawIntroMessage();
+
         if (com.bjsp123.rl2.ui.skin.Settings.showPerfOverlay()) renderPerfOverlay();
         frameProfiler.finish(ticked, overlayOpen);
+    }
+
+    /** Advance the intro zoom toward {@link #DEFAULT_ZOOM}, keeping the camera
+     *  centred on the player. Ends the intro when the ease completes. */
+    private void updateIntro(float delta) {
+        introTime += delta;
+        float t = INTRO_DURATION_SEC <= 0f ? 1f
+                : Math.min(1f, introTime / INTRO_DURATION_SEC);
+        float eased = t * t * (3f - 2f * t); // smoothstep
+        camera.zoom = INTRO_START_ZOOM + (DEFAULT_ZOOM - INTRO_START_ZOOM) * eased;
+        recenterCameraOnPlayer();
+        if (t >= 1f) endIntro();
+    }
+
+    /** Snap to play zoom and hand control to the player. Idempotent. */
+    private void endIntro() {
+        if (!introActive) return;
+        introActive = false;
+        camera.zoom = DEFAULT_ZOOM;
+        recenterCameraOnPlayer();
+    }
+
+    /** First processor in the input chain. While the intro is running, any tap
+     *  or key skips it (and is swallowed so it can't also fire a game action);
+     *  once the intro ends it is transparent and events fall through. */
+    private com.badlogic.gdx.InputProcessor introSkipInput() {
+        return new com.badlogic.gdx.InputAdapter() {
+            @Override public boolean touchDown(int x, int y, int pointer, int button) {
+                if (introActive) { endIntro(); return true; }
+                return false;
+            }
+            @Override public boolean keyDown(int keycode) {
+                if (introActive) { endIntro(); return true; }
+                return false;
+            }
+            @Override public boolean scrolled(float ax, float ay) { return introActive; }
+        };
+    }
+
+    /** Bottom banner with the intro goal text, drawn over the world. */
+    private void drawIntroMessage() {
+        String msg = com.bjsp123.rl2.logic.TextCatalog.get("ui.intro.message");
+        if (msg == null || msg.isEmpty()) return;
+        float w = game.ui.worldW();
+        float h = game.ui.worldH();
+        float bandH = Math.max(64f, h * 0.14f);
+        // Dark translucent band.
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
+        s.setProjectionMatrix(game.ui.camera.combined);
+        com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        com.badlogic.gdx.Gdx.gl.glBlendFunc(
+                com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(0f, 0f, 0f, 0.6f);
+        s.rect(0f, 0f, w, bandH);
+        s.end();
+        com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        // Centred goal text.
+        game.ui.applyProjection();
+        com.badlogic.gdx.graphics.g2d.SpriteBatch b = game.ui.batch;
+        com.badlogic.gdx.graphics.g2d.BitmapFont f = game.ui.fontRegular;
+        float yTop = bandH * 0.5f + f.getCapHeight() * 0.5f;
+        b.begin();
+        com.bjsp123.rl2.ui.v2.TextDraw.centreFit(game.ui, f,
+                com.badlogic.gdx.graphics.Color.WHITE, msg, w * 0.5f, yTop, w * 0.9f);
+        b.end();
     }
 
     private void drawDeathFadeOverlay(float alpha) {

@@ -1195,6 +1195,7 @@ ui.inventory.title,Backpack
 ui.inventory.choose,Choose an item
 ui.inventory.unequip,Unequip
 ui.inventory.use,Use
+ui.intro.message,Entering the top layer of the tombs. Your only escape is to reach the bottom and defeat the Bugbear.
 ui.levelInfo.chasms,Chasms    {value}
 ui.levelInfo.depth,Depth     {value}
 ui.levelInfo.doors,Doors     {value}
