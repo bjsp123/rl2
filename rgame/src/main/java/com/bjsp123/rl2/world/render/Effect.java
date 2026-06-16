@@ -682,29 +682,26 @@ public class Effect {
                 EffectType.LEVEL_FLICKER.frameCount));
     }
 
-    /** Death outro (RL-56): a tall column of light rising from the fallen
-     *  player's tile - a tight, fast white beam, a wider spray of rising golden
-     *  sparkles around it, and a base ignition burst. Composite, added straight
-     *  to the stage like {@link #beaconActivation}. */
+    /** Death outro (RL-56): the player's soul leaving as a vertical column of
+     *  light that shoots straight up and quickly vanishes - "the soul returning
+     *  to the top level". A tight, fast white core shaft launched together,
+     *  wrapped in a slightly wider pale-blue halo for body. Composite, added
+     *  straight to the stage like {@link #beaconActivation}. */
     public static void columnOfLight(EffectStage stage, Point at, Random rng) {
-        // Tight, fast, long-lived white beam - the column itself.
+        // Core shaft: many bright-white particles launched together (tiny spawn
+        // spread, near-zero horizontal jitter) straight up, fast, short-lived -
+        // a coherent column that rises and vanishes quickly.
         stage.add(EffectBuilder.fountain(at, EffectTint.WHITE,
-                /*count*/ 48, /*spawnSpread*/ 24, /*life*/ 70,
-                /*riseMin*/ 2.2f, /*riseMax*/ 3.4f,
-                /*horizontalJitter*/ 0.25f, /*fadeToWhite*/ true,
-                /*posJitterX*/ 5f, /*posJitterY*/ 3f, rng));
-        // Wider golden sparkle spray drifting up around the beam.
-        stage.add(EffectBuilder.fountain(at, EffectTint.YELLOW,
-                /*count*/ 28, /*spawnSpread*/ 28, /*life*/ 60,
-                /*riseMin*/ 1.2f, /*riseMax*/ 2.4f,
-                /*horizontalJitter*/ 1.1f, /*fadeToWhite*/ false,
-                /*posJitterX*/ 12f, /*posJitterY*/ 6f,
-                ParticleShape.STARS, rng));
-        // Base ignition burst.
-        stage.add(EffectBuilder.burst(at, EffectTint.WHITE,
-                /*count*/ 20, /*speedMin*/ 1.2f, /*speedMax*/ 2.6f,
-                /*size*/ 1.8f, /*bright*/ true,
-                /*duration*/ EffectType.PARTICLE_BURST.frameCount, rng));
+                /*count*/ 64, /*spawnSpread*/ 5, /*life*/ 34,
+                /*riseMin*/ 3.8f, /*riseMax*/ 5.4f,
+                /*horizontalJitter*/ 0.12f, /*fadeToWhite*/ true,
+                /*posJitterX*/ 3.5f, /*posJitterY*/ 3f, rng));
+        // Pale-blue halo: a touch wider + dimmer so the shaft has body.
+        stage.add(EffectBuilder.fountain(at, EffectTint.CYAN,
+                /*count*/ 30, /*spawnSpread*/ 7, /*life*/ 30,
+                /*riseMin*/ 3.2f, /*riseMax*/ 4.6f,
+                /*horizontalJitter*/ 0.35f, /*fadeToWhite*/ true,
+                /*posJitterX*/ 8f, /*posJitterY*/ 3f, rng));
     }
 
     /** Player-side teleport visual at the source cell - upward green streaks,
