@@ -416,6 +416,31 @@ public class Effect {
                 type, 36 + rng.nextInt(18), rng);
     }
 
+    /** Arrival mist (RL-56 intro): a dense ring of untinted dust puffs blooming
+     *  outward from {@code at} as the player materialises, each drifting away
+     *  from the centre and fading so the cloud expands and thins to reveal the
+     *  player. A composite of {@link #cloudPuff}, added straight to the stage. */
+    public static void arrivalCloud(EffectStage stage, Point at, Random rng) {
+        final float cell = LevelRenderer.TILE_SIZE;
+        final float cx = (at.tileX() + 0.5f) * cell;
+        final float cy = (at.tileY() + 0.5f) * cell;
+        final int puffs = 16;
+        for (int i = 0; i < puffs; i++) {
+            double angle = (i / (double) puffs) * Math.PI * 2.0
+                    + (rng.nextDouble() - 0.5) * 0.5;
+            float radius = cell * (0.15f + rng.nextFloat() * 0.55f);
+            float pxX = cx + (float) Math.cos(angle) * radius;
+            float pxY = cy + (float) Math.sin(angle) * radius;
+            // Drift radially outward (slightly slower vertically, faint upward
+            // bias) so the cloud opens like parting smoke rather than scattering.
+            float speed = 0.45f + rng.nextFloat() * 0.5f;
+            float vx = (float) Math.cos(angle) * speed;
+            float vy = (float) Math.sin(angle) * speed * 0.6f + 0.1f;
+            stage.add(cloudPuff(at.tileX(), at.tileY(), pxX, pxY, vx, vy,
+                    /*type*/ null, rng));
+        }
+    }
+
     /**
      * Magic-missile projectile (head + trail). A magic missile is conceptually
      * <i>projectile + impact-burst</i>; this factory produces the projectile half.

@@ -230,6 +230,13 @@ public class PlayScreen implements Screen {
     private boolean introActive;
     /** Real-time accumulator (seconds) driving the intro zoom ease. */
     private float introTime;
+    /** Real-time length of the arrival white-flash that fades out when control
+     *  begins (intro end), in seconds. */
+    private static final float ARRIVAL_FLASH_SEC = 0.5f;
+    /** True while the arrival white-flash is fading out after the intro ends. */
+    private boolean arrivalFlashActive;
+    /** Real-time accumulator (seconds) driving the arrival flash fade-out. */
+    private float arrivalFlashTime;
 
     /** Shared cursor-memory for Look and targeting. Records the most recent mob and the
      *  most recent non-mob tile the player interacted with; {@link TargetHistory#pickInitial}
@@ -1048,6 +1055,19 @@ public class PlayScreen implements Screen {
         // the world while the camera eases in. Drawn last so it sits on top.
         if (introActive) drawIntroMessage();
 
+        // Arrival white-flash - ramps from opaque white down to nothing right
+        // after the intro hands control to the player. Drawn over everything.
+        if (arrivalFlashActive) {
+            arrivalFlashTime += delta;
+            float a = ARRIVAL_FLASH_SEC <= 0f ? 0f
+                    : 1f - Math.min(1f, arrivalFlashTime / ARRIVAL_FLASH_SEC);
+            if (a <= 0f) {
+                arrivalFlashActive = false;
+            } else {
+                drawArrivalFlash(a);
+            }
+        }
+
         if (com.bjsp123.rl2.ui.skin.Settings.showPerfOverlay()) renderPerfOverlay();
         frameProfiler.finish(ticked, overlayOpen);
     }
@@ -1064,12 +1084,22 @@ public class PlayScreen implements Screen {
         if (t >= 1f) endIntro();
     }
 
-    /** Snap to play zoom and hand control to the player. Idempotent. */
+    /** Snap to play zoom and hand control to the player. Fires the arrival
+     *  cinematic (white-flash + dust cloud blooming around the player) so the
+     *  hand-off reads as "you materialise here". Idempotent. */
     private void endIntro() {
         if (!introActive) return;
         introActive = false;
         camera.zoom = DEFAULT_ZOOM;
         recenterCameraOnPlayer();
+        // Arrival: flash to white and bloom a dust cloud around the player.
+        arrivalFlashActive = true;
+        arrivalFlashTime = 0f;
+        Mob p = TurnSystem.findPlayer(world.currentLevel());
+        if (p != null && animator != null) {
+            com.bjsp123.rl2.world.render.Effect.arrivalCloud(
+                    animator.stage, p.position, animator.rng());
+        }
     }
 
     /** First processor in the input chain. While the intro is running, any tap
@@ -1117,6 +1147,21 @@ public class PlayScreen implements Screen {
         com.bjsp123.rl2.ui.v2.TextDraw.centreFit(game.ui, f,
                 com.badlogic.gdx.graphics.Color.WHITE, msg, w * 0.5f, yTop, w * 0.9f);
         b.end();
+    }
+
+    private void drawArrivalFlash(float alpha) {
+        if (alpha <= 0f) return;
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
+        s.setProjectionMatrix(game.ui.camera.combined);
+        com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        com.badlogic.gdx.Gdx.gl.glBlendFunc(
+                com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(1f, 1f, 1f, alpha);
+        s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
+        s.end();
+        com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
     }
 
     private void drawDeathFadeOverlay(float alpha) {

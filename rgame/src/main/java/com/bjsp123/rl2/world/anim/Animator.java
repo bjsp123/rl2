@@ -60,6 +60,11 @@ public final class Animator {
     public boolean impactFiredThisTick = false;
     static final Random RNG = new Random();
 
+    /** Shared effect RNG, exposed so callers outside this package (e.g.
+     *  {@code PlayScreen}'s intro arrival cloud) can spawn effects with the
+     *  same jitter source. */
+    public Random rng() { return RNG; }
+
 
     /** Wall-clock emit interval for fire-particle effects. Mirrors the legacy
      *  {@code GameBalance.FIRE_PARTICLE_INTERVAL_MS}. */
