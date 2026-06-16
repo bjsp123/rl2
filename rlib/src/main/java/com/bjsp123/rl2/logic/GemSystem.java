@@ -35,6 +35,16 @@ public final class GemSystem {
         };
     }
 
+    /** Player-facing rarity word for a gem class: BASIC = "simple",
+     *  METAL = "metal", EXOTIC = "exotic". Used in recycle/forge descriptions. */
+    public static String classLabel(GemClass cls) {
+        return switch (cls) {
+            case BASIC  -> "simple";
+            case METAL  -> "metal";
+            case EXOTIC -> "exotic";
+        };
+    }
+
     /** Pick a gem species of rarity {@code cls}, affinity-weighted toward {@code levelTheme}.
      *  Returns {@code null} only if the class has no members (never, for the fixed roster). */
     public static GemSpecies rollSpeciesOfClass(GemClass cls, VisualTheme levelTheme, Random rng) {

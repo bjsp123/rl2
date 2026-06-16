@@ -1392,9 +1392,8 @@ public final class ItemSystem {
      *  in the bag. Returns false on a null/missing item. */
     public static boolean recycleIntoGems(Level level, Mob user, Item item) {
         if (user == null || user.inventory == null || item == null) return false;
-        double power = Math.min(1.0,
-                Math.max(0.0, item.minPowerLevel) + Math.max(0, item.level) * 0.1);
-        int count = Math.max(1, Math.min(5, 1 + (int) Math.round(power * 4)));
+        double power = recyclePower(item);
+        int count = recycleGemCount(power);
         var theme = level != null ? level.theme : null;
         MobSystem.removeFromInventory(user, item);
         java.util.List<Item> gems = new java.util.ArrayList<>();
@@ -1416,6 +1415,59 @@ public final class ItemSystem {
                     com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
         }
         return true;
+    }
+
+    /** Recycle "power" 0..1 for an item: base tier ({@code minPowerLevel}) plus
+     *  +0.1 per enchant level, capped at 1. Drives both the gem count and the
+     *  rarity odds. Single source shared by {@link #recycleIntoGems} and
+     *  {@link #recycleForecast}. */
+    private static double recyclePower(Item item) {
+        return Math.min(1.0,
+                Math.max(0.0, item.minPowerLevel) + Math.max(0, item.level) * 0.1);
+    }
+
+    /** Number of gems an item recycles into (1..5), scaling with power. */
+    private static int recycleGemCount(double power) {
+        return Math.max(1, Math.min(5, 1 + (int) Math.round(power * 4)));
+    }
+
+    /** Rough, player-facing description of what recycling {@code item} is likely
+     *  to yield - for the recycle confirmation dialog. Mirrors
+     *  {@link #recycleIntoGems}' count + {@link #rollRecycleClass} rarity
+     *  thresholds so the blurb can't drift from the real rolls. Examples:
+     *  "a simple gem"; "a few simple gems and perhaps a metal gem"; "a handful
+     *  of simple gems, likely a metal gem, with a chance of an exotic gem". */
+    public static String recycleForecast(Item item) {
+        if (item == null) return "";
+        double power = recyclePower(item);
+        int count = recycleGemCount(power);
+        boolean metal  = power >= 0.4;   // METAL becomes reachable (rollRecycleClass)
+        boolean exotic = power >= 0.7;   // EXOTIC becomes reachable
+        String qty = switch (count) {
+            case 1  -> "a";
+            case 2  -> "a couple of";
+            case 3  -> "a few";
+            case 4  -> "several";
+            default -> "a handful of";
+        };
+        String simple = com.bjsp123.rl2.logic.GemSystem.classLabel(
+                com.bjsp123.rl2.model.GemSpecies.GemClass.BASIC);
+        StringBuilder sb = new StringBuilder();
+        sb.append(qty).append(' ').append(simple)
+          .append(count == 1 ? " gem" : " gems");
+        if (exotic) {
+            String m = com.bjsp123.rl2.logic.GemSystem.classLabel(
+                    com.bjsp123.rl2.model.GemSpecies.GemClass.METAL);
+            String e = com.bjsp123.rl2.logic.GemSystem.classLabel(
+                    com.bjsp123.rl2.model.GemSpecies.GemClass.EXOTIC);
+            sb.append(", likely a ").append(m).append(" gem, with a chance of an ")
+              .append(e).append(" gem");
+        } else if (metal) {
+            String m = com.bjsp123.rl2.logic.GemSystem.classLabel(
+                    com.bjsp123.rl2.model.GemSpecies.GemClass.METAL);
+            sb.append(" and perhaps a ").append(m).append(" gem");
+        }
+        return sb.toString();
     }
 
     /** Rarity class for one recycled gem: better odds of metal / exotic the
