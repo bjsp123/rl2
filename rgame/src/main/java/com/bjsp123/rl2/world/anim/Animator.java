@@ -851,13 +851,24 @@ public final class Animator {
         int ddy = from.tileY() - to.tileY();
         int dist = Math.max(Math.abs(ddx), Math.abs(ddy));
         if (dist == 0) return;
+        // Zip: roughly twice as fast as a normal step so the dodge reads as a
+        // sharp phase-blink rather than a leisurely slide.
         int frames = scaleFrames(Math.max(AnimationVars.STEP_FRAMES_MIN, stepFramesFor(mob) * dist));
+        frames = Math.max(scaleFrames(2), frames / 2);
         MobAnimState s = stateOf(mob);
         s.stepFromDx = (float) ddx;
         s.stepFromDy = (float) ddy;
         s.stepFrame  = 0;
         s.stepTotal  = frames;
-        s.phaseDodgeFrames = frames + scaleFrames(6);
+        // Longer shimmer afterglow so the phasing look lingers past the zip.
+        s.phaseDodgeFrames = frames + scaleFrames(16);
+        // Punctuate the phase with a quick shimmer burst at the departure tile
+        // (pale blue "phase-out") and the arrival tile (white "phase-in"), so
+        // the dodge reads as a hard blink between two points.
+        stage.add(com.bjsp123.rl2.world.render.Effect.particleBurst(
+                from, com.bjsp123.rl2.world.render.Effect.EffectTint.CYAN, 12, RNG));
+        stage.add(com.bjsp123.rl2.world.render.Effect.particleBurst(
+                to, com.bjsp123.rl2.world.render.Effect.EffectTint.WHITE, 12, RNG));
     }
 
     /** Grappling-rope visual - extend phase blocks subsequent events
