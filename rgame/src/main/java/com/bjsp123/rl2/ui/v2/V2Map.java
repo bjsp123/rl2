@@ -4,16 +4,14 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.TextCatalog;
-import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
+import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.model.World;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * V2 map screen - schematic of the world's level graph. Each level renders
@@ -480,67 +478,86 @@ public final class V2Map extends V2Screen {
         Rect info = infoPaneRect();
         float left = info.x + 12f;
         float top  = info.top() - 18f;
-        // Header: depth + theme.
-        String header = TextCatalog.format("ui.map.level", TextCatalog.vars("depth", lvl.depth));
-        if (lvl.theme != null) {
-            header += "   " + lvl.theme.name().toLowerCase();
-        }
         float textW = info.right() - left - 12f;
-        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.ACCENT, header, left, top, textW);
+
+        // Header: depth + type (special kind if any, else the visual theme).
+        String type = prettify(lvl.kind != null && lvl.kind != Level.LevelKind.REGULAR
+                ? lvl.kind.name()
+                : (lvl.theme == null ? "" : lvl.theme.name()));
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.ACCENT,
+                TextCatalog.format("ui.map.depthType",
+                        TextCatalog.vars("depth", lvl.depth, "type", type)),
+                left, top, textW);
         top -= 18f;
 
-        // Unique themed rooms - scan level.rooms for rooms whose kind is
-        // flagged unique in the registry.
-        String roomsLine = collectUniqueRooms(lvl);
-        if (!roomsLine.isEmpty()) {
-            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    TextCatalog.format("ui.map.rooms",
-                            TextCatalog.vars("rooms", roomsLine)),
-                    left, top, textW);
-            top -= 16f;
-        }
+        // Percent explored.
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.format("ui.map.explored",
+                        TextCatalog.vars("pct", exploredPercent(lvl))),
+                left, top, textW);
+        top -= 16f;
 
-        // Unique mob species present.
-        String mobsLine = collectUniqueMobs(lvl);
-        if (!mobsLine.isEmpty()) {
-            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    TextCatalog.format("ui.map.mobs",
-                            TextCatalog.vars("mobs", mobsLine)),
-                    left, top, textW);
-        }
+        // Beacon status: lit / present-but-unlit / none.
+        int beacon = beaconState(lvl);
+        String beaconVal = beacon == 2 ? TextCatalog.get("ui.map.beaconLit")
+                         : beacon == 1 ? TextCatalog.get("ui.map.beaconUnlit")
+                                       : TextCatalog.get("ui.map.beaconNone");
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.format("ui.map.beacon", TextCatalog.vars("state", beaconVal)),
+                left, top, textW);
+        top -= 16f;
+
+        // Gemforge presence.
+        String forgeVal = hasGemforge(lvl) ? TextCatalog.get("ui.map.yes")
+                                           : TextCatalog.get("ui.map.no");
+        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                TextCatalog.format("ui.map.gemforge", TextCatalog.vars("state", forgeVal)),
+                left, top, textW);
     }
 
-    private static String collectUniqueRooms(Level lvl) {
-        if (lvl.rooms == null || lvl.rooms.isEmpty()) return "";
-        Set<String> seen = new HashSet<>();
-        StringBuilder sb = new StringBuilder();
-        for (Level.RoomSnapshot r : lvl.rooms) {
-            if (r == null || r.kind == null) continue;
-            var def = Registries.themedRoom(r.kind);
-            if (def == null || !def.unique) continue;
-            String label = r.kind.toLowerCase().replace('_', ' ');
-            if (!seen.add(label)) continue;
-            if (sb.length() > 0) sb.append(", ");
-            sb.append(label);
-        }
-        return sb.toString();
+    /** "CRYSTAL" -> "Crystal", "MIRRORMATCH" -> "Mirrormatch". */
+    private static String prettify(String enumName) {
+        if (enumName == null || enumName.isEmpty()) return "";
+        return enumName.charAt(0) + enumName.substring(1).toLowerCase().replace('_', ' ');
     }
 
-    private static String collectUniqueMobs(Level lvl) {
-        if (lvl.mobs == null || lvl.mobs.isEmpty()) return "";
-        Set<String> seen = new HashSet<>();
-        StringBuilder sb = new StringBuilder();
-        for (Mob m : lvl.mobs) {
-            if (m == null || m.mobType == null) continue;
-            var def = Registries.mob(m.mobType);
-            if (def == null || !def.unique) continue;
-            String label = m.name != null && !m.name.isEmpty()
-                    ? m.name : m.mobType.toLowerCase();
-            if (!seen.add(label)) continue;
-            if (sb.length() > 0) sb.append(", ");
-            sb.append(label);
+    /** Percent of {@code lvl}'s floor-like tiles the player has explored. */
+    private static int exploredPercent(Level lvl) {
+        if (lvl.explored == null || lvl.tiles == null) return 0;
+        int total = 0, seen = 0;
+        for (int x = 0; x < lvl.width; x++) {
+            for (int y = 0; y < lvl.height; y++) {
+                if (lvl.tiles[x][y] == null || !lvl.tiles[x][y].isFloorLike()) continue;
+                total++;
+                if (lvl.explored[x][y]) seen++;
+            }
         }
-        return sb.toString();
+        return total == 0 ? 0 : Math.round(100f * seen / total);
+    }
+
+    /** 2 = a lit (active) beacon present, 1 = an unlit beacon present, 0 = none. */
+    private static int beaconState(Level lvl) {
+        if (lvl.tiles == null) return 0;
+        boolean unlit = false;
+        for (int x = 0; x < lvl.width; x++) {
+            for (int y = 0; y < lvl.height; y++) {
+                Tile t = lvl.tiles[x][y];
+                if (t == Tile.BEACON_ACTIVE) return 2;
+                if (t == Tile.BEACON_INACTIVE) unlit = true;
+            }
+        }
+        return unlit ? 1 : 0;
+    }
+
+    /** True if a gem forge (gem hearth) stands anywhere on the level. */
+    private static boolean hasGemforge(Level lvl) {
+        if (lvl.tiles == null) return false;
+        for (int x = 0; x < lvl.width; x++) {
+            for (int y = 0; y < lvl.height; y++) {
+                if (lvl.tiles[x][y] == Tile.GEM_HEARTH_L) return true;
+            }
+        }
+        return false;
     }
 
     @Override

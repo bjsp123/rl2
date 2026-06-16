@@ -1287,10 +1287,19 @@ ui.look.terrain.mushrooms,mushrooms
 ui.look.terrain.trees,trees
 ui.look.terrainMoveCost,Move cost: {mult}x
 ui.look.title,Look
+ui.map.beacon,Beacon: {state}
+ui.map.beaconLit,lit
+ui.map.beaconNone,none
+ui.map.beaconUnlit,unlit
+ui.map.depthType,Depth {depth}   {type}
+ui.map.explored,{pct}% explored
+ui.map.gemforge,Gemforge: {state}
 ui.map.level,L{depth}
 ui.map.mobs,Mobs:  {mobs}
+ui.map.no,no
 ui.map.orbCount,Teleport orbs: {count}
 ui.map.rooms,Rooms: {rooms}
+ui.map.yes,yes
 ui.map.teleportConfirm,"Teleport to level {depth}? (1 orb, you have {orbs})"
 ui.map.teleportNo,No
 ui.map.teleportYes,Yes

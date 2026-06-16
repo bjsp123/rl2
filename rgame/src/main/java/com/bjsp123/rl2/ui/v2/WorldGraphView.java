@@ -204,6 +204,10 @@ public final class WorldGraphView {
      *  batch/text pass (the lists are filled by {@link #draw}). */
     public void drawUnvisitedGlyphs(UiCtx ctx) {
         for (float[] cxy : unvisitedCenters) {
+            // The shape pass scissor-clips the boxes to the viewport, but this
+            // text pass has no scissor - skip glyphs whose box centre is outside
+            // the viewport so a "?" can't bleed onto the title / chrome.
+            if (!viewport.contains(cxy[0], cxy[1])) continue;
             TextDraw.centre(ctx, ctx.fontHeader, UIVars.BORDER_MID,
                     "?", cxy[0], cxy[1] + ctx.headerLineH() * 0.35f);
         }
