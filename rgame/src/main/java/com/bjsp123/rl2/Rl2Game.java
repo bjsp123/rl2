@@ -113,6 +113,11 @@ public class Rl2Game extends Game {
         this.persistence = persistence;
     }
 
+    /** True when the GL stack is a D3D-backed translation layer whose
+     *  {@code glfwDestroyWindow} crashes on teardown; set in
+     *  {@link #detectGlTeardownHazard()} and consumed by {@link #dispose()}. */
+    private boolean glNeedsHardHalt;
+
     @Override
     public void create() {
         // Data-driven configs - read once at startup, before any factory call or
@@ -152,8 +157,35 @@ public class Rl2Game extends Game {
         // wired in: title -> saves -> character select -> game; settings,
         // hall-of-fame, arena, credits, map, level-info all V2 too.
         ui = new UiCtx();
+        detectGlTeardownHazard();
         Gdx.input.setCatchKey(Input.Keys.BACK, true);
         setScreen(new V2Title(this, ui));
+    }
+
+    /** Decide whether this machine's GL stack is one where {@code glfwDestroyWindow}
+     *  crashes on teardown (see {@link #dispose()}). The bug lives in the D3D-backed
+     *  GL translation layers - Microsoft's OpenGLOn12 (the fallback when no native GL
+     *  driver exists, e.g. ARM/Snapdragon Windows) and ANGLE-over-Direct3D - which
+     *  report tell-tale renderer/vendor strings. Native desktop GL drivers
+     *  (NVIDIA/AMD/Intel/Apple) don't match, so the hard-halt stays off there. */
+    private void detectGlTeardownHazard() {
+        try {
+            String r = Gdx.gl.glGetString(com.badlogic.gdx.graphics.GL20.GL_RENDERER);
+            String v = Gdx.gl.glGetString(com.badlogic.gdx.graphics.GL20.GL_VENDOR);
+            String s = ((r == null ? "" : r) + " " + (v == null ? "" : v))
+                    .toLowerCase(java.util.Locale.ROOT);
+            glNeedsHardHalt = s.contains("openglon12") || s.contains("d3d12")
+                    || s.contains("d3d11") || s.contains("direct3d")
+                    || s.contains("angle") || s.contains("microsoft");
+            if (glNeedsHardHalt) {
+                System.out.println("[rl2] D3D-backed GL stack detected (" + r
+                        + " / " + v + "); will hard-halt on exit to avoid the "
+                        + "glfwDestroyWindow teardown crash.");
+            }
+        } catch (Exception ignored) {
+            // If we can't read the GL strings, leave the hazard flag false and let
+            // the normal teardown run.
+        }
     }
 
 
@@ -294,19 +326,21 @@ public class Rl2Game extends Game {
         if (music  != null) music.dispose();
         if (ui != null) ui.dispose();
 
-        // HARD EXIT to dodge a native teardown crash. On GL stacks that go
-        // through Microsoft's OpenGLOn12 / D3D12 mapping layer (used when no
-        // native OpenGL driver is present - e.g. ARM Windows, and even under
-        // ANGLE here), glfwDestroyWindow reliably access-violates during window
-        // teardown. That's a native EXCEPTION_ACCESS_VIOLATION the JVM can't
-        // catch with try/catch - it aborts the process with a crash dump.
-        // This dispose() is the ApplicationListener teardown, which libGDX runs
-        // BEFORE glfwDestroyWindow, and all our own cleanup (window-size save,
-        // audio/UI dispose) has just completed - so halt the JVM right here and
-        // never reach the buggy native destroy. The OS reclaims the GL context,
-        // window, and memory on process exit. Exit code 0 = clean shutdown.
-        System.out.flush();
-        System.err.flush();
-        Runtime.getRuntime().halt(0);
+        // HARD EXIT to dodge a native teardown crash - but ONLY on the GL stacks
+        // that actually hit it. On D3D-backed GL translation layers (Microsoft's
+        // OpenGLOn12 fallback when no native GL driver exists - e.g. ARM/Snapdragon
+        // Windows - and ANGLE-over-Direct3D) glfwDestroyWindow reliably
+        // access-violates during window teardown: a native
+        // EXCEPTION_ACCESS_VIOLATION the JVM can't catch with try/catch. This
+        // dispose() runs BEFORE that destroy, and all our own cleanup (window-size
+        // save, audio/UI dispose) is done, so halt the JVM here and never reach
+        // the buggy native call. The OS reclaims GL + window + memory on exit.
+        // Native-GL machines (NVIDIA/AMD/Intel/Apple) skip this and tear down
+        // normally - see detectGlTeardownHazard().
+        if (glNeedsHardHalt) {
+            System.out.flush();
+            System.err.flush();
+            Runtime.getRuntime().halt(0);
+        }
     }
 }
