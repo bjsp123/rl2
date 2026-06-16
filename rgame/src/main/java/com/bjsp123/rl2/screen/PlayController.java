@@ -414,11 +414,29 @@ final class PlayController {
         itemPicker.open(eligible,
                 (u, chosen) -> {
                     Level cur = world.currentLevel();
-                    ItemSystem.recycleIntoGems(cur, u, chosen);
-                    afterMove(cur);
+                    Runnable doRecycle = () -> {
+                        ItemSystem.recycleIntoGems(cur, u, chosen);
+                        afterMove(cur);
+                    };
+                    // Confirm first, showing roughly what the player will get.
+                    if (confirmRequest != null && chosen != null) {
+                        String name = chosen.name != null ? chosen.name : chosen.type;
+                        String forecast = com.bjsp123.rl2.logic.GemSystem.recycleForecast(chosen);
+                        String msg = forecast.isEmpty() ? "Break it down for gems?"
+                                : Character.toUpperCase(forecast.charAt(0)) + forecast.substring(1) + ".";
+                        confirmRequest.show("Recycle the " + name + "?", msg, doRecycle);
+                    } else {
+                        doRecycle.run();
+                    }
                 },
                 () -> { /* cancelled */ });
     }
+
+    /** Confirm-dialog hook, set by {@link PlayScreen}. Shows a modal with a
+     *  title + message and runs {@code onConfirm} only if the player accepts. */
+    public interface ConfirmRequest { void show(String title, String message, Runnable onConfirm); }
+    private ConfirmRequest confirmRequest;
+    public void setConfirmRequest(ConfirmRequest c) { this.confirmRequest = c; }
 
     private static final java.util.Random FX_RNG = new java.util.Random();
 

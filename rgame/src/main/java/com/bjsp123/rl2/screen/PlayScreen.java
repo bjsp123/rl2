@@ -87,6 +87,7 @@ public class PlayScreen implements Screen {
     private LevelRenderer    levelRenderer;
     private com.bjsp123.rl2.ui.v2.V2Hud v2Hud;
     private V2Inventory v2Inventory;
+    private com.bjsp123.rl2.ui.v2.ConfirmPopup confirmPopup;
     private V2Look      v2Look;
     private ActionBar         actionBar;
     private TargetingOverlay  targetingOverlay;
@@ -375,6 +376,7 @@ public class PlayScreen implements Screen {
         // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
                 introSkipInput(),
+                confirmPopup.input(),
                 cameraController,
                 tipPopupDismissInput(),
                 v2BuffInfo.input(),
@@ -392,7 +394,7 @@ public class PlayScreen implements Screen {
         // {@code subPopupLayer} so its scrim covers the inventory text
         // cleanly when up.
         if (popupActors == null) {
-            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[7];
+            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[8];
             popupActors[0] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Inventory);
             popupActors[1] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2CharacterStats);
             popupActors[2] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Look);
@@ -401,6 +403,7 @@ public class PlayScreen implements Screen {
                     v2Inventory.detailPopup());
             popupActors[5] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2BuffInfo);
             popupActors[6] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Log);
+            popupActors[7] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(confirmPopup);
         }
         game.ui.v2Stage.add(popupActors[0]);
         game.ui.v2Stage.add(popupActors[1]);
@@ -409,6 +412,7 @@ public class PlayScreen implements Screen {
         game.ui.v2Stage.addToSubPopup(popupActors[4]);
         game.ui.v2Stage.addToSubPopup(popupActors[5]);
         game.ui.v2Stage.addToSubPopup(popupActors[6]);
+        game.ui.v2Stage.addToSubPopup(popupActors[7]);
         game.currentPlay = this;
         if (game.music != null) game.music.play(com.bjsp123.rl2.audio.MusicPlayer.Track.GAMEPLAY);
     }
@@ -551,6 +555,10 @@ public class PlayScreen implements Screen {
         v2Inventory.setActionBar(actionBar);
         v2Inventory.setSounds(game.sounds);
 
+        // Shared confirmation modal (e.g. recycle-at-forge). Configured + opened
+        // on demand via controller.setConfirmRequest below.
+        confirmPopup = new com.bjsp123.rl2.ui.v2.ConfirmPopup(game.ui);
+
         lookMode = new LookMode(camera);
         lookMode.setPlayer(player);
         lookMode.setLevel(world.currentLevel());
@@ -652,6 +660,10 @@ public class PlayScreen implements Screen {
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
         controller.setItemPicker((eligible, onPick, onCancel) ->
                 v2Inventory.openPicker(eligible, onPick, onCancel));
+        controller.setConfirmRequest((title, message, onConfirm) -> {
+            confirmPopup.configure(title, message, "Recycle", "Cancel", onConfirm);
+            confirmPopup.open();
+        });
         controller.setOpenMapScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
                 game, game.ui, game::popScreen, world)));
         controller.setOpenForgeScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Forge(
@@ -1295,6 +1307,7 @@ public class PlayScreen implements Screen {
         if (v2Encyclopedia != null && v2Encyclopedia.isOpen()) return true;
         if (v2BuffInfo != null && v2BuffInfo.isOpen()) return true;
         if (v2Log != null && v2Log.isOpen()) return true;
+        if (confirmPopup != null && confirmPopup.isOpen()) return true;
         return false;
     }
 
