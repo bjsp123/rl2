@@ -18,6 +18,10 @@ public class SaveSystem {
 
     private final Persistence persistence;
     private final Json json;
+    /** Reason the most recent {@link #load} failed (exception summary), or null
+     *  on success. Surfaced in the save-screen "could not load" notice so the
+     *  failure is diagnosable rather than opaque. */
+    private String lastLoadError;
 
     public SaveSystem(Persistence persistence) {
         this.persistence = persistence;
@@ -138,20 +142,28 @@ public class SaveSystem {
     }
 
     public World load(int slot) {
+        lastLoadError = null;
         String raw = persistence.load(worldKey(slot));
-        if (raw == null || raw.isEmpty()) return null;
+        if (raw == null || raw.isEmpty()) { lastLoadError = "save slot is empty"; return null; }
         try {
             World w = json.fromJson(World.class, raw);
-            if (w == null || w.levels == null) return null;
+            if (w == null || w.levels == null) { lastLoadError = "save has no level data"; return null; }
             for (Level l : w.levels) if (l != null) l.initTransients();
             w.linkLevels();
             return w;
         } catch (Exception ex) {
-            // Log so a broken Resume can be diagnosed instead of silently doing nothing.
+            // Capture + log so a broken Resume can be diagnosed instead of
+            // silently doing nothing; the save screen shows this summary.
+            lastLoadError = ex.getClass().getSimpleName()
+                    + (ex.getMessage() != null ? ": " + ex.getMessage() : "");
             Gdx.app.error("SaveSystem", "load slot " + slot + " failed", ex);
             return null;
         }
     }
+
+    /** Reason the most recent {@link #load} returned null, or {@code null} if the
+     *  last load succeeded. */
+    public String lastLoadError() { return lastLoadError; }
 
     public SaveMetadata metadata(int slot) {
         String raw = persistence.load(metaKey(slot));

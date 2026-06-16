@@ -178,9 +178,12 @@ public final class V2Saves extends V2Screen {
 
     /** Modal "this save could not be loaded" notice. */
     private void openLoadError() {
+        String why = game.saveSystem.lastLoadError();
+        String body = TextCatalog.get("ui.saves.loadFailBody");
+        if (why != null && !why.isEmpty()) body = body + "\n(" + why + ")";
         deletePopup.configure(
                 TextCatalog.get("ui.saves.loadFailTitle"),
-                TextCatalog.get("ui.saves.loadFailBody"),
+                body,
                 TextCatalog.get("ui.common.ok"),
                 TextCatalog.get("ui.common.cancel"),
                 () -> {});
@@ -259,6 +262,16 @@ public final class V2Saves extends V2Screen {
                         line2, textLeft,
                         textTop - ctx.fontHeader.getCapHeight() - 6f,
                         c.rect.right() - textLeft - CARD_PAD);
+                // Flag saves written by a different game version in small yellow
+                // letters at the card's bottom-right.
+                if (!com.bjsp123.rl2.util.AppVersion.matches(
+                        c.metadata.version, c.metadata.build)) {
+                    String note = (c.metadata.version == null || c.metadata.version.isEmpty())
+                            ? "older version"
+                            : "v" + c.metadata.version + " (b" + c.metadata.build + ")";
+                    TextDraw.right(ctx, ctx.fontRegular, UIVars.ACCENT,
+                            note, c.rect.right() - CARD_PAD, c.rect.y + CARD_PAD + 2f);
+                }
             } else {
                 TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
                         TextCatalog.get("ui.saves.newGame"),

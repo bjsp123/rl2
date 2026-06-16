@@ -689,10 +689,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // so unseen tiles still darken normally. Only fires when the player is looking at
         // a mob; otherwise it's a no-op.
         if (lookedAtMob != null) drawLookAnnotations(level);
-        // Melee hit-chance preview - small chip above every enemy adjacent
-        // to the player. Toggled by Settings.meleePreview() so players who
-        // find it noisy can turn it off.
-        if (com.bjsp123.rl2.ui.skin.Settings.meleePreview()) drawMeleePreviews(level);
 
         long _t4 = System.nanoTime(); int _f4 = batch.renderCalls;
         if (DRAW_FOG) fog.render(batch);
@@ -760,58 +756,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  shared {@link #font}. Uses the same world-y offset convention as floating text so
      *  multi-line stacks (state-of-mind on the looked-at mob, "+1" floating heal text,
      *  etc.) layer cleanly. */
-    /** Render small "85% · ~5 dmg" chips above every adjacent enemy of
-     *  the looked-at-player (or, if no Look mode, the actual PLAYER). Uses
-     *  {@link com.bjsp123.rl2.logic.MobStats#hitChance} and the raw / armor
-     *  ranges to compose the same chip that {@link
-     *  com.bjsp123.rl2.ui.overlay.TargetingOverlay} renders for ranged
-     *  targeting - same math, same wording. */
-    private void drawMeleePreviews(Level level) {
-        Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
-        if (player == null || player.position == null) return;
-        int px = player.position.tileX(), py = player.position.tileY();
-        // Scale the world-space font down for the duration of the chip pass
-        // so a "85% · ~6 dmg" string isn't sized like a billboard. Reset
-        // after the loop so other annotation callers (state-of-mind labels,
-        // attitude marks) keep their full-size font.
-        float prevScale = font.getData().scaleX;
-        font.getData().setScale(prevScale * com.bjsp123.rl2.ui.v2.UIVars.MELEE_CHIP_SCALE);
-        try {
-            for (Mob m : level.mobs) {
-                if (m == null || m == player || m.position == null) continue;
-                int mx = m.position.tileX(), my = m.position.tileY();
-                int dist = Math.max(Math.abs(mx - px), Math.abs(my - py));
-                if (dist != 1) continue;
-                if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
-                if (!level.visible[mx][my]) continue;
-                if (com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(player, m)
-                        == com.bjsp123.rl2.logic.MobSystem.Attitude.ALLY) continue;
-                String chip = formatMeleeChip(player, m);
-                if (chip != null && !chip.isEmpty()) {
-                    drawAnnotationAbove(m, chip, com.bjsp123.rl2.ui.v2.UIVars.ACCENT);
-                }
-            }
-        } finally {
-            font.getData().setScale(prevScale);
-        }
-    }
-
-    private static String formatMeleeChip(Mob attacker, Mob target) {
-        double hitChance = com.bjsp123.rl2.logic.MobStats.hitChance(attacker, target);
-        int hitPct = (int) Math.round(hitChance * 100.0);
-        com.bjsp123.rl2.model.MinMax raw   = com.bjsp123.rl2.logic.MobStats.rawDamageRange(attacker);
-        com.bjsp123.rl2.model.MinMax armor = com.bjsp123.rl2.logic.MobStats.resistRange(target);
-        com.bjsp123.rl2.model.MinMax ap    = com.bjsp123.rl2.logic.MobStats.apDamageRange(attacker);
-        int rawMid   = (raw.min()   + raw.max())   / 2;
-        int armorMid = (armor.min() + armor.max()) / 2;
-        int apMid    = (ap.min()    + ap.max())    / 2;
-        int netMid   = Math.max(0, rawMid - armorMid) + apMid;
-        String dmg = (armorMid > 0 && rawMid > 0)
-                ? "~" + rawMid + "-" + armorMid + "=~" + netMid
-                : "~" + netMid;
-        return hitPct + "% · " + dmg;
-    }
-
     private void drawAnnotationAbove(Mob mob, String text, Color color) {
         if (text == null || text.isEmpty()) return;
         int gx = mob.position.tileX(), gy = mob.position.tileY();
