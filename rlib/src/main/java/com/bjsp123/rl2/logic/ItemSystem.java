@@ -1455,7 +1455,7 @@ public final class ItemSystem {
         if (gem == null || gem.type == null) return null;
         return switch (gem.type) {
             case "ELEMENTAL_INSCRIPTION" -> BrandSystem::isBrandable;
-            case "FERVENT_ASPIRATION"   -> i -> i != null && i.isEquippable();
+            case "FERVENT_ASPIRATION"   -> i -> i != null && (i.isEquippable() || isJadeItem(i));
             default -> null;
         };
     }
@@ -1478,7 +1478,8 @@ public final class ItemSystem {
                 return true;
             }
             case "FERVENT_ASPIRATION" -> {
-                if (!targetItem.isEquippable()) return false;
+                // Equipment and jade companions both have a meaningful level.
+                if (!targetItem.isEquippable() && !isJadeItem(targetItem)) return false;
                 targetItem.level += 1;
                 if (user != null) user.statsDirty = true;
                 announceGemUse(user, gem);
