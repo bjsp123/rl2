@@ -543,9 +543,10 @@ public final class ActionLibrary {
     }
 
     /** Enumerate moves to any known floor item that is consumable OR a true
-     *  equipment upgrade. SMART agents auto-pickup on tile entry via
-     *  {@code MobSystem.stepTowardTarget}'s non-PLAYER pickup path, so we never
-     *  need an explicit ActionPickup. */
+     *  equipment upgrade. A non-PLAYER SMART mob auto-picks-up on tile entry via
+     *  {@code MobSystem.stepTowardTarget}, but the player's auto-explore (a
+     *  PLAYER-behaviour mob driven by this planner) does NOT - so when the agent
+     *  is standing on the item we emit an explicit {@link ActionPickup}. */
     public static void addPickupConsumableOrUpgrade(WorldState s, List<Action> out) {
         if (s.memory == null) return;
         Mob me = s.mob;
@@ -557,7 +558,14 @@ public final class ActionLibrary {
                         && com.bjsp123.rl2.ai.goal.GoalPickupKnown.isEquipmentUpgrade(me, it));
             if (!want) continue;
             Point t = e.getKey();
-            if (t.equals(me.position)) continue;   // auto-picked-up; awaiting prune
+            if (t.equals(me.position)) {
+                // Standing on it: take it. For a non-PLAYER mob that auto-picked
+                // up on entry the item is already gone, so ActionPickup is
+                // inapplicable and ignored; for the player's auto-explore this is
+                // what actually grabs the item instead of ping-ponging beside it.
+                out.add(new ActionPickup());
+                continue;
+            }
             int d = WorldState.chebyshev(me.position, t);
             double value = it.getValue();
             out.add(new ActionMoveToward(t,
