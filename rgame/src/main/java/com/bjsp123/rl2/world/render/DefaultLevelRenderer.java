@@ -692,6 +692,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         long _t4 = System.nanoTime(); int _f4 = batch.renderCalls;
         if (DRAW_FOG) fog.render(batch);
+        // Player death soul-streak - drawn ABOVE the fog so it can't be hidden by
+        // unexplored/dark tiles once the player is gone (RL-56).
+        drawPlayerDeathStreakPass(level);
         // Buff over-head icons draw ABOVE the fog so an icon that sits over an
         // unexplored tile to the north isn't clipped by the fog overlay (RL-44).
         drawBuffOverheadIconsPass(level);
@@ -2033,19 +2036,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
             if (g.mob == null) continue;
             int gx = g.x, gy = g.y;
             if (!inBounds(level, gx, gy)) continue;
-            boolean isPlayer = g.mob.isPlayer;
-            // The player's death soul-streak must show even if FOV no longer
-            // covers the death tile (the player is gone, so lighting can drop);
-            // other mobs' fades still respect visibility.
-            if (!isPlayer && !level.visible[gx][gy]) continue;
+            // The player's death soul-streak is drawn later, ABOVE the fog,
+            // by drawPlayerDeathStreakPass - skip it here.
+            if (g.mob.isPlayer) continue;
+            if (!level.visible[gx][gy]) continue;
             Sprite s = spriteForGhost(g);
             if (s == null) continue;
-            if (isPlayer) {
-                int total = com.bjsp123.rl2.world.anim.AnimationVars.deathTotalFrames();
-                float p = total <= 0 ? 1f : g.frame / (float) total;
-                drawPlayerSoulStreak(s, gx, gy, p);
-                continue;
-            }
             com.bjsp123.rl2.world.anim.MobAnimState as = animator.stateOf(g.mob);
             // Slide offset, identical to drawMob's: at t=0 the sprite is
             // pulled back by stepFromDx tiles, ramping to zero by t=1.
@@ -2061,6 +2057,21 @@ public class DefaultLevelRenderer implements LevelRenderer {
             float alpha = g.alpha();
             if (alpha <= 0f) continue;
             drawMobSprite(s, gx, gy, ox, oy, alpha);
+        }
+    }
+
+    /** Post-fog pass: the player's death soul-streak, drawn on top of the fog so
+     *  it can't be hidden once the player's light is gone. */
+    private void drawPlayerDeathStreakPass(Level level) {
+        if (animator == null) return;
+        for (com.bjsp123.rl2.world.anim.Ghost g : animator.ghosts()) {
+            if (g.mob == null || !g.mob.isPlayer) continue;
+            if (!inBounds(level, g.x, g.y)) continue;
+            Sprite s = spriteForGhost(g);
+            if (s == null) continue;
+            int total = com.bjsp123.rl2.world.anim.AnimationVars.deathTotalFrames();
+            float p = total <= 0 ? 1f : g.frame / (float) total;
+            drawPlayerSoulStreak(s, g.x, g.y, p);
         }
     }
 
