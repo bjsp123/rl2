@@ -91,15 +91,24 @@ public final class V2GameOver extends V2Screen {
         buttons.add(logBtn);
     }
 
+    /** Wall-clock accumulator for the swirl backdrop. */
+    private float swirlT;
+
     @Override
     protected void drawBackground(float delta) {
-        // No attract-mode demo behind the death screen - a flat, somber backdrop.
+        // No attract-mode demo behind the death screen - the primal swirls over a
+        // dark void instead.
+        swirlT += delta;
         com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
         s.setProjectionMatrix(ctx.camera.combined);
         s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
         s.setColor(0.04f, 0.04f, 0.06f, 1f);
         s.rect(0f, 0f, ctx.worldW(), ctx.worldH());
         s.end();
+        ctx.batch.setProjectionMatrix(ctx.camera.combined);
+        ctx.batch.begin();
+        SwirlBackground.render(ctx.batch, 0f, 0f, ctx.worldW(), ctx.worldH(), swirlT);
+        ctx.batch.end();
     }
 
     @Override
