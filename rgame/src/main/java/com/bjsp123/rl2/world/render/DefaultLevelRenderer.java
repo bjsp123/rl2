@@ -1558,11 +1558,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         // Gently bob the whole sign; per-stair phase so neighbours don't sync.
         float phase = x * 0.7f + y * 1.3f;
-        float bob = (float) Math.sin(stairLabelTime * 1.8f + phase) * 2.5f;
+        float bob = (float) Math.sin(stairLabelTime * 1.8f + phase) * 1.0f;
 
         // Small sign: scale the font down for both measurement and draw,
         // restored at the end of this method.
-        font.getData().setScale(0.4f);
+        font.getData().setScale(0.28f);
 
         com.badlogic.gdx.graphics.g2d.GlyphLayout gl =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout();

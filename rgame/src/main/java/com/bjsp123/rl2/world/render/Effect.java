@@ -688,20 +688,26 @@ public class Effect {
      *  wrapped in a slightly wider pale-blue halo for body. Composite, added
      *  straight to the stage like {@link #beaconActivation}. */
     public static void columnOfLight(EffectStage stage, Point at, Random rng) {
-        // Core shaft: many bright-white particles launched together (tiny spawn
-        // spread, near-zero horizontal jitter) straight up, fast, short-lived -
-        // a coherent column that rises and vanishes quickly.
+        // Bright base burst so there's an unmistakable flash of light right at
+        // the fallen tile (small + local, not a screen flash).
+        stage.add(EffectBuilder.burst(at, EffectTint.WHITE,
+                /*count*/ 24, /*speedMin*/ 0.6f, /*speedMax*/ 1.8f,
+                /*size*/ 2.4f, /*bright*/ true,
+                /*duration*/ EffectType.PARTICLE_BURST.frameCount, rng));
+        // Dense bright-white core shaft: lots of particles launched together
+        // (tiny spawn spread, near-zero horizontal jitter) straight up, rising
+        // tall and fading - the soul streaking upward.
         stage.add(EffectBuilder.fountain(at, EffectTint.WHITE,
-                /*count*/ 64, /*spawnSpread*/ 5, /*life*/ 34,
-                /*riseMin*/ 3.8f, /*riseMax*/ 5.4f,
-                /*horizontalJitter*/ 0.12f, /*fadeToWhite*/ true,
-                /*posJitterX*/ 3.5f, /*posJitterY*/ 3f, rng));
-        // Pale-blue halo: a touch wider + dimmer so the shaft has body.
+                /*count*/ 110, /*spawnSpread*/ 4, /*life*/ 52,
+                /*riseMin*/ 3.0f, /*riseMax*/ 4.6f,
+                /*horizontalJitter*/ 0.1f, /*fadeToWhite*/ true,
+                /*posJitterX*/ 4f, /*posJitterY*/ 4f, rng));
+        // Pale-blue halo: wider + softer so the shaft has visible body.
         stage.add(EffectBuilder.fountain(at, EffectTint.CYAN,
-                /*count*/ 30, /*spawnSpread*/ 7, /*life*/ 30,
-                /*riseMin*/ 3.2f, /*riseMax*/ 4.6f,
-                /*horizontalJitter*/ 0.35f, /*fadeToWhite*/ true,
-                /*posJitterX*/ 8f, /*posJitterY*/ 3f, rng));
+                /*count*/ 55, /*spawnSpread*/ 6, /*life*/ 46,
+                /*riseMin*/ 2.6f, /*riseMax*/ 4.0f,
+                /*horizontalJitter*/ 0.4f, /*fadeToWhite*/ true,
+                /*posJitterX*/ 11f, /*posJitterY*/ 4f, rng));
     }
 
     /** Player-side teleport visual at the source cell - upward green streaks,
