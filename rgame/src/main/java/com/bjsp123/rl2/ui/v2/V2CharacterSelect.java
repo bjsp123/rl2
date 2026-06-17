@@ -67,7 +67,7 @@ public final class V2CharacterSelect extends V2Screen {
      *  regular dungeon depth) instead of depth 1. Defaults TRUE while we
      *  iterate on the endgame floors - flip back to FALSE once they're
      *  feature-complete and the regular dungeon start matters again. */
-    private boolean startOnLanding = true;
+    private boolean startOnLanding = false;
 
     private final Rect window       = new Rect();
     private final Rect charPopup    = new Rect();
