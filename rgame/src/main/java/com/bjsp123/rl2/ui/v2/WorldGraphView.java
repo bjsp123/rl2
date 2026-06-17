@@ -150,7 +150,16 @@ public final class WorldGraphView {
         boolean clipped = com.badlogic.gdx.scenes.scene2d.utils.ScissorStack
                 .pushScissors(scissorOut);
 
-        drawSwirlBackground(s, viewport);
+        // Dark void base (shapes), then the shifting primal swirls (batch).
+        s.setColor(0.04f, 0.04f, 0.07f, 1f);
+        s.rect(viewport.x, viewport.y, viewport.w, viewport.h);
+        s.end();
+        ctx.batch.setProjectionMatrix(ctx.camera.combined);
+        ctx.batch.begin();
+        SwirlBackground.render(ctx.batch, viewport.x, viewport.y,
+                viewport.w, viewport.h, swirlT);
+        ctx.batch.end();
+        s.begin(ShapeRenderer.ShapeType.Filled);
 
         // Pass A - connection arrows under the boxes.
         s.setColor(ARROW_TINT);
@@ -314,41 +323,6 @@ public final class WorldGraphView {
                 s.triangle(xL, rowY, xR, rowY, xRN, rowY + rowH);
                 s.triangle(xL, rowY, xRN, rowY + rowH, xLN, rowY + rowH);
             }
-        }
-    }
-
-    private void drawSwirlBackground(ShapeRenderer s, Rect vp) {
-        s.setColor(0.04f, 0.04f, 0.07f, 1f);
-        s.rect(vp.x, vp.y, vp.w, vp.h);
-        float t = swirlT;
-        float cx = vp.cx();
-        float cy = vp.cy();
-        float orbitR = Math.min(vp.w, vp.h) * 0.45f;
-        drawSwirlBlob(s,
-                cx + (float) Math.cos(t * 0.18f)        * orbitR * 0.7f,
-                cy + (float) Math.sin(t * 0.18f)        * orbitR * 0.4f,
-                Math.min(vp.w, vp.h) * 0.55f,
-                0.18f, 0.10f, 0.28f, 0.55f);
-        drawSwirlBlob(s,
-                cx + (float) Math.cos(t * 0.27f + 2.1f) * orbitR * 0.5f,
-                cy + (float) Math.sin(t * 0.22f + 0.7f) * orbitR * 0.6f,
-                Math.min(vp.w, vp.h) * 0.42f,
-                0.10f, 0.14f, 0.32f, 0.50f);
-        drawSwirlBlob(s,
-                cx + (float) Math.cos(t * 0.12f + 4.0f) * orbitR * 0.8f,
-                cy + (float) Math.sin(t * 0.16f + 3.3f) * orbitR * 0.5f,
-                Math.min(vp.w, vp.h) * 0.36f,
-                0.22f, 0.08f, 0.20f, 0.45f);
-    }
-
-    private void drawSwirlBlob(ShapeRenderer s, float cx, float cy,
-                               float outerR, float r, float g, float b, float alpha) {
-        int rings = 5;
-        for (int i = 0; i < rings; i++) {
-            float ringR  = outerR * (1f - i / (float) rings);
-            float ringA  = alpha * ((i + 1) / (float) rings);
-            s.setColor(r, g, b, ringA);
-            s.circle(cx, cy, ringR);
         }
     }
 
