@@ -235,13 +235,16 @@ public class PlayScreen implements Screen {
     private boolean introActive;
     /** Real-time accumulator (seconds) driving the intro zoom ease. */
     private float introTime;
-    /** Real-time length of the arrival white-flash that fades out when control
-     *  begins (intro end), in seconds. */
-    private static final float ARRIVAL_FLASH_SEC = 0.5f;
-    /** True while the arrival white-flash is fading out after the intro ends. */
-    private boolean arrivalFlashActive;
-    /** Real-time accumulator (seconds) driving the arrival flash fade-out. */
-    private float arrivalFlashTime;
+    /** Length of the crossfade from the world-graph fly-in to the level, in
+     *  seconds. The last graph frame is captured and faded out over the level. */
+    private static final float GRAPH_FADE_SEC = 0.25f;
+    /** True while the captured world-graph image is fading out over the level. */
+    private boolean introFadeActive;
+    /** Real-time accumulator (seconds) driving the graph->level crossfade. */
+    private float introFadeTime;
+    /** Snapshot of the final world-graph frame, drawn fading-out over the level
+     *  during the crossfade. Disposed when the fade completes. */
+    private com.badlogic.gdx.graphics.Texture introFadeTex;
 
     // --- Intro stage 4: world-graph prefix -----------------------------------
     /** Shared world-graph renderer for the intro fly-in (same look as the map
@@ -1105,16 +1108,17 @@ public class PlayScreen implements Screen {
         // the world while the camera eases in. Drawn last so it sits on top.
         if (introActive) drawIntroMessage();
 
-        // Arrival white-flash - ramps from opaque white down to nothing right
-        // after the intro hands control to the player. Drawn over everything.
-        if (arrivalFlashActive) {
-            arrivalFlashTime += delta;
-            float a = ARRIVAL_FLASH_SEC <= 0f ? 0f
-                    : 1f - Math.min(1f, arrivalFlashTime / ARRIVAL_FLASH_SEC);
+        // Graph -> level crossfade: the captured final world-graph frame fades
+        // out over the (now rendering) level, so the map dissolves into the
+        // dungeon. Drawn over everything.
+        if (introFadeActive) {
+            introFadeTime += delta;
+            float a = GRAPH_FADE_SEC <= 0f ? 0f
+                    : 1f - Math.min(1f, introFadeTime / GRAPH_FADE_SEC);
             if (a <= 0f) {
-                arrivalFlashActive = false;
+                endIntroFade();
             } else {
-                drawArrivalFlash(a);
+                drawIntroFade(a);
             }
         }
 
@@ -1136,7 +1140,7 @@ public class PlayScreen implements Screen {
 
     /** Intro stage 4 render path: draw the world graph full-screen and fly the
      *  view from "whole graph visible" into the current-level node, then hand
-     *  off (white-flash + level zoom-in). Runs instead of the normal frame
+     *  off (crossfade into the level zoom-in). Runs instead of the normal frame
      *  while {@link #introGraphPhase} is set; the world stays paused. */
     private void renderIntroGraph(float delta) {
         graphIntroTime += delta;
@@ -1173,18 +1177,36 @@ public class PlayScreen implements Screen {
         introGraph.drawUnvisitedGlyphs(ctx);
         ctx.batch.end();
 
-        if (t >= 1f) endGraphPhase();
+        if (t >= 1f) {
+            // Snapshot this final graph frame, then crossfade it out over the
+            // level (started in endGraphPhase) instead of cutting with a flash.
+            if (introFadeTex != null) introFadeTex.dispose();
+            introFadeTex = captureScreen();
+            endGraphPhase();
+        }
     }
 
-    /** Hand off from the graph fly-in to the level zoom-in: arm the level
-     *  camera at its far zoom and fire the bridging white-flash. */
+    /** Capture the current backbuffer as a Texture (caller owns + disposes it). */
+    private com.badlogic.gdx.graphics.Texture captureScreen() {
+        int w = Gdx.graphics.getBackBufferWidth();
+        int h = Gdx.graphics.getBackBufferHeight();
+        com.badlogic.gdx.graphics.Pixmap pm =
+                com.badlogic.gdx.graphics.Pixmap.createFromFrameBuffer(0, 0, w, h);
+        com.badlogic.gdx.graphics.Texture tex = new com.badlogic.gdx.graphics.Texture(pm);
+        pm.dispose();
+        return tex;
+    }
+
+    /** Hand off from the graph fly-in to the level zoom-in: arm the level camera
+     *  at its far zoom and start the graph->level crossfade (the captured graph
+     *  frame fades out over the level). */
     private void endGraphPhase() {
         introGraphPhase = false;
         introTime = 0f;
         camera.zoom = INTRO_START_ZOOM;
         recenterCameraOnPlayer();
-        arrivalFlashActive = true;   // white-flash bridges graph -> dungeon
-        arrivalFlashTime = 0f;
+        introFadeActive = true;
+        introFadeTime = 0f;
     }
 
     /** Ease the camera back from play zoom toward {@link #DEATH_ZOOM_OUT} as the
@@ -1198,18 +1220,15 @@ public class PlayScreen implements Screen {
         camera.update();
     }
 
-    /** Snap to play zoom and hand control to the player. Fires the arrival
-     *  cinematic (white-flash + dust cloud blooming around the player) so the
-     *  hand-off reads as "you materialise here". Idempotent. */
+    /** Snap to play zoom and hand control to the player, blooming a dust cloud
+     *  around them so the hand-off reads as "you materialise here". Idempotent. */
     private void endIntro() {
         if (!introActive) return;
         introActive = false;
         introGraphPhase = false;   // a skip during the graph fly-in lands here too
         camera.zoom = DEFAULT_ZOOM;
         recenterCameraOnPlayer();
-        // Arrival: flash to white and bloom a dust cloud around the player.
-        arrivalFlashActive = true;
-        arrivalFlashTime = 0f;
+        // Arrival: bloom a dust cloud around the player as control begins.
         Mob p = TurnSystem.findPlayer(world.currentLevel());
         if (p != null && animator != null) {
             com.bjsp123.rl2.world.render.Effect.arrivalCloud(
@@ -1264,19 +1283,30 @@ public class PlayScreen implements Screen {
         b.end();
     }
 
-    private void drawArrivalFlash(float alpha) {
-        if (alpha <= 0f) return;
-        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
-        s.setProjectionMatrix(game.ui.camera.combined);
+    /** Draw the captured world-graph frame full-screen at {@code alpha}, fading
+     *  it out over the level beneath (the graph->level crossfade). The captured
+     *  framebuffer image is top-down, so it's drawn V-flipped. */
+    private void drawIntroFade(float alpha) {
+        if (introFadeTex == null || alpha <= 0f) return;
+        com.bjsp123.rl2.ui.v2.UiCtx ctx = game.ui;
+        ctx.applyProjection();
+        com.badlogic.gdx.graphics.g2d.SpriteBatch b = ctx.batch;
         com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
-        com.badlogic.gdx.Gdx.gl.glBlendFunc(
-                com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
-                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
-        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
-        s.setColor(1f, 1f, 1f, alpha);
-        s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
-        s.end();
-        com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        b.begin();
+        b.setColor(1f, 1f, 1f, alpha);
+        b.draw(introFadeTex, 0f, 0f, ctx.worldW(), ctx.worldH(),
+                /*u*/ 0f, /*v*/ 1f, /*u2*/ 1f, /*v2*/ 0f);   // V-flip
+        b.setColor(1f, 1f, 1f, 1f);
+        b.end();
+    }
+
+    /** End the crossfade and release the captured graph texture. */
+    private void endIntroFade() {
+        introFadeActive = false;
+        if (introFadeTex != null) {
+            introFadeTex.dispose();
+            introFadeTex = null;
+        }
     }
 
     private void drawDeathFadeOverlay(float alpha) {
@@ -1368,6 +1398,7 @@ public class PlayScreen implements Screen {
     @Override
     public void dispose() {
         if (levelRenderer    != null) levelRenderer.dispose();
+        if (introFadeTex     != null) { introFadeTex.dispose(); introFadeTex = null; }
         // V2 inventory has no GPU resources of its own - dispose via UiCtx.
         if (targetingOverlay != null) targetingOverlay.dispose();
         if (lookMode         != null) lookMode.dispose();
