@@ -66,24 +66,17 @@ public final class GemSystem {
      *  Used by {@link #recycleGemCount} (the live roll) and
      *  {@link #recycleForecast} (the blurb) so they can't drift. */
     public static double recycleExpectedGems(double power) {
-        return RECYCLE_BASE_GEMS + power * RECYCLE_GEMS_PER_POWER;
+        return GameBalance.RECYCLE_BASE_GEMS + power * GameBalance.RECYCLE_GEMS_PER_POWER;
     }
-
-    /** Base expected gems at power 0 (the "1 in 4" chance) and the extra
-     *  expected gems added at full power. */
-    private static final double RECYCLE_BASE_GEMS      = 0.25;
-    private static final double RECYCLE_GEMS_PER_POWER = 2.75;   // power 1 -> ~3.0
-    /** Hard cap on gems from a single recycle. */
-    private static final int    RECYCLE_MAX_GEMS       = 4;
 
     /** Actual gem count for one recycle: the integer part of the expected value
      *  plus a fractional-chance extra, so a power-0 item drops a gem ~1 time in
-     *  4 and richer items a few. Capped at {@link #RECYCLE_MAX_GEMS}. */
+     *  4 and richer items a few. Capped at {@code GameBalance.RECYCLE_MAX_GEMS}. */
     public static int recycleGemCount(double power, Random rng) {
         double e = recycleExpectedGems(power);
         int n = (int) Math.floor(e);
         if (rng.nextDouble() < (e - n)) n++;
-        return Math.max(0, Math.min(RECYCLE_MAX_GEMS, n));
+        return Math.max(0, Math.min(GameBalance.RECYCLE_MAX_GEMS, n));
     }
 
     /** Rarity class for one recycled gem: better odds of metal / exotic the

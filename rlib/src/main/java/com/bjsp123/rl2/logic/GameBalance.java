@@ -366,6 +366,16 @@ public final class GameBalance {
     /** Standard turns spent on a floor per +1 hazard. */
     public static int HAZARD_TURNS_PER_POINT = 2000;
 
+    // ------------------------- Gem recycle (RL-50) ---------------------------
+    /** Expected gems from recycling an item = {@code RECYCLE_BASE_GEMS +
+     *  power * RECYCLE_GEMS_PER_POWER}, rolled stochastically. Base is the
+     *  power-0 yield (~0.25 = a 1-in-4 chance of a single gem). */
+    public static double RECYCLE_BASE_GEMS = 0.25;
+    /** Extra expected gems added at full item power. */
+    public static double RECYCLE_GEMS_PER_POWER = 2.75;
+    /** Hard cap on gems from a single recycle. */
+    public static int RECYCLE_MAX_GEMS = 4;
+
     // ------------------------- Throw range -----------------------------------
     /** Default Chebyshev throw range for the player targeting overlay. */
     public static int DEFAULT_THROW_RANGE = 6;
