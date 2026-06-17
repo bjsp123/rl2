@@ -494,6 +494,11 @@ public class Mob {
      *  now). */
     public transient Mob owner;
 
+    /** True for a player-summoned clone (EIGHTFOLD_MULTIPLICATION). Spawned from
+     *  the ENEMY_PLAYER_* template for stats/AI but flagged so the renderer draws
+     *  it from the clone column of {@code player.png}. */
+    public boolean isClone;
+
     // -- Turn scheduling + counters ------------------------------------------
     public int ticksTillMove;
     /** Mobs this mob could see at the beginning of its current/last action turn.

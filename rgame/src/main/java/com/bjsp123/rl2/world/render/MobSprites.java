@@ -26,27 +26,26 @@ public final class MobSprites {
     private static final int CELL = 32;
     /** Cell dimensions for {@code sprites/player.png}: 32 wide, 64 tall.
      *  Row = class (0=ROGUE, 1=WARRIOR, 2=MAGE). Col = variant
-     *  (0=unused, 1=enemy player, 2=ghost player). */
+     *  (0=real PC, 1=enemy player, 2=clone). */
     private static final int PLAYER_CELL_W = 32;
     private static final int PLAYER_CELL_H = 64;
 
-    /** Column index in {@code sprites/player.png} used for the real PC.
-     *  Set to {@code 2} (ghost variant) - the player reads as the
-     *  translucent silhouette while the dedicated enemy art (col 1) is
-     *  reserved for ENEMY_PLAYER_* mobs. */
-    private static final int PLAYER_VARIANT_COL       = 2;
-    /** Column index in {@code sprites/player.png} used for enemy-player
-     *  mobs. Set to {@code 1} - the dedicated enemy-art column - so
-     *  enemy players read as visibly distinct from the real (ghost) PC. */
+    /** Column in {@code sprites/player.png} for the real player character. */
+    private static final int PLAYER_VARIANT_COL       = 0;
+    /** Column for enemy-player mobs (ENEMY_PLAYER_*). */
     private static final int ENEMY_PLAYER_VARIANT_COL = 1;
+    /** Column for the player's summoned clones (PLAYER_CLONE_*). */
+    private static final int CLONE_VARIANT_COL        = 2;
 
     private static Texture mobsTex;
     private static final Map<String, int[]> coords = new HashMap<>();
     private static final Map<String, TextureRegion> regions = new HashMap<>();
     /** Per-class regions for real player mobs. Lazily built in {@link #ensureLoaded}. */
     private static Map<CharacterClass, TextureRegion> playerRegions;
-    /** Per-class regions for enemy-player mobs (ghost variant for now). */
+    /** Per-class regions for enemy-player mobs (col 1). */
     private static Map<CharacterClass, TextureRegion> enemyPlayerRegions;
+    /** Per-class regions for the player's summoned clones (col 2). */
+    private static Map<CharacterClass, TextureRegion> cloneRegions;
 
     private MobSprites() {}
 
@@ -79,6 +78,13 @@ public final class MobSprites {
     public static TextureRegion regionFor(Mob mob) {
         if (mob == null) return null;
         if (mob.characterClass != null) {
+            // Clones are spawned from the ENEMY_PLAYER_ template, so check the
+            // clone flag before the enemy-type prefix.
+            if (mob.isClone) {
+                ensureLoaded();
+                return cloneRegions == null
+                        ? null : cloneRegions.get(mob.characterClass);
+            }
             if (mob.mobType != null && mob.mobType.startsWith("ENEMY_PLAYER_")) {
                 ensureLoaded();
                 return enemyPlayerRegions == null
@@ -112,13 +118,18 @@ public final class MobSprites {
         return playerRegions == null ? null : playerRegions.get(cls);
     }
 
-    /** Region for an enemy-player class pose. Uses the ghost-variant column
-     *  in {@code sprites/player.png} so the silhouette still reads as a
-     *  member of that class but visibly differs from the real player. */
+    /** Region for an enemy-player class pose (col 1 of {@code player.png}). */
     public static TextureRegion enemyPlayerRegion(CharacterClass cls) {
         if (cls == null) return null;
         ensureLoaded();
         return enemyPlayerRegions == null ? null : enemyPlayerRegions.get(cls);
+    }
+
+    /** Region for a player-clone class pose (col 2 of {@code player.png}). */
+    public static TextureRegion cloneRegion(CharacterClass cls) {
+        if (cls == null) return null;
+        ensureLoaded();
+        return cloneRegions == null ? null : cloneRegions.get(cls);
     }
 
     /** Source-of-truth atlas Texture. {@code DefaultLevelRenderer} and the HUD
@@ -156,6 +167,13 @@ public final class MobSprites {
                 playerRegion(1, ENEMY_PLAYER_VARIANT_COL));
         enemyPlayerRegions.put(CharacterClass.MAGE,
                 playerRegion(2, ENEMY_PLAYER_VARIANT_COL));
+        cloneRegions = new EnumMap<>(CharacterClass.class);
+        cloneRegions.put(CharacterClass.ROGUE,
+                playerRegion(0, CLONE_VARIANT_COL));
+        cloneRegions.put(CharacterClass.WARRIOR,
+                playerRegion(1, CLONE_VARIANT_COL));
+        cloneRegions.put(CharacterClass.MAGE,
+                playerRegion(2, CLONE_VARIANT_COL));
     }
 
     private static TextureRegion mobRegion(int col, int row, int w, int h) {
@@ -180,5 +198,6 @@ public final class MobSprites {
         regions.clear();
         playerRegions = null;
         enemyPlayerRegions = null;
+        cloneRegions = null;
     }
 }

@@ -190,6 +190,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  Per-class so we can pick the matching silhouette for an ENEMY_PLAYER_*
      *  mob without re-routing through the regular player atlas. */
     private Sprite[]        enemyWarriorFacing, enemyMageFacing, enemyRogueFacing;
+    /** Player-clone facings: clone column of {@code sprites/player.png}. */
+    private Sprite[]        cloneWarriorFacing, cloneMageFacing, cloneRogueFacing;
     /** Per-species facing-pair sprites, keyed by mob-type string. Populated in
      *  {@link #create()} from every row in {@link com.bjsp123.rl2.logic.MobRegistry}.
      *  Replaces the legacy 25 hand-named per-species fields. */
@@ -331,6 +333,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
         enemyWarriorFacing     = enemyPlayerFacingPair(CharacterClass.WARRIOR);
         enemyMageFacing        = enemyPlayerFacingPair(CharacterClass.MAGE);
         enemyRogueFacing       = enemyPlayerFacingPair(CharacterClass.ROGUE);
+        cloneWarriorFacing     = facingPair(spriteFromRegion(MobSprites.cloneRegion(CharacterClass.WARRIOR), 0));
+        cloneMageFacing        = facingPair(spriteFromRegion(MobSprites.cloneRegion(CharacterClass.MAGE), 0));
+        cloneRogueFacing       = facingPair(spriteFromRegion(MobSprites.cloneRegion(CharacterClass.ROGUE), 0));
         // Every NPC species - driven entirely by the registry. Flying species
         // (bat, ghost, ...) get the floating y-lift; everyone else stands flat
         // on their tile. The registry is populated from {@code mobs.csv} at
@@ -392,6 +397,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
         registerOutlineSprites(enemyWarriorFacing);
         registerOutlineSprites(enemyMageFacing);
         registerOutlineSprites(enemyRogueFacing);
+        registerOutlineSprites(cloneWarriorFacing);
+        registerOutlineSprites(cloneMageFacing);
+        registerOutlineSprites(cloneRogueFacing);
         for (Sprite[] pair : speciesFacing.values()) registerOutlineSprites(pair);
 
         for (String type : com.bjsp123.rl2.logic.Registries.itemTypes()) {
@@ -2395,6 +2403,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE)) {
             fxRenderer.drawFireOnMob(mob, mx, my, ox, oy);
         }
+        if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(mob,
+                com.bjsp123.rl2.model.Buff.BuffType.KILLER)) {
+            drawKillerFlame(mob, mx, my, ox, oy);
+        }
         // Equipped gems bob around the player's head. The orbit + bob math is purely
         // visual; we leave the rest of the per-mob block alone.
         if (mob.isPlayer) {
@@ -2426,6 +2438,36 @@ public class DefaultLevelRenderer implements LevelRenderer {
             }
             drawBuffOverheadIcons(mob, mx, my, ox, oy, 1f);
         }
+    }
+
+    /** KILLER status flame: small red/orange vertical bars licking up around the
+     *  mob's head, each rising while shortening and fading, for a flame effect.
+     *  Additive-blended so the bars read as glowing fire. */
+    private void drawKillerFlame(Mob mob, int mx, int my, float ox, float oy) {
+        float t = stairLabelTime;
+        float headX = mx * CELL + CELL / 2f + ox;
+        float headY = my * CELL + ENTITY_Y_OFFSET + oy + CELL * 1.05f;  // around the head
+        final int bars = 8;
+        com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE);   // additive glow
+        for (int i = 0; i < bars; i++) {
+            float phase = t * 2.4f + i * 0.79f;
+            float cyc = phase - (float) Math.floor(phase);          // 0..1 rising cycle
+            float spread = ((i / (float) (bars - 1)) - 0.5f) * 2f;  // -1..1 across the head
+            float bx = headX + spread * CELL * 0.42f
+                    + (float) Math.sin(phase * 1.7f) * 1.5f;
+            float by = headY + cyc * CELL * 0.75f;                  // rises
+            float hgt = (1f - cyc) * (3f + (i % 3) * 2f);           // shortens as it rises
+            float w = 1.6f;
+            float a = (1f - cyc) * 0.85f;
+            // Red at the base warming toward orange/yellow as it climbs + fades.
+            batch.setColor(1f, 0.2f + 0.45f * cyc, 0.08f + 0.1f * cyc, a);
+            batch.draw(whiteRegion, bx - w / 2f, by, w, hgt);
+        }
+        batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+        batch.setColor(Color.WHITE);
     }
 
     /** Render any equipped gem slots that are filled, orbiting + bobbing above the player's
@@ -2712,6 +2754,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
         CharacterClass cls = mob.characterClass;
         // Enemy-player mobs share the player.png atlas but use the ghost
         // variant column, so swap to the per-class enemy facings here.
+        // Clones are spawned from the ENEMY_PLAYER_ template, so check the clone
+        // flag before the enemy-type prefix.
+        if (mob.isClone) {
+            if (cls == CharacterClass.ROGUE) return cloneRogueFacing[f];
+            if (cls == CharacterClass.MAGE)  return cloneMageFacing[f];
+            return cloneWarriorFacing[f];
+        }
         boolean enemy = mob.mobType != null
                 && mob.mobType.startsWith("ENEMY_PLAYER_");
         if (enemy) {

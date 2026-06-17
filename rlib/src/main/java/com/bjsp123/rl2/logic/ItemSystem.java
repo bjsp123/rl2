@@ -1180,6 +1180,7 @@ public final class ItemSystem {
                         Point spot = new Point(x, y);
                         Mob clone = MobFactory.spawn(key, spot);
                         if (clone == null) continue;
+                        clone.isClone = true;   // render from the clone sprite column
                         clone.owner = user;
                         clone.faction = user.faction;
                         clone.enemyFactions = user.enemyFactions != null

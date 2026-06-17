@@ -95,7 +95,9 @@ public final class BuffVisuals {
         // deliberately NOT shown over mobs' heads - they're internal recharging timers.
         TABLE.put(BuffType.ESP,    icon());
         TABLE.put(BuffType.INSIGHT, icon());
-        TABLE.put(BuffType.KILLER,  icon());
+        // KILLER: no over-head icon - rendered as a red flame around the head by
+        // DefaultLevelRenderer.drawKillerFlame instead.
+        TABLE.put(BuffType.KILLER,  simple(Category.NONE));
         // Sprite-modulation effects.
         TABLE.put(BuffType.GHOSTLY,    gray(0.45f));
         TABLE.put(BuffType.HIDING,     gray(0.30f));
