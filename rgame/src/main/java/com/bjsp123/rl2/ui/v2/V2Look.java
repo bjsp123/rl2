@@ -534,6 +534,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             bits.add(TextCatalog.getOrDefault("ui.look.brandEffect." + it.brand.element.name(),
                     TextCatalog.get("ui.look.brandEffect.generic")));
         } else if (it.isThrowable()
+                && it.throwEffect != null
                 && it.throwEffect != Item.ItemEffect.DAMAGE) {
             // get() (not getOrDefault) so a missing key shows as ??key?? in
             // the UI instead of an empty pill - lets us catch un-translated
