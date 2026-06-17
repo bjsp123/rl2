@@ -92,6 +92,17 @@ public final class V2GameOver extends V2Screen {
     }
 
     @Override
+    protected void drawBackground(float delta) {
+        // No attract-mode demo behind the death screen - a flat, somber backdrop.
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
+        s.setProjectionMatrix(ctx.camera.combined);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(0.04f, 0.04f, 0.06f, 1f);
+        s.rect(0f, 0f, ctx.worldW(), ctx.worldH());
+        s.end();
+    }
+
+    @Override
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
