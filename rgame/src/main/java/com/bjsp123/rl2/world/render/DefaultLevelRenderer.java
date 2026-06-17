@@ -694,7 +694,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (DRAW_FOG) fog.render(batch);
         // Player death soul-streak - drawn ABOVE the fog so it can't be hidden by
         // unexplored/dark tiles once the player is gone (RL-56).
-        drawPlayerDeathStreakPass(level);
+        drawPlayerDeathStreakPass(level, camera);
         // Buff over-head icons draw ABOVE the fog so an icon that sits over an
         // unexplored tile to the north isn't clipped by the fog overlay (RL-44).
         drawBuffOverheadIconsPass(level);
@@ -2062,8 +2062,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
     /** Post-fog pass: the player's death soul-streak, drawn on top of the fog so
      *  it can't be hidden once the player's light is gone. */
-    private void drawPlayerDeathStreakPass(Level level) {
+    private void drawPlayerDeathStreakPass(Level level, OrthographicCamera camera) {
         if (animator == null) return;
+        // Make "off the top of the screen" concrete: the head must clear the top
+        // of the visible world (viewport height * zoom), with margin.
+        float visibleWorldH = camera.viewportHeight * camera.zoom;
+        float maxHeight = visibleWorldH * 1.25f + CELL;
         for (com.bjsp123.rl2.world.anim.Ghost g : animator.ghosts()) {
             if (g.mob == null || !g.mob.isPlayer) continue;
             if (!inBounds(level, g.x, g.y)) continue;
@@ -2071,42 +2075,68 @@ public class DefaultLevelRenderer implements LevelRenderer {
             if (s == null) continue;
             int total = com.bjsp123.rl2.world.anim.AnimationVars.deathTotalFrames();
             float p = total <= 0 ? 1f : g.frame / (float) total;
-            drawPlayerSoulStreak(s, g.x, g.y, p);
+            drawPlayerSoulStreak(s, g.x, g.y, p, maxHeight);
         }
     }
 
-    /** Player death "soul streak" (RL-56): the sprite whitens, elongates into a
-     *  tall thin vertical streak, and springs upward while fading - the soul
-     *  leaving for the top level. {@code p} is death-animation progress 0..1. */
-    private void drawPlayerSoulStreak(Sprite s, int gx, int gy, float p) {
+    /** Player death "soul streak" (RL-56). Two phases over progress {@code p}:
+     *  <ol><li><b>Elongate</b> (p&lt;0.5): feet planted, the sprite stretches up
+     *  until its head is far above the top of the screen ({@code maxHeight}), a
+     *  white column fading in behind it.</li>
+     *  <li><b>Vanish</b> (p&ge;0.5): the head stays off-screen while the feet
+     *  rise, so the body shortens up off the top; the white column fades out.</li>
+     *  </ol> Throughout, an additive overdraw blooms the sprite toward white. */
+    private void drawPlayerSoulStreak(Sprite s, int gx, int gy, float p, float maxHeight) {
         if (s == null || s.region == null) return;
         p = Math.max(0f, Math.min(1f, p));
-        // Springy elongation (overshoot) then a quick upward launch.
-        float stretchY = 1f + 4.5f * easeOutBack(Math.min(1f, p / 0.55f));
-        float thinX    = 1f - 0.55f * smoothStep(p);
-        float rise     = smoothStep(p) * p * 8f * CELL;   // accelerating rise
-        float whiten   = smoothStep(Math.min(1f, p / 0.5f));
-        float alpha    = 1f - smoothStep(Math.max(0f, (p - 0.35f) / 0.65f));
-        if (alpha <= 0f) return;
 
-        float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * thinX;
-        float scaleY = (s.natural ? 1f : MOB_VISIBLE_H / (float) s.visibleH) * stretchY;
-        float dw = s.w * scaleX;
-        float dh = s.h * scaleY;
+        float thinX = 1f - 0.5f * smoothStep(p);
+        float baseScaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * thinX;
+        float baseScaleY = (s.natural ? 1f : MOB_VISIBLE_H / (float) s.visibleH);
+        float normalHeight = s.h * baseScaleY;
+        float dw = s.w * baseScaleX;
         float tileCenterX = gx * CELL + CELL / 2f;
-        float baselineY   = gy * CELL + ENTITY_Y_OFFSET + rise;
-        float drawX = tileCenterX - (s.visibleLeft + s.visibleW / 2f) * scaleX;
-        float drawY = baselineY + s.yAdjust * scaleY;
+        float floorY = gy * CELL + ENTITY_Y_OFFSET;
+        float drawX = tileCenterX - (s.visibleLeft + s.visibleW / 2f) * baseScaleX;
 
-        // Base sprite (stretched), then additive white overdraws to bloom it
-        // toward a glowing white streak as it rises.
-        batch.setColor(1f, 1f, 1f, alpha);
-        batch.draw(s.region, drawX, drawY, dw, dh);
+        float bottomY, height;
+        if (p < 0.5f) {
+            // Phase 1: elongate - feet planted, head launches far above the top.
+            float a = p / 0.5f;
+            height  = normalHeight + (maxHeight - normalHeight) * easeOutBack(a);
+            bottomY = floorY;
+        } else {
+            // Phase 2: vanish upward - head fixed off-screen, feet rise so the
+            // body shortens off the top of the screen.
+            float b = smoothStep((p - 0.5f) / 0.5f);
+            float topY = floorY + maxHeight;          // fixed, off-screen
+            bottomY = floorY + maxHeight * b;          // feet rise toward the top
+            height  = topY - bottomY;                  // shrinks to zero
+        }
+        if (height <= 0f) return;
+
+        float whiten      = smoothStep(Math.min(1f, p / 0.5f));
+        float columnAlpha = (float) Math.sin(p * Math.PI) * 0.7f;   // fade in, then out
+
+        // White column behind the streak: a tall thin beam from the floor up off
+        // the top of the screen, fading in as the sprite elongates and out as it
+        // vanishes.
+        if (columnAlpha > 0.01f) {
+            float colW = CELL * 0.55f;
+            Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+            batch.setColor(1f, 1f, 1f, columnAlpha);
+            batch.draw(whiteRegion, tileCenterX - colW / 2f, floorY, colW, maxHeight);
+            batch.setColor(Color.WHITE);
+        }
+
+        // The stretched sprite, plus an additive white bloom that grows with the
+        // elongation.
+        batch.setColor(1f, 1f, 1f, 1f);
+        batch.draw(s.region, drawX, bottomY, dw, height);
         batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
                 com.badlogic.gdx.graphics.GL20.GL_ONE);
-        batch.setColor(1f, 1f, 1f, alpha * whiten);
-        batch.draw(s.region, drawX, drawY, dw, dh);
-        batch.draw(s.region, drawX, drawY, dw, dh);
+        batch.setColor(1f, 1f, 1f, whiten);
+        batch.draw(s.region, drawX, bottomY, dw, height);
         batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
                 com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
         batch.setColor(Color.WHITE);
