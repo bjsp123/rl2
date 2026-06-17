@@ -235,16 +235,18 @@ public class PlayScreen implements Screen {
     private boolean introActive;
     /** Real-time accumulator (seconds) driving the intro zoom ease. */
     private float introTime;
-    /** Length of the crossfade from the world-graph fly-in to the level, in
-     *  seconds. The last graph frame is captured and faded out over the level. */
+    /** Total length of the world-graph -> level transition, in seconds: a quick
+     *  dip to black (graph half fades out, level half fades in). Capture-free so
+     *  it works on every GL backend. */
     private static final float GRAPH_FADE_SEC = 0.25f;
-    /** True while the captured world-graph image is fading out over the level. */
+    /** Real-time accumulator (seconds) for the graph-side fade-to-black, while
+     *  still in {@link #introGraphPhase}. */
+    private float graphFadeTime;
+    /** True while the level-side fade-in from black is running (after the graph
+     *  has dipped to black and control passed to the level phase). */
     private boolean introFadeActive;
-    /** Real-time accumulator (seconds) driving the graph->level crossfade. */
+    /** Real-time accumulator (seconds) driving the level-side fade-in. */
     private float introFadeTime;
-    /** Snapshot of the final world-graph frame, drawn fading-out over the level
-     *  during the crossfade. Disposed when the fade completes. */
-    private com.badlogic.gdx.graphics.Texture introFadeTex;
 
     // --- Intro stage 4: world-graph prefix -----------------------------------
     /** Shared world-graph renderer for the intro fly-in (same look as the map
@@ -702,6 +704,9 @@ public class PlayScreen implements Screen {
         introGraphPhase = introActive;   // graph fly-in precedes the level zoom-in
         introTime = 0f;
         graphIntroTime = 0f;
+        graphFadeTime = 0f;
+        introFadeActive = false;
+        introFadeTime = 0f;
         camera.zoom = introActive ? INTRO_START_ZOOM : DEFAULT_ZOOM;
         recenterCameraOnPlayer();
     }
@@ -1108,17 +1113,15 @@ public class PlayScreen implements Screen {
         // the world while the camera eases in. Drawn last so it sits on top.
         if (introActive) drawIntroMessage();
 
-        // Graph -> level crossfade: the captured final world-graph frame fades
-        // out over the (now rendering) level, so the map dissolves into the
-        // dungeon. Drawn over everything.
+        // Graph -> level transition, level half: the level fades in from black
+        // (the graph dipped to black first). Drawn over everything.
         if (introFadeActive) {
             introFadeTime += delta;
-            float a = GRAPH_FADE_SEC <= 0f ? 0f
-                    : 1f - Math.min(1f, introFadeTime / GRAPH_FADE_SEC);
+            float a = 1f - Math.min(1f, introFadeTime / (GRAPH_FADE_SEC * 0.5f));
             if (a <= 0f) {
-                endIntroFade();
+                introFadeActive = false;
             } else {
-                drawIntroFade(a);
+                drawBlackOverlay(a);
             }
         }
 
@@ -1178,28 +1181,32 @@ public class PlayScreen implements Screen {
         ctx.batch.end();
 
         if (t >= 1f) {
-            // Snapshot this final graph frame, then crossfade it out over the
-            // level (started in endGraphPhase) instead of cutting with a flash.
-            if (introFadeTex != null) introFadeTex.dispose();
-            introFadeTex = captureScreen();
-            endGraphPhase();
+            // Fly-in done: dip the graph to black over the first half of the
+            // transition, then hand off to the level (which fades in from black).
+            graphFadeTime += delta;
+            float k = Math.min(1f, graphFadeTime / (GRAPH_FADE_SEC * 0.5f));
+            drawBlackOverlay(k);
+            if (k >= 1f) endGraphPhase();
         }
     }
 
-    /** Capture the current backbuffer as a Texture (caller owns + disposes it). */
-    private com.badlogic.gdx.graphics.Texture captureScreen() {
-        int w = Gdx.graphics.getBackBufferWidth();
-        int h = Gdx.graphics.getBackBufferHeight();
-        com.badlogic.gdx.graphics.Pixmap pm =
-                com.badlogic.gdx.graphics.Pixmap.createFromFrameBuffer(0, 0, w, h);
-        com.badlogic.gdx.graphics.Texture tex = new com.badlogic.gdx.graphics.Texture(pm);
-        pm.dispose();
-        return tex;
+    /** Full-screen black overlay at {@code alpha} (0=clear, 1=opaque). Used for
+     *  the intro graph->level dip-to-black transition. */
+    private void drawBlackOverlay(float alpha) {
+        if (alpha <= 0f) return;
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
+        s.setProjectionMatrix(game.ui.camera.combined);
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(0f, 0f, 0f, Math.min(1f, alpha));
+        s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    /** Hand off from the graph fly-in to the level zoom-in: arm the level camera
-     *  at its far zoom and start the graph->level crossfade (the captured graph
-     *  frame fades out over the level). */
+    /** Hand off from the (now black) graph fly-in to the level zoom-in: arm the
+     *  level camera at its far zoom and start the level-side fade-in from black. */
     private void endGraphPhase() {
         introGraphPhase = false;
         introTime = 0f;
@@ -1281,32 +1288,6 @@ public class PlayScreen implements Screen {
         com.bjsp123.rl2.ui.v2.TextDraw.centreFit(game.ui, f,
                 com.badlogic.gdx.graphics.Color.WHITE, msg, w * 0.5f, yTop, w * 0.9f);
         b.end();
-    }
-
-    /** Draw the captured world-graph frame full-screen at {@code alpha}, fading
-     *  it out over the level beneath (the graph->level crossfade). The captured
-     *  framebuffer image is top-down, so it's drawn V-flipped. */
-    private void drawIntroFade(float alpha) {
-        if (introFadeTex == null || alpha <= 0f) return;
-        com.bjsp123.rl2.ui.v2.UiCtx ctx = game.ui;
-        ctx.applyProjection();
-        com.badlogic.gdx.graphics.g2d.SpriteBatch b = ctx.batch;
-        com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
-        b.begin();
-        b.setColor(1f, 1f, 1f, alpha);
-        b.draw(introFadeTex, 0f, 0f, ctx.worldW(), ctx.worldH(),
-                /*u*/ 0f, /*v*/ 1f, /*u2*/ 1f, /*v2*/ 0f);   // V-flip
-        b.setColor(1f, 1f, 1f, 1f);
-        b.end();
-    }
-
-    /** End the crossfade and release the captured graph texture. */
-    private void endIntroFade() {
-        introFadeActive = false;
-        if (introFadeTex != null) {
-            introFadeTex.dispose();
-            introFadeTex = null;
-        }
     }
 
     private void drawDeathFadeOverlay(float alpha) {
@@ -1398,7 +1379,6 @@ public class PlayScreen implements Screen {
     @Override
     public void dispose() {
         if (levelRenderer    != null) levelRenderer.dispose();
-        if (introFadeTex     != null) { introFadeTex.dispose(); introFadeTex = null; }
         // V2 inventory has no GPU resources of its own - dispose via UiCtx.
         if (targetingOverlay != null) targetingOverlay.dispose();
         if (lookMode         != null) lookMode.dispose();

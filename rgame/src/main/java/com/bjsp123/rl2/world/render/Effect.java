@@ -688,26 +688,13 @@ public class Effect {
      *  wrapped in a slightly wider pale-blue halo for body. Composite, added
      *  straight to the stage like {@link #beaconActivation}. */
     public static void columnOfLight(EffectStage stage, Point at, Random rng) {
-        // Bright base burst so there's an unmistakable flash of light right at
-        // the fallen tile (small + local, not a screen flash).
-        stage.add(EffectBuilder.burst(at, EffectTint.WHITE,
-                /*count*/ 24, /*speedMin*/ 0.6f, /*speedMax*/ 1.8f,
-                /*size*/ 2.4f, /*bright*/ true,
-                /*duration*/ EffectType.PARTICLE_BURST.frameCount, rng));
-        // Dense bright-white core shaft: lots of particles launched together
-        // (tiny spawn spread, near-zero horizontal jitter) straight up, rising
-        // tall and fading - the soul streaking upward.
+        // A few sparkles rising around the soul (the player sprite itself does
+        // the whiten/elongate/streak-upward in DefaultLevelRenderer now).
         stage.add(EffectBuilder.fountain(at, EffectTint.WHITE,
-                /*count*/ 110, /*spawnSpread*/ 4, /*life*/ 52,
-                /*riseMin*/ 3.0f, /*riseMax*/ 4.6f,
-                /*horizontalJitter*/ 0.1f, /*fadeToWhite*/ true,
-                /*posJitterX*/ 4f, /*posJitterY*/ 4f, rng));
-        // Pale-blue halo: wider + softer so the shaft has visible body.
-        stage.add(EffectBuilder.fountain(at, EffectTint.CYAN,
-                /*count*/ 55, /*spawnSpread*/ 6, /*life*/ 46,
-                /*riseMin*/ 2.6f, /*riseMax*/ 4.0f,
-                /*horizontalJitter*/ 0.4f, /*fadeToWhite*/ true,
-                /*posJitterX*/ 11f, /*posJitterY*/ 4f, rng));
+                /*count*/ 14, /*spawnSpread*/ 6, /*life*/ 40,
+                /*riseMin*/ 2.2f, /*riseMax*/ 3.6f,
+                /*horizontalJitter*/ 0.5f, /*fadeToWhite*/ true,
+                /*posJitterX*/ 7f, /*posJitterY*/ 5f, rng));
     }
 
     /** Player-side teleport visual at the source cell - upward green streaks,

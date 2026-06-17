@@ -2032,7 +2032,20 @@ public class DefaultLevelRenderer implements LevelRenderer {
         for (com.bjsp123.rl2.world.anim.Ghost g : animator.ghosts()) {
             if (g.mob == null) continue;
             int gx = g.x, gy = g.y;
-            if (!inBounds(level, gx, gy) || !level.visible[gx][gy]) continue;
+            if (!inBounds(level, gx, gy)) continue;
+            boolean isPlayer = g.mob.isPlayer;
+            // The player's death soul-streak must show even if FOV no longer
+            // covers the death tile (the player is gone, so lighting can drop);
+            // other mobs' fades still respect visibility.
+            if (!isPlayer && !level.visible[gx][gy]) continue;
+            Sprite s = spriteForGhost(g);
+            if (s == null) continue;
+            if (isPlayer) {
+                int total = com.bjsp123.rl2.world.anim.AnimationVars.deathTotalFrames();
+                float p = total <= 0 ? 1f : g.frame / (float) total;
+                drawPlayerSoulStreak(s, gx, gy, p);
+                continue;
+            }
             com.bjsp123.rl2.world.anim.MobAnimState as = animator.stateOf(g.mob);
             // Slide offset, identical to drawMob's: at t=0 the sprite is
             // pulled back by stepFromDx tiles, ramping to zero by t=1.
@@ -2047,11 +2060,59 @@ public class DefaultLevelRenderer implements LevelRenderer {
             // begins fading once the slide finishes).
             float alpha = g.alpha();
             if (alpha <= 0f) continue;
-            Sprite s = spriteForGhost(g);
-            if (s != null) {
-                drawMobSprite(s, gx, gy, ox, oy, alpha);
-            }
+            drawMobSprite(s, gx, gy, ox, oy, alpha);
         }
+    }
+
+    /** Player death "soul streak" (RL-56): the sprite whitens, elongates into a
+     *  tall thin vertical streak, and springs upward while fading - the soul
+     *  leaving for the top level. {@code p} is death-animation progress 0..1. */
+    private void drawPlayerSoulStreak(Sprite s, int gx, int gy, float p) {
+        if (s == null || s.region == null) return;
+        p = Math.max(0f, Math.min(1f, p));
+        // Springy elongation (overshoot) then a quick upward launch.
+        float stretchY = 1f + 4.5f * easeOutBack(Math.min(1f, p / 0.55f));
+        float thinX    = 1f - 0.55f * smoothStep(p);
+        float rise     = smoothStep(p) * p * 8f * CELL;   // accelerating rise
+        float whiten   = smoothStep(Math.min(1f, p / 0.5f));
+        float alpha    = 1f - smoothStep(Math.max(0f, (p - 0.35f) / 0.65f));
+        if (alpha <= 0f) return;
+
+        float scaleX = (s.natural ? 1f : MOB_VISIBLE_W / (float) s.visibleW) * thinX;
+        float scaleY = (s.natural ? 1f : MOB_VISIBLE_H / (float) s.visibleH) * stretchY;
+        float dw = s.w * scaleX;
+        float dh = s.h * scaleY;
+        float tileCenterX = gx * CELL + CELL / 2f;
+        float baselineY   = gy * CELL + ENTITY_Y_OFFSET + rise;
+        float drawX = tileCenterX - (s.visibleLeft + s.visibleW / 2f) * scaleX;
+        float drawY = baselineY + s.yAdjust * scaleY;
+
+        // Base sprite (stretched), then additive white overdraws to bloom it
+        // toward a glowing white streak as it rises.
+        batch.setColor(1f, 1f, 1f, alpha);
+        batch.draw(s.region, drawX, drawY, dw, dh);
+        batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE);
+        batch.setColor(1f, 1f, 1f, alpha * whiten);
+        batch.draw(s.region, drawX, drawY, dw, dh);
+        batch.draw(s.region, drawX, drawY, dw, dh);
+        batch.setBlendFunction(com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+        batch.setColor(Color.WHITE);
+    }
+
+    /** Smoothstep 0..1. */
+    private static float smoothStep(float t) {
+        t = Math.max(0f, Math.min(1f, t));
+        return t * t * (3f - 2f * t);
+    }
+
+    /** Ease-out-back (slight overshoot past 1) for a springy feel. */
+    private static float easeOutBack(float t) {
+        t = Math.max(0f, Math.min(1f, t));
+        float c1 = 1.70158f, c3 = c1 + 1f;
+        float x = t - 1f;
+        return 1f + c3 * x * x * x + c1 * x * x;
     }
 
     /** Sprite lookup for a ghost - same as {@link #spriteForMob} but uses
