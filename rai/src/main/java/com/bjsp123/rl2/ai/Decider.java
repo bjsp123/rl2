@@ -97,6 +97,25 @@ public final class Decider {
             // No enemy remains; the exit stamps this turn - fall through to descend.
         }
 
+        // 0.5 Committed descent (SMART-timeout fix): once the agent has dwelt
+        //     too long on a floor (or exploration has stalled) AND a reachable
+        //     down-stair is known, march to the stairs - preempted ONLY by an
+        //     ADJACENT enemy (an immediate threat / path-blocker, fought below).
+        //     Without this, a distant enemy that flickers in and out of FOV makes
+        //     the agent oscillate between fight/move (toward the foe) and
+        //     descend-stalled/move (toward the stairs) in opposite directions,
+        //     netting zero progress until the tick budget runs out. Placed ahead
+        //     of the fight branch so the flicker can't keep hijacking the descent;
+        //     stairsReachable() is false on locked-exit / boss floors, so this
+        //     never short-circuits a floor the agent must clear to leave.
+        if (s.memory != null && s.stairsReachable()
+                && (s.memory.exploreStallTurns > EXPLORE_STALL_LIMIT
+                    || s.memory.ticksOnCurrentLevel > EXPLORE_FATIGUE_LIMIT)
+                && !anyEnemyAdjacent(s)) {
+            LAST_BRANCH.set("descend-stalled");
+            return planDescend(s);
+        }
+
         // 1. Enemies in sight - engage (or flee) FIRST, before descending. A
         //    fully-explored level still has fightable foes to clear; checking
         //    "fully explored -> descend" ahead of this made the agent walk to the
@@ -170,6 +189,15 @@ public final class Decider {
 
     private static boolean levelFullyExplored(WorldState s) {
         return ExplorationEval.nearestExploreTarget(s.mob, s.level, s.memory) == null;
+    }
+
+    /** True if any visible enemy is in melee range right now - an immediate
+     *  threat that should preempt the committed-descent shortcut. */
+    private static boolean anyEnemyAdjacent(WorldState s) {
+        for (Mob e : s.visibleEnemies) {
+            if (e != null && e.hp > 0 && s.isAdjacent(e)) return true;
+        }
+        return false;
     }
 
     private static boolean anyEnemyStrongerThanPlayer(WorldState s) {
