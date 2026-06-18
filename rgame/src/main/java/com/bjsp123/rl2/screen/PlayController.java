@@ -617,6 +617,18 @@ final class PlayController {
         }, item);
     }
 
+    /** Drop {@code item} from the player's inventory onto the nearest free floor
+     *  tile. Always available for any carried item (the inventory only offers it
+     *  in place of Throw for non-throwable items); costs one move. */
+    void dropItem(Mob user, Item item) {
+        if (user == null || item == null) return;
+        Level level = world.currentLevel();
+        if (!TurnSystem.isPlayerTurn(level)) return;
+        if (!ItemSystem.dropItem(level, user, item)) return;
+        animator.consume(level);
+        afterMove(level);
+    }
+
     /** Grid of valid grapple targets: visible + within Chebyshev range {@code 2 + effectPower}. */
     private static boolean[][] grappleGrid(Level level, Mob user, Item item) {
         boolean[][] grid = new boolean[level.width][level.height];
@@ -718,6 +730,9 @@ final class PlayController {
                     != com.bjsp123.rl2.logic.MobSystem.Attitude.ATTACK) continue;
             // Require at least one walkable 8-neighbor for the arrival tile.
             if (!hasFreeNeighbor(level, mx, my)) continue;
+            // A charge is a ground dash - skip targets walled off from the user
+            // (castCharge enforces the same path check).
+            if (!com.bjsp123.rl2.logic.MobSystem.chargePathClear(level, user.position, m.position)) continue;
             grid[mx][my] = true;
         }
         return grid;

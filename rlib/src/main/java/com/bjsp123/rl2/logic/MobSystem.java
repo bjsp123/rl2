@@ -435,6 +435,7 @@ public class MobSystem {
                     if (level.tiles[bx][by] != Tile.BEACON_INACTIVE) continue;
                     level.tiles[bx][by] = Tile.BEACON_ACTIVE;
                     level.beaconLit = true;   // RL-54: lighting the beacon raises hazard
+                    mob.beaconsLit++;          // RL-19: scales the final boss + score
                     if (level.events != null) level.events.add(
                             new com.bjsp123.rl2.event.GameEvent.BeaconActivated(new Point(bx, by)));
                     EventLog.add(Messages.beaconActivated(nameForLog(level, mob)));
@@ -751,6 +752,32 @@ public class MobSystem {
         return MobVisibility.projectileLineReaches(level, from, to, shooter);
     }
 
+    /** True iff a ground charge from {@code from} to {@code to} crosses no
+     *  movement-blocking tile (wall, closed door, statue, beacon, gem hearth, ...)
+     *  strictly between the endpoints. Unlike a JUMP (which blinks over obstacles)
+     *  or a projectile (which flies over chasms), a CHARGE runs along the floor and
+     *  is stopped by any impassable square in its path. The endpoints themselves
+     *  are not tested - the target stands on its own tile and the charger on its.
+     *  Bresenham-walks the segment via {@link com.bjsp123.rl2.model.Tile#blocksMovement()}. */
+    public static boolean chargePathClear(Level level, Point from, Point to) {
+        if (level == null || from == null || to == null) return false;
+        int x0 = from.tileX(), y0 = from.tileY();
+        int x1 = to.tileX(),   y1 = to.tileY();
+        int dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy;
+        int x = x0, y = y0;
+        while (true) {
+            int e2 = err << 1;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 <  dx) { err += dx; y += sy; }
+            if (x == x1 && y == y1) return true;            // reached the target tile
+            if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
+            if (level.tiles[x][y].blocksMovement()) return false;
+        }
+    }
+
     /** Queue a deferred impact resolution onto the level. The {@code resolve}
      *  Runnable should invoke the matching {@code apply*Impact} method (which
      *  in turn decrements {@link Level#pendingImpactCount}). Used by every
@@ -929,7 +956,33 @@ public class MobSystem {
         int sx = subject.position.tileX(), sy = subject.position.tileY();
         if (vx < 0 || vy < 0 || vx >= level.width || vy >= level.height) return false;
         if (sx < 0 || sy < 0 || sx >= level.width || sy >= level.height) return false;
-        return Math.max(Math.abs(sx - vx), Math.abs(sy - vy)) <= radius;
+        if (Math.max(Math.abs(sx - vx), Math.abs(sy - vy)) > radius) return false;
+        // Smoke blinds a fight: a subject is hidden for surprise purposes when
+        // smoke sits on the subject's tile (cloaked in the plume) OR on the
+        // viewer's own tile (blinded by the smoke around them) - unless the
+        // viewer can peer through with KEEN_SIGHT (Chebyshev range = perk level,
+        // the same relaxation the player's FOV uses). This is what lets a
+        // keen-sighted attacker surprise foes fighting blind in smoke - whether
+        // the smoke landed on the foe or on the attacker - and symmetrically
+        // lets smoke-cloaked foes surprise a player who lacks the perk.
+        if (GameBalance.RULES_SURPRISE_SMOKE_CONCEALS
+                && (CloudSystem.smokeAt(level, sx, sy) || CloudSystem.smokeAt(level, vx, vy))
+                && !keenSeesThroughSmoke(viewer, sx, sy)) {
+            return false;
+        }
+        return true;
+    }
+
+    /** True iff {@code viewer}'s KEEN_SIGHT perk reaches tile ({@code tx},{@code ty}) -
+     *  i.e. the tile is within Chebyshev range = perk level, the same relaxation
+     *  {@link LevelSystem} applies to the player's FOV so keen eyes see into smoke. */
+    private static boolean keenSeesThroughSmoke(Mob viewer, int tx, int ty) {
+        if (viewer == null || viewer.position == null || viewer.perks == null) return false;
+        int keen = viewer.perks.getOrDefault(com.bjsp123.rl2.model.Perk.KEEN_SIGHT, 0);
+        if (keen <= 0) return false;
+        int d = Math.max(Math.abs(tx - viewer.position.tileX()),
+                         Math.abs(ty - viewer.position.tileY()));
+        return d <= keen;
     }
 
     public static boolean isSurpriseAttack(Level level, Mob attacker, Mob target,
@@ -1626,6 +1679,30 @@ public class MobSystem {
                 killer.history.add(com.bjsp123.rl2.model.HistoricalRecord.kill(
                         level.currentTurn, level.depth, victimName));
             }
+            // Final-boss roster (RL-19): the player records every individual it
+            // kills so the boss floor can reanimate them as revenants. Exclude
+            // players/clones, the boss itself, and already-reanimated revenants
+            // so the fight can't feed itself.
+            if (killer.isPlayer && mob.mobType != null && !mob.isPlayer && !mob.isClone
+                    && !"GREAT_WRAITH".equals(mob.mobType)
+                    && !BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.REVENANT)) {
+                killer.killedRoster.add(mob.mobType);
+            }
+        }
+
+        // Final-boss defeat (RL-19): killing the Great Wraith stamps the escape
+        // stairs at the arena centre and ends revenant support, regardless of any
+        // adds still alive. PlayScreen turns stepping onto these stairs into the win.
+        if (level.kind == Level.LevelKind.FINAL_BOSS && "GREAT_WRAITH".equals(mob.mobType)) {
+            level.bossDefeated = true;
+            level.spawner = null;
+            if (level.lockedExit != null) {
+                int ex = level.lockedExit.tileX(), ey = level.lockedExit.tileY();
+                if (ex >= 0 && ey >= 0 && ex < level.width && ey < level.height) {
+                    level.tiles[ex][ey] = Tile.STAIRS_UP;
+                    level.stairsUp = new Point(ex, ey);
+                }
+            }
         }
 
         // Synchronously remove the mob from level.mobs. The visual flicker/fade plays
@@ -2010,6 +2087,54 @@ public class MobSystem {
                 && dstLevel.stairsUp != null) {
             LevelSystem.sealStairsUp(dstLevel);
         }
+        // Final-boss floor (RL-19): on the player's first arrival, seed the
+        // revenant roster from the player's kills and spawn + scale the Great
+        // Wraith by beacons lit.
+        if (mob.isPlayer && dstLevel.kind == Level.LevelKind.FINAL_BOSS
+                && !dstLevel.bossDefeated && findFinalBoss(dstLevel) == null) {
+            spawnFinalBoss(dstLevel, mob);
+        }
+    }
+
+    /** Spawn the Great Wraith at the arena centre and scale it by the arriving
+     *  player's beacons lit; seed the depleting revenant roster from the
+     *  player's kills (RL-19). */
+    private static void spawnFinalBoss(Level level, Mob player) {
+        java.util.List<String> roster = new java.util.ArrayList<>(player.killedRoster);
+        if (GameBalance.BOSS_ADD_TOTAL_CAP > 0 && roster.size() > GameBalance.BOSS_ADD_TOTAL_CAP) {
+            java.util.Collections.shuffle(roster, RANDOM);
+            roster = new java.util.ArrayList<>(roster.subList(0, GameBalance.BOSS_ADD_TOTAL_CAP));
+        }
+        level.remainingRoster = roster;
+
+        Point at = level.lockedExit != null ? level.lockedExit
+                : new Point(level.width / 2, level.height / 2);
+        Mob boss = MobFactory.spawn("GREAT_WRAITH", at);
+        if (boss == null) return;
+        int beacons = Math.max(0, player.beaconsLit);
+        int lvl = Math.min(GameBalance.MAX_CHARACTER_LEVEL,
+                GameBalance.BOSS_BASE_LEVEL + beacons * GameBalance.BOSS_LEVEL_PER_BEACON);
+        MobProgression.setSpawnLevel(boss, lvl);
+        // Stacked buffs scale survivability/threat past the level cap with beacons;
+        // ability milestones add haste.
+        if (beacons > 0) {
+            BuffSystem.apply(level, boss,
+                    com.bjsp123.rl2.model.Buff.BuffType.PROTECTION, Math.min(10, beacons), boss);
+            BuffSystem.apply(level, boss,
+                    com.bjsp123.rl2.model.Buff.BuffType.REGENERATION, Math.min(10, beacons), boss);
+            if (GameBalance.BOSS_ABILITY_PER_BEACONS > 0
+                    && beacons >= GameBalance.BOSS_ABILITY_PER_BEACONS) {
+                BuffSystem.apply(level, boss,
+                        com.bjsp123.rl2.model.Buff.BuffType.HASTED,
+                        Math.min(10, beacons / GameBalance.BOSS_ABILITY_PER_BEACONS), boss);
+            }
+        }
+        boss.stateOfMind = Mob.StateOfMind.AWAKE;
+        level.mobs.add(boss);
+        MobHooks.onSpawn(level, boss);
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(boss, at));
+        }
     }
 
     /** Data-driven per-turn mob spawner. Reads {@link Level#spawner} (null on
@@ -2022,21 +2147,57 @@ public class MobSystem {
     public static void runLevelSpawner(Level level) {
         if (level == null) return;
         Level.Spawner sp = level.spawner;
-        if (sp == null || sp.chancePerTurn <= 0
-                || sp.speciesPool == null || sp.speciesPool.isEmpty()) return;
-        if (RANDOM.nextDouble() >= sp.chancePerTurn) return;
-        // Live-mob cap, summed across the pooled species, plus the global cap.
-        int alive = 0;
-        for (String type : sp.speciesPool) alive += MobQueries.countMobsOfType(level, type);
-        if (alive >= sp.maxAlive) return;
+        if (sp == null) return;
+        boolean bossPool = level.remainingRoster != null;   // final-boss revenants
+
+        // Cadence: deterministic everyNTurns, else probabilistic chancePerTurn.
+        if (sp.everyNTurns > 0) {
+            if (level.turnsOnLevel <= 0 || level.turnsOnLevel % sp.everyNTurns != 0) return;
+        } else {
+            if (sp.chancePerTurn <= 0) return;
+            if (RANDOM.nextDouble() >= sp.chancePerTurn) return;
+        }
+
+        // Pick the species + enforce the live cap.
+        int rosterIdx = -1;
+        String species;
+        if (bossPool) {
+            if (level.remainingRoster.isEmpty()) return;     // support exhausted
+            int aliveRev = 0;
+            for (Mob m : level.mobs) {
+                if (BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.REVENANT)) aliveRev++;
+            }
+            if (aliveRev >= sp.maxAlive) return;
+            rosterIdx = RANDOM.nextInt(level.remainingRoster.size());
+            species = level.remainingRoster.get(rosterIdx);
+        } else {
+            if (sp.speciesPool == null || sp.speciesPool.isEmpty()) return;
+            int alive = 0;
+            for (String type : sp.speciesPool) alive += MobQueries.countMobsOfType(level, type);
+            if (alive >= sp.maxAlive) return;
+            species = sp.speciesPool.get(RANDOM.nextInt(sp.speciesPool.size()));
+        }
         if (!MobQueries.levelHasRoomForSpawn(level)) return;
         Point spawnPos = spawnerTile(level, sp);
         if (spawnPos == null) return;
-        String species = sp.speciesPool.get(RANDOM.nextInt(sp.speciesPool.size()));
         Mob bud = MobFactory.spawn(species, spawnPos);
         if (bud == null) return;
-        // Escalation: spawn level ramps with the player's time on the level.
-        if (sp.levelRampPer10Turns > 0) {
+
+        if (bossPool) {
+            // Reanimated kill: level to the boss-floor depth, REVENANT mark, and
+            // the boss's faction so it fights the player + allies with the boss.
+            MobProgression.setSpawnLevel(bud,
+                    Math.min(GameBalance.MAX_CHARACTER_LEVEL, 1 + level.depth));
+            BuffSystem.apply(level, bud,
+                    com.bjsp123.rl2.model.Buff.BuffType.REVENANT, 9999, bud);
+            Mob boss = findFinalBoss(level);
+            if (boss != null) {
+                bud.faction = boss.faction;
+                bud.enemyFactions = boss.enemyFactions != null
+                        ? new java.util.HashSet<>(boss.enemyFactions) : new java.util.HashSet<>();
+            }
+            level.remainingRoster.remove(rosterIdx);   // this individual is spent
+        } else if (sp.levelRampPer10Turns > 0) {
             int lvl = Math.min(GameBalance.MAX_CHARACTER_LEVEL,
                     1 + sp.levelRampPer10Turns * (level.turnsOnLevel / 10));
             MobProgression.setSpawnLevel(bud, lvl);
@@ -2049,8 +2210,20 @@ public class MobSystem {
         }
     }
 
+    /** The living Great Wraith on a final-boss floor, or null. */
+    private static Mob findFinalBoss(Level level) {
+        if (level.mobs == null) return null;
+        for (Mob m : level.mobs) if ("GREAT_WRAITH".equals(m.mobType)) return m;
+        return null;
+    }
+
     /** Pick a spawn tile per the spawner's placement strategy. */
     private static Point spawnerTile(Level level, Level.Spawner sp) {
+        if (sp.placement == Level.Spawner.Placement.SOUL_SPAWNERS) {
+            if (level.spawnerTiles == null || level.spawnerTiles.isEmpty()) return null;
+            Point anchor = level.spawnerTiles.get(RANDOM.nextInt(level.spawnerTiles.size()));
+            return MobHooks.freeAdjacentFloor(level, anchor);
+        }
         if (sp.placement == Level.Spawner.Placement.MIDPOINT_TO_EXIT) {
             return midpointToExitTile(level);
         }

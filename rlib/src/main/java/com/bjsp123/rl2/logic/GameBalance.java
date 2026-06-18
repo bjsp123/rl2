@@ -173,6 +173,11 @@ public final class GameBalance {
     public static boolean RULES_SURPRISE_ALLOW_THROW = true;
     /** If true, every targeted attack type can surprise; otherwise only physical attacks can. */
     public static boolean RULES_SURPRISE_ALLOW_ALL_TARGETED_ATTACK_TYPES = false;
+    /** If true, a mob standing in a smoke cloud is concealed from a viewer who
+     *  can't peer into that tile with KEEN_SIGHT - so a smoke plume both blocks
+     *  sight through it AND hides whoever is fighting inside it, enabling surprise
+     *  attacks against (and from) foes blinded by the smoke. */
+    public static boolean RULES_SURPRISE_SMOKE_CONCEALS = true;
 
     // ------------------------- Low-HP warning thresholds --------------------
     /** HP fraction at which the HUD chrome starts tinting red. Linear ramp
@@ -365,6 +370,28 @@ public final class GameBalance {
     public static int HAZARD_MAX = 5;
     /** Standard turns spent on a floor per +1 hazard. */
     public static int HAZARD_TURNS_PER_POINT = 2000;
+
+    // ------------------------- Final boss (RL-19) ----------------------------
+    /** Great Wraith spawn level with zero beacons lit. */
+    public static int BOSS_BASE_LEVEL = 18;
+    /** Extra boss spawn-level per beacon lit (capped at MAX_CHARACTER_LEVEL). */
+    public static int BOSS_LEVEL_PER_BEACON = 1;
+    /** The boss gains one extra ability per this many beacons lit. */
+    public static int BOSS_ABILITY_PER_BEACONS = 3;
+    /** Standard turns between revenant-add spawns on the boss floor. */
+    public static int BOSS_ADD_SPAWN_CADENCE = 6;
+    /** Max live revenant adds before the add-spawner pauses. */
+    public static int BOSS_ADD_MAX_ALIVE = 8;
+    /** Cap on the total reanimated kills reproduced over the fight (0 = all). */
+    public static int BOSS_ADD_TOTAL_CAP = 0;
+
+    // ------------------------- Victory score (RL-19) -------------------------
+    /** Base score for any victory - far above any death (deaths score 0). */
+    public static int VICTORY_SCORE_BASE = 10000;
+    /** Score per beacon lit over the run. */
+    public static int SCORE_PER_BEACON = 500;
+    /** Bonus for a perfect victory (all beacons lit + boss slain). */
+    public static int PERFECT_VICTORY_BONUS = 5000;
 
     // ------------------------- Gem recycle (RL-50) ---------------------------
     /** Expected gems from recycling an item = {@code RECYCLE_BASE_GEMS +

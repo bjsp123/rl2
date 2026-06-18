@@ -105,7 +105,7 @@ public class Level {
      * rules (stairs vanishing on entry, horde spawner, win conditions).
      */
     public enum LevelKind {
-        REGULAR, LANDING, MIRRORMATCH, HORDE, WALKWAY
+        REGULAR, LANDING, MIRRORMATCH, HORDE, WALKWAY, FINAL_BOSS
     }
 
     public int width;
@@ -300,6 +300,18 @@ public class Level {
      *  no-op then. Set by the factory (e.g. the Horde floor). */
     public Spawner spawner;
 
+    // --- Final-boss floor (FINAL_BOSS) --------------------------------------
+    /** True once the Great Wraith has been defeated. Stairs are stamped at
+     *  {@link #lockedExit} on its death; stepping there wins. */
+    public boolean bossDefeated;
+    /** Cardinal soul-spawner anchor tiles (the SOUL_SPAWNER_L cells). Revenant
+     *  adds spawn on free floor adjacent to a random one. */
+    public java.util.List<Point> spawnerTiles = new java.util.ArrayList<>();
+    /** Depleting copy of the player's kill roster (mobType per slain individual)
+     *  seeded on boss-floor entry; the add-spawner pops from it until empty, then
+     *  support ends. {@code null} on non-boss floors. */
+    public java.util.List<String> remainingRoster;
+
     /**
      * Data-driven per-turn mob spawner attached to a level. Every standard
      * turn the handler rolls {@link #chancePerTurn}; on success it spawns a
@@ -316,11 +328,18 @@ public class Level {
             /** Roughly halfway between the player and the exit stairs, on
              *  average - jittered around the midpoint then snapped to a free
              *  floor tile. */
-            MIDPOINT_TO_EXIT
+            MIDPOINT_TO_EXIT,
+            /** On free floor adjacent to a random {@link Level#spawnerTiles}
+             *  anchor (final-boss soul spawners). */
+            SOUL_SPAWNERS
         }
 
         /** Probability per standard turn of spawning one mob. */
         public double chancePerTurn;
+        /** Deterministic cadence: when {@code > 0}, spawn once every this many
+         *  standard turns ({@code turnsOnLevel % everyNTurns == 0}) instead of
+         *  rolling {@link #chancePerTurn}. */
+        public int everyNTurns;
         /** Species keys to pick from at random for each spawn. */
         public java.util.List<String> speciesPool = new java.util.ArrayList<>();
         /** Placement strategy for the spawned mob. */

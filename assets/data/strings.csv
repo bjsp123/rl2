@@ -155,6 +155,9 @@ buff.REGENERATION.description,Regenerating health each turn.
 buff.REGENERATION.details,"Heals HP each turn while below max HP. Each turn it also strips any active POISONED buff, even at full HP."
 buff.REGENERATION.name,Regeneration
 buff.REGENERATION.tip,You regenerate health each turn while this is active.  Cures poison too.
+buff.REVENANT.description,A soul reanimated by the Great Wraith to fight in its name.
+buff.REVENANT.name,Revenant
+buff.REVENANT.details,A slain creature raised by the Great Wraith. Cosmetic only.
 buff.SHIELDED.description,Completely immune to all damage -- until the effect wears off.
 buff.SHIELDED.details,Negates the next instance of incoming damage entirely.
 buff.SHIELDED.name,Shielded
@@ -230,6 +233,7 @@ effect.levelUp.up,level up
 effect.mob.tamed,tame!
 eventlog.achievement.unlocked,Achievement unlocked: {achievement}.
 eventlog.beacon.activated,{player} activates the beacon.
+eventlog.charge.blocked,Something solid blocks the path to your foe.
 eventlog.charge.noRoom,No solid ground beside your foe to charge onto.
 eventlog.bomb.detonates,The {item} detonates.
 eventlog.phasedodge,{name} phases out of harm's way.
@@ -274,6 +278,7 @@ eventlog.fallback.adventurer,Adventurer
 eventlog.fallback.creature,creature
 eventlog.fallback.equipped,equipped
 eventlog.game.begin,{player} begins a new adventure.
+eventlog.item.dropped,{player} drops the {item}.
 eventlog.item.equipped,{player} equips the {item}.
 eventlog.item.fellInChasm,The {item} falls into the chasm.
 eventlog.item.fizzleOutOfCharge,The {item} fizzles because it lacks charge.
@@ -557,9 +562,9 @@ item.PEAR_SCRUMPTIOUS.tip,"A delicious pear. *Eat to satisfy hunger*, with a big
 item.PEAR_SILVERY.description,A pear with skin that shimmers like polished silver. Mysterious.
 item.PEAR_SILVERY.name,silvery pear
 item.PEAR_SILVERY.tip,A magical pear. *Eat to satisfy hunger + gain a magical boost*.\nRare.
-item.POTION_ESP.description,A fizzy potion that seems to weigh nothing.
-item.POTION_ESP.description2,Confers levitation on the drinker.
-item.POTION_ESP.name,potion of levitation
+item.POTION_ESP.description,A glutinous potion that seems made of eyeballs.
+item.POTION_ESP.description2,Allows the drinker to perceive distant creatures.
+item.POTION_ESP.name,potion of perception
 item.POTION_ESP.tip,Drink to *sense every mob* on the level for a short time.\nScouting tool.
 item.POTION_GHOSTLINESS.description,A swirling pearl-grey liquid.
 item.POTION_GHOSTLINESS.description2,The drinker becomes briefly ethereal and can pass through walls.
@@ -573,9 +578,9 @@ item.POTION_INVISIBILITY.description,A clear potion that hides the imbiber from 
 item.POTION_INVISIBILITY.description2,Invisibility ends if you attack.
 item.POTION_INVISIBILITY.name,potion of invisibility
 item.POTION_INVISIBILITY.tip,Drink to *become invisible*.\n+20 evasion; can't be targeted by ranged. Ends on attack.
-item.POTION_LEV.description,A glutinous potion that seems made of eyeballs.
-item.POTION_LEV.description2,Allows the drinker to percieve distant creatures.
-item.POTION_LEV.name,potion of perception
+item.POTION_LEV.description,A fizzy potion that seems to weigh nothing.
+item.POTION_LEV.description2,Confers levitation on the drinker.
+item.POTION_LEV.name,potion of levitation
 item.POTION_LEV.tip,Drink to *levitate*.\nIgnores ground hazards and pits.
 item.POTION_POISON.description,"A sickly green elixir. Vile to drink, devastating to throw."
 item.POTION_POISON.description2,"If thrown, creates a puff of poison vapor."
@@ -778,6 +783,9 @@ mob.ability.PHASE_DODGE,Phases aside to avoid an incoming attack{cooldown}
 mob.AWFUL_WRAITH.description,These horrible phantoms seem to have something to do with the beacon system.  They are huge in size and malice.
 mob.AWFUL_WRAITH.name,awful wraith
 mob.AWFUL_WRAITH.tip,"High evasion, armor piercing, magic resistant -- good luck."
+mob.GREAT_WRAITH.description,The Great Wraith, lord of the beacons and warden of the tombs' deepest floor. Every beacon you lit fed its power -- and it raises your every fallen foe to its side.
+mob.GREAT_WRAITH.name,Great Wraith
+mob.GREAT_WRAITH.tip,"The final boss. Stronger for every beacon lit; surrounded by the revenants of all you have slain."
 mob.BARBARIAN_PRINCESS.description,"A fierce barbarian princess, pursuing her own unknowable goals"
 mob.BARBARIAN_PRINCESS.name,barbarian princess
 mob.BARBARIAN_PRINCESS.tip,"She's peaceful, but perhaps an enemy could be tricked into angering her?"
@@ -1173,6 +1181,9 @@ ui.encyclopedia.title,Encyclopedia
 ui.gameOver.mainMenu,Main Menu
 ui.gameOver.stats,Score: {score}   Depth: {depth}
 ui.gameOver.title,YOU DIED
+ui.victory.title,VICTORY
+ui.victory.titlePerfect,PERFECT VICTORY
+ui.victory.stats,Beacons: {beacons}   Score: {score}
 ui.hall.empty,No entries yet.
 ui.hall.hiddenName,???
 ui.hall.summary,Level:{level} Depth: {depth}
@@ -1188,6 +1199,7 @@ ui.hud.menu.map,Map
 ui.hud.menu.settings,Settings
 ui.hud.status,Lvl {depth}
 ui.hud.hazard,Hazard {n}
+ui.inventory.drop,Drop
 ui.inventory.equip,Equip
 ui.inventory.quickslot,Quickslot
 ui.inventory.throw,Throw
@@ -1195,7 +1207,7 @@ ui.inventory.title,Backpack
 ui.inventory.choose,Choose an item
 ui.inventory.unequip,Unequip
 ui.inventory.use,Use
-ui.intro.message,Entering the top layer of the tombs. Your only escape is to reach the bottom and defeat the Bugbear.
+ui.intro.message,Entering the top layer of the tombs. Your only escape is to reach the bottom and defeat the Great Wraith.
 ui.levelInfo.chasms,Chasms    {value}
 ui.levelInfo.depth,Depth     {value}
 ui.levelInfo.doors,Doors     {value}
@@ -1368,7 +1380,7 @@ ui.title.hallOfFame,Hall of Fame
 ui.title.logo,rl2
 ui.title.newGame,New Game
 ui.title.quit,Quit
-ui.title.savedGames,Saved Games
+ui.title.savedGames,Load / New Game
 ui.title.settings,Settings
 world.mobState.asleep,asleep
 world.mobState.awake,awake

@@ -154,6 +154,16 @@ public final class WorldTopology {
             next.stairsUpTarget = previousIdx;
             previousIdx = nextIdx;
         }
+
+        // Final-boss floor (RL-19) - the deepest level, below the three trials.
+        // The last trial floor (previousIdx), which used to be the dead-end, now
+        // descends here. The boss floor has no downstair (the run ends here).
+        int bossDepth = landingDepth + 1 + order.size();
+        Level boss = LevelFactorySpecial.buildFinalBoss(bossDepth, rng.nextLong());
+        out.add(boss);
+        int bossIdx = out.size() - 1;
+        out.get(previousIdx).stairsDownTarget = bossIdx;
+        boss.stairsUpTarget = previousIdx;
     }
 
     /** Allocate downstairs from depth {@code d} into depth {@code d+1}. Phase 1

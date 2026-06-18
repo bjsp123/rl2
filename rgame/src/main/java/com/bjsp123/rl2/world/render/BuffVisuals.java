@@ -101,6 +101,9 @@ public final class BuffVisuals {
         // Sprite-modulation effects.
         TABLE.put(BuffType.GHOSTLY,    gray(0.45f));
         TABLE.put(BuffType.HIDING,     gray(0.30f));
+        // Boss revenants read washed-out; the blurry-edge pass is added directly
+        // in DefaultLevelRenderer.drawMobSprite (keyed off the REVENANT buff).
+        TABLE.put(BuffType.REVENANT,   gray(0.40f));
         TABLE.put(BuffType.FRIGHTENED, simple(Category.TREMBLE));
         TABLE.put(BuffType.HASTED,     simple(Category.ZOOM));
         // NONE (handled by pre-existing render code): ON_FIRE, INVISIBLE, FROZEN, PHASE,

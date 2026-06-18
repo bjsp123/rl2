@@ -1324,6 +1324,33 @@ public final class ItemSystem {
      *  scroll did nothing", and far-flung placement (the previous bug) left a
      *  3-item scroll looking like it never fired. Falls back to the player's
      *  own tile when no nearby floor is free. */
+    /** Drop {@code it} out of {@code user}'s inventory onto the nearest free floor
+     *  tile (the user's own tile only as a last resort). Removes the whole
+     *  stack/instance - equipped items are pulled straight out of their slot.
+     *  Always succeeds when the item is actually carried; returns {@code false}
+     *  only on bad input or if the item isn't in the inventory. */
+    public static boolean dropItem(Level level, Mob user, Item it) {
+        if (level == null || user == null || it == null
+                || user.inventory == null || user.position == null || level.items == null) {
+            return false;
+        }
+        boolean wasEquipped = InventorySystem.isEquipped(user.inventory, it);
+        if (!InventorySystem.removeEntirely(user.inventory, it)) return false;
+        if (wasEquipped) user.statsDirty = true;
+        Point spot = nearestFreeDropTile(level, user.position.tileX(), user.position.tileY());
+        if (spot == null) spot = user.position;
+        it.location = spot;
+        level.items.add(it);
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemCreated(it, spot));
+        }
+        String who  = user.name != null ? user.name : "You";
+        String what = it.name != null ? it.name : it.type;
+        EventLog.add(Messages.itemDropped(who, what));
+        TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
+        return true;
+    }
+
     private static void dropItemsNearPlayer(Level level, Mob user, java.util.List<Item> items) {
         if (user == null || user.position == null) return;
         dropItemsNear(level, user.position.tileX(), user.position.tileY(), items,
@@ -1745,6 +1772,17 @@ public final class ItemSystem {
         // The targeting overlay (chargeGrid) also gates this, but enforcing
         // it here keeps the AI path and any future caller honest.
         if (cheb < 2) return;
+        // A charge is a ground dash, not a blink: an impassable square (wall,
+        // closed door, statue, beacon, ...) between the charger and the target
+        // stops it cold. Fizzles without spending the charge or the turn.
+        if (!MobSystem.chargePathClear(level, user.position, target)) {
+            if (user.isPlayer) {
+                EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                        TextCatalog.get("eventlog.charge.blocked"),
+                        com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+            }
+            return;
+        }
 
         Point arrival = pickChargeArrival(level, user.position, target);
         if (arrival == null) {

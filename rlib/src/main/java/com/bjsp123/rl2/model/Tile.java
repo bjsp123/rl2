@@ -44,7 +44,13 @@ public enum Tile {
      *  on top of whatever floor/wall is behind it. {@code _L} is the anchor
      *  (renders the sprite); {@code _R} is the right base cell (impassable,
      *  drawn nothing - covered by the anchor sprite). */
-    GEM_HEARTH_L, GEM_HEARTH_R;
+    GEM_HEARTH_L, GEM_HEARTH_R,
+    /** Soul spawner (final-boss floor). A 2-tall beacon-like prop that
+     *  reanimates the player's slain as revenants to fight the Great Wraith.
+     *  {@code _L} is the anchor (renders the sprite); {@code _R} is the right
+     *  base cell. Blocks movement + projectiles like a beacon; revenants spawn
+     *  on adjacent floor. */
+    SOUL_SPAWNER_L, SOUL_SPAWNER_R;
 
     /** True for any door state (open, closed, crystal, one-time). */
     public boolean isDoor() {
@@ -85,7 +91,8 @@ public enum Tile {
             || this == ALTAR
             || this == THRONE_L || this == THRONE_R
             || this == BEACON_INACTIVE || this == BEACON_ACTIVE
-            || this == GEM_HEARTH_L || this == GEM_HEARTH_R;
+            || this == GEM_HEARTH_L || this == GEM_HEARTH_R
+            || this == SOUL_SPAWNER_L || this == SOUL_SPAWNER_R;
     }
 
     /** True if the tile is a beacon (either state). */

@@ -165,6 +165,25 @@ public final class InventorySystem {
         return true;
     }
 
+    /** Remove {@code it} from {@code inv} entirely - the whole bag entry (stack
+     *  and all) or whichever equipment / gem slot holds it - without returning it
+     *  anywhere. Used by the drop action, which hands the instance to the floor.
+     *  Returns {@code true} if the item was found and removed. */
+    public static boolean removeEntirely(Inventory inv, Item it) {
+        if (inv == null || it == null) return false;
+        if (inv.bag.remove(it)) return true;
+        if (inv.weapon  == it) { inv.weapon  = null; return true; }
+        if (inv.offhand == it) { inv.offhand = null; return true; }
+        if (inv.armor   == it) { inv.armor   = null; return true; }
+        for (int i = 0; i < inv.amulets.length; i++) {
+            if (inv.amulets[i] == it) { inv.amulets[i] = null; return true; }
+        }
+        for (int i = 0; i < inv.gems.length; i++) {
+            if (inv.gems[i] == it) { inv.gems[i] = null; return true; }
+        }
+        return false;
+    }
+
     /** Destroy a gem-slot occupant outright (does NOT return it to the bag).
      *  Used by single-use crafted gem-items (RL-50): triggering one consumes
      *  it from its slot. Returns {@code true} if a slot held {@code it}. */

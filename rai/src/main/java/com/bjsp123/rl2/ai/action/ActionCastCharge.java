@@ -27,7 +27,11 @@ public final class ActionCastCharge implements Action {
         int effLvl = com.bjsp123.rl2.logic.ItemStats.effectiveLevel(item, s.mob);
         int dashRange = Math.max(1, com.bjsp123.rl2.logic.ItemStats.effectiveRange(item, effLvl));
         // Range / LOS / non-ally / alive / not-already-adjacent all in one.
-        return com.bjsp123.rl2.ai.eval.CombatEval.dashWillLandUsefully(s, target, dashRange);
+        if (!com.bjsp123.rl2.ai.eval.CombatEval.dashWillLandUsefully(s, target, dashRange)) return false;
+        // A charge runs along the floor: an impassable square in the path makes
+        // castCharge no-op, so don't let it win argmax in that case.
+        return target.position != null
+                && com.bjsp123.rl2.logic.MobSystem.chargePathClear(s.level, s.mob.position, target.position);
     }
     @Override public double utility(WorldState s) {
         if (target == null) return 0.0;

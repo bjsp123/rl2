@@ -184,6 +184,11 @@ public final class TileSprites {
      *  + particles). */
     private static final int BEACON_COL       = 11;
     private static final int BEACON_ROW       = 0;
+    /** Soul-spawner ornament (RL-19): same 1x2 footprint as the beacon, anchored
+     *  at the lower (floor) cell. Authored in the gothic terrain sheet; other
+     *  themes have no art here (the boss floor is always gothic). */
+    private static final int SOUL_SPAWNER_COL = 16;
+    private static final int SOUL_SPAWNER_ROW = 0;
     private static final int STAIRS_UP_COL    = 0;
     private static final int STAIRS_UP_ROW    = 10;
     private static final int STAIRS_DOWN_COL  = 2;
@@ -244,6 +249,7 @@ public final class TileSprites {
     private static Map<VisualTheme, TextureRegion> altarByTheme;
     private static Map<VisualTheme, TextureRegion> throneByTheme;
     private static Map<VisualTheme, TextureRegion> beaconByTheme;
+    private static Map<VisualTheme, TextureRegion> soulSpawnerByTheme;
     private static Map<VisualTheme, TextureRegion> gemHearthByTheme;
     /** Per-theme average floor + wall colours, sampled from the terrain atlas
      *  during {@link #load}. Used by the world map to tint level cards by
@@ -328,6 +334,14 @@ public final class TileSprites {
     public static TextureRegion beacon(VisualTheme theme) {
         if (beaconByTheme == null) load();
         return ornament(beaconByTheme, theme);
+    }
+
+    /** Soul-spawner ornament region (1x2 cells), or {@code null} when the theme
+     *  has no authored soul-spawner art - the renderer falls back to the beacon
+     *  sprite in that case (RL-19). */
+    public static TextureRegion soulSpawner(VisualTheme theme) {
+        if (soulSpawnerByTheme == null) load();
+        return soulSpawnerByTheme.get(theme);
     }
 
     /** Flat region-index for the FLOOR_SPECIAL base sprite. The renderer adds
@@ -416,6 +430,9 @@ public final class TileSprites {
             // Both hearth base cells map to the 2x2 sprite anchored at _L.
             case GEM_HEARTH_L, GEM_HEARTH_R ->
                     new int[]{GEM_HEARTH_COL, GEM_HEARTH_ROW, GEM_HEARTH_W_CELLS, GEM_HEARTH_H_CELLS};
+            // Soul spawners have their own 1x2 cell (gothic sheet); the L/R
+            // base cells both map to the sprite anchored at the floor cell.
+            case SOUL_SPAWNER_L, SOUL_SPAWNER_R -> new int[]{SOUL_SPAWNER_COL, SOUL_SPAWNER_ROW, 1, 2};
         };
     }
 
@@ -474,6 +491,7 @@ public final class TileSprites {
         altarByTheme       = new EnumMap<>(VisualTheme.class);
         throneByTheme      = new EnumMap<>(VisualTheme.class);
         beaconByTheme      = new EnumMap<>(VisualTheme.class);
+        soulSpawnerByTheme = new EnumMap<>(VisualTheme.class);
         gemHearthByTheme   = new EnumMap<>(VisualTheme.class);
         floorTintByTheme   = new EnumMap<>(VisualTheme.class);
         wallTintByTheme    = new EnumMap<>(VisualTheme.class);
@@ -590,6 +608,16 @@ public final class TileSprites {
             throneByTheme.put(theme,
                     new TextureRegion(tex, throneX, yOffset + throneY, srcCell, throneHPx));
         }
+        // Soul-spawner art lives only in the gothic sheet (boss floor is always
+        // gothic); other themes fall back to the beacon sprite at render time.
+        if (theme == VisualTheme.GOTHIC) {
+            int ssX = SOUL_SPAWNER_COL * srcCell;
+            int ssY = SOUL_SPAWNER_ROW * srcCell;
+            if (ssX + srcCell <= sheetW && ssY + 2 * srcCell <= sheetH) {
+                soulSpawnerByTheme.put(theme,
+                        new TextureRegion(tex, ssX, yOffset + ssY, srcCell, 2 * srcCell));
+            }
+        }
         int beaconX = BEACON_COL * srcCell;
         int beaconY = BEACON_ROW * srcCell;
         if (beaconX + srcCell <= sheetW && beaconY + 2 * srcCell <= sheetH) {
@@ -619,6 +647,7 @@ public final class TileSprites {
         altarByTheme       = null;
         throneByTheme      = null;
         beaconByTheme      = null;
+        soulSpawnerByTheme = null;
         floorTintByTheme   = null;
         wallTintByTheme    = null;
     }

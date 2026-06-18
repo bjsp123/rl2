@@ -128,6 +128,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     // Callbacks (mirror V1 InventoryRenderer surface).
     private BiConsumer<Mob, Item> onUse;
     private BiConsumer<Mob, Item> onThrow;
+    private BiConsumer<Mob, Item> onDrop;
     /** Optional jump target - when set, the item-detail popup grows a "?"
      *  button that closes the inventory and opens the encyclopaedia
      *  pre-selected to the chosen item. */
@@ -157,6 +158,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     public void setActionBar(ActionBar ab)                { this.actionBar = ab; }
     public void setOnUse(BiConsumer<Mob, Item> fn)        { this.onUse = fn; }
     public void setOnThrow(BiConsumer<Mob, Item> fn)      { this.onThrow = fn; }
+    public void setOnDrop(BiConsumer<Mob, Item> fn)       { this.onDrop = fn; }
     public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
     public void setEncyclopedia(V2Encyclopedia enc)       { this.encyclopedia = enc; }
 
@@ -616,7 +618,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // item (e.g. Equip on a non-equippable blinkstone, Throw on a wand).
         drawBtn(s, detailUseBtn,   detailUsePressed,   canUseSelected());
         drawBtn(s, detailEquipBtn, detailEquipPressed, canEquipSelected());
-        drawBtn(s, detailThrowBtn, detailThrowPressed, canThrowSelected());
+        // Third slot is Throw (enabled when throwable) or Drop (always enabled).
+        drawBtn(s, detailThrowBtn, detailThrowPressed, dropModeSelected() || canThrowSelected());
         if (encyclopedia != null) {
             drawBtn(s, detailInfoBtn, detailInfoPressed, true);
         }
@@ -701,6 +704,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private boolean canUseSelected()   { return selectedItem != null && selectedItem.isUsable(); }
     private boolean canEquipSelected() { return selectedItem != null && selectedItem.isEquippable(); }
     private boolean canThrowSelected() { return selectedItem != null && selectedItem.isThrowable(); }
+    /** The third action button is a Drop button (always enabled) instead of Throw
+     *  whenever the selected item can't be thrown. */
+    private boolean dropModeSelected() { return selectedItem != null && !selectedItem.isThrowable(); }
 
     /** Inventory body text - header, equipment icons, tab icons, bag-grid
      *  icons + count badges. Drawn before the detail popup's chrome so the
@@ -839,10 +845,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     detailEquipPressed ? UIVars.ACCENT : (canEquipSelected() ? UIVars.TEXT_BODY : UIVars.TEXT_DIM),
                     TextDraw.ellipsize(ctx.fontRegular, equipLabel, detailEquipBtn.w - 8f),
                     detailEquipBtn.cx(), detailEquipBtn.cy() + 6f);
+            boolean dropMode = dropModeSelected();
+            boolean thirdEnabled = dropMode || canThrowSelected();
             TextDraw.centre(ctx, ctx.fontRegular,
-                    detailThrowPressed ? UIVars.ACCENT : (canThrowSelected() ? UIVars.TEXT_BODY : UIVars.TEXT_DIM),
+                    detailThrowPressed ? UIVars.ACCENT : (thirdEnabled ? UIVars.TEXT_BODY : UIVars.TEXT_DIM),
                     TextDraw.ellipsize(ctx.fontRegular,
-                            TextCatalog.get("ui.inventory.throw"), detailThrowBtn.w - 8f),
+                            TextCatalog.get(dropMode ? "ui.inventory.drop" : "ui.inventory.throw"),
+                            detailThrowBtn.w - 8f),
                     detailThrowBtn.cx(), detailThrowBtn.cy() + 6f);
             if (encyclopedia != null) {
                 // Standard info-icon button - same INFO glyph the
@@ -912,7 +921,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     // (greyed) actions swallow the tap without reacting.
                     if (detailUseBtn.contains(vx, vy))   { if (canUseSelected())   detailUsePressed = true;   return true; }
                     if (detailEquipBtn.contains(vx, vy)) { if (canEquipSelected()) detailEquipPressed = true; return true; }
-                    if (detailThrowBtn.contains(vx, vy)) { if (canThrowSelected()) detailThrowPressed = true; return true; }
+                    if (detailThrowBtn.contains(vx, vy)) { if (dropModeSelected() || canThrowSelected()) detailThrowPressed = true; return true; }
                     // Tap outside the detail window closes it without firing anything.
                     if (!detailWindow.contains(vx, vy)) {
                         selectedItem = null;
@@ -1084,10 +1093,15 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     detailThrowPressed = false;
                     if (detailThrowBtn.contains(vx, vy)) {
                         Item it = selectedItem;
+                        boolean drop = it != null && !it.isThrowable();
                         selectedItem = null;
                         close();
-                        if (onThrow != null && player != null && it != null) {
-                            onThrow.accept(player, it);
+                        if (player != null && it != null) {
+                            if (drop) {
+                                if (onDrop != null) onDrop.accept(player, it);
+                            } else if (onThrow != null) {
+                                onThrow.accept(player, it);
+                            }
                         }
                     }
                     return true;

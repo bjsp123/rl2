@@ -214,6 +214,7 @@ public final class BuffIcons {
             case POISONED     -> 7;
             case HOPE         -> 8;
             case GHOSTLY      -> 9;
+            case REVENANT     -> 9;   // reuse the ghost icon
             case HASTED       -> 10;
             case PROTECTION   -> 11;
             case ANTI_MAGIC   -> 12;

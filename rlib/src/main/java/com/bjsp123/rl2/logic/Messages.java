@@ -547,6 +547,12 @@ public final class Messages {
                             EventPriority.LOW, true);
     }
 
+    public static LogEvent itemDropped(String playerName, String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.item.dropped",
+                                    TextCatalog.vars("player", playerName, "item", itemName)),
+                            EventPriority.LOW, true);
+    }
+
     public static LogEvent powerupAbsorbed(String playerName, String itemName) {
         return new LogEvent(TextCatalog.format("eventlog.powerup.absorbed",
                                     TextCatalog.vars("player", playerName, "item", itemName)),

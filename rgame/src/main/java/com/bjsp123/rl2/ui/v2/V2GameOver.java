@@ -17,7 +17,8 @@ import java.util.List;
 /** V2 game-over screen - shown when the player dies. */
 public final class V2GameOver extends V2Screen {
 
-    private static final Color DIM_WARN = new Color(0.9f, 0.3f, 0.3f, 1f);
+    private static final Color DIM_WARN  = new Color(0.9f, 0.3f, 0.3f, 1f);
+    private static final Color VICTORY_HL = new Color(1f, 0.85f, 0.4f, 1f);  // warm gold
 
     private final Rl2Game        game;
     private final HallOfFameEntry record;
@@ -132,9 +133,12 @@ public final class V2GameOver extends V2Screen {
     protected void drawBodyText(UiCtx ctx) {
         float cx = window.cx();
 
-        // "YOU DIED" title.
-        TextDraw.centre(ctx, ctx.fontHeader, DIM_WARN,
-                TextCatalog.get("ui.gameOver.title"), cx,
+        // Title: gold VICTORY (or PERFECT VICTORY) on a win, red YOU DIED on death.
+        String titleKey = record.victory
+                ? (record.allBeaconsLit ? "ui.victory.titlePerfect" : "ui.victory.title")
+                : "ui.gameOver.title";
+        TextDraw.centre(ctx, ctx.fontHeader, record.victory ? VICTORY_HL : DIM_WARN,
+                TextCatalog.get(titleKey), cx,
                 window.top() - ctx.headerLineH());
 
         // Portrait.
@@ -149,9 +153,12 @@ public final class V2GameOver extends V2Screen {
         // Class name.
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, record.charClass, cx, nameY);
 
-        // Score + depth.
-        String stats = TextCatalog.format("ui.gameOver.stats",
-                TextCatalog.vars("score", record.score, "depth", record.depth));
+        // Stats: victory shows beacons + score; death shows score + depth.
+        String stats = record.victory
+                ? TextCatalog.format("ui.victory.stats",
+                        TextCatalog.vars("beacons", record.beaconsLit, "score", record.score))
+                : TextCatalog.format("ui.gameOver.stats",
+                        TextCatalog.vars("score", record.score, "depth", record.depth));
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, stats, cx, statsY);
 
         // Death log inside the framed panel. Left-justified, oldest at top,

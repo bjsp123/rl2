@@ -111,7 +111,11 @@ public class Buff {
         PHASE,
         /** Complete immunity to all incoming damage. Duration counts down per
          *  standard turn. Does not block self-inflicted healing or stat effects. */
-        SHIELDED
+        SHIELDED,
+        /** A reanimated kill fighting for the final boss (final-boss floor).
+         *  Cosmetic only - the renderer desaturates + blurs the mob's edges;
+         *  no stat effect. Used to mark + visually distinguish boss revenants. */
+        REVENANT
     }
 
     public BuffType type;

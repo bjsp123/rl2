@@ -28,6 +28,13 @@ public class HallOfFameEntry {
     public int    beastsTamed  = 0;
     /** Perk.name() of the perk with the highest level at run-end, or "" if none. */
     public String favPerk      = "";
+    /** True if the run ended in victory (Great Wraith defeated) rather than death.
+     *  Drives the VICTORY vs YOU DIED screen. Defaults false for old records. */
+    public boolean victory     = false;
+    /** Beacons lit over the run - the victory score driver. */
+    public int    beaconsLit   = 0;
+    /** True if every beacon in the world was lit (perfect victory). */
+    public boolean allBeaconsLit = false;
 
     public HallOfFameEntry() {}
 

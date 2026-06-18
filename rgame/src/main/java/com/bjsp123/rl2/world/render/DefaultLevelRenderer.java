@@ -160,6 +160,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     private TextureRegion currentAltar;
     private TextureRegion currentThrone;
     private TextureRegion currentBeacon;
+    private TextureRegion currentSoulSpawner;
     /** Mob the player is currently inspecting via look mode. When non-null, the renderer
      *  overlays its state-of-mind above its tile and draws this mob's attitude toward
      *  every other visible mob. {@link com.bjsp123.rl2.screen.PlayScreen} updates it each
@@ -539,6 +540,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         currentAltar        = TileSprites.altar(level.theme);
         currentThrone       = TileSprites.throne(level.theme);
         currentBeacon       = TileSprites.beacon(level.theme);
+        currentSoulSpawner  = TileSprites.soulSpawner(level.theme);
         TileBounds view = visibleTileBounds(level, camera);
         outlines.ensureCurrent();
 
@@ -636,6 +638,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
                     drawLampAt(level, x, y);
                     drawGemHearthAt(level, x, y);
                     drawBeaconAt(level, x, y);
+                    drawSoulSpawnerAt(level, x, y);
                     drawStairsAt(level, x, y);
                     drawStatueAt(level, x, y);
                     drawAltarAt(level, x, y);
@@ -1515,6 +1518,52 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.draw(currentBeacon, dx, dy, CELL, 2f * CELL);
     }
 
+    /** Final-boss soul spawner (RL-19): beacon-bodied prop with an erratic,
+     *  multicolored glow + sparks. Drawn only at the {@code _L} anchor cell.
+     *  Uses the beacon sprite as placeholder art for the body. */
+    private void drawSoulSpawnerAt(Level level, int x, int y) {
+        if (level.tiles[x][y] != Tile.SOUL_SPAWNER_L) return;
+        // Dedicated soul-spawner art where authored (gothic), else the beacon body.
+        TextureRegion body = currentSoulSpawner != null ? currentSoulSpawner : currentBeacon;
+        if (body == null) return;
+        float dx = x * (float) CELL;
+        float dy = y * (float) CELL + ENTITY_Y_OFFSET;
+        float cx = dx + CELL * 0.5f;
+        float cy = dy + 30f;
+        float phase = x * 1.3f + y * 0.7f;               // per-spawner desync
+        float t = stairLabelTime * 1.7f + phase;
+        TextureRegion glow = com.bjsp123.rl2.world.render.BuffIcons.beaconGlowRegion();
+        if (glow != null) {
+            float jitter = 0.5f + 0.5f * (float) Math.sin(t * 3.3f + phase);
+            float size  = 22f + 12f * jitter;
+            float alpha = 0.5f + 0.4f * jitter;
+            // Erratic cycling hue.
+            float r = 0.5f + 0.5f * (float) Math.sin(t);
+            float g = 0.5f + 0.5f * (float) Math.sin(t + 2.1f);
+            float b = 0.5f + 0.5f * (float) Math.sin(t + 4.2f);
+            batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+            batch.setColor(r, g, b, alpha);
+            batch.draw(glow, cx - size * 0.5f, cy - size * 0.5f, size, size);
+            // A few rising, fading, multicolored sparks.
+            for (int i = 0; i < 5; i++) {
+                float sp = t * 2.0f + i * 1.9f;
+                float sf = sp - (float) Math.floor(sp);          // 0..1 spark life
+                float sx = cx + (float) Math.cos(sp * 5.0f) * (3f + 6f * sf);
+                float sy = cy - 4f + sf * 16f;
+                float sa = (1f - sf) * 0.9f;
+                batch.setColor(0.5f + 0.5f * (float) Math.sin(sp),
+                        0.5f + 0.5f * (float) Math.sin(sp + 2f),
+                        0.5f + 0.5f * (float) Math.sin(sp + 4f), sa);
+                batch.draw(whiteRegion, sx - 1f, sy, 2f, 2f);
+            }
+            batch.setColor(Color.WHITE);
+            batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        }
+        outlines.drawRegion(batch, body, dx, dy, CELL, 2f * CELL);
+        batch.setColor(Color.WHITE);
+        batch.draw(body, dx, dy, CELL, 2f * CELL);
+    }
+
     /** Width of the contact shadow under a small statue, in screen pixels. */
     private static final int STATUE_SMALL_SHADOW_W = 10;
     /** Width of the contact shadow under a tall statue. Wider than the small variant so a
@@ -1884,7 +1933,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
                  BEACON_INACTIVE, BEACON_ACTIVE,
                  // Gem hearth sits on a floor base; the 64x64 sprite is layered
                  // on top in drawGemHearthAt (anchored at the _L base cell).
-                 GEM_HEARTH_L, GEM_HEARTH_R -> TileSprites.floorVariant(hash);
+                 GEM_HEARTH_L, GEM_HEARTH_R,
+                 // Soul spawners (final boss) sit on a floor base; the prop is
+                 // layered on top in drawSoulSpawnerAt.
+                 SOUL_SPAWNER_L, SOUL_SPAWNER_R -> TileSprites.floorVariant(hash);
         };
     }
 
@@ -2685,6 +2737,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 batch.setColor(0.6f, 0.6f, 0.62f, alpha * gray.grayAlpha);
                 batch.draw(s.region, drawX, drawY, dw, dh);
             }
+        }
+        // REVENANT: faint offset copies read as blurred, unstable edges (RL-19).
+        if (mob != null && com.bjsp123.rl2.logic.BuffSystem.hasBuff(
+                mob, com.bjsp123.rl2.model.Buff.BuffType.REVENANT)) {
+            float o = Math.max(1f, dw * 0.12f);
+            batch.setColor(0.72f, 0.74f, 0.82f, alpha * 0.18f);
+            batch.draw(s.region, drawX - o, drawY,     dw, dh);
+            batch.draw(s.region, drawX + o, drawY,     dw, dh);
+            batch.draw(s.region, drawX,     drawY - o, dw, dh);
+            batch.draw(s.region, drawX,     drawY + o, dw, dh);
         }
         batch.setColor(Color.WHITE);
     }

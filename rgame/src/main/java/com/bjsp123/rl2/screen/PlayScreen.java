@@ -219,6 +219,14 @@ public class PlayScreen implements Screen {
      *  overlay's alpha is {@code deathFadeFrame / DEATH_FADE_FRAMES}. */
     private int deathFadeFrame;
 
+    /** Victory transition (RL-19): latched when the player steps onto the escape
+     *  stairs after defeating the Great Wraith. Mirrors the death transition but
+     *  the player is alive, so it gold-fades to the VICTORY screen. */
+    private boolean victoryTransitionPending;
+    /** Counts up once the victory transition is latched; the V2GameOver (victory)
+     *  swap fires at {@link #DEATH_FADE_FRAMES}. */
+    private int victoryFadeFrame;
+
     /** Camera zoom the death outro pulls back to as the screen fades (RL-56).
      *  Larger = more zoomed out; the pull-back mirrors the intro zoom-in. */
     private static final float DEATH_ZOOM_OUT = 1.4f;
@@ -662,6 +670,7 @@ public class PlayScreen implements Screen {
                 levelRenderer, this::recenterCameraOnPlayer, frameProfiler, game.sounds);
         if (newRun) controller.seedDefaultActionBar(player, charClass);
         v2Inventory.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
+        v2Inventory.setOnDrop((user, item) -> controller.dropItem(user, item));
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
         controller.setItemPicker((eligible, onPick, onCancel) ->
                 v2Inventory.openPicker(eligible, onPick, onCancel));
@@ -932,13 +941,26 @@ public class PlayScreen implements Screen {
         // here so any path that changes the player's level (stairs,
         // chasm fall, debug "starting level") feeds the same poll.
         checkDepthAchievements();
+        // Victory (RL-19): the boss floor's stairs only exist once the Great
+        // Wraith is dead; stepping onto them (lockedExit) wins, regardless of any
+        // revenants still alive. Latched before the death check and mutually
+        // exclusive with it (the player is alive here).
+        if (playerAfter != null && !victoryTransitionPending && !deathTransitionPending
+                && level.kind == com.bjsp123.rl2.model.Level.LevelKind.FINAL_BOSS
+                && level.bossDefeated && level.lockedExit != null
+                && playerAfter.position != null
+                && playerAfter.position.tileX() == level.lockedExit.tileX()
+                && playerAfter.position.tileY() == level.lockedExit.tileY()) {
+            latchVictory(level, playerAfter);
+        }
+
         // First frame the player has been removed from level.mobs: capture
         // the death snapshot + clear the save (irreversible bookkeeping) and
         // LATCH the V2GameOver transition. The screen swap itself waits for
         // the killing attack's lunge / flinch + the death flicker / fade to
         // finish - see deathTransitionPending javadoc.
         if (player != null && playerAfter == null && lastSnapshot != null
-                && !deathTransitionPending) {
+                && !deathTransitionPending && !victoryTransitionPending) {
             // Walk the rolling event log oldest -> newest and pull the last
             // five player-involved entries. The very last one is the cause
             // of death; the four before it are the lead-up (incoming hits,
@@ -1012,6 +1034,20 @@ public class PlayScreen implements Screen {
             frameProfiler.add("deathHandling", span);
             frameProfiler.finish(ticked, overlayOpen);
             return;
+        }
+        // Victory (RL-19): no in-world death anim to wait on - the player is
+        // alive on the escape stairs. Ramp the gold fade immediately, then swap
+        // to the VICTORY screen.
+        if (victoryTransitionPending) {
+            victoryFadeFrame++;
+            if (victoryFadeFrame >= DEATH_FADE_FRAMES) {
+                com.bjsp123.rl2.ui.skin.Settings.setAnimationTransientOverride(0f);
+                dispose();
+                game.setRootScreen(new com.bjsp123.rl2.ui.v2.V2GameOver(game, lastSnapshot));
+                frameProfiler.add("deathHandling", span);
+                frameProfiler.finish(ticked, overlayOpen);
+                return;
+            }
         }
         frameProfiler.add("deathCheck", span);
 
@@ -1107,6 +1143,12 @@ public class PlayScreen implements Screen {
         if (deathTransitionPending && deathFadeFrame > 0) {
             float alpha = Math.min(1f, deathFadeFrame / (float) DEATH_FADE_FRAMES);
             drawDeathFadeOverlay(alpha);
+        }
+        // Victory cinematic - the same ramp but a warm gold wash instead of
+        // black, so the win reads as triumph rather than death.
+        if (victoryTransitionPending && victoryFadeFrame > 0) {
+            float alpha = Math.min(1f, victoryFadeFrame / (float) DEATH_FADE_FRAMES);
+            drawVictoryFadeOverlay(alpha);
         }
 
         // Intro arrival message - a bottom banner naming the goal, shown over
@@ -1227,6 +1269,53 @@ public class PlayScreen implements Screen {
         camera.update();
     }
 
+    /** Latch the victory transition (RL-19): the player has stepped onto the
+     *  stairs that appeared when the Great Wraith died. Mirrors the death
+     *  bookkeeping - snapshot the run, mark it a win, score by beacons lit,
+     *  persist to the hall of fame, clear the save - then ramp the gold fade and
+     *  swap to the VICTORY screen. The player is alive, so {@code lastSnapshot}
+     *  already holds the live snapshot refreshed each frame. */
+    private void latchVictory(Level level, Mob player) {
+        if (lastSnapshot == null) return;
+        // Beacons lit this run + whether the whole world was lit (perfect victory).
+        int beaconsLit = player.beaconsLit;
+        boolean anyUnlit = false;
+        for (Level l : world.levels) {
+            if (l == null || l.tiles == null) continue;
+            for (int ty = 0; ty < l.height && !anyUnlit; ty++) {
+                for (int tx = 0; tx < l.width; tx++) {
+                    if (l.tiles[tx][ty] == com.bjsp123.rl2.model.Tile.BEACON_INACTIVE) {
+                        anyUnlit = true;
+                        break;
+                    }
+                }
+            }
+            if (anyUnlit) break;
+        }
+        boolean allBeaconsLit = !anyUnlit;
+        lastSnapshot.victory = true;
+        lastSnapshot.beaconsLit = beaconsLit;
+        lastSnapshot.allBeaconsLit = allBeaconsLit;
+        lastSnapshot.score = com.bjsp123.rl2.logic.GameBalance.VICTORY_SCORE_BASE
+                + com.bjsp123.rl2.logic.GameBalance.SCORE_PER_BEACON * beaconsLit
+                + (allBeaconsLit ? com.bjsp123.rl2.logic.GameBalance.PERFECT_VICTORY_BONUS : 0);
+        game.hallOfFame.add(lastSnapshot);
+        com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
+        if (game.achievementSystem != null) {
+            game.achievementSystem.observeRunEnded(lastSnapshot);
+        }
+        game.saveSystem.clear(saveSlot);
+        game.currentPlay = null;
+        victoryTransitionPending = true;
+        victoryFadeFrame = 0;
+        // A column of light erupts from the escape stairs - triumph rather than
+        // the death outro's dim collapse.
+        if (animator != null) {
+            com.bjsp123.rl2.world.render.Effect.columnOfLight(
+                    animator.stage, player.position, animator.rng());
+        }
+    }
+
     /** Snap to play zoom and hand control to the player, blooming a dust cloud
      *  around them so the hand-off reads as "you materialise here". Idempotent. */
     private void endIntro() {
@@ -1300,6 +1389,23 @@ public class PlayScreen implements Screen {
                 com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
         s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
         s.setColor(0f, 0f, 0f, alpha);
+        s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
+        s.end();
+        com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+    }
+
+    /** Victory analogue of {@link #drawDeathFadeOverlay} - a warm gold wash that
+     *  ramps to full as the run resolves into the VICTORY screen. */
+    private void drawVictoryFadeOverlay(float alpha) {
+        if (alpha <= 0f) return;
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
+        s.setProjectionMatrix(game.ui.camera.combined);
+        com.badlogic.gdx.Gdx.gl.glEnable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+        com.badlogic.gdx.Gdx.gl.glBlendFunc(
+                com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA,
+                com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(1f, 0.85f, 0.45f, alpha);
         s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
         s.end();
         com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);

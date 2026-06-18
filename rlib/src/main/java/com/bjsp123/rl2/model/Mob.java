@@ -531,6 +531,13 @@ public class Mob {
     public java.util.EnumMap<Perk, Integer> perks = new java.util.EnumMap<>(Perk.class);
     /** Cumulative count of beasts tamed this run. Persisted in save files. */
     public int beastsTamed = 0;
+    /** Beacons the player has lit this run. Scales the final boss + drives the
+     *  victory score. Persisted. */
+    public int beaconsLit = 0;
+    /** Every individual the player has killed this run, as mobType keys (one
+     *  entry per kill). The final-boss floor reanimates this roster as revenants
+     *  - each killed individual returns exactly once. Persisted. */
+    public java.util.List<String> killedRoster = new java.util.ArrayList<>();
     /** Lifetime history - kills, level-ups, item finds - read by the character stats
      *  frame's History tab. */
     public java.util.List<HistoricalRecord> history = new java.util.ArrayList<>();

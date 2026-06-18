@@ -31,6 +31,8 @@ public final class LevelFactorySpecial {
      *  so the map screen draws them at the same scale as regular floors. */
     private static final int W = 48;
     private static final int H = 48;
+    /** Radius of the final-boss arena. */
+    private static final int BOSS_ARENA_R = 8;
 
     // ========================================================================
     // Landing - the antechamber. Single small room with stairs up + stairs
@@ -143,6 +145,79 @@ public final class LevelFactorySpecial {
         fillChasmWithWall(level);
 
         return level;
+    }
+
+    // ========================================================================
+    // Final boss - the Great Wraith (RL-19). A central round arena, sealed on
+    // entry (no stairs while the boss lives). Four cardinal soul spawners
+    // reanimate the player's slain as revenants: N/S sit on the arena floor,
+    // E/W on small platforms over the void reached by short plank walkways.
+    // The boss is spawned + scaled (by beacons lit) on arrival in
+    // MobSystem.transferMobToLevel; its death stamps the escape stairs at the
+    // arena centre.
+    // ========================================================================
+    public static Level buildFinalBoss(int depth, long seed) {
+        Random rng = new Random(seed ^ 0x5151515151515151L);
+        Level level = blankFloor(depth, Level.VisualTheme.GOTHIC);
+        level.kind = Level.LevelKind.FINAL_BOSS;
+        level.sealOnEntry = true;   // the entry stairs vanish on arrival
+
+        int cx = W / 2, cy = H / 2;
+        int r  = BOSS_ARENA_R;
+        carveCircle(level, cx, cy, r);
+
+        // Boss + appearing-stairs tile at the arena centre.
+        level.lockedExit = new Point(cx, cy);
+
+        // Entry stairs-up at the south of the arena; sealOnEntry clears it on
+        // arrival, so the floor then has no stairs until the boss dies.
+        Point entry = new Point(cx, cy - (r - 1));
+        level.tiles[entry.tileX()][entry.tileY()] = Tile.STAIRS_UP;
+        level.stairsUp   = entry;
+        level.spawnPoint = entry;
+        level.stairsDown = null;
+
+        // Four cardinal soul spawners. N/S on the arena floor; E/W on platforms
+        // over the void reached by short plank walkways.
+        placeSpawner(level, cx, cy + (r - 2));      // north (arena floor)
+        placeSpawner(level, cx, cy - (r - 4));      // south (arena floor, north of entry)
+        placeWalkwaySpawner(level, cx, cy, cx + (r + 5), cy, rng);   // east platform
+        placeWalkwaySpawner(level, cx, cy, cx - (r + 5), cy, rng);   // west platform
+        // The void around the E/W walkways is intentional - do NOT fill it.
+
+        // Revenant add-spawner (roster seeded on entry by MobSystem).
+        Level.Spawner sp = new Level.Spawner();
+        sp.everyNTurns = GameBalance.BOSS_ADD_SPAWN_CADENCE;
+        sp.maxAlive    = GameBalance.BOSS_ADD_MAX_ALIVE;
+        sp.placement   = Level.Spawner.Placement.SOUL_SPAWNERS;
+        sp.spawnAwake  = true;
+        level.spawner  = sp;
+
+        return level;
+    }
+
+    /** Place a 2-wide soul-spawner prop (anchor at (x,y)) and register it as a
+     *  spawn anchor. */
+    private static void placeSpawner(Level level, int x, int y) {
+        if (!inBounds(x, y)) return;
+        level.tiles[x][y] = Tile.SOUL_SPAWNER_L;
+        if (inBounds(x + 1, y)) level.tiles[x + 1][y] = Tile.SOUL_SPAWNER_R;
+        level.spawnerTiles.add(new Point(x, y));
+    }
+
+    /** Carve a small 3x3 floor platform over the void at (px,py), bridge it to
+     *  the arena with a plank walkway, and place a soul spawner on it. */
+    private static void placeWalkwaySpawner(Level level, int arenaCx, int arenaCy,
+                                            int px, int py, Random rng) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (inBounds(px + dx, py + dy)) level.tiles[px + dx][py + dy] = Tile.FLOOR;
+            }
+        }
+        int dirX = Integer.signum(px - arenaCx);
+        carveLPlankPath(level, arenaCx + dirX * (BOSS_ARENA_R - 1), arenaCy,
+                px - dirX, py, rng);
+        placeSpawner(level, px, py);
     }
 
     // ========================================================================
