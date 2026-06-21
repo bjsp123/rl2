@@ -60,6 +60,7 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.BeaconActivated m)       animator.onBeaconActivated(m);
         else if (ev instanceof GameEvent.PlayerTeleportOut m)     animator.onPlayerTeleportOut(m);
         else if (ev instanceof GameEvent.PlayerTeleportIn m)      animator.onPlayerTeleportIn(m);
+        else if (ev instanceof GameEvent.PlayerRevived m)         animator.onPlayerRevived(m);
         else if (ev instanceof GameEvent.InwardSpiralSpawn m)     {
             // Beacons emit BOTH a spiral particle and a co-located light
             // mote (both lifted 42 px above the sprite base) so the two

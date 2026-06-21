@@ -126,6 +126,10 @@ public final class ItemDefinition {
      *  predictable places. */
     public boolean restrictedDrop;
 
+    /** Revive charm flag (Jade Peach) - stamped onto the Item as
+     *  {@link Item#revivesOnDeath}. CSV column {@code revivesOnDeath}. */
+    public boolean revivesOnDeath;
+
     /** Atlas-cell coordinates on {@code sprites/items.png} (32-px grid). Read by
      *  the rgame-side {@code ItemSprites} loader; rlib code never touches them. */
     public int spriteCol;
@@ -194,6 +198,7 @@ public final class ItemDefinition {
                 com.bjsp123.rl2.model.Level.VisualTheme.class, null);
         d.guaranteedPerLevel = CsvTable.intCell(row, "guaranteedPerLevel", 0);
         d.restrictedDrop     = CsvTable.boolCell(row, "restrictedDrop", false);
+        d.revivesOnDeath     = CsvTable.boolCell(row, "revivesOnDeath", false);
 
         d.spriteCol     = CsvTable.intCell(row, "spriteCol", 0);
         d.spriteRow     = CsvTable.intCell(row, "spriteRow", 0);
@@ -239,6 +244,7 @@ public final class ItemDefinition {
         it.glows                 = glows;
         it.inventoryCategory     = inventoryCategory;
         it.minPowerLevel         = powerMin;
+        it.revivesOnDeath        = revivesOnDeath;
         if (it.baseChargeMax > 0) {
             it.charge = it.maxCharge();
         }

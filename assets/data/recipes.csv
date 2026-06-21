@@ -48,3 +48,6 @@ INVOCATION_OF_RU_SHOU,6,MALACHOR,metal_exotic,any,any
 INVOCATION_OF_MO_YE,6,GOLD,metal_exotic,any,any
 PATH_THROUGH_OBLIVION,7,BLACKGLASS,exotic,metal_exotic,any
 PILL_OF_IMMORTALITY,7,FLUORON,exotic,metal_exotic,any
+# --- Jade Peach: a revive charm crafted from an exotic gem (output is an
+# --- ITEM, not a GEM-scroll - the forge drops it like any other recipe output).
+JADE_PEACH,6,exotic,metal_exotic,any,

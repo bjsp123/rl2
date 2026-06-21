@@ -1627,6 +1627,29 @@ public class MobSystem {
      * Callers must not perform any of these steps themselves - they all live here.
      */
     public static void killMob(Level level, Mob mob, Mob killer) {
+        // Jade Peach revive (difficulty levels): if the player is about to die
+        // while carrying a revive charm, consume one and revive in place instead
+        // of dying - full heal, clear lethal DoTs, and a shockwave that damages
+        // every hostile on the level. killMob is the single death funnel, so this
+        // covers every damage source. Skips all kill bookkeeping below.
+        if (mob.isPlayer && level != null) {
+            Item charm = findReviveCharm(mob);
+            if (charm != null) {
+                InventorySystem.removeOneFromBag(mob.inventory, charm);
+                mob.statsDirty = true;
+                int maxHp = (int) Math.round(mob.effectiveStats().maxHp);
+                mob.hp = Math.max(1, (int) Math.round(maxHp * GameBalance.REVIVE_HP_RESTORE_FRAC));
+                BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE);
+                BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.POISONED);
+                BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.BLEEDING);
+                reviveShockwave(level, mob);
+                if (level.events != null && mob.position != null) {
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.PlayerRevived(mob.position));
+                }
+                EventLog.add(Messages.playerRevived(nameForLog(level, mob)));
+                return;
+            }
+        }
         // Drain inventory + equipment, roll drop-quality loot, scatter on adjacent
         // tiles, and post LootDropped events so rgame's Animator can play the
         // corpse-to-landing arc. Replaces the inline scatter that used to live here.
@@ -1717,6 +1740,36 @@ public class MobSystem {
                     mob, killer, mob.position.tileX(), mob.position.tileY(), visible));
         }
         level.mobs.remove(mob);
+    }
+
+    /** First carried Jade Peach (revive charm) in the bag, or null. Classified by
+     *  the {@link Item#revivesOnDeath} flag, never by item type. */
+    private static Item findReviveCharm(Mob mob) {
+        if (mob == null || mob.inventory == null || mob.inventory.bag == null) return null;
+        for (Item it : mob.inventory.bag) {
+            if (it != null && it.revivesOnDeath && it.count > 0) return it;
+        }
+        return null;
+    }
+
+    /** Jade Peach revive shockwave: deal {@code REVIVE_AOE_MAXHP_FRAC} of each
+     *  hostile's max HP to every enemy on the level. Snapshots the target list
+     *  first because killing weak enemies mutates {@code level.mobs}. */
+    private static void reviveShockwave(Level level, Mob player) {
+        if (level == null || level.mobs == null) return;
+        java.util.List<Mob> hostiles = new java.util.ArrayList<>();
+        for (Mob m : level.mobs) {
+            if (m == null || m == player || m.hp <= 0 || m.position == null) continue;
+            if (getAttitudeToMob(player, m) != Attitude.ATTACK) continue;
+            hostiles.add(m);
+        }
+        for (Mob m : hostiles) {
+            if (m.hp <= 0) continue;
+            int dmg = (int) Math.round(m.effectiveStats().maxHp * GameBalance.REVIVE_AOE_MAXHP_FRAC);
+            if (dmg <= 0) continue;
+            m.hp -= dmg;
+            if (m.hp <= 0) killMob(level, m, player);
+        }
     }
 
     /**
@@ -2080,17 +2133,21 @@ public class MobSystem {
                 }
             }
         }
-        // Levels that seal behind the player vanish their stairs-up the first
-        // time the player sets foot on them. Generic + idempotent (once sealed
-        // stairsUp is null), so no per-level "entered" bookkeeping needed.
-        if (mob.isPlayer && dstLevel.sealOnEntry
-                && dstLevel.stairsUp != null) {
+        applyLevelEntryEffects(dstLevel, mob);
+    }
+
+    /** Side effects of the player setting foot on {@code dstLevel}: seal-on-entry
+     *  floors vanish their up-stairs, and the final-boss floor seeds the revenant
+     *  roster + spawns / scales the Great Wraith (RL-19). Idempotent (sealed
+     *  stairs go null; the boss spawns only once). Invoked both by stair
+     *  transfers and by initial placement (the "start at level" option), so
+     *  starting directly on a special floor behaves like descending into it. */
+    public static void applyLevelEntryEffects(Level dstLevel, Mob mob) {
+        if (dstLevel == null || mob == null || !mob.isPlayer) return;
+        if (dstLevel.sealOnEntry && dstLevel.stairsUp != null) {
             LevelSystem.sealStairsUp(dstLevel);
         }
-        // Final-boss floor (RL-19): on the player's first arrival, seed the
-        // revenant roster from the player's kills and spawn + scale the Great
-        // Wraith by beacons lit.
-        if (mob.isPlayer && dstLevel.kind == Level.LevelKind.FINAL_BOSS
+        if (dstLevel.kind == Level.LevelKind.FINAL_BOSS
                 && !dstLevel.bossDefeated && findFinalBoss(dstLevel) == null) {
             spawnFinalBoss(dstLevel, mob);
         }

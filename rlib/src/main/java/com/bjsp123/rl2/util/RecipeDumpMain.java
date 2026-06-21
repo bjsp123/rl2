@@ -68,7 +68,11 @@ public final class RecipeDumpMain {
             if (Registries.item(r.output) == null) {
                 System.out.println("ERROR: " + tag + " has no items.csv row"); errors++;
             } else if (Registries.item(r.output).inventoryCategory != Item.InventoryCategory.GEM) {
-                System.out.println("ERROR: " + tag + " output is not a GEM-category item"); errors++;
+                // Most recipes craft GEM-category scrolls, but a recipe may
+                // deliberately output a non-gem ITEM (e.g. JADE_PEACH). That's a
+                // note, not an error - the forge drops any recipe output.
+                System.out.println("NOTE: " + tag + " output is "
+                        + Registries.item(r.output).inventoryCategory + " (non-GEM), allowed.");
             }
             if (r.rarity < 2 || r.rarity > 7) {
                 System.out.println("ERROR: " + tag + " rarity " + r.rarity + " out of 2..7"); errors++;

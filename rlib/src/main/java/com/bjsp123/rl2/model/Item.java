@@ -116,10 +116,13 @@ public class Item {
         THROWN,
         ITEM;
 
-        /** True if items in this category go into a gear strip equipment slot. */
+        /** True if items in this category go into a gear strip equipment slot.
+         *  GEMs are NOT equipment - the gem-slot system was retired; gems and
+         *  gem-scrolls live in the bag (raw gems forge at the hearth, scrolls are
+         *  read from the bag). */
         public boolean isEquipment() {
             return this == WEAPON || this == OFFHAND || this == ARMOR
-                    || this == AMULET || this == GEM;
+                    || this == AMULET;
         }
     }
 
@@ -365,6 +368,13 @@ public class Item {
      *  deeper-band items. */
     public double minPowerLevel;
 
+    /** Revive charm (the Jade Peach): while one is carried, the player's death
+     *  is intercepted - the charm is consumed to revive in place. Set from the
+     *  {@code revivesOnDeath} items.csv column. Classified by this flag, never by
+     *  item type. Also makes the item stackable (see {@link #isStackable()}) so a
+     *  pool of charms occupies a single bag slot. */
+    public boolean revivesOnDeath;
+
     public boolean isGem() { return gemSpecies != null; }
     public boolean isEquippable() {
         return inventoryCategory != null && inventoryCategory.isEquipment();
@@ -397,7 +407,8 @@ public class Item {
      *  and thrown weapons. All other item types (weapons, wands, gems,
      *  tools, ...) are always singletons. */
     public boolean isStackable() {
-        return inventoryCategory == InventoryCategory.POTION
+        return revivesOnDeath
+                || inventoryCategory == InventoryCategory.POTION
                 || inventoryCategory == InventoryCategory.BOMB
                 || inventoryCategory == InventoryCategory.FOOD
                 || inventoryCategory == InventoryCategory.THROWN;
@@ -412,6 +423,7 @@ public class Item {
     public boolean isThrowable() {
         if (inventoryCategory == null
                 || inventoryCategory.isEquipment()
+                || inventoryCategory == InventoryCategory.GEM
                 || inventoryCategory == InventoryCategory.ITEM) return false;
         // Throwable if it has a thrown effect, is tame-bait (e.g. the delicious fish,
         // thrown at a cat / dog to tame it - no throwEffect), or is FOOD: all food can be

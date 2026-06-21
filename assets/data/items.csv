@@ -1,4 +1,4 @@
-type,theme,minPowerLevel,maxPowerLevel,clusterSize,inventoryCategory,guaranteedPerLevel,damage,attackSpeed,apDamage,armor,antiMagic,moveSpeed,effectSize,lightRadius,throwEffect,tameOnThrow,useBehavior,useVerb,foodValue,appliesBuff,effectDuration,effectRange,effectPower,wandEffect,summonsWhenUsed,chargeGain,baseChargeMax,knockbackSquares,throwResult,glows,spriteCol,spriteRow,restrictedDrop
+type,theme,minPowerLevel,maxPowerLevel,clusterSize,inventoryCategory,guaranteedPerLevel,damage,attackSpeed,apDamage,armor,antiMagic,moveSpeed,effectSize,lightRadius,throwEffect,tameOnThrow,useBehavior,useVerb,foodValue,appliesBuff,effectDuration,effectRange,effectPower,wandEffect,summonsWhenUsed,chargeGain,baseChargeMax,knockbackSquares,throwResult,glows,spriteCol,spriteRow,restrictedDrop,revivesOnDeath
 AMULET_OF_NIMBLENESS,,0.3,0.7,,AMULET,,,,,,,0.8,,,,,NONE,,,,,,,,,,,,,,0,6,
 AMULET_OF_FINESSE,,0.1,0.4,,AMULET,,,0.8,,,,,,,,,NONE,,,,,,,,,,,,,,1,6,
 AMULET_OF_DEFENCE,,0.2,0.8,,AMULET,,,,,3,,,,,,,NONE,,,,,,,,,,,,,,2,6,
@@ -103,3 +103,4 @@ INVOCATION_OF_RU_SHOU,,,,,GEM,,,,,,,,,,,,APPLYBUFF,read,,,,,,,,,,,,,0,12,TRUE
 INVOCATION_OF_MO_YE,,,,,GEM,,,,,,,,,,,,APPLYBUFF,read,,,,,,,,,,,,,1,12,TRUE
 PATH_THROUGH_OBLIVION,,,,,GEM,,,,,,,,,,,,APPLYBUFF,read,,,,,,,,,,,,,2,12,TRUE
 PILL_OF_IMMORTALITY,,,,,GEM,,,,,,,,,,,,APPLYBUFF,read,,,,,,,,,,,,,3,12,TRUE
+JADE_PEACH,,,,,ITEM,,,,,,,,,,,,NONE,,,,,,,,,,,,,,15,8,TRUE,TRUE

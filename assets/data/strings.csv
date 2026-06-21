@@ -279,6 +279,7 @@ eventlog.fallback.creature,creature
 eventlog.fallback.equipped,equipped
 eventlog.game.begin,{player} begins a new adventure.
 eventlog.item.dropped,{player} drops the {item}.
+eventlog.player.revived,A Jade Peach shatters in a burst of light and {player} is reborn!
 eventlog.item.equipped,{player} equips the {item}.
 eventlog.item.fellInChasm,The {item} falls into the chasm.
 eventlog.item.fizzleOutOfCharge,The {item} fizzles because it lacks charge.
@@ -533,6 +534,10 @@ item.JADE_FISH.description,"A peaceful green fish carved from jade, cool and smo
 item.JADE_FISH.description2,Hold the fish and you pass through the world like a blur.
 item.JADE_FISH.name,jade fish
 item.JADE_FISH.tip,Throw at a mouse to *tame it as a pet*.\nPets follow you and fight alongside you.
+item.JADE_PEACH.description,"A luminous peach carved from green jade, warm with a faint inner light."
+item.JADE_PEACH.description2,The peach of immortality - it shatters to cheat death once.
+item.JADE_PEACH.name,jade peach
+item.JADE_PEACH.tip,*Revives you in place* the moment you die.\nThe burst damages every nearby enemy. Consumed on use.
 item.KATANA.description,"A deadly, razor sharp sword."
 item.KATANA.name,katana
 item.KATANA.tip,"A long, sharp blade. *High damage*.\nSlightly slower than the dagger."
@@ -1138,6 +1143,19 @@ ui.characterSelect.seedPrompt,Seed (blank for random)
 ui.characterSelect.seedRandom,Seed: random
 ui.characterSelect.startingLevel,Starting level: {level}
 ui.characterSelect.startOnLanding,Start on Landing: {state}
+ui.characterSelect.difficulty,Difficulty: {name}
+difficulty.easy.name,Easy
+difficulty.easy.description,Player has double hit points, 8 lives, regenerates 1.5% of hit points per turn, and moves 20% faster. Fresh enemies arrive on levels less frequently. Good for a relaxing experience and exploring.
+difficulty.gentle.name,Gentle
+difficulty.gentle.description,Player has 50% more hit points, 4 lives, slowly regenerates, and moves 10% faster. Fresh enemies arrive a little less often. Good for learning the game.
+difficulty.normal.name,Normal
+difficulty.normal.description,A balanced and tough roguelike experience. Most players won't get to the endgame.
+difficulty.hard.name,Hard
+difficulty.hard.description,Enemies have 30% more hit points.
+difficulty.very_hard.name,Very Hard
+difficulty.very_hard.description,Enemies have 50% more hit points. Fresh enemies arrive on levels frequently.
+difficulty.supereasy.name,Super Easy
+difficulty.supereasy.description,Like Easy but with triple hit points and jade items never run out of charges. Debug tier.
 ui.characterSelect.tenPerkPoints,+10 perk points: {state}
 ui.characterSelect.title,Choose Class
 ui.characterStats.accuracy,Accuracy
@@ -1198,6 +1216,7 @@ ui.hud.menu.main,Main Menu
 ui.hud.menu.map,Map
 ui.hud.menu.settings,Settings
 ui.hud.status,Lvl {depth}
+ui.hud.revives,Revives: {n}
 ui.hud.hazard,Hazard {n}
 ui.inventory.drop,Drop
 ui.inventory.equip,Equip

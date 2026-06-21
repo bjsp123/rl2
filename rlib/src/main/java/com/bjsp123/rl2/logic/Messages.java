@@ -553,6 +553,13 @@ public final class Messages {
                             EventPriority.LOW, true);
     }
 
+    /** "A Jade Peach shatters and {player} is reborn!" - the revive charm fired. */
+    public static LogEvent playerRevived(String playerName) {
+        return new LogEvent(TextCatalog.format("eventlog.player.revived",
+                                    TextCatalog.vars("player", playerName)),
+                            EventPriority.HIGH, true);
+    }
+
     public static LogEvent powerupAbsorbed(String playerName, String itemName) {
         return new LogEvent(TextCatalog.format("eventlog.powerup.absorbed",
                                     TextCatalog.vars("player", playerName, "item", itemName)),

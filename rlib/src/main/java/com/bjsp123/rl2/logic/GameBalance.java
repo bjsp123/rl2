@@ -179,6 +179,142 @@ public final class GameBalance {
      *  attacks against (and from) foes blinded by the smoke. */
     public static boolean RULES_SURPRISE_SMOKE_CONCEALS = true;
 
+    // ------------------------- Difficulty -----------------------------------
+    /** Selected difficulty for the active run. Set via {@link #applyDifficulty}
+     *  at run start (and reset to NORMAL when leaving a game). Game logic reads
+     *  the "active" multiplier fields below, not this enum directly. */
+    public static Difficulty difficulty = Difficulty.NORMAL;
+
+    // Active multipliers the game logic reads (populated by applyDifficulty);
+    // baked defaults equal NORMAL so non-game contexts (autoplay, menus) are unaffected.
+    /** Player max-HP multiplier (applied in MobStats for the player mob). */
+    public static double PLAYER_HP_MULTIPLIER = 1.0;
+    /** Enemy max-HP multiplier (applied in MobStats for non-player mobs). */
+    public static double ENEMY_HP_MULTIPLIER = 1.0;
+    /** Fraction of the player's max HP regenerated per standard turn (MobStats). */
+    public static double PLAYER_REGEN_FRAC_PER_TURN = 0.0;
+    /** Renewing-spawn cadence multiplier; >1 = fresh enemies arrive less often (TurnSystem). */
+    public static double SPAWN_CADENCE_MULTIPLIER = 1.0;
+    /** Player movement-speed multiplier; >1 = faster (lower move cost) (MobStats). */
+    public static double PLAYER_SPEED_MULTIPLIER = 1.0;
+    /** When true, jade items (fish/crab/bull) don't consume charges on use
+     *  (ItemSystem). Set only by the SUPEREASY tier. */
+    public static boolean JADE_ITEMS_FREE_CHARGES = false;
+    /** Jade Peach revive charms granted to the player at run start. */
+    public static int STARTING_REVIVE_CHARMS = 0;
+    /** Fraction of max HP the player is restored to when a revive charm fires. */
+    public static double REVIVE_HP_RESTORE_FRAC = 1.0;
+    /** Fraction of each hostile's max HP dealt by the revive shockwave. */
+    public static double REVIVE_AOE_MAXHP_FRAC = 0.20;
+
+    // Per-difficulty presets (config.csv-tunable). applyDifficulty copies the
+    // chosen level's values into the active fields above.
+    public static double DIFFICULTY_EASY_PLAYER_HP_MULT      = 2.0;
+    public static double DIFFICULTY_EASY_ENEMY_HP_MULT       = 1.0;
+    public static double DIFFICULTY_EASY_REGEN_FRAC          = 0.015;
+    public static double DIFFICULTY_EASY_SPAWN_CADENCE_MULT  = 2.0;
+    public static double DIFFICULTY_EASY_SPEED_MULT          = 1.2;
+    public static int    DIFFICULTY_EASY_REVIVE_CHARMS       = 8;
+
+    // Gentle sits midway between Easy and Normal on every axis.
+    public static double DIFFICULTY_GENTLE_PLAYER_HP_MULT     = 1.5;
+    public static double DIFFICULTY_GENTLE_ENEMY_HP_MULT      = 1.0;
+    public static double DIFFICULTY_GENTLE_REGEN_FRAC         = 0.005;
+    public static double DIFFICULTY_GENTLE_SPAWN_CADENCE_MULT = 1.5;
+    public static double DIFFICULTY_GENTLE_SPEED_MULT         = 1.1;
+    public static int    DIFFICULTY_GENTLE_REVIVE_CHARMS      = 4;
+
+    public static double DIFFICULTY_NORMAL_PLAYER_HP_MULT     = 1.0;
+    public static double DIFFICULTY_NORMAL_ENEMY_HP_MULT      = 1.0;
+    public static double DIFFICULTY_NORMAL_REGEN_FRAC         = 0.0;
+    public static double DIFFICULTY_NORMAL_SPAWN_CADENCE_MULT = 1.0;
+    public static double DIFFICULTY_NORMAL_SPEED_MULT         = 1.0;
+    public static int    DIFFICULTY_NORMAL_REVIVE_CHARMS      = 0;
+
+    public static double DIFFICULTY_HARD_PLAYER_HP_MULT       = 1.0;
+    public static double DIFFICULTY_HARD_ENEMY_HP_MULT        = 1.3;
+    public static double DIFFICULTY_HARD_REGEN_FRAC           = 0.0;
+    public static double DIFFICULTY_HARD_SPAWN_CADENCE_MULT   = 1.0;
+    public static double DIFFICULTY_HARD_SPEED_MULT           = 1.0;
+    public static int    DIFFICULTY_HARD_REVIVE_CHARMS        = 0;
+
+    public static double DIFFICULTY_VERY_HARD_PLAYER_HP_MULT     = 1.0;
+    public static double DIFFICULTY_VERY_HARD_ENEMY_HP_MULT      = 1.5;
+    public static double DIFFICULTY_VERY_HARD_REGEN_FRAC         = 0.0;
+    public static double DIFFICULTY_VERY_HARD_SPAWN_CADENCE_MULT = 0.5;
+    public static double DIFFICULTY_VERY_HARD_SPEED_MULT         = 1.0;
+    public static int    DIFFICULTY_VERY_HARD_REVIVE_CHARMS      = 0;
+
+    // SuperEasy (debug): like Easy but triple HP and free jade charges.
+    public static double DIFFICULTY_SUPEREASY_PLAYER_HP_MULT      = 3.0;
+    public static double DIFFICULTY_SUPEREASY_ENEMY_HP_MULT       = 1.0;
+    public static double DIFFICULTY_SUPEREASY_REGEN_FRAC          = 0.015;
+    public static double DIFFICULTY_SUPEREASY_SPAWN_CADENCE_MULT  = 2.0;
+    public static double DIFFICULTY_SUPEREASY_SPEED_MULT          = 1.2;
+    public static int    DIFFICULTY_SUPEREASY_REVIVE_CHARMS       = 8;
+
+    /** The five selectable difficulty levels. Display text comes from
+     *  {@link TextCatalog} (keys {@code difficulty.<lower>.name} /
+     *  {@code .description}); the numbers live in the {@code DIFFICULTY_*}
+     *  fields above so they stay config-tunable. */
+    public enum Difficulty {
+        EASY, GENTLE, NORMAL, HARD, VERY_HARD,
+        /** Debug / playtesting tier - NOT shown in the character-select cycle.
+         *  Like Easy but triple HP and jade items don't consume charges. Listed
+         *  last so the menu difficulties keep their ordinals (seed stability). */
+        SUPEREASY;
+
+        /** False for difficulties hidden from the character-select UI cycle. */
+        public boolean menuSelectable() { return this != SUPEREASY; }
+
+        public String displayName() {
+            return TextCatalog.get("difficulty." + name().toLowerCase(java.util.Locale.ROOT) + ".name");
+        }
+        public String description() {
+            return TextCatalog.get("difficulty." + name().toLowerCase(java.util.Locale.ROOT) + ".description");
+        }
+    }
+
+    /** Copy {@code d}'s preset numbers into the active multiplier fields and set
+     *  {@link #difficulty}. Call at run start (new and loaded games); call with
+     *  {@link Difficulty#NORMAL} to reset when returning to menus so preview mobs
+     *  aren't scaled by the last run's difficulty. */
+    public static void applyDifficulty(Difficulty d) {
+        if (d == null) d = Difficulty.NORMAL;
+        difficulty = d;
+        switch (d) {
+            case EASY -> setActive(DIFFICULTY_EASY_PLAYER_HP_MULT, DIFFICULTY_EASY_ENEMY_HP_MULT,
+                    DIFFICULTY_EASY_REGEN_FRAC, DIFFICULTY_EASY_SPAWN_CADENCE_MULT,
+                    DIFFICULTY_EASY_SPEED_MULT, DIFFICULTY_EASY_REVIVE_CHARMS, false);
+            case GENTLE -> setActive(DIFFICULTY_GENTLE_PLAYER_HP_MULT, DIFFICULTY_GENTLE_ENEMY_HP_MULT,
+                    DIFFICULTY_GENTLE_REGEN_FRAC, DIFFICULTY_GENTLE_SPAWN_CADENCE_MULT,
+                    DIFFICULTY_GENTLE_SPEED_MULT, DIFFICULTY_GENTLE_REVIVE_CHARMS, false);
+            case NORMAL -> setActive(DIFFICULTY_NORMAL_PLAYER_HP_MULT, DIFFICULTY_NORMAL_ENEMY_HP_MULT,
+                    DIFFICULTY_NORMAL_REGEN_FRAC, DIFFICULTY_NORMAL_SPAWN_CADENCE_MULT,
+                    DIFFICULTY_NORMAL_SPEED_MULT, DIFFICULTY_NORMAL_REVIVE_CHARMS, false);
+            case HARD -> setActive(DIFFICULTY_HARD_PLAYER_HP_MULT, DIFFICULTY_HARD_ENEMY_HP_MULT,
+                    DIFFICULTY_HARD_REGEN_FRAC, DIFFICULTY_HARD_SPAWN_CADENCE_MULT,
+                    DIFFICULTY_HARD_SPEED_MULT, DIFFICULTY_HARD_REVIVE_CHARMS, false);
+            case VERY_HARD -> setActive(DIFFICULTY_VERY_HARD_PLAYER_HP_MULT, DIFFICULTY_VERY_HARD_ENEMY_HP_MULT,
+                    DIFFICULTY_VERY_HARD_REGEN_FRAC, DIFFICULTY_VERY_HARD_SPAWN_CADENCE_MULT,
+                    DIFFICULTY_VERY_HARD_SPEED_MULT, DIFFICULTY_VERY_HARD_REVIVE_CHARMS, false);
+            case SUPEREASY -> setActive(DIFFICULTY_SUPEREASY_PLAYER_HP_MULT, DIFFICULTY_SUPEREASY_ENEMY_HP_MULT,
+                    DIFFICULTY_SUPEREASY_REGEN_FRAC, DIFFICULTY_SUPEREASY_SPAWN_CADENCE_MULT,
+                    DIFFICULTY_SUPEREASY_SPEED_MULT, DIFFICULTY_SUPEREASY_REVIVE_CHARMS, true);
+        }
+    }
+
+    private static void setActive(double playerHp, double enemyHp, double regen,
+                                  double cadence, double speed, int charms, boolean jadeFree) {
+        PLAYER_HP_MULTIPLIER       = playerHp;
+        ENEMY_HP_MULTIPLIER        = enemyHp;
+        PLAYER_REGEN_FRAC_PER_TURN = regen;
+        SPAWN_CADENCE_MULTIPLIER   = cadence;
+        PLAYER_SPEED_MULTIPLIER    = speed;
+        STARTING_REVIVE_CHARMS     = charms;
+        JADE_ITEMS_FREE_CHARGES    = jadeFree;
+    }
+
     // ------------------------- Low-HP warning thresholds --------------------
     /** HP fraction at which the HUD chrome starts tinting red. Linear ramp
      *  from this value down to 0.01 (fully red). Read by both rgame's HUD

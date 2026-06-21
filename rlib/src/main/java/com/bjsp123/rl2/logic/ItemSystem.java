@@ -1456,6 +1456,15 @@ public final class ItemSystem {
         return it.name != null && it.name.toLowerCase(java.util.Locale.ROOT).contains("jade");
     }
 
+    /** Spend one charge on a charge-gated tool, unless it has none or the
+     *  SUPEREASY difficulty grants jade items free charges. Single source of
+     *  truth for tool charge consumption (jade fish/crab/bull, blink, frog, ...). */
+    private static void spendChargeIfAny(Item item) {
+        if (item == null || item.baseChargeMax <= 0) return;
+        if (GameBalance.JADE_ITEMS_FREE_CHARGES && isJadeItem(item)) return;
+        item.charge = Math.max(0f, item.charge - 1f);
+    }
+
     /** Nearest floor-like tile to ({@code px},{@code py}) not already holding an
      *  item, searched in expanding Chebyshev rings (adjacent tiles first, the
      *  player's own tile only as a last resort) out to a small radius. Returns
@@ -1631,7 +1640,7 @@ public final class ItemSystem {
         }
         applyConsumableBuff(level, user, item);
         com.bjsp123.rl2.util.ActionTracker.bumpTool(user);
-        if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+        spendChargeIfAny(item);
         if (level != null && level.events != null && user.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(user.position, item));
         }
@@ -1689,7 +1698,7 @@ public final class ItemSystem {
                             targetMob.name != null ? targetMob.name
                                     : TextCatalog.get("eventlog.fallback.creature")));
                 }
-                if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+                spendChargeIfAny(item);
                 TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
                 return;
             }
@@ -1698,7 +1707,7 @@ public final class ItemSystem {
             if (level.events != null)
                 level.events.add(new com.bjsp123.rl2.event.GameEvent.GrappleFired(
                         caster, caster.position, target, false));
-            if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+            spendChargeIfAny(item);
             TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
             return;
         }
@@ -1716,7 +1725,7 @@ public final class ItemSystem {
             } else if (caster.name != null && item.name != null) {
                 EventLog.add(Messages.mobUsesItem(caster.name, item.name, false));
             }
-            if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+            spendChargeIfAny(item);
             TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
             return;
         }
@@ -1736,7 +1745,7 @@ public final class ItemSystem {
         } else if (caster.name != null && item.name != null) {
             EventLog.add(Messages.mobUsesItem(caster.name, item.name, false));
         }
-        if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+        spendChargeIfAny(item);
         TurnSystem.applyActionCost(caster, caster.effectiveStats().attackCost);
     }
 
@@ -1843,7 +1852,7 @@ public final class ItemSystem {
             }
         }
 
-        if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+        spendChargeIfAny(item);
         // No trailing "uses the jade bull" log - the leading playerCharges
         // line above already framed the action.
         TurnSystem.applyMoveCost(user, user.effectiveStats().moveCost);
@@ -1919,7 +1928,7 @@ public final class ItemSystem {
         } else if (jumper.name != null && item.name != null) {
             EventLog.add(Messages.mobUsesItem(jumper.name, item.name, false));
         }
-        if (item.baseChargeMax > 0) item.charge = Math.max(0f, item.charge - 1f);
+        spendChargeIfAny(item);
         TurnSystem.applyMoveCost(jumper, jumper.effectiveStats().moveCost);
     }
 

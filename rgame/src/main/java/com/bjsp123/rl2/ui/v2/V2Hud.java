@@ -638,6 +638,15 @@ public final class V2Hud {
                 clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f + 5f,
                 Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
 
+        // Revive charms (Jade Peaches) - shown only when the player carries some.
+        int charms = reviveCharmCount(currentPlayer());
+        if (charms > 0) {
+            TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.ACCENT,
+                    TextCatalog.format("ui.hud.revives", TextCatalog.vars("n", charms)),
+                    clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f - 10f,
+                    Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
+        }
+
         // Hazard level - top-centre of the HUD (RL-54). Brighter as it climbs.
         TextDraw.centre(ctx, ctx.fontRegular,
                 hazard >= 3 ? UIVars.ACCENT : UIVars.TEXT_DIM,
@@ -743,6 +752,16 @@ public final class V2Hud {
 
     private Mob currentPlayer() {
         return playerSupplier != null ? playerSupplier.get() : null;
+    }
+
+    /** Total Jade Peach revive charms carried (summed stack counts). */
+    private static int reviveCharmCount(Mob player) {
+        if (player == null || player.inventory == null || player.inventory.bag == null) return 0;
+        int n = 0;
+        for (Item it : player.inventory.bag) {
+            if (it != null && it.revivesOnDeath) n += Math.max(1, it.count);
+        }
+        return n;
     }
 
     // -- Input ---------------------------------------------------------------

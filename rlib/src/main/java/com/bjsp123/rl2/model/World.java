@@ -21,6 +21,13 @@ public class World {
      *  {@link com.bjsp123.rl2.util.SeedCode#encode(long)}. */
     public long seed;
 
+    /** The run's difficulty (RL difficulty levels). Persisted by name in the
+     *  save so a resumed run keeps its multipliers; defaults to NORMAL for
+     *  pre-change saves. The active GameBalance multipliers are re-applied from
+     *  this on load via {@code GameBalance.applyDifficulty}. */
+    public com.bjsp123.rl2.logic.GameBalance.Difficulty difficulty =
+            com.bjsp123.rl2.logic.GameBalance.Difficulty.NORMAL;
+
     public World() {}
 
     public World(Level[] levels) {

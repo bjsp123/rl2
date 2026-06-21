@@ -697,6 +697,18 @@ public class Effect {
                 /*posJitterX*/ 7f, /*posJitterY*/ 5f, rng));
     }
 
+    /** Jade Peach revive: a ring-shaped wave of green sparkles bursting outward
+     *  from the revived player's tile, plus rising motes. Paired with the
+     *  shockwave damage applied in logic. */
+    public static void reviveRing(EffectStage stage, Point at, Random rng) {
+        stage.add(EffectBuilder.explosion(at, /*radiusTiles*/ 4, /*duration*/ 34, rng));
+        stage.add(EffectBuilder.fountain(at, EffectTint.GREEN,
+                /*count*/ 22, /*spawnSpread*/ 8, /*life*/ 44,
+                /*riseMin*/ 1.5f, /*riseMax*/ 3.0f,
+                /*horizontalJitter*/ 1.0f, /*fadeToWhite*/ true,
+                /*posJitterX*/ 9f, /*posJitterY*/ 7f, rng));
+    }
+
     /** Player-side teleport visual at the source cell - upward green streaks,
      *  same family as {@link #teleportStreaks} so beacon teleports look like
      *  the existing mob teleport. */

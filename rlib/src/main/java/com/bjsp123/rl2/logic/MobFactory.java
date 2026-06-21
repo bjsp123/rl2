@@ -35,6 +35,11 @@ public class MobFactory {
         m.characterClass = cls;
         m.isPlayer = true;
         seedPlayerHostility(m);
+        // Start at full effective HP, including the difficulty player-HP
+        // multiplier (MobStats keys it off isPlayer, which is now set). At Normal
+        // this equals the intrinsic max, so behaviour is unchanged.
+        m.statsDirty = true;
+        m.hp = (int) Math.round(m.effectiveStats().maxHp);
         return m;
     }
 
@@ -76,6 +81,10 @@ public class MobFactory {
                 m.characterClass = CharacterClass.valueOf(suffix);
             } catch (IllegalArgumentException ignored) { /* unknown class */ }
         }
+        // Start at full effective HP, including the difficulty enemy-HP
+        // multiplier (Normal = no change).
+        m.statsDirty = true;
+        m.hp = (int) Math.round(m.effectiveStats().maxHp);
         return m;
     }
 

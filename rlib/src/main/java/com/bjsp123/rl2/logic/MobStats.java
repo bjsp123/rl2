@@ -88,7 +88,14 @@ public final class MobStats {
                 ? Math.min(GameBalance.MOB_HP_INC_CAP,
                         Math.max(1, baseHp / GameBalance.AMOUNT_LEVEL_SCALE_FACTOR))
                 : 0;
-        dst.maxHp          = baseHp + (long) L * incHp;
+        // Difficulty HP scaling (RL-: difficulty levels): the player and enemies
+        // get separate max-HP multipliers, applied here so the proportional
+        // healRate scaling below inherits the boosted pool.
+        long levelMaxHp = baseHp + (long) L * incHp;
+        double hpMult = mob.isPlayer
+                ? GameBalance.PLAYER_HP_MULTIPLIER
+                : GameBalance.ENEMY_HP_MULTIPLIER;
+        dst.maxHp          = Math.max(1, Math.round(levelMaxHp * hpMult));
         dst.accuracy       = ItemStats.scaleAmount(mob.intrinsic.accuracy, L);
         dst.evasion        = ItemStats.scaleAmount(mob.intrinsic.evasion,  L);
         dst.rangedDistance = ItemStats.scaleAmount(mob.intrinsic.rangedDistance, L);
@@ -97,6 +104,12 @@ public final class MobStats {
         dst.healRate = baseMaxHp > 0
                 ? mob.intrinsic.healRate * (dst.maxHp / baseMaxHp)
                 : mob.intrinsic.healRate;
+        // Difficulty player regen: Easy heals a flat % of max HP per turn. healRate
+        // is per-tick, so divide the per-turn fraction by the ticks/turn.
+        if (mob.isPlayer && GameBalance.PLAYER_REGEN_FRAC_PER_TURN > 0) {
+            dst.healRate += dst.maxHp * GameBalance.PLAYER_REGEN_FRAC_PER_TURN
+                    / TurnSystem.STANDARD_TURN_TICKS;
+        }
 
         // Knockback comes from intrinsic (mobs.csv), the equipped weapon
         // (scaled in ItemStats, added below), and the KNOCKBACK perk - never
@@ -117,6 +130,14 @@ public final class MobStats {
         for (Item eq : mob.inventory.amulets) ItemStats.contributeInto(dst, eq, mob);
         for (Item eq : mob.inventory.gems)    ItemStats.contributeInto(dst, eq, mob);
         BuffSystem.contributeInto(dst, mob);
+
+        // Difficulty player-speed: a faster player has a lower move cost. Applied
+        // last so it stacks on top of the buff (haste) multipliers.
+        if (mob.isPlayer && GameBalance.PLAYER_SPEED_MULTIPLIER > 0
+                && GameBalance.PLAYER_SPEED_MULTIPLIER != 1.0) {
+            dst.moveCost = (int) Math.max(1,
+                    Math.round(dst.moveCost / GameBalance.PLAYER_SPEED_MULTIPLIER));
+        }
     }
 
     /** Derive a combat range [N/2, N] from a single-int base, scaled by

@@ -69,7 +69,8 @@ public sealed interface GameEvent permits
         GameEvent.BeaconActivated,
         GameEvent.PlayerTeleportOut,
         GameEvent.PlayerTeleportIn,
-        GameEvent.InwardSpiralSpawn {
+        GameEvent.InwardSpiralSpawn,
+        GameEvent.PlayerRevived {
 
     /** Mob took a single tile step. The animator translates this into a step interpolation. */
     record MobMoved(Mob mob, int fromX, int fromY, int toX, int toY) implements GameEvent {}
@@ -303,4 +304,9 @@ public sealed interface GameEvent permits
      *  game-tick-driven so the cadence keeps ticking while the game is
      *  paused on input. */
     record InwardSpiralSpawn(Point pos) implements GameEvent {}
+
+    /** The player's Jade Peach revive charm fired: revived in place, a sparkle
+     *  shockwave rings out from {@code pos} and damages every hostile. The
+     *  Animator turns this into the expanding revive ring. */
+    record PlayerRevived(Point pos) implements GameEvent {}
 }

@@ -5,6 +5,7 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.Rl2Game;
+import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.ItemDefinition;
 import com.bjsp123.rl2.logic.Registries;
 import com.bjsp123.rl2.logic.MobDefinition;
@@ -49,10 +50,10 @@ public final class V2CharacterSelect extends V2Screen {
     /** Pre-game options. {@link #customSeed} == null means "random". */
     private boolean godMode;
     private Long customSeed;
-    /** Starting character level - also doubles as the starting dungeon
-     *  depth when {@code > 1}. Clamped at build time to
-     *  {@code [1, DUNGEON_DEPTH]} since the world only has that many
-     *  levels. */
+    /** Starting character level - also the starting dungeon depth (1-based)
+     *  when {@code > 1}. Ranges over the whole world including the endgame
+     *  specials (Landing, trials, boss) so the deepest floors are reachable
+     *  for playtesting; {@link PlayScreen} clamps to the actual level count. */
     private int startingLevel = 1;
     /** Seed the player with one of every non-unique item in the registry. */
     private boolean allItems;
@@ -68,6 +69,9 @@ public final class V2CharacterSelect extends V2Screen {
      *  iterate on the endgame floors - flip back to FALSE once they're
      *  feature-complete and the regular dungeon start matters again. */
     private boolean startOnLanding = false;
+    /** Per-run difficulty - drives HP multipliers, regen, spawn cadence, and the
+     *  number of Jade Peach revive charms granted at start. */
+    private GameBalance.Difficulty selectedDifficulty = GameBalance.Difficulty.NORMAL;
 
     private final Rect window       = new Rect();
     private final Rect charPopup    = new Rect();
@@ -103,6 +107,9 @@ public final class V2CharacterSelect extends V2Screen {
         super(game.ui);
         this.game = game;
         this.slot = slot;
+        // Reset the global difficulty multipliers so class-preview mobs read at
+        // Normal; the chosen difficulty is applied when the run launches.
+        GameBalance.applyDifficulty(GameBalance.Difficulty.NORMAL);
     }
 
     @Override
@@ -219,10 +226,10 @@ public final class V2CharacterSelect extends V2Screen {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float pw = Math.min(300f, vw - 32f);
-        // Compressed to fit eight toggles plus the Done button: shorter
-        // rows + tighter gaps, taller cap. headerBandH + 9*btnH + 7*gap +
+        // Fits nine toggles (difficulty + eight), a wrapped difficulty-description
+        // band, and the Done button: headerBandH + 9*btnH + 8*gap + description +
         // pad is the worst-case stack height (see buildOptionsPopup loop).
-        float ph = Math.min(440f, vh - 120f);
+        float ph = Math.min(520f, vh - 80f);
         optionsPopup.set((vw - pw) * 0.5f, (vh - ph) * 0.5f, pw, ph);
 
         float pad   = 16f;
@@ -231,9 +238,15 @@ public final class V2CharacterSelect extends V2Screen {
         float btnW  = pw - 2 * pad;
         float yTop  = optionsPopup.top() - headerBandH() - btnH;
 
+        // Range spans the whole world - regular dungeon PLUS the endgame
+        // specials (Landing, trials, boss) - so the option can drop the player
+        // straight onto the deepest floors for playtesting (e.g. the final boss).
         int maxStartLevel = Math.max(1,
-                com.bjsp123.rl2.logic.GameBalance.DUNGEON_DEPTH);
+                com.bjsp123.rl2.model.WorldTopology.totalLevelCount());
         for (OptionRow row : List.of(
+                new OptionRow(() -> TextCatalog.format("ui.characterSelect.difficulty",
+                        TextCatalog.vars("name", selectedDifficulty.displayName())),
+                        () -> { cycleDifficulty(); show(); }),
                 new OptionRow(() -> TextCatalog.format("ui.characterSelect.godMode",
                         TextCatalog.vars("state", onOff(godMode))),
                         () -> { godMode = !godMode; show(); }),
@@ -298,7 +311,7 @@ public final class V2CharacterSelect extends V2Screen {
         game.saveSystem.clear(slot);
         game.setRootScreen(new PlayScreen(game, slot, selected,
                 customSeed, godMode, startingLevel, allItems, tenPerkPoints,
-                revealWholeWorld, startOnLanding, allScrolls));
+                revealWholeWorld, startOnLanding, allScrolls, selectedDifficulty));
     }
 
     // -- Seed entry ------------------------------------------------------
@@ -467,6 +480,26 @@ public final class V2CharacterSelect extends V2Screen {
     private void drawOptionsText() {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, TextCatalog.get("ui.characterSelect.options"),
                 optionsPopup.cx(), optionsPopup.top() - ctx.fontHeader.getCapHeight() - UIVars.HUD_BORDER - 2f);
+        // Selected difficulty's description, wrapped in the band just above the
+        // Done button (which sits at optionsPopup.y + 16).
+        String desc = selectedDifficulty.description();
+        if (desc != null && !desc.isEmpty()) {
+            float pad = 16f;
+            float maxW = optionsPopup.w - 2 * pad;
+            TextDraw.TextBlock block = TextDraw.block(ctx.fontRegular, desc, maxW, 6, ctx.lineH());
+            float top = optionsPopup.y + pad + 32f + 8f + block.height();
+            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM, block,
+                    optionsPopup.x + pad, top);
+        }
+    }
+
+    /** Advance to the next menu-selectable difficulty, wrapping (skips hidden
+     *  debug tiers like SUPEREASY). */
+    private void cycleDifficulty() {
+        GameBalance.Difficulty[] all = GameBalance.Difficulty.values();
+        do {
+            selectedDifficulty = all[(selectedDifficulty.ordinal() + 1) % all.length];
+        } while (!selectedDifficulty.menuSelectable());
     }
 
     private static String lookupItemName(String type) {

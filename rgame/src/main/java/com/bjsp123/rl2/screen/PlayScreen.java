@@ -77,6 +77,10 @@ public class PlayScreen implements Screen {
      *  startingLevel when true. Temporary while we iterate on the endgame
      *  floors; defaults true in V2CharacterSelect. */
     private final boolean startOnLandingRequested;
+    /** Pre-game-options difficulty for a fresh run. Applied to the global
+     *  GameBalance multipliers in {@link #initialize()} and recorded on the
+     *  World. Ignored on a loaded run (the saved World carries its own). */
+    private final com.bjsp123.rl2.logic.GameBalance.Difficulty requestedDifficulty;
 
     private World world;
     /** Exposed so burger-menu items from other packages can construct level-info
@@ -331,6 +335,17 @@ public class PlayScreen implements Screen {
                       boolean allItems, boolean tenPerkPoints,
                       boolean revealWholeWorld, boolean startOnLanding,
                       boolean allScrolls) {
+        this(game, slot, cls, seed, godMode, startingLevel, allItems, tenPerkPoints,
+                revealWholeWorld, startOnLanding, allScrolls,
+                com.bjsp123.rl2.logic.GameBalance.Difficulty.NORMAL);
+    }
+
+    public PlayScreen(Rl2Game game, int slot, CharacterClass cls,
+                      Long seed, boolean godMode, int startingLevel,
+                      boolean allItems, boolean tenPerkPoints,
+                      boolean revealWholeWorld, boolean startOnLanding,
+                      boolean allScrolls,
+                      com.bjsp123.rl2.logic.GameBalance.Difficulty difficulty) {
         this.game = game;
         this.saveSlot = slot;
         this.charClass = cls;
@@ -343,6 +358,8 @@ public class PlayScreen implements Screen {
         this.tenPerkPointsRequested = tenPerkPoints;
         this.revealWholeWorldRequested = revealWholeWorld;
         this.startOnLandingRequested = startOnLanding;
+        this.requestedDifficulty = difficulty != null
+                ? difficulty : com.bjsp123.rl2.logic.GameBalance.Difficulty.NORMAL;
     }
 
     public PlayScreen(Rl2Game game, int slot, World loadedWorld) {
@@ -360,6 +377,7 @@ public class PlayScreen implements Screen {
         this.tenPerkPointsRequested = false;
         this.revealWholeWorldRequested = false;
         this.startOnLandingRequested = false;
+        this.requestedDifficulty = com.bjsp123.rl2.logic.GameBalance.Difficulty.NORMAL;
     }
 
     @Override
@@ -452,6 +470,11 @@ public class PlayScreen implements Screen {
             world = preloadedWorld;
             for (Level l : world.levels) if (l != null) l.initTransients();
             world.linkLevels();
+            // Re-apply the saved run's difficulty so its multipliers are live.
+            com.bjsp123.rl2.logic.GameBalance.applyDifficulty(world.difficulty);
+            // The gem-equip slots were retired: move any gems a pre-change save
+            // left equipped back into the bag so they aren't stranded.
+            migrateEquippedGemsToBag(world);
         } else {
             EventLog.clear();
             // World is procedurally generated - see WorldTopology.build. Depth and the
@@ -461,6 +484,10 @@ public class PlayScreen implements Screen {
             // share the same UniqueTracker - that's how unique themed rooms only
             // appear once per game.
             world = new World();
+            // Apply difficulty BEFORE world-build so every mob created during
+            // generation gets the difficulty-scaled HP at full health.
+            world.difficulty = requestedDifficulty;
+            com.bjsp123.rl2.logic.GameBalance.applyDifficulty(requestedDifficulty);
             // Honour an explicit user-supplied seed if there is one; otherwise
             // pick a random seed inside the {@link com.bjsp123.rl2.util.SeedCode}
             // window so the printed code is always typeable. Storing on World
@@ -504,10 +531,17 @@ public class PlayScreen implements Screen {
                 com.bjsp123.rl2.logic.MobProgression.setSpawnLevel(player, startingLevel);
             }
             if (tenPerkPointsRequested) player.perkPoints += 10;
+            // Difficulty revive charms (Jade Peaches) - the only source of them.
+            grantReviveCharms(player, com.bjsp123.rl2.logic.GameBalance.STARTING_REVIVE_CHARMS);
             if (allItemsRequested) grantOneOfEachItem(player);
             if (allScrollsRequested) grantOneOfEachScroll(player);
             if (revealWholeWorldRequested) revealWholeWorld(player, levels);
             startLevel.mobs.add(player);
+            // Initial placement must trigger the same arrival side effects a
+            // stair-descent would (seal-on-entry stairs, final-boss spawn), so
+            // the "start at level" debug option can drop the player straight onto
+            // a special / boss floor and have it behave correctly.
+            com.bjsp123.rl2.logic.MobSystem.applyLevelEntryEffects(startLevel, player);
             String playerName = player.name != null ? player.name
                     : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
             EventLog.add(Messages.beginGame(playerName));
@@ -779,6 +813,39 @@ public class PlayScreen implements Screen {
             } catch (RuntimeException ignored) {
                 // Defensive: skip any registry entry the factory refuses.
             }
+        }
+    }
+
+    /** Save migration: the gem equip-slot system was retired. Move any gems a
+     *  pre-change save left in {@code inventory.gems[]} back into the bag and
+     *  clear the slots, for every mob in the world. */
+    private static void migrateEquippedGemsToBag(World world) {
+        if (world == null || world.levels == null) return;
+        for (Level l : world.levels) {
+            if (l == null || l.mobs == null) continue;
+            for (Mob m : l.mobs) {
+                if (m == null || m.inventory == null || m.inventory.gems == null) continue;
+                com.bjsp123.rl2.model.Item[] gems = m.inventory.gems;
+                for (int i = 0; i < gems.length; i++) {
+                    if (gems[i] != null) {
+                        com.bjsp123.rl2.logic.InventorySystem.addToBag(m.inventory, gems[i]);
+                        gems[i] = null;
+                    }
+                }
+            }
+        }
+    }
+
+    /** Grant {@code n} Jade Peach revive charms into the bag (difficulty levels).
+     *  They stack, so this lands as a single bag entry with count {@code n}. */
+    private static void grantReviveCharms(Mob player, int n) {
+        if (player == null || player.inventory == null || n <= 0) return;
+        for (int i = 0; i < n; i++) {
+            try {
+                com.bjsp123.rl2.model.Item charm =
+                        com.bjsp123.rl2.logic.ItemFactory.build("JADE_PEACH");
+                com.bjsp123.rl2.logic.InventorySystem.addToBag(player.inventory, charm);
+            } catch (RuntimeException ignored) { /* registry missing JADE_PEACH */ }
         }
     }
 

@@ -44,6 +44,18 @@ public final class WorldTopology {
 
     private WorldTopology() {}
 
+    /** Appended endgame floors below the regular dungeon: the Landing, the three
+     *  shuffled trial floors, and the final-boss floor. Keep in sync with
+     *  {@link #appendSpecialLevels}. */
+    public static final int SPECIAL_LEVEL_COUNT = 5;
+
+    /** Total floors in a full world: the regular dungeon depth plus the appended
+     *  endgame specials. Lets pre-game UI (e.g. the "start at level" option) offer
+     *  a range that reaches the deepest floors, including the boss. */
+    public static int totalLevelCount() {
+        return Math.max(2, GameBalance.DUNGEON_DEPTH) + SPECIAL_LEVEL_COUNT;
+    }
+
     /** Build a fresh world. {@code rng} drives every probability roll; pass a
      *  reproducible seed to get a deterministic dungeon. The {@code unique}
      *  tracker is threaded through to {@link LevelFactory#createDungeonLevel} so

@@ -238,7 +238,11 @@ public class TurnSystem {
         level.hazardLevel = Math.min(GameBalance.HAZARD_MAX,
                 (level.beaconLit ? 1 : 0)
                         + level.turnsOnLevel / Math.max(1, GameBalance.HAZARD_TURNS_PER_POINT));
-        int cadence = Math.max(1, GameBalance.RENEWING_SPAWN_CADENCE - 2 * level.hazardLevel);
+        // Difficulty scales how often fresh enemies arrive: >1 = less frequent
+        // (Easy), <1 = more frequent (Very Hard).
+        int cadence = Math.max(1, (int) Math.round(
+                (GameBalance.RENEWING_SPAWN_CADENCE - 2 * level.hazardLevel)
+                        * GameBalance.SPAWN_CADENCE_MULTIPLIER));
         if (level.turnsOnLevel % cadence != 0) return;
         if (MobQueries.countLivingHostiles(level)
                 >= GameBalance.RENEWING_ENEMY_CAP + level.hazardLevel) return;

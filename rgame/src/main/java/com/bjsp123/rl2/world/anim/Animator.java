@@ -680,6 +680,10 @@ public final class Animator {
         stage.add(Effect.playerTeleportIn(m.pos(), RNG));
     }
 
+    void onPlayerRevived(GameEvent.PlayerRevived m) {
+        Effect.reviveRing(stage, m.pos(), RNG);
+    }
+
     void onItemThrown(Level level, GameEvent.ItemThrown m) {
         Item it = m.item();
         Effect thrown = Effect.thrownItem(m.from(), m.to(), it);

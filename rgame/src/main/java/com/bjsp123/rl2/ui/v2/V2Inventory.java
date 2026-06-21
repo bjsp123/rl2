@@ -30,7 +30,6 @@ import java.util.function.BiConsumer;
  * <ol>
  *   <li>Header label ("Backpack")</li>
  *   <li>Equipment row - five fixed cells: weapon, offhand, armor, amulet 0, amulet 1</li>
- *   <li>Gems row - three fixed cells: gem 0, gem 1, gem 2</li>
  *   <li>Tab strip - Gear / Food / Items / Gems</li>
  *   <li>Bag grid - 6 cols x N rows of free-form items in the current tab</li>
  * </ol>
@@ -73,7 +72,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private final Rect window         = new Rect();
     private final Rect headerRect     = new Rect();
     private final Rect[] equipRects   = new Rect[5];
-    private final Rect[] gemRects     = new Rect[3];
     private final Rect[] tabRects     = new Rect[Tab.values().length];
     /** Bag grid cells - built each frame from the player's bag, filtered by tab. */
     private final List<BagCell> bagCells = new ArrayList<>();
@@ -113,8 +111,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
      *  tap fills {@link #selectedItem} and opens the detail popup, where
      *  Use / Throw fire on the equipped item. */
     private int equipPressed = -1;
-    /** Index into {@link #gemRects} (0..2) similarly. */
-    private int gemPressed = -1;
     private boolean detailUsePressed, detailEquipPressed, detailThrowPressed;
     private boolean detailInfoPressed;
     /** Index of the bind-button (0..5) currently held, or -1. */
@@ -148,7 +144,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     public V2Inventory(UiCtx ctx) {
         this.ctx = ctx;
         for (int i = 0; i < equipRects.length;  i++) equipRects[i]  = new Rect();
-        for (int i = 0; i < gemRects.length;    i++) gemRects[i]    = new Rect();
         for (int i = 0; i < tabRects.length;    i++) tabRects[i]    = new Rect();
         for (int i = 0; i < bindBtnRects.length; i++) bindBtnRects[i] = new Rect();
     }
@@ -281,19 +276,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             equipRects[i].set(equipRowX + i * (cellSz + cellGap), equipRowY, cellSz, cellSz);
         }
 
-        // Gems row - 3 cells.
-        float gemRowW = 3 * cellSz + 2 * cellGap;
-        float gemRowX = contentX + (contentW - gemRowW) * 0.5f;
-        float gemRowY = equipRowY - 8f - cellSz;
-        for (int i = 0; i < 3; i++) {
-            gemRects[i].set(gemRowX + i * (cellSz + cellGap), gemRowY, cellSz, cellSz);
-        }
+        // (Gem equip slots removed - gems/scrolls are ordinary bag items now.)
 
         // Tab strip - 4 tabs spanning the content width.
         float tabH = 32f * 1.2f;
         float tabGap = 4f;
         float tabW = (contentW - (tabRects.length - 1) * tabGap) / tabRects.length;
-        float tabRowY = gemRowY - 14f - tabH;
+        float tabRowY = equipRowY - 14f - tabH;
         for (int i = 0; i < tabRects.length; i++) {
             tabRects[i].set(contentX + i * (tabW + tabGap), tabRowY, tabW, tabH);
         }
@@ -460,13 +449,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
-    /** Gem in the i-th gem slot (0..2), or {@code null}. */
-    private Item gemAt(int i) {
-        if (player == null || player.inventory == null) return null;
-        if (i < 0 || i >= player.inventory.gems.length) return null;
-        return player.inventory.gems[i];
-    }
-
     private List<Item> filteredBag() {
         List<Item> out = new ArrayList<>();
         if (player == null || player.inventory == null) return out;
@@ -525,9 +507,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Outer window with full chrome.
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
 
-        // Equipment + gem cells - all use the slot-style border.
+        // Equipment cells use the slot-style border.
         for (Rect r : equipRects) drawSlot(s, r);
-        for (Rect r : gemRects)   drawSlot(s, r);
 
         // Tab strip - active tab highlighted with the accent border.
         for (int i = 0; i < tabRects.length; i++) {
@@ -727,9 +708,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             drawCellIcon(equipRects[2], inv.armor);
             drawCellIcon(equipRects[3], inv.amulets[0]);
             drawCellIcon(equipRects[4], inv.amulets[1]);
-            for (int i = 0; i < gemRects.length; i++) {
-                drawCellIcon(gemRects[i], inv.gems[i]);
-            }
         }
 
         // Tab icons - same source sheet as the Settings tab strip. FOOD
@@ -768,7 +746,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Inventory inv = player.inventory;
         Item[] equip = {inv.weapon, inv.offhand, inv.armor, inv.amulets[0], inv.amulets[1]};
         for (int i = 0; i < equipRects.length; i++) dimIfIneligible(s, equipRects[i], equip[i]);
-        for (int i = 0; i < gemRects.length; i++)   dimIfIneligible(s, gemRects[i], inv.gems[i]);
         for (BagCell c : bagCells)                  dimIfIneligible(s, c.rect, c.item);
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
@@ -951,13 +928,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         return true;
                     }
                 }
-                for (int i = 0; i < gemRects.length; i++) {
-                    if (gemRects[i].contains(vx, vy)
-                            && gemAt(i) != null) {
-                        gemPressed = i;
-                        return true;
-                    }
-                }
                 // Bag grid cells.
                 for (int i = 0; i < bagCells.size(); i++) {
                     if (bagCells.get(i).rect.contains(vx, vy)) {
@@ -987,7 +957,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     // doesn't fire a row click.
                     bagPressed = -1;
                     equipPressed = -1;
-                    gemPressed = -1;
                     for (int i = 0; i < tabPressed.length; i++) tabPressed[i] = false;
                     return true;
                 }
@@ -1127,17 +1096,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                             && equipRects[idx].contains(vx, vy)) {
                         if (pickMode()) tryPick(equippedItemAt(idx));
                         else selectedItem = equippedItemAt(idx);
-                    }
-                    return true;
-                }
-                // Gem-cell tap -> pick (chooser) or open item-detail popup.
-                if (gemPressed >= 0) {
-                    int idx = gemPressed;
-                    gemPressed = -1;
-                    if (idx < gemRects.length
-                            && gemRects[idx].contains(vx, vy)) {
-                        if (pickMode()) tryPick(gemAt(idx));
-                        else selectedItem = gemAt(idx);
                     }
                     return true;
                 }
