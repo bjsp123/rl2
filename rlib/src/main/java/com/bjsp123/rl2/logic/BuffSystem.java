@@ -456,7 +456,9 @@ public final class BuffSystem {
                 // other ground hazards gated on flying) for the buff's duration.
                 case LEVITATING -> dst.flying = true;
                 case PHASE -> {
-                    dst.evasion += 40;
+                    // Phasing makes the mob very hard to hit - it's flickering
+                    // half out of reality. Far above INVISIBLE's +40.
+                    dst.evasion += 150;
                     moveMultiplier *= 0.3;
                 }
                 case HASTED -> moveMultiplier *= Math.pow(0.8, b.stacks);
