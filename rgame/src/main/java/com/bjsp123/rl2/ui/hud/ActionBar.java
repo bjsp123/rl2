@@ -3,7 +3,7 @@ import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
 
 /**
- * Player-facing HUD action-bar bindings. Six slots that map 1:1 to the bottom-right
+ * Player-facing HUD action-bar bindings. {@code SLOTS} (10) slots that map 1:1 to the bottom-right
  * action buttons; each slot is either {@code null} or a reference to an {@link Item} the
  * player holds. Living on the rgame side rather than as a field on {@link Mob} so the
  * domain model in rlib stays free of UI concepts - nothing in rlib has to know an action

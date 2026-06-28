@@ -22,8 +22,9 @@ import java.util.Random;
  * {@link Level.VisualTheme#CRYSTAL} at column 1 (CENTER),
  * {@link Level.VisualTheme#GOTHIC} at column 2 (EAST). Depth 1 and depth N are
  * single {@link Level.VisualTheme#SHINY} CENTER levels. Each intermediate depth
- * carries 1 level (always CRYSTAL) or 2 levels (any 2 of 3 columns), rolled per
- * depth via {@code TWO_LEVEL_PROBABILITY}.
+ * rolls its level count: 3 levels (all columns) at {@code THREE_LEVEL_PROBABILITY},
+ * 2 levels (a random column dropped) at {@code TWO_LEVEL_PROBABILITY}, else a
+ * single level in a uniformly random column.
  *
  * <p>Stair wiring per source level at depth {@code d}:
  * <ul>
@@ -45,9 +46,9 @@ public final class WorldTopology {
     private WorldTopology() {}
 
     /** Appended endgame floors below the regular dungeon: the Landing, the three
-     *  shuffled trial floors, and the final-boss floor. Keep in sync with
-     *  {@link #appendSpecialLevels}. */
-    public static final int SPECIAL_LEVEL_COUNT = 5;
+     *  shuffled trial floors, the final-boss floor, and the exit-portal ending
+     *  floor. Keep in sync with {@link #appendSpecialLevels}. */
+    public static final int SPECIAL_LEVEL_COUNT = 6;
 
     /** Total floors in a full world: the regular dungeon depth plus the appended
      *  endgame specials. Lets pre-game UI (e.g. the "start at level" option) offer
@@ -62,8 +63,9 @@ public final class WorldTopology {
      *  unique themed rooms only spawn once across the whole world. */
     public static Level[] build(int width, int height, Random rng, UniqueTracker unique) {
         int depth = Math.max(2, GameBalance.DUNGEON_DEPTH);
-        double pTwo  = clamp01(GameBalance.TWO_LEVEL_PROBABILITY);
-        double pDiag = clamp01(GameBalance.DIAGONAL_STAIR_PROBABILITY);
+        double pTwo   = clamp01(GameBalance.TWO_LEVEL_PROBABILITY);
+        double pThree = clamp01(GameBalance.THREE_LEVEL_PROBABILITY);
+        double pDiag  = clamp01(GameBalance.DIAGONAL_STAIR_PROBABILITY);
 
         List<Level> out = new ArrayList<>();
 
@@ -76,19 +78,25 @@ public final class WorldTopology {
                 /*depth=*/1, Level.Side.CENTER, /*mapColumn=*/0f,
                 Level.VisualTheme.SHINY, unique, rng);
 
-        // Intermediate depths: roll 1 level (always CRYSTAL) or 2 levels
-        // (any 2 of 3 columns picked uniformly).
+        // Intermediate depths: roll the level count - 3 levels (all columns) at
+        // THREE_LEVEL_PROBABILITY, 2 levels (a random column missing) at
+        // TWO_LEVEL_PROBABILITY, else a single random-column level. All draws are
+        // uniform over columns so CONCRETE / CRYSTAL / GOTHIC stay equally common
+        // across the non-special depths.
         for (int d = 2; d < depth; d++) {
             int[] cols;
-            if (rng.nextDouble() < pTwo) {
-                int pair = rng.nextInt(3);
-                cols = switch (pair) {
-                    case 0  -> new int[]{0, 1};   // CONCRETE + CRYSTAL
-                    case 1  -> new int[]{0, 2};   // CONCRETE + GOTHIC
-                    default -> new int[]{1, 2};   // CRYSTAL  + GOTHIC
+            double r = rng.nextDouble();
+            if (r < pThree) {
+                cols = new int[]{0, 1, 2};         // all three themes
+            } else if (r < pThree + pTwo) {
+                int missing = rng.nextInt(3);      // drop one theme at random
+                cols = switch (missing) {
+                    case 0  -> new int[]{1, 2};    // CRYSTAL  + GOTHIC
+                    case 1  -> new int[]{0, 2};    // CONCRETE + GOTHIC
+                    default -> new int[]{0, 1};    // CONCRETE + CRYSTAL
                 };
             } else {
-                cols = new int[]{1};               // CRYSTAL only
+                cols = new int[]{rng.nextInt(3)};  // single level: any column
             }
             for (int c : cols) {
                 slot[c][d] = addLevel(out, width, height, true, true, d,
@@ -120,9 +128,11 @@ public final class WorldTopology {
         return out.toArray(new Level[0]);
     }
 
-    /** Build and wire the four special floors after the regular dungeon.
+    /** Build and wire the six special floors after the regular dungeon.
      *  Order: Landing always at depth N+1; then the three unique floors
-     *  (Mirrormatch, Horde, Walkway) shuffled across depths N+2..N+4. */
+     *  (Mirrormatch, Horde, Walkway) shuffled across depths N+2..N+4; then the
+     *  final-boss floor at depth N+5; then the exit-portal ending floor at
+     *  depth N+6 (reached by the stairs that open when the boss dies). */
     private static void appendSpecialLevels(List<Level> out, int regularDepth,
                                        int lastRegularIdx, Random rng) {
         // Landing - the antechamber. Always sits immediately below the
@@ -176,6 +186,15 @@ public final class WorldTopology {
         int bossIdx = out.size() - 1;
         out.get(previousIdx).stairsDownTarget = bossIdx;
         boss.stairsUpTarget = previousIdx;
+
+        // Exit-portal floor - the ending floor below the boss. The boss's
+        // down-stairs (stamped at the arena centre when the Great Wraith dies)
+        // descend here; the floor holds one active beacon that ends the run.
+        Level exit = LevelFactorySpecial.buildExitPortal(bossDepth + 1, rng.nextLong());
+        out.add(exit);
+        int exitIdx = out.size() - 1;
+        boss.stairsDownTarget = exitIdx;
+        exit.stairsUpTarget   = bossIdx;
     }
 
     /** Allocate downstairs from depth {@code d} into depth {@code d+1}. Phase 1

@@ -55,6 +55,9 @@ public final class ArenaHarness {
             GameBalance.load(Files.readString(config));
         Registries.loadMobs(Files.readString(assets.resolve("mobs.csv")));
         Registries.loadItems(Files.readString(assets.resolve("items.csv")));
+        Path gems = assets.resolve("gems.csv");
+        if (Files.exists(gems))
+            Registries.loadGems(Files.readString(gems));
         Path themed = assets.resolve("themedrooms.csv");
         if (Files.exists(themed))
             Registries.loadThemedRooms(Files.readString(themed));

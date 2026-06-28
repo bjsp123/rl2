@@ -23,31 +23,32 @@
 # crystal/arcane, concrete/earth).
 output,rarity,slot1,slot2,slot3,slot4
 # --- Low rarity (basic-fed) -------------------------------------------------
-ELEMENTAL_INSCRIPTION,2,any,any,,
-FERVENT_ASPIRATION,2,any,any,,
-BLIND_MASTER,3,any,any,HAMETHYST,
-THIRTY_SIX_STRATAGEMS,3,any,any,LETTUSTONE,
-EIGHT_DIRECTIONS_DEFENCE,3,any,any,SALAMITE,
-HEAVENLY_PEACH,3,any,any,ICELANDSPAR,
-INVOCATION_OF_CHIYOU,3,any,any,SALAMITE,
-BLIZZARD_PETAL,4,any,ICELANDSPAR,metal_exotic,
-HARVEST_BLOSSOM,4,any,LETTUSTONE,metal_exotic,
-LESSER_SEAL,4,any,HAMETHYST,metal_exotic,
-POLYMORPH_SIGN,4,any,HAMETHYST,metal_exotic,
-INVOCATION_OF_JIUTIAN,4,any,HAMETHYST,metal_exotic,
-INVOCATION_OF_THE_FOXES,4,any,LETTUSTONE,metal_exotic,
+SC_BRAND_WEAPON,2,any,any,,
+SC_UPGRADE_WEAPON,2,any,any,,
+SC_CONJURE_POTIONS,2,any,any,,
+SC_SMOKE_LEVEL_AND_ESP,3,any,any,HAMETHYST,
+SC_RANDOM_TELEPORT,3,any,any,LETTUSTONE,
+SC_GREAT_WARD,3,any,any,SALAMITE,
+SC_FULL_RESTORE,3,any,any,ICELANDSPAR,
+SC_CONJURE_BOMBS,3,any,any,SALAMITE,
+SC_FREEZE_ALL_ENEMIES,4,any,ICELANDSPAR,metal_exotic,
+SC_HARVEST_PLANTS,4,any,LETTUSTONE,metal_exotic,
+SC_SEAL_DOORS_ONETIME,4,any,HAMETHYST,metal_exotic,
+SC_POLYMORPH_ENEMIES,4,any,HAMETHYST,metal_exotic,
+SC_CONJURE_WAND,4,any,HAMETHYST,metal_exotic,
+SC_CONJURE_TOOLS,4,any,LETTUSTONE,metal_exotic,
 # --- Mid / high rarity (rare-gated) -----------------------------------------
-BLOOD_FLOWER,5,BLOODHIVE,metal_exotic,any,
-CRYSTAL_OF_INVERSION,6,FLUORON,metal_exotic,any,any
-STONE_BURNER,6,MALACHOR,metal_exotic,any,any
-EIGHTFOLD_MULTIPLICATION,6,BLACKGLASS,metal_exotic,any,any
-GREATER_SEAL,6,GOLD,metal_exotic,any,any
-SYMBOL_OF_INSANITY,6,BLOODHIVE,metal_exotic,any,any
-INVOCATION_OF_TAISHAN,6,SILVER,metal_exotic,any,any
-INVOCATION_OF_RU_SHOU,6,MALACHOR,metal_exotic,any,any
-INVOCATION_OF_MO_YE,6,GOLD,metal_exotic,any,any
-PATH_THROUGH_OBLIVION,7,BLACKGLASS,exotic,metal_exotic,any
-PILL_OF_IMMORTALITY,7,FLUORON,exotic,metal_exotic,any
+SC_BLOOD_NOVA,5,BLOODHIVE,metal_exotic,any,
+SC_BLAST_THROUGH_WALLS,6,FLUORON,metal_exotic,any,any
+SC_IGNITE_NEAR_STATUES,6,MALACHOR,metal_exotic,any,any
+SC_SUMMON_CLONES,6,BLACKGLASS,metal_exotic,any,any
+SC_SEAL_DOORS_CRYSTAL,6,GOLD,metal_exotic,any,any
+SC_MADDEN_ENEMIES,6,BLOODHIVE,metal_exotic,any,any
+SC_CONJURE_ITEMS,6,SILVER,metal_exotic,any,any
+SC_CONJURE_ARMOR,6,MALACHOR,metal_exotic,any,any
+SC_CONJURE_BRANDED_SWORD,6,GOLD,metal_exotic,any,any
+SC_VOID_NEARBY_FLOOR,7,BLACKGLASS,exotic,metal_exotic,any
+SC_SHIELD_SELF,7,FLUORON,exotic,metal_exotic,any
 # --- Jade Peach: a revive charm crafted from an exotic gem (output is an
 # --- ITEM, not a GEM-scroll - the forge drops it like any other recipe output).
 JADE_PEACH,6,exotic,metal_exotic,any,

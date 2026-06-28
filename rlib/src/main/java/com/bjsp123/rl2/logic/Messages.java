@@ -453,6 +453,14 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
+    /** A beacon spirit orbiting the Great Wraith is shattered; {@code remaining}
+     *  is the count still circling it. */
+    public static LogEvent beaconSpiritDestroyed(int remaining) {
+        return new LogEvent(TextCatalog.format("eventlog.boss.beaconSpiritDestroyed",
+                                    TextCatalog.vars("remaining", remaining)),
+                            EventPriority.HIGH, true);
+    }
+
     /** "Adventurer eats the apple." - HIGH-priority so the player sees it
      *  in the default log filter; food is a meaningful resource event. */
     public static LogEvent playerEats(String playerName, String itemName) {
@@ -521,9 +529,9 @@ public final class Messages {
                             EventPriority.HIGH, true);
     }
 
-    /** "{name} phases out of harm's way." - reactive PHASE_DODGE negated a hit. */
-    public static LogEvent phaseDodged(String name, boolean involvesPlayer) {
-        return new LogEvent(TextCatalog.format("eventlog.phasedodge",
+    /** "{name} phases out of harm's way." - reactive WRAITH_DODGE negated a hit. */
+    public static LogEvent wraithDodged(String name, boolean involvesPlayer) {
+        return new LogEvent(TextCatalog.format("eventlog.wraithdodge",
                                     TextCatalog.vars("name", name)),
                             EventPriority.HIGH, involvesPlayer);
     }

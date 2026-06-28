@@ -300,13 +300,13 @@ public final class V2Forge extends V2Screen {
         ctx.batch.setColor(Color.WHITE);
     }
 
-    /** Draw the pinned recycle recipe: "[?] -> [gem gem gem] ?  recycle item". */
+    /** Draw the pinned recycle recipe: "any item -> [gem gem gem] ?  recycle item". */
     private void drawRecycleRow(UiCtx ctx) {
         Rect r = recycleRow;
         float icon = r.h - 14f;
         float x = r.x + 8f;
         float cy = r.cy();
-        // Input: any item (question mark).
+        // Input: the literal text "any item".
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, "any item", x + icon * 0.5f, cy + 6f);
         x += icon;
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "->", x + 12f, cy + 6f);

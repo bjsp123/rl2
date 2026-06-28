@@ -235,6 +235,11 @@ public class TurnSystem {
      * gives a 5% chance per point of an extra wraith.
      */
     private static void tickHazardAndRenew(Level level) {
+        // The boss floor sets its hazard from the player's kills on arrival
+        // (MobSystem.spawnFinalBoss) and uses it to drive the revenant spawner -
+        // so don't recompute it from time here, and don't run the regular
+        // renewing-enemy spawns on the bespoke arena.
+        if (level.kind == com.bjsp123.rl2.model.Level.LevelKind.FINAL_BOSS) return;
         level.hazardLevel = Math.min(GameBalance.HAZARD_MAX,
                 (level.beaconLit ? 1 : 0)
                         + level.turnsOnLevel / Math.max(1, GameBalance.HAZARD_TURNS_PER_POINT));

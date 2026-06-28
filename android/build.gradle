@@ -64,6 +64,19 @@ android {
 
 configurations { natives }
 
+// Kotlin 1.8 merged the kotlin-stdlib-jdk7 / -jdk8 modules into the main
+// kotlin-stdlib. A transitive dependency (Play Billing) still requests the old
+// split jdk7/jdk8 artifacts at 1.6.21, which then collide with kotlin-stdlib
+// 1.8.22 -> "Duplicate class kotlin.collections.jdk8...". Forcing the jdk7/jdk8
+// modules up to 1.8.22 makes them the empty post-merge stubs, so no classes
+// are duplicated.
+configurations.all {
+    resolutionStrategy {
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+    }
+}
+
 dependencies {
     implementation project(':rgame')
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
@@ -110,14 +123,36 @@ tasks.matching { it.name.contains("merge") && it.name.contains("JniLibFolders") 
 }
 
 // Build, install, and launch on an attached device in one step.
-// Requires adb on PATH (Android SDK platform-tools).
 // Run with:  ./gradlew :android:deploy
+//
+// adb is resolved from the SDK rather than PATH: we read sdk.dir from
+// local.properties (falling back to ANDROID_HOME / ANDROID_SDK_ROOT, then a
+// bare "adb" if the platform-tools binary can't be located). This means deploy
+// works on a fresh machine that never added platform-tools to PATH.
 task deploy(dependsOn: 'installDebug') {
     group       'install'
     description 'Assembles the debug APK, installs it on the attached device, and launches the app.'
     doLast {
+        def adb = 'adb'
+        def sdkDir = null
+        def lp = rootProject.file('local.properties')
+        if (lp.exists()) {
+            def props = new Properties()
+            lp.withInputStream { props.load(it) }
+            sdkDir = props.getProperty('sdk.dir')
+        }
+        if (sdkDir == null) {
+            sdkDir = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+        }
+        if (sdkDir != null) {
+            def exe = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'adb.exe' : 'adb'
+            def candidate = file("$sdkDir/platform-tools/$exe")
+            if (candidate.exists()) {
+                adb = candidate.absolutePath
+            }
+        }
         exec {
-            commandLine 'adb', 'shell', 'am', 'start',
+            commandLine adb, 'shell', 'am', 'start',
                     '-n', 'com.bjsp123.rl2/com.bjsp123.rl2.android.AndroidLauncher'
         }
     }

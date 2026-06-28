@@ -45,16 +45,16 @@ import java.util.function.BiConsumer;
  */
 public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
-    private enum Tab { GEAR, FOOD, ITEMS, GEMS }
+    private enum Tab { GEAR, CONSUMABLE, ITEMS, GEMS }
 
-    /** Map each tab to a glyph in the shared UI icon sheet. FOOD and GEMS
-     *  have no dedicated icons yet - fall back to OTHER. */
+    /** Map each tab to a glyph in the shared UI icon sheet. The CONSUMABLE tab
+     *  (food + potions) reuses the FOOD glyph. */
     private static com.bjsp123.rl2.world.render.IconSprites.Icon tabIcon(Tab t) {
         return switch (t) {
-            case GEAR  -> com.bjsp123.rl2.world.render.IconSprites.Icon.EQUIPMENT;
-            case FOOD  -> com.bjsp123.rl2.world.render.IconSprites.Icon.FOOD;
-            case ITEMS -> com.bjsp123.rl2.world.render.IconSprites.Icon.ITEMS;
-            case GEMS  -> com.bjsp123.rl2.world.render.IconSprites.Icon.GEMS;
+            case GEAR       -> com.bjsp123.rl2.world.render.IconSprites.Icon.EQUIPMENT;
+            case CONSUMABLE -> com.bjsp123.rl2.world.render.IconSprites.Icon.FOOD;
+            case ITEMS      -> com.bjsp123.rl2.world.render.IconSprites.Icon.ITEMS;
+            case GEMS       -> com.bjsp123.rl2.world.render.IconSprites.Icon.GEMS;
         };
     }
 
@@ -97,8 +97,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private float detailDividerY = Float.NaN;
     /** Top of the body text region (the y of the first flavor line). */
     private float detailBodyTop;
-    /** Quickslot-binding buttons - six numbered cells in the detail popup
-     *  that bind / unbind the chosen item to / from each action-bar slot.
+    /** Quickslot-binding buttons - one numbered cell per quickslot
+     *  ({@code Settings.quickslotCount()}) in the detail popup that
+     *  bind / unbind the chosen item to / from each action-bar slot.
      *  Built only when an {@link ActionBar} has been wired. */
     private final Rect[] bindBtnRects = new Rect[ActionBar.SLOTS];
 
@@ -252,7 +253,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // HUD strip at the bottom and a clear gap at the top.
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(360f, vw - UIVars.PAD_MODAL);
+        float winW = Math.min(400f, vw - UIVars.PAD_MODAL);
         float winH = Math.min(580f, vh - 96f);
         float winX = (vw - winW) * 0.5f;
         float winY = (vh - winH) * 0.5f;
@@ -267,7 +268,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         headerRect.set(contentX, winY + winH - pad - headerH, contentW, headerH);
 
         // Equipment row - 5 cells, sized to fit the content width.
-        float cellSz = 44f * 1.3f;
+        float cellSz = 44f * 1.43f * 1.1f;
         float cellGap = 6f;
         float equipRowW = 5 * cellSz + 4 * cellGap;
         float equipRowX = contentX + (contentW - equipRowW) * 0.5f;
@@ -296,7 +297,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // chrome only.
         bagCells.clear();
         int cols = 6;
-        float gridCellSz = 36f * 1.3f;
+        float gridCellSz = 36f * 1.43f * 1.1f;
         float gridGap = 4f;
         float gridW = cols * gridCellSz + (cols - 1) * gridGap;
         float gridX = contentX + (contentW - gridW) * 0.5f;
@@ -471,8 +472,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         return switch (it.inventoryCategory) {
             case WEAPON, OFFHAND, ARMOR, AMULET, WAND, ITEM, TOOL -> Tab.GEAR;
             case GEM                                         -> Tab.GEMS;
-            case FOOD                                        -> Tab.FOOD;
-            case POTION, BOMB, ORB, THROWN                   -> Tab.ITEMS;
+            case FOOD, POTION                                -> Tab.CONSUMABLE;
+            case BOMB, ORB, THROWN                           -> Tab.ITEMS;
         };
     }
 
@@ -480,10 +481,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
      *  look up the bag-capacity limit that applies to items on that tab. */
     private static Item.InventoryCategory tabCategory(Tab tab) {
         return switch (tab) {
-            case GEAR  -> Item.InventoryCategory.WEAPON;
-            case FOOD  -> Item.InventoryCategory.FOOD;
-            case ITEMS -> Item.InventoryCategory.POTION;
-            case GEMS  -> Item.InventoryCategory.GEM;
+            case GEAR       -> Item.InventoryCategory.WEAPON;
+            case CONSUMABLE -> Item.InventoryCategory.FOOD;
+            case ITEMS      -> Item.InventoryCategory.BOMB;
+            case GEMS       -> Item.InventoryCategory.GEM;
         };
     }
 
@@ -840,7 +841,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         detailInfoPressed, false);
             }
 
-            // Quickslot bind labels - slot number 1..6 + "Quickslot" header.
+            // Quickslot bind labels - one number per quickslot + "Quickslot" header.
             if (actionBar != null) {
                 TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         TextCatalog.get("ui.inventory.quickslot"),

@@ -145,8 +145,6 @@ public final class V2Settings extends V2Screen {
                         Settings::instantActions, Settings::setInstantActions);
                 yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
                         Settings::queueAccelEnabled, Settings::setQueueAccelEnabled);
-                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.tipsEnabled"),
-                        Settings::tipsEnabled, Settings::setTipsEnabled);
                 yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.meleePreview"),
                         Settings::meleePreview, Settings::setMeleePreview);
                 // Destructive actions live at the bottom of the tab so the
@@ -316,8 +314,9 @@ public final class V2Settings extends V2Screen {
      *  on the right edge, both on the same baseline. Toggle reads its
      *  value live from the supplier, so no rebuild is needed when the
      *  value flips. Row consumes ~{@link #TOGGLE_ROW_H} of vertical space
-     *  vs. the ~58 px a slider row needs - sliders draw on their own line
-     *  because the value label needs the horizontal real estate. */
+     *  vs. the ~70 px a slider/chooser row needs (ROW_LABEL_H + CHOOSER_H +
+     *  ROW_GAP) - those draw on their own line because the value label needs
+     *  the horizontal real estate. */
     private float addToggleRow(float x, float yTop, String label,
                                java.util.function.BooleanSupplier getter,
                                java.util.function.Consumer<Boolean> setter) {

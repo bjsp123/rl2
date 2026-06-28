@@ -12,7 +12,7 @@ import com.bjsp123.rl2.model.StatBlock;
  * <h3>Scaling rules</h3>
  * <ul>
  *   <li><b>amount stats</b> (damage, armor, apDamage, magicResist, accuracy,
- *       evasion, foodValue, knockbackSquares, lightRadius, effectDuration,
+ *       evasion, knockbackSquares, lightRadius, effectDuration,
  *       effectRange):
  *       {@code scaled = base + N × max(1, base/AMOUNT_LEVEL_SCALE_FACTOR)}.
  *       Every {@code +1} adds at least 1, larger bases grow proportionally
@@ -190,21 +190,13 @@ public final class ItemStats {
         return scaleAmount(item.evasion, level);
     }
 
-    public static int effectiveFoodValue(Item item) {
-        return effectiveFoodValue(item, clampedLevel(item));
-    }
-    public static int effectiveFoodValue(Item item, int level) {
-        if (item == null || item.foodValue <= 0) return 0;
-        return scaleAmount(item.foodValue, level);
-    }
-
     public static int effectiveKnockback(Item item) {
         return effectiveKnockback(item, clampedLevel(item));
     }
     public static int effectiveKnockback(Item item, int level) {
         if (item == null) return 0;
-        return scaleAmount(item.knockbackSquares, level,
-                GameBalance.KNOCKBACK_LEVEL_SCALE_FACTOR);
+        // Knockback is intrinsic to the weapon and does NOT scale with level.
+        return item.knockbackSquares;
     }
 
     public static double effectiveLightRadius(Item item) {
@@ -283,17 +275,18 @@ public final class ItemStats {
     public static int effectiveMaxCharge(Item item, int level) {
         if (item == null || item.baseChargeMax <= 0) return 1;
         int lvl = Math.max(0, level);
+        int cap = GameBalance.MAX_ITEM_CHARGES;   // no item exceeds this many charges
         if (item.useBehavior == Item.UseBehavior.WAND) {
             // Wand maxCharge: sqrt-based growth. base=3 → +6 at L5, +9 at L10.
-            return Math.max(1, item.baseChargeMax
-                    + (int) Math.floor(item.baseChargeMax * Math.sqrt(lvl)));
+            return Math.max(1, Math.min(cap, item.baseChargeMax
+                    + (int) Math.floor(item.baseChargeMax * Math.sqrt(lvl))));
         }
         // Item / tool maxCharge: piecewise linear, knee at L5.
         // base=2: L5 → +4, L10 → +6. base=3: L5 → +5, L10 → +7.
         int lvlBefore5 = Math.min(lvl, 5);
         int lvlAfter5  = Math.max(0, lvl - 5);
         int inc = (item.baseChargeMax + 2) * lvlBefore5 / 5 + 2 * lvlAfter5 / 5;
-        return Math.max(1, item.baseChargeMax + inc);
+        return Math.max(1, Math.min(cap, item.baseChargeMax + inc));
     }
 
     // -- speed stats (flat — do not scale) ----------------------------------
@@ -343,6 +336,7 @@ public final class ItemStats {
         double lr = effectiveLightRadius(item, effLvl);
         if (lr > dst.lightRadius) dst.lightRadius = lr;
         dst.knockbackSquares += effectiveKnockback(item, effLvl);
+        dst.xRayEyes += item.xRayEyes;   // flat - x-ray levels don't scale with item level
 
         if (item.brand != null) {
             BrandDefinition b = item.brand;
@@ -407,13 +401,10 @@ public final class ItemStats {
         return item == null ? 0 : scaleIncrement(item.evasion);
     }
 
-    public static int foodValuePerLevel(Item item) {
-        return item == null ? 0 : scaleIncrement(item.foodValue);
-    }
 
     public static int knockbackPerLevel(Item item) {
-        return item == null ? 0 : scaleIncrement(item.knockbackSquares,
-                GameBalance.KNOCKBACK_LEVEL_SCALE_FACTOR);
+        // Knockback no longer scales with level - the per-level delta is always 0.
+        return 0;
     }
 
     public static int lightRadiusPerLevel(Item item) {

@@ -161,7 +161,10 @@ public final class LevelFactoryThemedRooms {
         }
         int[] r = pairRooms.get(chosen);
         ThemedRoomDefinition d = pairDefs.get(chosen);
-        int spawnLevel = 1 + level.depth;
+        // -1 = ThemedRoomPopulator passes through to spawnMobAt's per-mob
+        // depth-adjusted rule, so each room mob scales by its own band rather
+        // than every spawn riding the floor's full depth.
+        int spawnLevel = -1;
         ThemedRoomPainter.paint(level, d, r[0], r[1], r[2], r[3], rng);
         ThemedRoomPopulator.populate(level, d, r[0], r[1], r[2], r[3], spawnLevel, rng);
         level.reservedRects.add(new int[]{r[0], r[1], r[2], r[3]});
@@ -179,6 +182,10 @@ public final class LevelFactoryThemedRooms {
         for (String type : Registries.themedRoomTypes()) {
             ThemedRoomDefinition d = Registries.themedRoom(type);
             if (d == null || d.unique) continue;
+            // perLevelUnique rooms (e.g. beacons, perLevelUnique=BEACON) are placed
+            // exclusively by the per-level-unique special pass - at most one per
+            // level. Skip them here so the regular pass can't stamp extra copies.
+            if (d.perLevelUnique != null) continue;
             // WALKWAY_LEVEL paints corridors as planks over chasm - stamping a
             // walkway-shaped room on top would be redundant.
             if (walkwayLevel && d.roomShape == ThemedRoomDefinition.RoomShape.WALKWAY) continue;
@@ -203,7 +210,8 @@ public final class LevelFactoryThemedRooms {
             }
             if (fitting.isEmpty()) continue;
             ThemedRoomDefinition d = weightedPick(fitting, level, rng);
-            int spawnLevel = 1 + level.depth;
+            // -1 = per-mob depth-adjusted (see spawnMobAt sentinel).
+            int spawnLevel = -1;
             ThemedRoomPainter.paint(level, d, r[0], r[1], r[2], r[3], rng);
             ThemedRoomPopulator.populate(level, d, r[0], r[1], r[2], r[3],
                                          spawnLevel, rng);

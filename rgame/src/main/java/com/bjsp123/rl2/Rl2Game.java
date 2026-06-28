@@ -129,10 +129,12 @@ public class Rl2Game extends Game {
         loadAnimationVars();
         loadMobConfig();
         loadItemConfig();
+        loadGemConfig();
         loadBrandConfig();
         loadThemedRoomConfig();
         loadRecipeConfig();
         loadTipsConfig();
+        loadGameStartTipsConfig();
         loadHelpConfig();
         Settings.init(persistence);
         loadSoundsConfig();
@@ -240,6 +242,16 @@ public class Rl2Game extends Game {
         com.bjsp123.rl2.logic.Registries.loadItems(csv);
     }
 
+    /** Read {@code assets/data/gems.csv} (raw-gem affinity + sprite cells) into
+     *  the gem registry. Missing file is non-fatal - {@code Registries.gem(...)}
+     *  then returns null and gems fall back to no-affinity / sprite cell 0. */
+    private void loadGemConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/gems.csv");
+        if (!fh.exists()) return;
+        com.bjsp123.rl2.logic.Registries.loadGems(fh.readString());
+    }
+
     /** Read {@code assets/data/brands.csv} into {@link com.bjsp123.rl2.logic.BrandRegistry}. */
     private void loadBrandConfig() {
         com.badlogic.gdx.files.FileHandle fh =
@@ -273,6 +285,13 @@ public class Rl2Game extends Game {
                 com.badlogic.gdx.Gdx.files.internal("data/tips.csv");
         if (!fh.exists()) return;
         TipsRegistry.load(fh.readString());
+    }
+
+    private void loadGameStartTipsConfig() {
+        com.badlogic.gdx.files.FileHandle fh =
+                com.badlogic.gdx.Gdx.files.internal("data/tip.csv");
+        if (!fh.exists()) return;
+        GameStartTipsRegistry.load(fh.readString());
     }
 
     private void loadSoundsConfig() {

@@ -13,8 +13,9 @@ import com.bjsp123.rl2.model.Item.InventoryCategory;
  *
  * <p>The bag is divided into four capacity groups, each capped independently by
  * a constant in {@link GameBalance}: equipment ({@code BAG_EQUIPMENT_SIZE}),
- * gems ({@code BAG_GEMS_SIZE}), food ({@code BAG_FOOD_SIZE}), and all other
- * consumables / tools ({@code BAG_ITEMS_SIZE}).
+ * gems ({@code BAG_GEMS_SIZE}), consumables - food + potions
+ * ({@code BAG_CONSUMABLE_SIZE}), and all other throwables / tools
+ * ({@code BAG_ITEMS_SIZE}).
  *
  * <p>Only {@link InventoryCategory#POTION}, {@link InventoryCategory#BOMB}, and
  * {@link InventoryCategory#FOOD} items can merge into stacks; all other item
@@ -30,26 +31,27 @@ public final class InventorySystem {
 
     // -- Capacity groups -------------------------------------------------------
 
-    /** The four bag-capacity buckets that partition every {@link InventoryCategory}. */
-    private enum BagGroup { EQUIPMENT, GEMS, FOOD, ITEMS }
+    /** The four bag-capacity buckets that partition every {@link InventoryCategory}.
+     *  CONSUMABLE merges food and potions into one group. */
+    private enum BagGroup { EQUIPMENT, GEMS, CONSUMABLE, ITEMS }
 
     private static BagGroup groupOf(InventoryCategory cat) {
         if (cat == null) return BagGroup.ITEMS;
         return switch (cat) {
             case WEAPON, OFFHAND, ARMOR, AMULET, WAND, ITEM, TOOL -> BagGroup.EQUIPMENT;
             case GEM                                         -> BagGroup.GEMS;
-            case FOOD                                        -> BagGroup.FOOD;
-            case POTION, BOMB, ORB, THROWN                   -> BagGroup.ITEMS;
+            case FOOD, POTION                                -> BagGroup.CONSUMABLE;
+            case BOMB, ORB, THROWN                           -> BagGroup.ITEMS;
         };
     }
 
     /** Bag slot limit that applies to items in the same capacity group as {@code cat}. */
     public static int bagLimitFor(InventoryCategory cat) {
         return switch (groupOf(cat)) {
-            case EQUIPMENT -> GameBalance.BAG_EQUIPMENT_SIZE;
-            case GEMS      -> GameBalance.BAG_GEMS_SIZE;
-            case FOOD      -> GameBalance.BAG_FOOD_SIZE;
-            case ITEMS     -> GameBalance.BAG_ITEMS_SIZE;
+            case EQUIPMENT  -> GameBalance.BAG_EQUIPMENT_SIZE;
+            case GEMS       -> GameBalance.BAG_GEMS_SIZE;
+            case CONSUMABLE -> GameBalance.BAG_CONSUMABLE_SIZE;
+            case ITEMS      -> GameBalance.BAG_ITEMS_SIZE;
         };
     }
 
@@ -102,6 +104,20 @@ public final class InventorySystem {
             inv.bag.remove(idx);
         }
         return true;
+    }
+
+    /** The least valuable bag entry in the same capacity group as {@code cat}
+     *  (by {@link Item#getValue()}), or {@code null} if that group is empty.
+     *  Used by AI pickup to pick a slot to free when the group is full. */
+    public static Item leastValuableInGroup(Inventory inv, InventoryCategory cat) {
+        if (inv == null || inv.bag == null) return null;
+        BagGroup target = groupOf(cat);
+        Item worst = null;
+        for (Item it : inv.bag) {
+            if (it == null || groupOf(it.inventoryCategory) != target) continue;
+            if (worst == null || it.getValue() < worst.getValue()) worst = it;
+        }
+        return worst;
     }
 
     /**
@@ -240,7 +256,6 @@ public final class InventorySystem {
         out.damage = src.damage;
         out.armor = src.armor;
         out.lightRadius = src.lightRadius;
-        out.foodValue = src.foodValue;
         out.effectSize = src.effectSize;
         out.effectDuration = src.effectDuration;
         out.effectRange = src.effectRange;

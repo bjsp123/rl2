@@ -100,6 +100,8 @@ public class Mob {
     public static final int BIG_ENOUGH_TO_BLOCK_SIGHT = PLAYER_SIZE + 1;
     /** Threshold (inclusive) at which an oily mob drips oil onto each tile it leaves. */
     public static final int BIG_ENOUGH_TO_DRIP_OIL    = 3;
+    /** Threshold (inclusive) at which a mob crashing through TREES flattens them to GRASS. */
+    public static final int BIG_ENOUGH_TO_FLATTEN_TREES = 5;
 
     /** Mental state, mostly used by AI to gate sleeping/hiding/awake/follow behaviour. */
     public enum StateOfMind {
@@ -244,7 +246,7 @@ public class Mob {
             /** Reactive: when about to take damage, slide to a free adjacent square and
              *  negate the hit, then go on cooldown (e.g. wraiths). Not cast proactively -
              *  handled in {@code MobSystem.processAttack}, gated by {@link #cooldownTracker}. */
-            PHASE_DODGE
+            WRAITH_DODGE
         }
 
         public MobAbility() {}
@@ -277,8 +279,8 @@ public class Mob {
                     cooldown, cooldownTurns);
         }
 
-        public static MobAbility phaseDodge(Buff.BuffType cooldown, int cooldownTurns) {
-            return new MobAbility(AbilityKind.PHASE_DODGE, null, 0, 0, 0,
+        public static MobAbility wraithDodge(Buff.BuffType cooldown, int cooldownTurns) {
+            return new MobAbility(AbilityKind.WRAITH_DODGE, null, 0, 0, 0,
                     cooldown, cooldownTurns);
         }
     }
@@ -494,7 +496,7 @@ public class Mob {
      *  now). */
     public transient Mob owner;
 
-    /** True for a player-summoned clone (EIGHTFOLD_MULTIPLICATION). Spawned from
+    /** True for a player-summoned clone (SC_SUMMON_CLONES). Spawned from
      *  the ENEMY_PLAYER_* template for stats/AI but flagged so the renderer draws
      *  it from the clone column of {@code player.png}. */
     public boolean isClone;
@@ -538,6 +540,17 @@ public class Mob {
      *  entry per kill). The final-boss floor reanimates this roster as revenants
      *  - each killed individual returns exactly once. Persisted. */
     public java.util.List<String> killedRoster = new java.util.ArrayList<>();
+    /** Per-run statistics (kills, pickups, food, gems, most-used items) for the
+     *  victory / game-over screen and the run score. Player-only; persisted. */
+    public RunStats runStats = new RunStats();
+    /** True once the player has slain the Great Wraith this run - drives the
+     *  victory-score boss bonus. Persisted. */
+    public boolean killedGreatWraith = false;
+    /** Beacon spirits orbiting the Great Wraith (one per beacon lit on arrival).
+     *  They are the live source of the boss's beacon power: each landed hit has a
+     *  chance to destroy one, and the Wraith's bonuses are recomputed from the
+     *  remaining count. Rendered as orbiting glows by rgame. Boss-only. */
+    public int beaconSpirits = 0;
     /** Lifetime history - kills, level-ups, item finds - read by the character stats
      *  frame's History tab. */
     public java.util.List<HistoricalRecord> history = new java.util.ArrayList<>();

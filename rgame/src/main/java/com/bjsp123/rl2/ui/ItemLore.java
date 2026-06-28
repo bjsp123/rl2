@@ -216,14 +216,6 @@ public final class ItemLore {
             line(bod, TextCatalog.get("lore.items.light"), trim(lightRadius) + " tiles",
                     perLevel(com.bjsp123.rl2.logic.ItemStats.lightRadiusPerLevel(it), "tiles"));
         }
-        int foodValue = com.bjsp123.rl2.logic.ItemStats.effectiveFoodValue(it, effLvl);
-        if (foodValue > 0) {
-            // foodValue is stored x1000; both the live and per-level numbers
-            // divide by 1000 for the UI.
-            int fvPerLvl = com.bjsp123.rl2.logic.ItemStats.foodValuePerLevel(it) / 1000;
-            line(bod, TextCatalog.get("lore.items.food"), "" + foodValue / 1000,
-                    perLevel(fvPerLvl));
-        }
         int maxCharge = com.bjsp123.rl2.logic.ItemStats.effectiveMaxCharge(it, effLvl);
         if (it.baseChargeMax > 0) {
             int chargeHint = com.bjsp123.rl2.logic.ItemStats.maxChargePerLevelHint(it);
@@ -239,7 +231,15 @@ public final class ItemLore {
             String verb = it.useVerb != null && !it.useVerb.isEmpty()
                     ? it.useVerb : useBehaviorVerb(it.useBehavior);
             switch (it.useBehavior) {
-                case EAT -> flag(use, TextCatalog.get("item.use.EAT"));
+                case EAT -> {
+                    if (!it.appliesBuff.isEmpty()) {
+                        flag(use, TextCatalog.format("item.use.EAT.buff",
+                                TextCatalog.vars("buffs", buffList(it.appliesBuff),
+                                        "duration", buffDurationSuffix(it, effLvl))));
+                    } else {
+                        flag(use, TextCatalog.get("item.use.EAT"));
+                    }
+                }
                 case DRINK -> {
                     if (!it.appliesBuff.isEmpty()) {
                         flag(use, TextCatalog.format("item.use.DRINK.buff",
@@ -414,8 +414,10 @@ public final class ItemLore {
     private static String buffDurationSuffix(Item it, int effLvl) {
         int dur = com.bjsp123.rl2.logic.ItemStats.effectiveDuration(it, effLvl);
         if (dur <= 0) return "";
-        return TextCatalog.format("item.buff.duration",
-                TextCatalog.vars("turns", dur));
+        // Own the separating space here - the CSV reader trims the string's
+        // leading space, which would otherwise glue it to the buff name.
+        return " " + TextCatalog.format("item.buff.duration",
+                TextCatalog.vars("turns", dur)).trim();
     }
 
     /** User-facing verb describing what a {@link com.bjsp123.rl2.model.Item.UseBehavior#POWERUP}

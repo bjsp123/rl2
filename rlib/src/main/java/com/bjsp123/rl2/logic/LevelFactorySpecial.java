@@ -75,6 +75,41 @@ public final class LevelFactorySpecial {
     }
 
     // ========================================================================
+    // Exit portal - the ending floor, reached by the stairs that open at the
+    // arena centre when the Great Wraith dies. A single small room, empty
+    // except for one active beacon at its centre: the exit portal. Touching
+    // (stepping adjacent to) it starts the victory end-sequence. lockedExit
+    // marks the beacon tile so PlayScreen can detect the touch.
+    // ========================================================================
+    public static Level buildExitPortal(int depth, long seed) {
+        Level level = blankFloor(depth, Level.VisualTheme.GOTHIC);
+        level.kind = Level.LevelKind.EXIT_PORTAL;
+
+        // Single rectangular room centred in the canvas.
+        int rw = 12, rh = 10;
+        int rx = (W - rw) / 2, ry = (H - rh) / 2;
+        carveRoom(level, rx, ry, rw, rh);
+        // Carved stone room over the void - no precipice around the exit.
+        fillChasmWithWall(level);
+
+        // Stairs up on the west wall (back up to the boss arena); the player
+        // arrives here from the boss floor's down-stairs.
+        Point stairsUp = new Point(rx + 1, ry + rh / 2);
+        level.tiles[stairsUp.tileX()][stairsUp.tileY()] = Tile.STAIRS_UP;
+        level.stairsUp   = stairsUp;
+        level.spawnPoint = stairsUp;
+        level.stairsDown = null;
+
+        // The exit-portal beacon: an ACTIVE beacon at the room centre. Same
+        // ornament as the boss-arena beacons, but lit with a normal glow.
+        int bx = rx + rw / 2, by = ry + rh / 2;
+        level.tiles[bx][by] = Tile.BEACON_ACTIVE;
+        level.lockedExit = new Point(bx, by);   // touch-target for the end-sequence
+
+        return level;
+    }
+
+    // ========================================================================
     // Mirrormatch - centre round room with three round side rooms (one per
     // class), each holding a high-level enemy player. Stairs up vanish on
     // entry; stairs down appear when all three enemy players are dead.
@@ -185,9 +220,12 @@ public final class LevelFactorySpecial {
         placeWalkwaySpawner(level, cx, cy, cx - (r + 5), cy, rng);   // west platform
         // The void around the E/W walkways is intentional - do NOT fill it.
 
-        // Revenant add-spawner (roster seeded on entry by MobSystem).
+        // Revenant add-spawner (roster seeded on entry by MobSystem). The real
+        // per-turn cadence is hazard-driven in MobSystem.runLevelSpawner (the boss
+        // pool branch reads BOSS_ADD_CADENCE_BY_HAZARD); everyNTurns is just a
+        // nominal positive value so the spawner is the deterministic kind.
         Level.Spawner sp = new Level.Spawner();
-        sp.everyNTurns = GameBalance.BOSS_ADD_SPAWN_CADENCE;
+        sp.everyNTurns = 1;
         sp.maxAlive    = GameBalance.BOSS_ADD_MAX_ALIVE;
         sp.placement   = Level.Spawner.Placement.SOUL_SPAWNERS;
         sp.spawnAwake  = true;
@@ -342,6 +380,7 @@ public final class LevelFactorySpecial {
         Level level = new Level(W, H);
         level.depth = depth;
         level.theme = theme;
+        LevelFactory.lastGeneratedTheme = theme;
         // Special floors are CENTER for now; the map screen lays them out
         // in the middle column below the diamond.
         level.side = Level.Side.CENTER;

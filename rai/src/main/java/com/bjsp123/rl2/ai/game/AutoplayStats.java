@@ -35,6 +35,36 @@ public final class AutoplayStats {
     public int    potionsDrunk;
     public int    meleeAttacks;
 
+    /** Total damage the agent dealt with melee swings (sum of
+     *  {@code MobMeleeAttacked.dealt} for attacks where the agent is the
+     *  attacker). Missed swings contribute 0; periodic bleed / DOT damage is
+     *  not included (it lands as DamageDealt with the source still the
+     *  agent but its origin item is the bleed mechanism, not the weapon). */
+    public int    meleeDamage;
+    /** Total damage the agent dealt via wands - any
+     *  {@link com.bjsp123.rl2.event.GameEvent.DamageDealt} where source is
+     *  the agent and the cause's originating item is a WAND. */
+    public int    wandDamage;
+    /** Total damage the agent dealt with thrown bombs - any DamageDealt
+     *  where source is the agent and the originating item is a BOMB. */
+    public int    bombDamage;
+
+    /** Total HP the agent lost across the run, summed from every
+     *  {@link com.bjsp123.rl2.event.GameEvent.DamageDealt} that landed on
+     *  the agent. Includes misses-rounded-up? No — only positive amounts;
+     *  misses are amount=0. */
+    public int    damageTaken;
+    /** Damage taken, bucketed by {@code DamageCause.medium} ("blow",
+     *  "magic", "throw", "fire", "chasm", "wall-slam", ...). Lets the
+     *  regression report tell you whether HP is leaking to melee, ranged
+     *  shots, DOTs or terrain. {@code "environment"} catches the
+     *  {@link com.bjsp123.rl2.logic.MobSystem.DamageCause#NONE} case;
+     *  {@code "unknown"} catches malformed cause records (shouldn't fire). */
+    public final Map<String, Integer> damageTakenByMedium = new LinkedHashMap<>();
+    /** Damage taken, bucketed by source-mob type (e.g. {@code "KOBOLD"}).
+     *  {@code "ENV"} catches environmental damage (no attacker mob). */
+    public final Map<String, Integer> damageTakenBySource = new LinkedHashMap<>();
+
     public double finalHp;
     public double finalMaxHp;
     public int    finalCharLevel;
@@ -48,6 +78,12 @@ public final class AutoplayStats {
 
     /** {@link AutoplayGame.Outcome#name()} when run is done. */
     public String outcome = "IN_PROGRESS";
+
+    /** Mob type of the killer that landed the final blow on the agent, or
+     *  {@code "ENV"} for environmental deaths (chasms, fire, ambient DOTs),
+     *  or {@code null} when the run ended via WIN / TIMEOUT. Used by the
+     *  regression harness to bucket deaths by attacker. */
+    public String deathCause;
 
     /** Wall-clock time the run took, in milliseconds. Filled in by the driver. */
     public double wallClockMs;

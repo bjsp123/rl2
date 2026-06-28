@@ -150,9 +150,9 @@ public final class MobSprites {
         mobsTex = SpriteAtlas.texture();
         if (mobsTex == null) return;
         // Player + enemy-player atlas: sprites/player.png. Row = class
-        // (0=ROGUE, 1=WARRIOR, 2=MAGE); col = variant (1=enemy art,
-        // 2=ghost). Real players draw from the ghost column; enemy
-        // players draw from the enemy column.
+        // (0=ROGUE, 1=WARRIOR, 2=MAGE); col = variant (0=real PC, 1=enemy,
+        // 2=clone). Real players draw from col 0, enemy players from col 1,
+        // clones from col 2.
         playerRegions = new EnumMap<>(CharacterClass.class);
         playerRegions.put(CharacterClass.ROGUE,
                 playerRegion(0, PLAYER_VARIANT_COL));

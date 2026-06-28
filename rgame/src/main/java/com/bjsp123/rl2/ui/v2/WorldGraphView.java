@@ -129,6 +129,32 @@ public final class WorldGraphView {
         };
     }
 
+    /** Screen-space bounding box of all level boxes at the current zoom,
+     *  assuming zero pan. {@code transformBox} adds pan directly, so the caller
+     *  can shift this by (panX, panY) to get the live bounds - used to clamp
+     *  panning. Returns {x, y, w, h}, or {@code null} when nothing to draw. */
+    public float[] contentBoundsZeroPan() {
+        if (!computeBounds()) return null;
+        float bw = BOX_W * zoom, bh = BOX_H * zoom;
+        float pivotX = viewport.cx(), pivotY = viewport.cy();
+        float minX = Float.POSITIVE_INFINITY, minY = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY, maxY = Float.NEGATIVE_INFINITY;
+        for (Level lvl : world.levels) {
+            if (lvl == null) continue;
+            float logCx = boxX(lvl) + BOX_W * 0.5f;
+            float logCy = boxY(lvl) + BOX_H * 0.5f;
+            float scrCx = pivotX + (logCx - pivotX) * zoom;   // pan = 0
+            float scrCy = pivotY + (logCy - pivotY) * zoom;
+            float x = scrCx - bw * 0.5f, y = scrCy - bh * 0.5f;
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x + bw > maxX) maxX = x + bw;
+            if (y + bh > maxY) maxY = y + bh;
+        }
+        if (minX == Float.POSITIVE_INFINITY) return null;
+        return new float[] { minX, minY, maxX - minX, maxY - minY };
+    }
+
     /** Shape pass: swirl backdrop, arrows, mini-map boxes, beacons. Clipped to
      *  {@link #viewport}. Populates the hit + unvisited-centre lists. */
     public void draw(UiCtx ctx) {
@@ -199,6 +225,7 @@ public final class WorldGraphView {
 
             if (lvl.visited && lvl.tiles != null) {
                 drawBeaconsOnBox(s, lvl, i, bx, by, bw, bh, ti);
+                drawGemforgesOnBox(s, lvl, bx, by, bw, bh, ti);
             }
         }
 
@@ -361,6 +388,31 @@ public final class WorldGraphView {
                         hitArm * 2f, hitArm * 2f));
                 beaconRefs.add(new int[]{worldIdx, tx, ty});
                 beaconActive.add(active);
+            }
+        }
+    }
+
+    /** Plot a circle on each gemforge (hearth) tile - same trapezoid mapping as
+     *  {@link #drawBeaconsOnBox}, but a filled amber disc instead of a "+". */
+    private void drawGemforgesOnBox(ShapeRenderer s, Level lvl,
+                                    float bx, float by, float bw, float bh, float topInset) {
+        int lw = lvl.width, lh = lvl.height;
+        if (lw <= 0 || lh <= 0) return;
+        float r = 4.5f * Math.max(0.5f, zoom);
+        for (int ty = 0; ty < lh; ty++) {
+            for (int tx = 0; tx < lw; tx++) {
+                // GEM_HEARTH_L is the 2-wide hearth's anchor cell (one per forge).
+                if (lvl.tiles[tx][ty] != Tile.GEM_HEARTH_L) continue;
+                float u = (tx + 0.5f) / (float) lw;
+                float v = (ty + 0.5f) / (float) lh;
+                float rowLeftX  = bx + topInset * v;
+                float rowRightX = bx + bw - topInset * v;
+                float cx = rowLeftX + (rowRightX - rowLeftX) * u;
+                float cy = by + bh * v;
+                s.setColor(0f, 0f, 0f, 1f);
+                s.circle(cx, cy, r + 1.5f);
+                s.setColor(0.95f, 0.58f, 0.18f, 1f);
+                s.circle(cx, cy, r);
             }
         }
     }

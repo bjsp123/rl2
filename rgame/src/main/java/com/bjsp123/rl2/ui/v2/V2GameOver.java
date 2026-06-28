@@ -23,17 +23,32 @@ public final class V2GameOver extends V2Screen {
     private final Rl2Game        game;
     private final HallOfFameEntry record;
     private final V2Log           log;
+    /** When non-null this screen is a Hall-of-Fame detail view (pushed, not a
+     *  root death screen): adds a back button and ESC returns here instead of
+     *  the title. */
+    private final Runnable        onBack;
 
     // Layout rects - computed once in buildLayout().
     private final Rect window   = new Rect();
     private final Rect portrait = new Rect();
     private final Rect deathLogFrame = new Rect();
     private float nameY, statsY;
+    /** Body tabs: the death log (0) and the score breakdown (1). */
+    private final TabStrip tabs = new TabStrip(2);
+    private int activeTab = 0;
+    private static final String[] TAB_LABELS = { "Log", "Score" };
 
     public V2GameOver(Rl2Game game, HallOfFameEntry record) {
+        this(game, record, null);
+    }
+
+    /** Detail-view constructor (Hall of Fame): {@code onBack} returns to the
+     *  list via back button / ESC. */
+    public V2GameOver(Rl2Game game, HallOfFameEntry record, Runnable onBack) {
         super(game.ui);
         this.game   = game;
         this.record = record;
+        this.onBack = onBack;
         this.log    = new V2Log(game.ui);
     }
 
@@ -47,10 +62,20 @@ public final class V2GameOver extends V2Screen {
 
     @Override
     protected void buildLayout() {
+        if (onBack != null) back = new BackBtn(ctx, onBack);
         float vw = ctx.worldW();
         float vh = ctx.worldH();
         float winW = Math.min(340f, vw - UIVars.PAD_MODAL);
-        float winH = Math.min(460f, vh - 80f);
+        // Size the window dynamically so the TALLER of the two tabs (score / log)
+        // has room for all its text, instead of clipping against a fixed height.
+        // The fixed chrome above the body frame (title + portrait + name + stats +
+        // tab strip) and the button band below it sum to a constant; the body
+        // frame is then sized to its content. buildLayout's top-down placement
+        // reproduces exactly this frame height from winH, so only winH changes.
+        // Sized to the max of both tabs so switching tabs never needs a re-layout.
+        float topStackH = 2f * ctx.headerLineH() + 2f * ctx.lineH() + 128f;
+        float winH = topStackH + neededBodyH(winW) + 80f;
+        winH = Math.max(380f, Math.min(winH, vh - 60f));
         float winX = (vw - winW) * 0.5f;
         float winY = (vh - winH) * 0.5f;
         window.set(winX, winY, winW, winH);
@@ -71,12 +96,16 @@ public final class V2GameOver extends V2Screen {
         float iconSz  = 52f;
         float btnY    = winY + 16f;
 
-        // Death-log frame - panel spanning the body between the stats line
-        // and the button row. Inset by 12px on each side from the window.
+        // Tab strip (Log / Score) above the body panel; the panel shows the
+        // selected tab's content.
         float frameX = winX + 12f;
         float frameTopY = statsY - ctx.lineH();
         float frameBottomY = btnY + btnH + 12f;
-        float frameH = Math.max(40f, frameTopY - frameBottomY);
+        float tabH = 26f;
+        float tabY = frameTopY - tabH;
+        tabs.layout(window, 12f, tabY, tabH, 6f);
+        tabs.setActive(activeTab);
+        float frameH = Math.max(40f, (tabY - 6f) - frameBottomY);
         deathLogFrame.set(frameX, frameBottomY, winW - 24f, frameH);
         float mainW   = winW - iconSz - btnGap - 32f;
         float mainX   = winX + 16f;
@@ -90,6 +119,39 @@ public final class V2GameOver extends V2Screen {
                 () -> { log.open(); });
         logBtn.icon = IconSprites.regionFor(IconSprites.Icon.BOOK);
         buttons.add(logBtn);
+    }
+
+    /** Body-frame height needed to fit the taller of the two tabs' content, in
+     *  the current font scale. Drives the window's dynamic height so no text is
+     *  clipped. Mirrors the row counts of {@link ScoreBreakdown#draw} and the
+     *  death-log layout in {@link #drawBodyText}. */
+    private float neededBodyH(float winW) {
+        float lineH = ctx.lineH();
+        // Score tab: mobs / gems / food / beacons (+ wraith, + perfect) +
+        // difficulty + TOTAL header line.
+        int scoreRows = 4;
+        if (record.killedGreatWraith) scoreRows++;
+        if (record.allBeaconsLit)     scoreRows++;
+        scoreRows++;                                    // difficulty row
+        float scoreH = 12f                              // top inset
+                + scoreRows * (lineH + 6f)
+                + 4f                                    // difficulty's wider gap
+                + ctx.headerLineH()                     // TOTAL (header font)
+                + 12f;                                  // bottom inset
+        // Log tab: wrapped headline (<=3 lines) + recent log lines + insets.
+        float maxW = (winW - 24f) - 16f;
+        int headLines = 0;
+        if (record.deathHeadline != null && !record.deathHeadline.isEmpty()) {
+            List<String> hw = new ArrayList<>();
+            TextDraw.wrap(ctx.fontRegular, record.deathHeadline, maxW, 3, hw);
+            headLines = hw.size();
+        }
+        int logLines = (record.deathLog != null && !record.deathLog.isEmpty())
+                ? record.deathLog.size()
+                : ((record.deathMessage != null && !record.deathMessage.isEmpty()) ? 1 : 0);
+        float logH = 8f + headLines * lineH + (headLines > 0 ? 4f : 0f)
+                + logLines * lineH + 8f;
+        return Math.max(scoreH, logH);
     }
 
     /** Wall-clock accumulator for the swirl backdrop. */
@@ -122,11 +184,12 @@ public final class V2GameOver extends V2Screen {
         ctx.shapes.rect(portrait.x - pad, portrait.y - pad,
                 portrait.w + 2f * pad, portrait.h + 2f * pad);
 
-        // Death-log frame - inset panel that visually groups the rolling
-        // log lines. Same recessed treatment as the portrait frame.
+        // Body panel - inset panel that visually groups the active tab's
+        // content. Same recessed treatment as the portrait frame.
         ctx.shapes.setColor(UIVars.SLOT_RECESS);
         ctx.shapes.rect(deathLogFrame.x, deathLogFrame.y,
                 deathLogFrame.w, deathLogFrame.h);
+        tabs.drawShapes(ctx.shapes);
     }
 
     @Override
@@ -161,9 +224,21 @@ public final class V2GameOver extends V2Screen {
                         TextCatalog.vars("score", record.score, "depth", record.depth));
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM, stats, cx, statsY);
 
+        // Tab labels (Log / Score).
+        for (int i = 0; i < tabs.rects.length; i++) {
+            Rect tr = tabs.rects[i];
+            TextDraw.centre(ctx, ctx.fontRegular,
+                    i == activeTab ? UIVars.ACCENT : UIVars.TEXT_DIM,
+                    TAB_LABELS[i], tr.cx(), tr.cy() + ctx.fontRegular.getCapHeight() * 0.5f);
+        }
+        if (activeTab == 1) {
+            ScoreBreakdown.draw(ctx, deathLogFrame, record);
+            return;
+        }
+
         // Death log inside the framed panel. Left-justified, oldest at top,
         // cause-of-death at the bottom rendered in full body-bright; older
-        // entries fade with age (90% -> 25% alpha by the topmost line) so
+        // entries fade with age (100% -> 25% alpha by the topmost line) so
         // the eye is drawn to the killing blow. Falls back to the single-
         // line deathMessage when deathLog is empty (legacy saves).
         List<String> lines = record.deathLog;
@@ -225,8 +300,21 @@ public final class V2GameOver extends V2Screen {
     }
 
     @Override
+    protected boolean onTouchDownInBody(float vx, float vy) {
+        return tabs.touchDown(vx, vy) >= 0;
+    }
+
+    @Override
+    protected boolean onTouchUpInBody(float vx, float vy) {
+        int t = tabs.touchUp(vx, vy);
+        if (t >= 0) { activeTab = t; tabs.setActive(t); return true; }
+        return false;
+    }
+
+    @Override
     protected void onEscape() {
-        game.setRootScreen(new V2Title(game, ctx));
+        if (onBack != null) onBack.run();
+        else game.setRootScreen(new V2Title(game, ctx));
     }
 
     // -- Helpers ---------------------------------------------------------------

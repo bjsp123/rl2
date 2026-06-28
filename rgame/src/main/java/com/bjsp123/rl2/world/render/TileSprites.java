@@ -27,10 +27,10 @@ import java.util.Map;
  * <p>KEEP THIS IN SYNC whenever a tile, sprite, or row is added.
  *
  * <pre>
- *   (cols 0..2, row 1) - stone FLOOR variants, picked randomly per tile. Col 0 is
- *                     the canonical slot; cols 1 and 2 are alternates.
- *   (cols 0..2, row 2) - FLOOR_WOOD variants, picked randomly per tile. Col 0 is
- *                     the canonical slot; cols 1 and 2 are alternates.
+ *   (cols 0..5, row 1) - stone FLOOR variants, picked randomly per tile. Col 0 is
+ *                     the canonical slot; cols 1..5 are alternates.
+ *   (cols 0..5, row 2) - FLOOR_WOOD variants, picked randomly per tile. Col 0 is
+ *                     the canonical slot; cols 1..5 are alternates.
  *   (col 6, row  1) - FLOOR_SPECIAL base (decorative floor variant).
  *   (col 7, row  1) - FLOOR_SPECIAL edge overlay drawn on top of a regular FLOOR
  *                     whose neighbour to the WEST is FLOOR_SPECIAL.
@@ -398,13 +398,24 @@ public final class TileSprites {
      *  for tile-icon previews; the in-world renderer uses {@link #regionsFor} instead. */
     public static TextureRegion regionFor(Tile tile, VisualTheme theme) {
         if (tile == null) return null;
-        Texture tex = textureFor(theme);
-        if (tex == null) return null;
-        int cell = 32;
         int[] spec = canonicalCell(tile);
         if (spec == null) return null;
+        // Reuse the per-cell regions the in-world renderer uses - they already
+        // point into the correct terrain section of the shared atlas (with the
+        // per-theme Y offset). Building a raw region from textureFor(theme)
+        // skipped that offset and sampled the mobs region (the stray blob).
+        TextureRegion[] arr = regionsFor(theme);
+        if (arr == null || arr.length == 0) return null;
         int col = spec[0], row = spec[1], w = spec[2], h = spec[3];
-        return new TextureRegion(tex, col * cell, row * cell, w * cell, h * cell);
+        int idx = row * TERRAIN_COLS + col;
+        if (idx < 0 || idx >= arr.length) return null;
+        TextureRegion base = arr[idx];
+        if (w == 1 && h == 1) return base;
+        // Multi-cell tile (stairs / beacon / lamp ...): extend the base region's
+        // already-offset origin to cover w x h source cells.
+        int srcCell = base.getRegionWidth();
+        return new TextureRegion(base.getTexture(),
+                base.getRegionX(), base.getRegionY(), w * srcCell, h * srcCell);
     }
 
     private static int[] canonicalCell(Tile tile) {

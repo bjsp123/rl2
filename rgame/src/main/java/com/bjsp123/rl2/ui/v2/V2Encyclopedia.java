@@ -131,14 +131,33 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         for (int i = 0; i < tabRects.length; i++) tabRects[i] = new Rect();
     }
 
+    /** Theme the TERRAIN entries' tile icons were last built with. */
+    private com.bjsp123.rl2.model.Level.VisualTheme terrainTheme;
+
     private void ensureEntries() {
-        if (!entries.isEmpty()) return;
-        entries.put(Cat.ITEMS,        buildItemEntries());
-        entries.put(Cat.CREATURES,    buildCreatureEntries());
-        entries.put(Cat.BUFFS_PERKS,  buildBuffsAndPerksEntries());
-        entries.put(Cat.GEMS,         buildGemEntries());
-        entries.put(Cat.TERRAIN,      buildTerrainEntries());
-        entries.put(Cat.GUIDE,        buildGuideEntries());
+        // The non-terrain categories are theme-independent - build them once.
+        if (entries.get(Cat.ITEMS) == null) {
+            entries.put(Cat.ITEMS,        buildItemEntries());
+            entries.put(Cat.CREATURES,    buildCreatureEntries());
+            entries.put(Cat.BUFFS_PERKS,  buildBuffsAndPerksEntries());
+            entries.put(Cat.GEMS,         buildGemEntries());
+            entries.put(Cat.GUIDE,        buildGuideEntries());
+        }
+        refreshTerrainEntries();
+    }
+
+    /** (Re)build the terrain entries so tile icons use the last generated
+     *  level's theme (or GOTHIC before any level exists). Cheap; runs on each
+     *  open so the icons track the dungeon the player is exploring. */
+    private void refreshTerrainEntries() {
+        com.bjsp123.rl2.model.Level.VisualTheme t =
+                com.bjsp123.rl2.logic.LevelFactory.lastGeneratedTheme != null
+                        ? com.bjsp123.rl2.logic.LevelFactory.lastGeneratedTheme
+                        : com.bjsp123.rl2.model.Level.VisualTheme.GOTHIC;
+        if (entries.get(Cat.TERRAIN) == null || t != terrainTheme) {
+            entries.put(Cat.TERRAIN, buildTerrainEntries(t));
+            terrainTheme = t;
+        }
     }
 
     /** {@code true} when the encyclopaedia was opened with a registered
@@ -192,8 +211,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             }
 
             // Build per-row hit rects for whatever fits below the tab strip.
-            // Row height accommodates a 32x32 icon cell so every list row
-            // shows its sprite at a uniform 32 px regardless of source size
+            // Row height accommodates an 80x80 icon cell so every list row
+            // shows its sprite at a uniform ~80 px regardless of source size
             // (small buff icons get scaled UP, big mob sprites get scaled
             // DOWN - same fixed cell either way).
             //
@@ -790,7 +809,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             out.add(new Entry(t, BuffIcons.regionFor(t), name, body.toString()));
         }
         for (Perk p : Perk.values()) {
-            out.add(new Entry(p, null, p.displayName(), p.description()));
+            out.add(new Entry(p, BuffIcons.perkRegion(p.ordinal()), p.displayName(), p.description()));
         }
         return out;
     }
@@ -798,16 +817,25 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private static List<Entry> buildGemEntries() {
         List<Entry> out = new ArrayList<>();
         for (GemSpecies sp : GemSpecies.values()) {
+            com.bjsp123.rl2.logic.GemDefinition gdef =
+                    com.bjsp123.rl2.logic.Registries.gem(sp);
+            Object affinity = (gdef != null && gdef.theme != null) ? gdef.theme : "-";
             String desc = TextCatalog.format("ui.encyclopedia.gemDetails",
-                    TextCatalog.vars("affinity", sp.theme, "rarity", sp.gemClass));
+                    TextCatalog.vars("affinity", affinity, "rarity", sp.gemClass));
             out.add(new Entry(sp, GemSprites.regionFor(sp), sp.pretty(), desc));
         }
         return out;
     }
 
-    private static List<Entry> buildTerrainEntries() {
+    private static List<Entry> buildTerrainEntries(com.bjsp123.rl2.model.Level.VisualTheme theme) {
         List<Entry> out = new ArrayList<>();
         for (Tile t : Tile.values()) {
+            // Skip the right-hand cell of two-cell props (statues, throne, gem
+            // forge, soul spawner). The _R tile is a facing variant or a filler
+            // base cell that renders nothing; it would list as an identical
+            // duplicate of the _L anchor, which carries the sprite + text.
+            // Looking at an _R cell still resolves here via canonicalTerrainId.
+            if (t.name().endsWith("_R")) continue;
             StringBuilder sb = new StringBuilder();
             // Flavor description first.
             String desc = TextCatalog.getOrDefault("tile." + t.name() + ".description", "");
@@ -851,7 +879,29 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             }
             // Localized tile name (falls back to enum-lowercase if absent).
             String name = TextCatalog.getOrDefault("tile." + t.name(), t.name().toLowerCase());
-            out.add(new Entry(t, null, name, sb.toString().trim()));
+            out.add(new Entry(t,
+                    com.bjsp123.rl2.world.render.TileSprites.regionFor(t, theme),
+                    name, sb.toString().trim()));
+        }
+        // Vegetation / surface / cloud entries - so the Look screen's per-row
+        // info buttons (Material / Surface / Clouds) land on a real page.
+        for (com.bjsp123.rl2.model.Level.Vegetation v : com.bjsp123.rl2.model.Level.Vegetation.values()) {
+            out.add(new Entry(v,
+                    com.bjsp123.rl2.world.render.SurfaceSprites.regionFor(v),
+                    TextCatalog.getOrDefault("ui.look.terrain." + v.name().toLowerCase(), v.name().toLowerCase()),
+                    TextCatalog.getOrDefault("terrain.material." + v.name() + ".desc", "")));
+        }
+        for (com.bjsp123.rl2.model.Level.Surface s : com.bjsp123.rl2.model.Level.Surface.values()) {
+            out.add(new Entry(s,
+                    com.bjsp123.rl2.world.render.SurfaceSprites.regionFor(s),
+                    TextCatalog.getOrDefault("ui.look.surface." + s.name().toLowerCase(), s.name().toLowerCase()),
+                    TextCatalog.getOrDefault("terrain.surface." + s.name() + ".desc", "")));
+        }
+        for (com.bjsp123.rl2.model.Level.Cloud c : com.bjsp123.rl2.model.Level.Cloud.values()) {
+            out.add(new Entry(c,
+                    com.bjsp123.rl2.world.render.BuffIcons.cloudRegion(c.ordinal()),
+                    TextCatalog.getOrDefault("ui.look.cloud." + c.name(), c.name().toLowerCase()),
+                    TextCatalog.getOrDefault("terrain.cloud." + c.name() + ".desc", "")));
         }
         return out;
     }
@@ -912,6 +962,7 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         openedFromStack = onClose != null;
         if (onClose != null) ctx.stack.push(onClose);
         if (id == null) return;
+        id = canonicalTerrainId(id);
         for (Cat c : Cat.values()) {
             for (Entry e : entries.getOrDefault(c, new ArrayList<>())) {
                 if (id.equals(e.id)) {
@@ -921,6 +972,19 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 }
             }
         }
+    }
+
+    /** Two-cell props (statues, throne, gem forge, soul spawner) store a left
+     *  anchor plus a right filler/facing tile, but the terrain list shows only
+     *  the {@code _L} anchor. Looking at the {@code _R} cell should still open
+     *  that one page, so resolve any {@code _R} tile id to its {@code _L}
+     *  counterpart. Non-Tile ids (and tiles with no {@code _L}) pass through. */
+    private static Object canonicalTerrainId(Object id) {
+        if (id instanceof Tile t && t.name().endsWith("_R")) {
+            String l = t.name().substring(0, t.name().length() - 2) + "_L";
+            try { return Tile.valueOf(l); } catch (IllegalArgumentException ignored) { }
+        }
+        return id;
     }
 
     /** One row in a tab's list - id (natural key for {@link #openTo}) +

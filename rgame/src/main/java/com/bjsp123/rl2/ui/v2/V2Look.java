@@ -22,7 +22,10 @@ import com.bjsp123.rl2.model.StatBlock;
 import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.world.render.BuffIcons;
 import com.bjsp123.rl2.world.render.IconSprites;
+import com.bjsp123.rl2.world.render.TileSprites;
+import com.bjsp123.rl2.world.render.SurfaceSprites;
 import com.bjsp123.rl2.model.Buff;
+import com.badlogic.gdx.graphics.Color;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,13 +33,20 @@ import java.util.List;
 /** Compact look popup: terrain, floor item, mob, plus direct info buttons. */
 public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
-    private static final float HEADER_H = 38f;
+    /** Top padding inside each look window. No title is drawn (the popup's
+     *  content makes its subject obvious), so this is just breathing room
+     *  above the first content row. */
+    private static final float HEADER_H = 14f;
     private static final float PAD = 12f;
     /** Info-button size. Chunky (a clear tappable square, not a tiny glyph)
      *  so the "open the encyclopedia entry" affordance is obvious. */
     private static final float INFO = 40f;
     private static final float SECTION_GAP = 8f;
     private static final float DETAIL_INDENT = 12f;
+    /** Vertical breathing room after the title and between detail lines. With a
+     *  single subject on screen there's room to space things out for legibility. */
+    private static final float TITLE_GAP = 8f;
+    private static final float DETAIL_GAP = 6f;
     private static final float BUFF_ICON_SZ = 14f;
     private static final float BUFF_ICON_GAP = 2f;
     /** Height of the mob HP bar drawn in the look popup - chunky so the
@@ -69,6 +79,32 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private Mob lookedMob;
     private int cx, cy;
 
+    /** Terrain mode (no mob / item on the tile): the popup becomes a list of
+     *  Terrain / Material / Surface / Clouds rows instead of a section block. */
+    private boolean terrainMode;
+    private final List<TRow> terrainRows = new ArrayList<>();
+    private int pressedTerrainRow = -1;
+    /** Image cell + row geometry for the terrain list. */
+    private static final float ROW_IMG = 34f;
+    private static final float ROW_H   = 46f;
+
+    /** Item mode (floor item, no mob): a picture + name + flavour + level-aware
+     *  encyclopedia-style detail block, mirroring the inventory detail popup. */
+    private boolean itemMode;
+    private static final float ITEM_ICON = 64f;
+    private TextureRegion itemIcon;
+    private TextDraw.TextBlock itemNameBlock, itemFlavorBlock, itemDetailBlock;
+    private float itemIconY, itemNameTop, itemFlavorY, itemDetailY, itemSepY, itemUseNowY;
+
+    /** Mob mode: name+level, picture, description, tip, a "if you fought this
+     *  now" combat readout, special abilities, and a scrollable carried list. */
+    private boolean mobMode;
+    private static final float MOB_IMG_H = 64f;
+    private TextureRegion mobImage;
+    private float mobImgX, mobImgY, mobImgW;
+    private TextDraw.TextBlock mobNameBlock, mobDescBlock, mobTipBlock, mobCombatBlock, mobSpecialsBlock;
+    private float mobDescY, mobTipY, mobFightHdrY, mobCombatY, mobSpecialsY, mobCarryLabelY, mobSepY;
+
     private final List<Section> sections = new ArrayList<>();
 
     /** Looked-at mob's carried (bag) items, shown in their own scrollable frame
@@ -95,9 +131,23 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (!isOpen()) return;
         captureLookedAt();
         buildSections();
-        layoutRects();
-        renderShapesPass();
-        renderTextPass();
+        if (terrainMode) {
+            layoutTerrain();
+            renderTerrainShapes();
+            renderTerrainText();
+        } else if (itemMode) {
+            layoutItem();
+            renderItemShapes();
+            renderItemText();
+        } else if (mobMode) {
+            layoutMob();
+            renderMobShapes();
+            renderMobText();
+        } else {
+            layoutRects();
+            renderShapesPass();
+            renderTextPass();
+        }
     }
 
     private void captureLookedAt() {
@@ -142,118 +192,423 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private void buildSections() {
         sections.clear();
         carried.clear();
+        terrainMode = false;
+        itemMode = false;
+        mobMode = false;
         if (!inBounds()) {
             sections.add(new Section(TextCatalog.get("ui.look.noTile"), INFO_TERRAIN));
             return;
         }
-
-        Section terrain = new Section(floorSummary(), INFO_TERRAIN);
-        String moveHint = terrainMoveCostHint();
-        if (!moveHint.isEmpty()) terrain.details.add(moveHint);
-        sections.add(terrain);
-
-        if (lookedItem != null) {
-            Section item = new Section(ItemNames.displayName(lookedItem, null), INFO_ITEM);
-            // Flavor hint (one line) so the look popup says what the item *is*, not just
-            // its raw stats - tap the ⓘ for the full encyclopedia entry.
-            // Gems are procedural (null type); their description is stamped on
-            // the instance from strings.csv, so read it directly.
-            String hint = lookedItem.isGem()
-                    ? (lookedItem.description == null ? "" : lookedItem.description)
-                    : TextCatalog.itemDescription(lookedItem.type, "");
-            if (!hint.isEmpty()) item.details.add(hint);
-            String detail = itemSummary(lookedItem);
-            if (!detail.isEmpty()) item.details.add(detail);
-            sections.add(item);
-        }
-
+        // Priority display: a mob on the tile takes the whole window; failing
+        // that a floor item (picture + encyclopedia-style detail); failing that
+        // the terrain (Terrain / Material / Surface / Clouds list).
         if (lookedMob != null) {
-            Section mob = new Section(mobName(lookedMob), INFO_MOB);
-            // Flavor hint (one line) describing the creature.
-            String mobHint = lookedMob.mobType == null ? ""
-                    : TextCatalog.mobDescription(lookedMob.mobType, "");
-            if (!mobHint.isEmpty()) mob.details.add(mobHint);
-            // Mob HP - prominent bar + "23 / 64" numeric, shown for every
-            // looked mob (including the player themselves when looking at
-            // their own tile).
-            double maxHp = lookedMob.effectiveStats().maxHp;
-            int curHp = (int) Math.round(lookedMob.hp);
-            int maxHpInt = (int) Math.round(maxHp);
-            mob.hasHpBar = true;
-            mob.hpFrac = maxHp > 0 ? (float) (lookedMob.hp / maxHp) : 0f;
-            mob.hpText = curHp + " / " + maxHpInt;
-            Mob player = TurnSystem.findPlayer(level);
-            if (player != null && player != lookedMob) {
-                mob.details.add(TextCatalog.format("ui.look.mobHitRates",
-                        TextCatalog.vars("player", playerName(player),
-                                // {toHit} = "to hit {player}" -> this mob hitting the
-                                // player; {beHit} = "to be hit" -> this mob being hit by
-                                // the player. (Were crossed: the player's evasion drop
-                                // showed under the wrong label.)
-                                "toHit", percent(MobStats.hitChance(lookedMob, player)),
-                                "beHit", percent(MobStats.hitChance(player, lookedMob)))));
+            mobMode = true;           // rendered by layoutMob / renderMob*
+            if (lookedMob.inventory != null && lookedMob.inventory.bag != null) {
+                carried.addAll(lookedMob.inventory.bag);
             }
-            StatBlock s = lookedMob.effectiveStats();
-            if (!s.damage.isZero()) {
-                mob.details.add(TextCatalog.format("ui.look.mobMelee",
-                        TextCatalog.vars("damage", range(s.damage))));
-            }
-            if (!s.rangedDamage.isZero()) {
-                String type = lookedMob.rangedDamageType == Mob.RangedDamageType.PHYSICAL
-                        ? TextCatalog.get("ui.look.damageType.physical")
-                        : TextCatalog.get("ui.look.damageType.magic");
-                // One-line ranged summary - damage range + distance the shot
-                // can travel. Surfaces info the model already carries
-                // (rangedDistance) so players can plan around being out-
-                // ranged by crossbowmen / imps.
-                mob.details.add(TextCatalog.format("ui.look.mobRanged",
-                        TextCatalog.vars("type", type,
-                                "damage", range(s.rangedDamage),
-                                "range", s.rangedDistance)));
-            }
-            String state = compactMobState(lookedMob, player);
-            if (!state.isEmpty()) mob.details.add(state);
-            // Main levelled stats - armour / accuracy / evasion, the core
-            // combat numbers that scale with the mob's level (damage is shown
-            // on its own line above). Lets the player size up a foe at a glance.
-            mob.details.add(TextCatalog.format("ui.look.mobStats",
-                    TextCatalog.vars("armor", range(s.armor),
-                            "acc", s.accuracy,
-                            "eva", s.evasion)));
-            if (lookedMob.inventory != null) {
-                List<Item> gear = lookedMob.inventory.allEquipped();
-                if (!gear.isEmpty()) {
-                    StringBuilder sb = new StringBuilder();
-                    for (int gi = 0; gi < gear.size(); gi++) {
-                        if (gi > 0) sb.append(" · ");
-                        sb.append(ItemNames.displayName(gear.get(gi), null));
-                    }
-                    mob.details.add(TextCatalog.format("ui.look.mobEquipment",
-                            TextCatalog.vars("items", sb.toString())));
-                }
-                // Carried (un-equipped) bag items - e.g. an enemy player's
-                // bombs / wands / potions. These go into a dedicated scrollable
-                // frame at the bottom (built in layoutRects / rendered below the
-                // sections) instead of a single truncated detail line.
-                if (lookedMob.inventory.bag != null) carried.addAll(lookedMob.inventory.bag);
-            }
-            if (lookedMob.buffs != null) {
-                for (Buff b : lookedMob.buffs) {
-                    if (b == null || b.type == null) continue;
-                    // Cooldown buffs are internal accounting - not shown as clickable buff icons.
-                    if (com.bjsp123.rl2.logic.BuffSystem.isCooldownBuff(b.type)) continue;
-                    TextureRegion r = BuffIcons.regionFor(b.type);
-                    if (r != null) { mob.icons.add(r); mob.iconTypes.add(b.type); }
-                }
-            }
-            sections.add(mob);
+        } else if (lookedItem != null) {
+            itemMode = true;          // rendered by layoutItem / renderItem*
+        } else {
+            buildTerrainRows();
+            terrainMode = true;
         }
+    }
+
+    /** Terrain mode: the four fixed rows. Present things carry an image, a name
+     *  and an encyclopedia info button; absent ones read "none". */
+    private void buildTerrainRows() {
+        terrainRows.clear();
+        // Terrain - always present.
+        terrainRows.add(new TRow(TextCatalog.get("ui.look.row.terrain"),
+                terrainName(),
+                TileSprites.regionFor(lookedTile, level.theme), null, lookedTile));
+        // Material (vegetation).
+        Level.Vegetation veg = level.vegetation != null ? level.vegetation[cx][cy] : null;
+        terrainRows.add(veg == null
+                ? TRow.none(TextCatalog.get("ui.look.row.material"))
+                : new TRow(TextCatalog.get("ui.look.row.material"),
+                        describeVegetation(veg), SurfaceSprites.regionFor(veg), null, veg));
+        // Surface.
+        Level.Surface surf = level.surface != null ? level.surface[cx][cy] : null;
+        terrainRows.add(surf == null
+                ? TRow.none(TextCatalog.get("ui.look.row.surface"))
+                : new TRow(TextCatalog.get("ui.look.row.surface"),
+                        describeSurface(surf), SurfaceSprites.regionFor(surf), null, surf));
+        // Clouds - procedural, so a colour swatch stands in for the image.
+        Level.Cloud cloud = (level.cloud != null && level.cloud[cx][cy] != 0)
+                ? com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]) : null;
+        terrainRows.add(cloud == null
+                ? TRow.none(TextCatalog.get("ui.look.row.clouds"))
+                : new TRow(TextCatalog.get("ui.look.row.clouds"),
+                        TextCatalog.getOrDefault("ui.look.cloud." + cloud.name(), pretty(cloud.name())),
+                        null, cloudColor(cloud), cloud));
+    }
+
+    /** Cloud tint matching the in-world FxRenderer puffs (no sprite exists). */
+    private static Color cloudColor(Level.Cloud c) {
+        return switch (c) {
+            case SMOKE  -> new Color(0.35f, 0.35f, 0.38f, 1f);
+            case STEAM  -> new Color(0.85f, 0.88f, 0.92f, 1f);
+            case POISON -> new Color(0.30f, 0.70f, 0.28f, 1f);
+            case SPORE  -> new Color(0.74f, 0.66f, 0.30f, 1f);
+        };
+    }
+
+    // -- Terrain-list layout / render ----------------------------------------
+
+    private void layoutTerrain() {
+        float vw = ctx.worldW();
+        float vh = ctx.worldH();
+        float winW = Math.min(440f, vw - 28f);
+        float winH = Math.min(vh - 92f, HEADER_H + PAD * 2f + terrainRows.size() * ROW_H);
+        window.set((vw - winW) * 0.5f, vh - 78f - winH, winW, winH);
+
+        float y = window.top() - HEADER_H - PAD;   // top edge of the first row
+        for (TRow r : terrainRows) {
+            r.rowTop = y;
+            r.infoBtn.set(0, 0, 0, 0);
+            if (r.hasInfo()) {
+                r.infoBtn.set(window.right() - PAD - INFO,
+                        y - ROW_H + (ROW_H - INFO) * 0.5f, INFO, INFO);
+            }
+            y -= ROW_H;
+        }
+    }
+
+    private void renderTerrainShapes() {
+        ctx.applyProjection();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ShapeRenderer s = ctx.shapes;
+        s.begin(ShapeRenderer.ShapeType.Filled);
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
+
+        float imgX = window.x + PAD;
+        for (int i = 0; i < terrainRows.size(); i++) {
+            TRow r = terrainRows.get(i);
+            if (r.present()) {
+                float imgY = r.rowTop - ROW_H + (ROW_H - ROW_IMG) * 0.5f;
+                Edges.drawTriLine(s, imgX, imgY, ROW_IMG, ROW_IMG, 1f);
+                if (r.swatch != null) {           // procedural cloud - filled swatch
+                    s.setColor(r.swatch);
+                    s.rect(imgX + 3, imgY + 3, ROW_IMG - 6, ROW_IMG - 6);
+                }
+                if (r.hasInfo()) {
+                    ButtonChrome.shape(ctx, r.infoBtn, pressedTerrainRow == i,
+                            false, false, UIVars.BTN_BG);
+                }
+            }
+            if (i < terrainRows.size() - 1) {
+                Window.drawInfoSeparator(ctx, window.x + PAD, r.rowTop - ROW_H,
+                        window.w - PAD * 2f);
+            }
+        }
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private void renderTerrainText() {
+        ctx.batch.begin();
+        TextureRegion infoIcon = IconSprites.regionFor(IconSprites.Icon.INFO);
+        float imgX  = window.x + PAD;
+        float textX = imgX + ROW_IMG + 10f;
+        for (TRow r : terrainRows) {
+            float baseTop = r.rowTop - ROW_H * 0.5f + ctx.lineH() * 0.5f;
+            float tx = r.present() ? textX : imgX;
+            if (r.icon != null) {
+                float imgY = r.rowTop - ROW_H + (ROW_H - ROW_IMG) * 0.5f;
+                ctx.batch.draw(r.icon, imgX, imgY, ROW_IMG, ROW_IMG);
+            }
+            String lbl = r.label + ":";
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, lbl, tx, baseTop);
+            ctx.layout.setText(ctx.fontRegular, lbl + "  ");
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY, r.name,
+                    tx + ctx.layout.width, baseTop);
+            if (r.hasInfo()) {
+                ButtonChrome.icon(ctx, r.infoBtn, infoIcon, false, false);
+            }
+        }
+        ctx.batch.end();
+    }
+
+    // -- Item view (picture + encyclopedia-style, level-aware detail) --------
+
+    private void layoutItem() {
+        float vw = ctx.worldW();
+        float vh = ctx.worldH();
+        float winW = Math.min(480f, vw - 28f);
+        itemIcon = com.bjsp123.rl2.world.render.ItemSprites.regionFor(lookedItem);
+        Mob player = TurnSystem.findPlayer(level);
+        String name    = ItemNames.displayName(lookedItem, null);
+        String flavor  = com.bjsp123.rl2.ui.ItemLore.describeFlavor(lookedItem);
+        String details = com.bjsp123.rl2.ui.ItemLore.describeDetails(lookedItem, player);
+
+        float bodyW = winW - PAD * 2f;
+        float nameW = Math.max(40f, bodyW - ITEM_ICON - 10f - INFO);
+        itemNameBlock   = TextDraw.block(ctx.fontHeader,  name,    nameW, 2, ctx.headerLineH());
+        itemFlavorBlock = TextDraw.block(ctx.fontRegular, flavor,  bodyW, 4, ctx.lineH());
+        // Briefer than the full encyclopedia entry: cap the stat block.
+        itemDetailBlock = TextDraw.block(ctx.fontRegular, details, bodyW - DETAIL_INDENT, 12, ctx.lineH());
+
+        float useNowH = itemDetailBlock.height() > 0 ? ctx.lineH() + 2f : 0f;
+        float headerRowH = Math.max(ITEM_ICON, itemNameBlock.height());
+        float contentH = headerRowH;
+        if (itemFlavorBlock.height() > 0) contentH += TITLE_GAP + itemFlavorBlock.height();
+        if (itemDetailBlock.height() > 0) contentH += SECTION_GAP + useNowH + itemDetailBlock.height();
+        float winH = Math.min(vh - 92f, HEADER_H + PAD * 2f + contentH);
+        window.set((vw - winW) * 0.5f, vh - 78f - winH, winW, winH);
+
+        float topRow = window.top() - HEADER_H - PAD;
+        itemIconY  = topRow - ITEM_ICON;
+        itemNameTop = topRow - (headerRowH - itemNameBlock.height()) * 0.5f;
+        float y = topRow - headerRowH;
+        itemFlavorY = Float.NaN;
+        if (itemFlavorBlock.height() > 0) { y -= TITLE_GAP; itemFlavorY = y; y -= itemFlavorBlock.height(); }
+        itemSepY = Float.NaN; itemDetailY = Float.NaN; itemUseNowY = Float.NaN;
+        if (itemDetailBlock.height() > 0) {
+            itemSepY = y - SECTION_GAP * 0.5f;
+            y -= SECTION_GAP;
+            itemUseNowY = y;          // "If you used this item right now:" header
+            y -= useNowH;
+            itemDetailY = y;
+        }
+        itemInfoBtn.set(window.right() - PAD - INFO, topRow - INFO + 5f, INFO, INFO);
+    }
+
+    private void renderItemShapes() {
+        ctx.applyProjection();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ShapeRenderer s = ctx.shapes;
+        s.begin(ShapeRenderer.ShapeType.Filled);
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
+        // Picture cell.
+        Edges.drawTriLine(s, window.x + PAD, itemIconY, ITEM_ICON, ITEM_ICON, 1f);
+        if (encyclopedia != null && lookedItem != null) {
+            ButtonChrome.shape(ctx, itemInfoBtn, pressedInfo == INFO_ITEM, false, false, UIVars.BTN_BG);
+        }
+        if (!Float.isNaN(itemSepY)) {
+            Window.drawInfoSeparator(ctx, window.x + PAD, itemSepY, window.w - PAD * 2f);
+        }
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private void renderItemText() {
+        ctx.batch.begin();
+        float ix = window.x + PAD;
+        if (itemIcon != null) ctx.batch.draw(itemIcon, ix, itemIconY, ITEM_ICON, ITEM_ICON);
+        TextDraw.wrapped(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
+                itemNameBlock, ix + ITEM_ICON + 10f, itemNameTop);
+        if (!Float.isNaN(itemFlavorY)) {
+            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                    itemFlavorBlock, ix, itemFlavorY);
+        }
+        if (!Float.isNaN(itemUseNowY)) {
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.ACCENT,
+                    TextCatalog.get("ui.look.itemUseNow"), ix, itemUseNowY);
+        }
+        if (!Float.isNaN(itemDetailY)) {
+            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    itemDetailBlock, ix + DETAIL_INDENT, itemDetailY);
+        }
+        if (encyclopedia != null && lookedItem != null) {
+            ButtonChrome.icon(ctx, itemInfoBtn,
+                    IconSprites.regionFor(IconSprites.Icon.INFO), pressedInfo == INFO_ITEM, false);
+        }
+        ctx.batch.end();
+    }
+
+    private static final class TRow {
+        final String label;
+        final String name;
+        final TextureRegion icon;   // nullable (clouds have no sprite)
+        final Color swatch;         // nullable; set for clouds (drawn as a swatch)
+        final Object encId;         // encyclopedia id; null when this row is "none"
+        final Rect infoBtn = new Rect();
+        float rowTop;
+
+        TRow(String label, String name, TextureRegion icon, Color swatch, Object encId) {
+            this.label = label; this.name = name;
+            this.icon = icon; this.swatch = swatch; this.encId = encId;
+        }
+
+        static TRow none(String label) {
+            return new TRow(label, TextCatalog.get("ui.look.none"), null, null, null);
+        }
+
+        boolean present() { return encId != null; }
+        boolean hasInfo() { return encId != null; }
+    }
+
+    // -- Mob view (name+level, picture, description, tip, combat readout,
+    //    special abilities, scrollable carried list) --------------------------
+
+    private void layoutMob() {
+        float vw = ctx.worldW(), vh = ctx.worldH();
+        float winW = Math.min(480f, vw - 28f);
+        float bodyW = winW - PAD * 2f;
+        Mob m = lookedMob;
+        Mob player = TurnSystem.findPlayer(level);
+
+        String name = mobName(m);
+        String desc = m.mobType != null ? TextCatalog.mobDescription(m.mobType, "") : "";
+        if ((desc == null || desc.isEmpty()) && m.description != null) desc = m.description;
+        String tip = m.mobType != null ? TextCatalog.getOrDefault("mob." + m.mobType + ".tip", "") : "";
+        String combat = buildMobCombat(m, player);
+        String specials = com.bjsp123.rl2.ui.MobLore.describeSpecials(m);
+        mobImage = com.bjsp123.rl2.world.render.MobSprites.regionFor(m);
+
+        mobNameBlock     = TextDraw.block(ctx.fontHeader,  name,     bodyW - INFO - 8f, 2, ctx.headerLineH());
+        mobDescBlock     = TextDraw.block(ctx.fontRegular, desc,     bodyW, 4, ctx.lineH());
+        mobTipBlock      = TextDraw.block(ctx.fontRegular, tip,      bodyW, 3, ctx.lineH());
+        mobCombatBlock   = TextDraw.block(ctx.fontRegular, combat,   bodyW - DETAIL_INDENT, 4, ctx.lineH());
+        mobSpecialsBlock = TextDraw.block(ctx.fontRegular, specials, bodyW - DETAIL_INDENT, 8, ctx.lineH());
+
+        float imgH = MOB_IMG_H;
+        mobImgW = (mobImage != null && mobImage.getRegionHeight() > 0)
+                ? MOB_IMG_H * mobImage.getRegionWidth() / (float) mobImage.getRegionHeight()
+                : MOB_IMG_H;
+
+        float rowH = ctx.lineH();
+        boolean hasCarried = !carried.isEmpty();
+        float carriedFrameH = 0f, carriedBlockH = 0f;
+        if (hasCarried) {
+            int visRows = Math.min(carried.size(), MAX_CARRIED_ROWS);
+            carriedFrameH = visRows * rowH;
+            carriedBlockH = SECTION_GAP + rowH + carriedFrameH;
+        }
+
+        float gap = 6f;
+        float contentH = mobNameBlock.height()
+                + gap + imgH
+                + (mobDescBlock.height()  > 0 ? gap + mobDescBlock.height()  : 0)
+                + (mobTipBlock.height()   > 0 ? gap + mobTipBlock.height()   : 0)
+                + SECTION_GAP + rowH
+                + gap + mobCombatBlock.height()
+                + (mobSpecialsBlock.height() > 0 ? SECTION_GAP + mobSpecialsBlock.height() : 0)
+                + carriedBlockH;
+        float winH = Math.min(vh - 40f, HEADER_H + PAD * 2f + contentH);
+        window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
+
+        float ix = window.x + PAD;
+        float y = window.top() - HEADER_H - PAD;
+        mobInfoBtn.set(window.right() - PAD - INFO, y - INFO + 5f, INFO, INFO);
+        y -= mobNameBlock.height();
+        y -= gap;
+        mobImgX = window.cx() - mobImgW * 0.5f;
+        mobImgY = y - imgH;
+        y -= imgH;
+        mobDescY = Float.NaN;
+        if (mobDescBlock.height() > 0) { y -= gap; mobDescY = y; y -= mobDescBlock.height(); }
+        mobTipY = Float.NaN;
+        if (mobTipBlock.height() > 0) { y -= gap; mobTipY = y; y -= mobTipBlock.height(); }
+        y -= SECTION_GAP;
+        mobSepY = y + SECTION_GAP * 0.5f;
+        mobFightHdrY = y;
+        y -= rowH;
+        y -= gap;
+        mobCombatY = y;
+        y -= mobCombatBlock.height();
+        mobSpecialsY = Float.NaN;
+        if (mobSpecialsBlock.height() > 0) { y -= SECTION_GAP; mobSpecialsY = y; y -= mobSpecialsBlock.height(); }
+        mobCarryLabelY = Float.NaN;
+        if (hasCarried) {
+            y -= SECTION_GAP;
+            mobCarryLabelY = y;
+            float frameX = ix + DETAIL_INDENT;
+            float frameW = window.right() - PAD - frameX;
+            float frameTop = y - rowH - 2f;
+            carriedBand.set(frameX, frameTop - carriedFrameH, frameW, carriedFrameH);
+            carriedBand.update(carried.size() * rowH);
+        }
+    }
+
+    private String buildMobCombat(Mob m, Mob player) {
+        StatBlock s = m.effectiveStats();
+        StringBuilder sb = new StringBuilder();
+        if (player != null && player != m) {
+            sb.append(TextCatalog.format("ui.look.fight.toHit",
+                    TextCatalog.vars("pct", percent(MobStats.hitChance(player, m))))).append('\n');
+            sb.append(TextCatalog.format("ui.look.fight.toBeHit",
+                    TextCatalog.vars("pct", percent(MobStats.hitChance(m, player))))).append('\n');
+        }
+        if (!s.damage.isZero()) {
+            sb.append(TextCatalog.format("ui.look.fight.damage",
+                    TextCatalog.vars("damage", range(s.damage)))).append('\n');
+        }
+        if (!s.rangedDamage.isZero()) {
+            sb.append(TextCatalog.format("ui.look.fight.ranged",
+                    TextCatalog.vars("damage", range(s.rangedDamage), "range", s.rangedDistance))).append('\n');
+        }
+        return sb.toString().trim();
+    }
+
+    private void renderMobShapes() {
+        ctx.applyProjection();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        ShapeRenderer s = ctx.shapes;
+        s.begin(ShapeRenderer.ShapeType.Filled);
+        Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
+        if (encyclopedia != null) {
+            ButtonChrome.shape(ctx, mobInfoBtn, pressedInfo == INFO_MOB, false, false, UIVars.BTN_BG);
+        }
+        Window.drawInfoSeparator(ctx, window.x + PAD, mobSepY, window.w - PAD * 2f);
+        if (!carried.isEmpty() && carriedBand.height() > 0f) {
+            Edges.drawTriLine(s, carriedBand.rect.x, carriedBand.rect.y,
+                    carriedBand.rect.w, carriedBand.rect.h, 1f);
+            carriedBand.drawScrollbar(s, carried.size() * ctx.lineH());
+        }
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private void renderMobText() {
+        ctx.batch.begin();
+        float ix = window.x + PAD;
+        TextDraw.wrapped(ctx, ctx.fontHeader, UIVars.TEXT_BODY,
+                mobNameBlock, ix, window.top() - HEADER_H - PAD);
+        if (encyclopedia != null) {
+            ButtonChrome.icon(ctx, mobInfoBtn,
+                    IconSprites.regionFor(IconSprites.Icon.INFO), pressedInfo == INFO_MOB, false);
+        }
+        if (mobImage != null) ctx.batch.draw(mobImage, mobImgX, mobImgY, mobImgW, MOB_IMG_H);
+        if (!Float.isNaN(mobDescY)) {
+            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, mobDescBlock, ix, mobDescY);
+        }
+        if (!Float.isNaN(mobTipY)) {
+            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM, mobTipBlock, ix, mobTipY);
+        }
+        TextDraw.left(ctx, ctx.fontRegular, UIVars.ACCENT,
+                TextCatalog.get("ui.look.fightHeader"), ix, mobFightHdrY);
+        TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, mobCombatBlock, ix + DETAIL_INDENT, mobCombatY);
+        if (!Float.isNaN(mobSpecialsY)) {
+            TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_BODY, mobSpecialsBlock, ix + DETAIL_INDENT, mobSpecialsY);
+        }
+        if (!carried.isEmpty() && !Float.isNaN(mobCarryLabelY)) {
+            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
+                    TextCatalog.get("ui.look.carrying"), ix, mobCarryLabelY);
+            float rowH = ctx.lineH();
+            carriedBand.clip(ctx, () -> {
+                for (int i = 0; i < carried.size(); i++) {
+                    float rowTop = carriedBand.rowTop(i, rowH);
+                    if (!carriedBand.rowVisible(rowTop, rowH)) continue;
+                    TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                            ItemNames.displayName(carried.get(i), null),
+                            carriedBand.rect.x + 2f, rowTop - rowH + 4f,
+                            carriedBand.rect.w - 6f);
+                }
+            });
+        }
+        ctx.batch.end();
     }
 
     private void layoutRects() {
         float vw = ctx.worldW();
         float vh = ctx.worldH();
-        float winW = Math.min(430f, vw - 28f);
+        float winW = Math.min(500f, vw - 28f);
         float textW = Math.max(20f, winW - PAD * 2f - INFO - 8f);
         float detailW = Math.max(20f, winW - PAD * 2f - DETAIL_INDENT);
         float sectionsH = measureSections(textW, detailW);
@@ -308,7 +663,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             sec.detailBlocks.clear();
             for (String detail : sec.details) {
                 sec.detailBlocks.add(TextDraw.block(ctx.fontRegular, detail,
-                        detailW, 2, lineH));
+                        detailW, 3, lineH));
             }
             total += sec.height();
             if (i < sections.size() - 1) total += SECTION_GAP;
@@ -336,8 +691,6 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // uses the lighter info-window fill. The user-facing signal is the
         // contrast against interactive windows like inventory or settings.
         Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
-        s.setColor(UIVars.BORDER_MID);
-        s.rect(window.x + 6f, window.top() - HEADER_H, window.w - 12f, 1f);
 
         if (encyclopedia != null && lookedTile != null) {
             ButtonChrome.shape(ctx, terrainInfoBtn, pressedInfo == INFO_TERRAIN,
@@ -360,6 +713,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         for (int i = 0; i < sections.size(); i++) {
             Section sec = sections.get(i);
             if (sec.titleBlock != null) y -= sec.titleBlock.height();
+            if (sec.hasBelowTitle()) y -= TITLE_GAP;
             if (sec.hasHpBar) {
                 float barX = textLeft + DETAIL_INDENT;
                 float barW = Math.max(20f, textRight - barX);
@@ -374,7 +728,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 }
                 y -= HP_BAR_H + HP_BAR_GAP;
             }
-            for (TextDraw.TextBlock detail : sec.detailBlocks) y -= detail.height();
+            for (TextDraw.TextBlock detail : sec.detailBlocks) y -= detail.height() + DETAIL_GAP;
             y -= sec.iconRowH();
             // Consume any reserved padding (info-button minimum height) so the next
             // section lines up with its info button.
@@ -405,9 +759,6 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         buffHitRects.clear();
         buffHitTypes.clear();
         ctx.batch.begin();
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                TextCatalog.get("ui.look.title"),
-                window.cx(), window.top() - ctx.headerLineH() * 0.75f);
 
         float y = window.top() - HEADER_H - PAD;
         float textLeft = window.x + PAD;
@@ -422,6 +773,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                         pressedInfo == sec.infoKind, false);
             }
             y -= sec.titleBlock.height();
+            if (sec.hasBelowTitle()) y -= TITLE_GAP;
             float detailX = textLeft + DETAIL_INDENT;
             if (sec.hasHpBar) {
                 float barX = detailX;
@@ -436,7 +788,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             for (TextDraw.TextBlock detail : sec.detailBlocks) {
                 TextDraw.wrapped(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
                         detail, detailX, y);
-                y -= detail.height();
+                y -= detail.height() + DETAIL_GAP;
             }
             if (!sec.icons.isEmpty()) {
                 float iconY = y - BUFF_ICON_SZ;
@@ -479,80 +831,14 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         ctx.batch.end();
     }
 
-    /** Surface a tile's move-cost multiplier when it differs from the
-     *  default (1x). Today the only mechanism is the OIL surface (doubles
-     *  base move cost - see {@code MobSystem.moveCostOnto}); returns empty
-     *  string for default tiles. Pulled into the V2Look terrain section so
-     *  players can predict slowdown without stepping into the puddle. */
-    private String terrainMoveCostHint() {
-        if (!inBounds() || level.surface == null) return "";
-        com.bjsp123.rl2.model.Level.Surface s = level.surface[cx][cy];
-        if (s == com.bjsp123.rl2.model.Level.Surface.OIL) {
-            return TextCatalog.format("ui.look.terrainMoveCost",
-                    TextCatalog.vars("mult", "2"));
-        }
-        return "";
-    }
-
-    private String floorSummary() {
-        String terrain = TextCatalog.getOrDefault("level.theme." + level.theme.name(),
+    /** Theme + tile name, e.g. "Crystal floor". Surface / vegetation / cloud are
+     *  listed as their own lines by {@link #buildTerrainRows}. */
+    private String terrainName() {
+        return TextCatalog.getOrDefault("level.theme." + level.theme.name(),
                 pretty(level.theme.name())) + " "
                 + TextCatalog.getOrDefault("tile." + lookedTile.name(), pretty(lookedTile.name()));
-        List<String> features = new ArrayList<>(3);
-        if (level.surface != null && level.surface[cx][cy] != null) {
-            features.add(describeSurface(level.surface[cx][cy]));
-        }
-        if (level.vegetation != null && level.vegetation[cx][cy] != null) {
-            features.add(describeVegetation(level.vegetation[cx][cy]));
-        }
-        if (level.cloud != null && level.cloud[cx][cy] != 0) {
-            Level.Cloud c = com.bjsp123.rl2.logic.CloudSystem.type(level.cloud[cx][cy]);
-            if (c != null) features.add(TextCatalog.getOrDefault(
-                    "ui.look.cloud." + c.name(), pretty(c.name())));
-        }
-        if (features.isEmpty()) {
-            return TextCatalog.format("ui.look.floorSummary",
-                    TextCatalog.vars("terrain", terrain));
-        }
-        return TextCatalog.format("ui.look.floorSummaryWith",
-                TextCatalog.vars("terrain", terrain, "features", joinFeatures(features)));
     }
 
-    private static String itemSummary(Item it) {
-        List<String> bits = new ArrayList<>(4);
-        MinMax dmg = itemDamageWithBrand(it);
-        if (!dmg.isZero()) {
-            bits.add(TextCatalog.format("ui.look.itemDamage",
-                    TextCatalog.vars("damage", range(dmg))));
-        }
-        MinMax arm = ItemStats.effectiveArmorRange(it);
-        if (!arm.isZero()) {
-            bits.add(TextCatalog.format("ui.look.itemArmor",
-                    TextCatalog.vars("armor", range(arm))));
-        }
-        if (it.brand != null && it.brand.element != null) {
-            bits.add(TextCatalog.getOrDefault("ui.look.brandEffect." + it.brand.element.name(),
-                    TextCatalog.get("ui.look.brandEffect.generic")));
-        } else if (it.isThrowable()
-                && it.throwEffect != null
-                && it.throwEffect != Item.ItemEffect.DAMAGE) {
-            // get() (not getOrDefault) so a missing key shows as ??key?? in
-            // the UI instead of an empty pill - lets us catch un-translated
-            // enum values during playtest.
-            bits.add(TextCatalog.get("item.effect." + it.throwEffect.name()));
-        } else if (it.useBehavior != null && it.useBehavior != Item.UseBehavior.NONE) {
-            bits.add(TextCatalog.get("item.useVerb." + it.useBehavior.name()));
-        }
-        return String.join("  ", bits);
-    }
-
-    private static MinMax itemDamageWithBrand(Item it) {
-        MinMax dmg = ItemStats.effectiveDamageRange(it);
-        if (it != null && it.brand != null && it.brand.damage > 0) {
-            dmg = dmg.plus(new MinMax(it.brand.damage, it.brand.damage));
-        }
-        return dmg;
-    }
 
     private String mobName(Mob m) {
         String name = m.name != null ? m.name : TextCatalog.get("ui.look.mobFallback");
@@ -562,93 +848,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 : name;
     }
 
-    private String compactMobState(Mob m, Mob player) {
-        List<String> bits = new ArrayList<>(3);
-        if (player != null && player != m) {
-            bits.add(attitudeLabel(player, m));
-        }
-        if (m.isPlayer) {
-            bits.add(TextCatalog.get("ui.look.state.player"));
-        } else if (m.stateOfMind != null) {
-            bits.add(switch (m.stateOfMind) {
-                case ASLEEP -> TextCatalog.get("ui.look.state.asleep");
-                case AWAKE -> TextCatalog.get("ui.look.state.awake");
-                case SEEKING_HIDING -> TextCatalog.get("ui.look.state.seekingHiding");
-                case HIDING -> TextCatalog.get("ui.look.state.hiding");
-                case FOLLOWING -> TextCatalog.get("ui.look.state.following");
-            });
-            // SMART AI mobs set intentDetail to a human-readable goal/action label
-            // (e.g. "SURVIVE: drink Lesser Healing"). Prefer that over the enum bucket
-            // when present so the look popup shows what the planner actually picked.
-            if (m.intentDetail != null && !m.intentDetail.isEmpty()) {
-                bits.add(m.intentDetail);
-            } else {
-                String intentLabel = intentLabel(m.intent);
-                if (!intentLabel.isEmpty()) bits.add(intentLabel);
-            }
-        }
-        return String.join("  ", bits);
-    }
-
-    private static String intentLabel(Mob.Intent intent) {
-        if (intent == null) return "";
-        return switch (intent) {
-            case IDLE            -> TextCatalog.get("ui.look.intent.idle");
-            case CONSIDERING     -> TextCatalog.get("ui.look.intent.considering");
-            case WANDERING       -> TextCatalog.get("ui.look.intent.wandering");
-            case PURSUING        -> TextCatalog.get("ui.look.intent.pursuing");
-            case CHASING_LAST_KNOWN -> TextCatalog.get("ui.look.intent.chasing");
-            case SHOOTING        -> TextCatalog.get("ui.look.intent.shooting");
-            case KITING          -> TextCatalog.get("ui.look.intent.kiting");
-            case FLEEING         -> TextCatalog.get("ui.look.intent.fleeing");
-            case FOLLOWING_LEADER -> TextCatalog.get("ui.look.intent.following");
-            case USING_ABILITY   -> TextCatalog.get("ui.look.intent.usingAbility");
-            case USING_ITEM      -> TextCatalog.get("ui.look.intent.usingItem");
-            case RELOADING       -> TextCatalog.get("ui.look.intent.reloading");
-        };
-    }
-
-    private static String playerName(Mob player) {
-        if (player.name != null && !player.name.isEmpty()) return player.name;
-        return player.characterClass != null ? player.characterClass.displayName()
-                : TextCatalog.get("eventlog.fallback.adventurer");
-    }
-
-    private static String attitudeLabel(Mob viewer, Mob target) {
-        com.bjsp123.rl2.logic.MobSystem.Attitude a =
-                com.bjsp123.rl2.logic.MobSystem.getAttitudeToMob(target, viewer);
-        if (a == null) return "";
-        return switch (a) {
-            case ATTACK -> TextCatalog.get("ui.look.attitude.attack");
-            case FLEE -> TextCatalog.get("ui.look.attitude.flee");
-            case NOTHING -> TextCatalog.get("ui.look.attitude.nothing");
-            case ALLY -> TextCatalog.get("ui.look.attitude.ally");
-        };
-    }
-
     private static String describeSurface(Level.Surface s) {
         return TextCatalog.get("ui.look.surface." + s.name().toLowerCase());
     }
 
     private static String describeVegetation(Level.Vegetation v) {
         return TextCatalog.get("ui.look.terrain." + v.name().toLowerCase());
-    }
-
-    private static String joinFeatures(List<String> xs) {
-        if (xs.isEmpty()) return "";
-        if (xs.size() == 1) return xs.get(0);
-        if (xs.size() == 2) {
-            return TextCatalog.format("ui.list.two",
-                    TextCatalog.vars("a", xs.get(0), "b", xs.get(1)));
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < xs.size(); i++) {
-            if (i > 0) sb.append(i == xs.size() - 1
-                    ? TextCatalog.get("ui.list.finalSep")
-                    : TextCatalog.get("ui.list.sep"));
-            sb.append(xs.get(i));
-        }
-        return sb.toString();
     }
 
     private static int percent(double p) {
@@ -674,7 +879,18 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 float vy = ctx.unprojectY(sx, sy);
                 pressedInfo = 0;
                 pressedBuff = -1;
+                pressedTerrainRow = -1;
                 carriedBand.touchDown(vx, vy);   // prime carried-list drag
+                // Terrain mode: a tap on a present row's info button.
+                if (terrainMode && encyclopedia != null) {
+                    for (int i = 0; i < terrainRows.size(); i++) {
+                        TRow r = terrainRows.get(i);
+                        if (r.hasInfo() && r.infoBtn.contains(vx, vy)) {
+                            pressedTerrainRow = i;
+                            return true;
+                        }
+                    }
+                }
                 if (encyclopedia != null && lookedTile != null && terrainInfoBtn.contains(vx, vy)) {
                     pressedInfo = INFO_TERRAIN;
                     return true;
@@ -709,8 +925,19 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 float vy = ctx.unprojectY(sx, sy);
                 int info = pressedInfo;
                 int buff = pressedBuff;
+                int trow = pressedTerrainRow;
                 pressedInfo = 0;
                 pressedBuff = -1;
+                pressedTerrainRow = -1;
+                if (terrainMode && trow >= 0 && trow < terrainRows.size()) {
+                    TRow r = terrainRows.get(trow);
+                    if (r.hasInfo() && r.infoBtn.contains(vx, vy)) {
+                        Object id = r.encId;
+                        if (lookMode != null) lookMode.toggle();
+                        encyclopedia.openTo(id);
+                        return true;
+                    }
+                }
                 if (info == INFO_TERRAIN && terrainInfoBtn.contains(vx, vy) && lookedTile != null) {
                     Tile t = lookedTile;
                     if (lookMode != null) lookMode.toggle();
@@ -793,11 +1020,18 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             return hasHpBar ? HP_BAR_H + HP_BAR_GAP : 0f;
         }
 
-        /** Height of the section's actual content (title + hp bar + details + icons). */
+        /** True when anything is drawn below the title (so a gap is warranted). */
+        boolean hasBelowTitle() {
+            return hasHpBar || !detailBlocks.isEmpty() || !icons.isEmpty();
+        }
+
+        /** Height of the section's actual content (title + hp bar + details + icons),
+         *  including the title gap and per-detail spacing. */
         float contentHeight() {
             float h = titleBlock == null ? 0f : titleBlock.height();
+            if (hasBelowTitle()) h += TITLE_GAP;
             h += hpBarRowH();
-            for (TextDraw.TextBlock block : detailBlocks) h += block.height();
+            for (TextDraw.TextBlock block : detailBlocks) h += block.height() + DETAIL_GAP;
             h += iconRowH();
             return h;
         }

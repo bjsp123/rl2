@@ -63,7 +63,7 @@ public enum Perk {
      *  Chebyshev range of the holder as transparent. Beyond that range,
      *  those tiles still block sight normally. */
     KEEN_SIGHT,
-    /** Open. Grants the reactive PHASE_DODGE: when about to take damage, the holder
+    /** Open. Grants the reactive WRAITH_DODGE: when about to take damage, the holder
      *  slides to a free adjacent square and negates the whole hit, then goes on cooldown.
      *  Cooldown length = {@code 11 - perkLvl} turns (L1 = 10, L10 = 1). */
     DODGE;

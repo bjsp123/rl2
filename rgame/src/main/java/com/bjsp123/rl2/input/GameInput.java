@@ -20,11 +20,12 @@ public class GameInput extends InputAdapter {
 
     private float touchStartX, touchStartY;
     private Runnable onInteract;
+    private Runnable onBeaconActivate;
     private Runnable onInventoryToggle;
     private Runnable onLookToggle;
     private Runnable onCharacterToggle;
     /** Invoked with a 0-based action-bar slot index when the user presses a number key
-     *  (1 -> slot 0, 2 -> slot 1, ..., up to {@link com.bjsp123.rl2.ui.hud.ActionBar#SLOTS}). */
+     *  (1 -> slot 0, 2 -> slot 1, ..., up to the live {@code Settings.quickslotCount()}). */
     private java.util.function.IntConsumer onActionSlot;
 
     public GameInput(World world, OrthographicCamera camera, CameraController cameraController) {
@@ -36,6 +37,12 @@ public class GameInput extends InputAdapter {
     }
 
     public void setInteractHandler(Runnable onInteract) { this.onInteract = onInteract; }
+
+    /** Wired by PlayScreen: opens the teleport-enabled map when the player walks
+     *  into (or taps) an adjacent beacon. */
+    public void setBeaconActivate(Runnable onBeaconActivate) {
+        this.onBeaconActivate = onBeaconActivate;
+    }
 
     /** Wired by PlayScreen to {@link com.bjsp123.rl2.ui.popup.InventoryRenderer#toggle}. The
      *  inventory's own scene2d listener handles {@code i} only after it has keyboard focus
@@ -58,8 +65,8 @@ public class GameInput extends InputAdapter {
         this.onCharacterToggle = onCharacterToggle;
     }
 
-    /** Wired by PlayScreen to {@code triggerActionSlot}. Number keys 1..{@link
-     *  com.bjsp123.rl2.ui.hud.ActionBar#SLOTS} fire this with a 0-based slot index. */
+    /** Wired by PlayScreen to {@code triggerActionSlot}. Number keys up to the live
+     *  {@code Settings.quickslotCount()} fire this with a 0-based slot index. */
     public void setActionSlotHandler(java.util.function.IntConsumer onActionSlot) {
         this.onActionSlot = onActionSlot;
     }
@@ -116,8 +123,20 @@ public class GameInput extends InputAdapter {
         if (isGemHearth(target.tileX(), target.tileY())) {
             if (onInteract != null) { onInteract.run(); return true; }
         }
+        // Stepping into a beacon opens the teleport map rather than bonking.
+        if (isBeacon(target.tileX(), target.tileY())) {
+            if (onBeaconActivate != null) { onBeaconActivate.run(); return true; }
+        }
         player.targetPosition = target;
         return true;
+    }
+
+    /** True when ({@code x},{@code y}) on the current level is a beacon tile. */
+    private boolean isBeacon(int x, int y) {
+        com.bjsp123.rl2.model.Level lvl = world.currentLevel();
+        if (lvl == null || lvl.tiles == null) return false;
+        if (x < 0 || y < 0 || x >= lvl.width || y >= lvl.height) return false;
+        return lvl.tiles[x][y].isBeacon();
     }
 
     /** True when ({@code x},{@code y}) on the current level is a gem-hearth tile. */
@@ -180,6 +199,12 @@ public class GameInput extends InputAdapter {
                 && Math.max(Math.abs(tileX - player.position.tileX()),
                             Math.abs(tileY - player.position.tileY())) == 1) {
             if (onInteract != null) { onInteract.run(); return true; }
+        }
+        // Tapping an adjacent beacon opens the teleport map.
+        if (isBeacon(tileX, tileY)
+                && Math.max(Math.abs(tileX - player.position.tileX()),
+                            Math.abs(tileY - player.position.tileY())) == 1) {
+            if (onBeaconActivate != null) { onBeaconActivate.run(); return true; }
         }
 
         player.targetPosition = new Point(tileX, tileY);

@@ -100,6 +100,7 @@ public class PlayScreen implements Screen {
     private com.bjsp123.rl2.ui.v2.V2BuffInfo v2BuffInfo;
     private com.bjsp123.rl2.ui.v2.V2Log v2Log;
     private com.bjsp123.rl2.ui.v2.V2TipPopup v2TipPopup;
+    private com.bjsp123.rl2.ui.v2.V2GameStartTipPopup v2GameStartTipPopup;
 
     /** Input adapter slotted FIRST in the multiplexer (right after the
      *  camera controller). Consumes a tap when the tip popup is showing,
@@ -114,6 +115,26 @@ public class PlayScreen implements Screen {
                 float vy = game.ui.unprojectY(sx, sy);
                 return v2TipPopup.handleClick(vx, vy);
             }
+        };
+    }
+
+    /** Input adapter placed at the head of the multiplexer for the
+     *  game-start tip phase. While {@link #introTipPhase} is set the popup
+     *  is modal: every touch goes to its arrow / dismiss handler and never
+     *  reaches downstream processors (notably {@link #introSkipInput} which
+     *  would otherwise end the intro early). */
+    private com.badlogic.gdx.InputAdapter gameStartTipInput() {
+        return new com.badlogic.gdx.InputAdapter() {
+            @Override
+            public boolean touchDown(int sx, int sy, int pointer, int button) {
+                if (!introTipPhase || v2GameStartTipPopup == null) return false;
+                float vx = game.ui.unprojectX(sx, sy);
+                float vy = game.ui.unprojectY(sx, sy);
+                v2GameStartTipPopup.handleClick(vx, vy);
+                return true;
+            }
+            @Override public boolean keyDown(int k) { return introTipPhase; }
+            @Override public boolean scrolled(float ax, float ay) { return introTipPhase; }
         };
     }
 
@@ -220,8 +241,10 @@ public class PlayScreen implements Screen {
     /** Counts up each render frame AFTER the in-world death animation has
      *  completed (ghost faded, freeze frames drained). When this reaches
      *  {@link #DEATH_FADE_FRAMES} the V2GameOver transition fires. The fade
-     *  overlay's alpha is {@code deathFadeFrame / DEATH_FADE_FRAMES}. */
-    private int deathFadeFrame;
+     *  overlay's alpha is {@code deathFadeFrame / DEATH_FADE_FRAMES}. Advanced
+     *  by the dt-scaled frame delta so the fade lasts the same wall-clock time
+     *  at any refresh rate. */
+    private float deathFadeFrame;
 
     /** Victory transition (RL-19): latched when the player steps onto the escape
      *  stairs after defeating the Great Wraith. Mirrors the death transition but
@@ -229,7 +252,17 @@ public class PlayScreen implements Screen {
     private boolean victoryTransitionPending;
     /** Counts up once the victory transition is latched; the V2GameOver (victory)
      *  swap fires at {@link #DEATH_FADE_FRAMES}. */
-    private int victoryFadeFrame;
+    private float victoryFadeFrame;
+
+    /** Jade Peach revive cinematic (>=0 while playing): the level fades to black,
+     *  the peach appears over a sunburst and bursts, then the level fades back in.
+     *  The game is frozen for the duration. -1 = inactive. */
+    private float reviveCinematicFrame = -1;
+    private static final int REVIVE_FADE_OUT  = 14;  // black ramps in
+    private static final int REVIVE_GROW_END  = 44;  // peach finished growing
+    private static final int REVIVE_EXPLODE   = 50;  // peach bursts
+    private static final int REVIVE_FADE_IN   = 60;  // black starts ramping out
+    private static final int REVIVE_TOTAL     = 84;  // cinematic ends
 
     /** Camera zoom the death outro pulls back to as the screen fades (RL-56).
      *  Larger = more zoomed out; the pull-back mirrors the intro zoom-in. */
@@ -257,6 +290,13 @@ public class PlayScreen implements Screen {
     /** True while the level-side fade-in from black is running (after the graph
      *  has dipped to black and control passed to the level phase). */
     private boolean introFadeActive;
+    /** True while the game-start tip window is up - sits between the graph
+     *  fly-in and the level zoom-in. World, HUD and input are inert; the
+     *  popup is modal and any click on it (other than its prev/next arrows)
+     *  dismisses, after which {@link #introFadeActive} arms the level
+     *  zoom-in. Never set for resumed runs or when {@code tip.csv} is
+     *  empty / tips are disabled. */
+    private boolean introTipPhase;
     /** Real-time accumulator (seconds) driving the level-side fade-in. */
     private float introFadeTime;
 
@@ -277,6 +317,19 @@ public class PlayScreen implements Screen {
      *  (current node fills the view). Larger = more zoomed in. */
     private static final float GRAPH_ZOOM_START = 0.6f;
     private static final float GRAPH_ZOOM_END   = 2.6f;
+
+    // --- Outro cinematic (RL-58): touching the exit-portal beacon zooms out
+    //     from the level to the world map, dissolves the world to white from
+    //     the deepest level up (beacons explode, levels flash + ring), lightens
+    //     the swirl to full white, then shows the victory screen. ---
+    private boolean outroActive;
+    private float   outroTime;
+    /** World-graph zoom-out + white-dissolve duration. */
+    private static final float OUTRO_GRAPH_SEC  = 2.2f;
+    /** Final ramp to a fully white screen after the dissolve. */
+    private static final float OUTRO_WHITE_SEC  = 1.0f;
+    private static final float OUTRO_ZOOM_START = GRAPH_ZOOM_END;   // focused on the exit node
+    private static final float OUTRO_ZOOM_END   = GRAPH_ZOOM_START;  // whole world visible
 
     /** Shared cursor-memory for Look and targeting. Records the most recent mob and the
      *  most recent non-mob tile the player interacted with; {@link TargetHistory#pickInitial}
@@ -406,6 +459,7 @@ public class PlayScreen implements Screen {
         // handlers. V2 popups come BEFORE the HUD so an open popup eats taps
         // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
+                gameStartTipInput(),
                 introSkipInput(),
                 confirmPopup.input(),
                 cameraController,
@@ -667,6 +721,9 @@ public class PlayScreen implements Screen {
         v2TipPopup = new com.bjsp123.rl2.ui.v2.V2TipPopup(game.ui);
         com.bjsp123.rl2.ui.v2.TipSystem.setPopup(v2TipPopup);
         com.bjsp123.rl2.ui.v2.TipSystem.reset();
+        // Game-start tip - modal window shown once at the top of every new
+        // run between the world-graph fly-in and the level zoom-in.
+        v2GameStartTipPopup = new com.bjsp123.rl2.ui.v2.V2GameStartTipPopup(game.ui);
         v2CharacterStats.setBuffInfo(v2BuffInfo);
         v2Look.setBuffInfo(v2BuffInfo);
         // Inventory's item-detail info button jumps to the encyclopaedia
@@ -712,8 +769,9 @@ public class PlayScreen implements Screen {
             confirmPopup.configure(title, message, "Recycle", "Cancel", onConfirm);
             confirmPopup.open();
         });
+        // Beacon-triggered map: teleport enabled (walked into / waited beside a beacon).
         controller.setOpenMapScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Map(
-                game, game.ui, game::popScreen, world)));
+                game, game.ui, game::popScreen, world, /*teleportEnabled=*/true)));
         controller.setOpenForgeScreen(() -> game.pushScreen(new com.bjsp123.rl2.ui.v2.V2Forge(
                 game, game.ui, game::popScreen,
                 // Recycle: leave the forge and open the inventory picker to choose
@@ -725,6 +783,7 @@ public class PlayScreen implements Screen {
         gameInput = new GameInput(world, camera, cameraController);
         gameInput.setStairHandlers(controller::tryStairsUp, controller::tryStairsDown);
         gameInput.setInteractHandler(controller::tryInteract);
+        gameInput.setBeaconActivate(controller::openBeaconMap);
         gameInput.setInventoryToggle(() -> {
             if (v2Inventory != null) v2Inventory.toggle();
         });
@@ -750,6 +809,7 @@ public class PlayScreen implements Screen {
         graphFadeTime = 0f;
         introFadeActive = false;
         introFadeTime = 0f;
+        introTipPhase = false;
         camera.zoom = introActive ? INTRO_START_ZOOM : DEFAULT_ZOOM;
         recenterCameraOnPlayer();
     }
@@ -899,6 +959,14 @@ public class PlayScreen implements Screen {
             renderIntroGraph(delta);
             return;
         }
+        if (outroActive) {
+            renderOutro(delta);
+            return;
+        }
+        if (introActive && introTipPhase) {
+            renderIntroTip(delta);
+            return;
+        }
         Level level  = world.currentLevel();
         frameProfiler.begin(delta, level, animator.queue.freezeFrames);
 
@@ -935,8 +1003,15 @@ public class PlayScreen implements Screen {
         // frame instead of leaving a one-frame stationary gap that reads as jerky.
         // The drain count matches the Animator's frames-per-render multiplier so the
         // freeze gate clears at the user-selected animation speed.
+        //
+        // Cap the wall-clock delta at 100 ms so a frame hitch doesn't dump a
+        // backlog of particles all at once. Computed here (above the gate) so the
+        // freeze drain and the Animator's anim advance share the same dt-scaled
+        // frame delta - both must pace on real time so a 120 Hz display doesn't
+        // clear the gate (and run animations) twice as fast as a 60 Hz one.
+        int dtMs = Math.min(100, (int) (Gdx.graphics.getDeltaTime() * 1000f));
         span = frameProfiler.start();
-        animator.queue.tick(com.bjsp123.rl2.ui.skin.Settings.framesPerRender());
+        animator.queue.tick(com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs));
         frameProfiler.add("queueTick", span);
         // Single gate: any visible game-action animation in progress (step interpolation,
         // attack lunge / flinch, projectile in flight, death flicker / fade) bumps
@@ -949,6 +1024,7 @@ public class PlayScreen implements Screen {
         // they used to be. Waiting one more frame lets the impact resolve first.
         boolean ticked = !overlayOpen
                 && !deathTransitionPending
+                && reviveCinematicFrame < 0
                 && !introActive
                 && (com.bjsp123.rl2.ui.skin.Settings.instantActions()
                         || (animator.queue.freezeFrames == 0 && !animator.hasPendingImpacts()))
@@ -968,10 +1044,8 @@ public class PlayScreen implements Screen {
         // Real-time cadence - runs every render frame regardless of the game-tick or
         // per-turn clocks, so visuals (effect frames, mob lunge animation, fire embers)
         // continue while the game is paused on input. Projectile-impact resolution and
-        // effect-frame advancement are owned by the Animator below.
-        // Cap the wall-clock delta at 100 ms so a frame hitch doesn't dump a backlog of
-        // particles all at once.
-        int dtMs = Math.min(100, (int) (Gdx.graphics.getDeltaTime() * 1000f));
+        // effect-frame advancement are owned by the Animator below. dtMs is
+        // computed above (shared with the freeze-gate drain).
         // Engine->renderer event drain plus the in-world animation tick. The Animator
         // owns per-mob anim state, the freeze gate, ghost flicker/fade, and the
         // periodic teleport / burning / sleep-Z particle cadences.
@@ -979,6 +1053,16 @@ public class PlayScreen implements Screen {
         span = frameProfiler.start();
         animator.consume(level);
         frameProfiler.add("animConsume", span);
+        // Jade Peach revive: kick off the full-screen cinematic when the engine
+        // signals a revive (player stays alive; the game freezes for the show).
+        if (animator.playerRevivedSignal) {
+            animator.playerRevivedSignal = false;
+            if (reviveCinematicFrame < 0) reviveCinematicFrame = 0;
+        }
+        if (reviveCinematicFrame >= 0) {
+            reviveCinematicFrame += com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs);
+            if (reviveCinematicFrame >= REVIVE_TOTAL) reviveCinematicFrame = -1;
+        }
         span = frameProfiler.start();
         animator.tick(level, dtMs);
         frameProfiler.add("animTick", span);
@@ -1008,16 +1092,16 @@ public class PlayScreen implements Screen {
         // here so any path that changes the player's level (stairs,
         // chasm fall, debug "starting level") feeds the same poll.
         checkDepthAchievements();
-        // Victory (RL-19): the boss floor's stairs only exist once the Great
-        // Wraith is dead; stepping onto them (lockedExit) wins, regardless of any
-        // revenants still alive. Latched before the death check and mutually
-        // exclusive with it (the player is alive here).
+        // Victory (RL-19): killing the Great Wraith opens stairs down to the
+        // exit-portal floor; touching (stepping adjacent to) its beacon
+        // (lockedExit) starts the end-sequence. Latched before the death check
+        // and mutually exclusive with it (the player is alive here).
         if (playerAfter != null && !victoryTransitionPending && !deathTransitionPending
-                && level.kind == com.bjsp123.rl2.model.Level.LevelKind.FINAL_BOSS
-                && level.bossDefeated && level.lockedExit != null
+                && level.kind == com.bjsp123.rl2.model.Level.LevelKind.EXIT_PORTAL
+                && level.lockedExit != null
                 && playerAfter.position != null
-                && playerAfter.position.tileX() == level.lockedExit.tileX()
-                && playerAfter.position.tileY() == level.lockedExit.tileY()) {
+                && Math.max(Math.abs(playerAfter.position.tileX() - level.lockedExit.tileX()),
+                            Math.abs(playerAfter.position.tileY() - level.lockedExit.tileY())) <= 1) {
             latchVictory(level, playerAfter);
         }
 
@@ -1075,6 +1159,9 @@ public class PlayScreen implements Screen {
                 com.bjsp123.rl2.world.render.Effect.columnOfLight(
                         animator.stage, player.position, animator.rng());
             }
+            // Player-death sting for the outro cinematic (distinct from the
+            // in-combat death event sound, sfx.player.combat.die).
+            if (game.sounds != null) game.sounds.play("sfx.player.death");
             // Killing-blow cinematic: drop the animation speed for the next
             // few seconds so the player's ghost flicker / fade plays in slow
             // motion. Cleared just before the V2GameOver transition fires.
@@ -1090,7 +1177,7 @@ public class PlayScreen implements Screen {
                 && !animator.hasPendingImpacts()
                 && animator.playerDeathAnimComplete();
         if (deathAnimDone) {
-            deathFadeFrame++;
+            deathFadeFrame += com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs);
         }
         if (deathTransitionPending && deathFadeFrame >= DEATH_FADE_FRAMES) {
             com.bjsp123.rl2.ui.skin.Settings.setAnimationTransientOverride(0f);
@@ -1106,7 +1193,7 @@ public class PlayScreen implements Screen {
         // alive on the escape stairs. Ramp the gold fade immediately, then swap
         // to the VICTORY screen.
         if (victoryTransitionPending) {
-            victoryFadeFrame++;
+            victoryFadeFrame += com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs);
             if (victoryFadeFrame >= DEATH_FADE_FRAMES) {
                 com.bjsp123.rl2.ui.skin.Settings.setAnimationTransientOverride(0f);
                 dispose();
@@ -1145,7 +1232,13 @@ public class PlayScreen implements Screen {
         if (levelRenderer instanceof DefaultLevelRenderer dlr) {
             dlr.setLookedAtMob(lookMode.isActive() ? lookMode.mobAtCursor() : null);
         }
-        levelRenderer.render(level, camera);
+        // Render the CURRENT level, not the one captured at the top of the frame:
+        // controller.tick() above may have taken stairs and swapped levels, in which
+        // case the local `level` is the level we just left. Drawing it for a frame
+        // (with the new level's camera/visibility) shows the prior room - or, for a
+        // trees room, the grass front-veg without the trunk/canopy - until the next
+        // tick. The renderer rebuilds its per-level caches when the instance changes.
+        levelRenderer.render(world.currentLevel(), camera);
         frameProfiler.add("levelRender", span);
         if (levelRenderer instanceof DefaultLevelRenderer dlr) {
             com.bjsp123.rl2.world.render.DefaultLevelRenderer.RenderStats rs = dlr.lastRenderStats();
@@ -1216,6 +1309,11 @@ public class PlayScreen implements Screen {
         if (victoryTransitionPending && victoryFadeFrame > 0) {
             float alpha = Math.min(1f, victoryFadeFrame / (float) DEATH_FADE_FRAMES);
             drawVictoryFadeOverlay(alpha);
+        }
+        // Jade Peach revive cinematic - fade to black, the peach blooms over a
+        // sunburst and bursts, then the level fades back in.
+        if (reviveCinematicFrame >= 0) {
+            drawReviveCinematic((int) reviveCinematicFrame);
         }
 
         // Intro arrival message - a bottom banner naming the goal, shown over
@@ -1290,12 +1388,19 @@ public class PlayScreen implements Screen {
         ctx.batch.end();
 
         if (t >= 1f) {
-            // Fly-in done: dip the graph to black over the first half of the
-            // transition, then hand off to the level (which fades in from black).
-            graphFadeTime += delta;
-            float k = Math.min(1f, graphFadeTime / (GRAPH_FADE_SEC * 0.5f));
-            drawBlackOverlay(k);
-            if (k >= 1f) endGraphPhase();
+            if (willShowGameStartTip()) {
+                // A tip follows: hand straight over with the swirl still showing,
+                // so the backdrop keeps moving into the tip phase instead of
+                // flashing to black between the graph and the tip.
+                endGraphPhase();
+            } else {
+                // No tip - dip the graph to black over the first half of the
+                // transition, then hand off to the level (fades in from black).
+                graphFadeTime += delta;
+                float k = Math.min(1f, graphFadeTime / (GRAPH_FADE_SEC * 0.5f));
+                drawBlackOverlay(k);
+                if (k >= 1f) endGraphPhase();
+            }
         }
     }
 
@@ -1315,14 +1420,75 @@ public class PlayScreen implements Screen {
     }
 
     /** Hand off from the (now black) graph fly-in to the level zoom-in: arm the
-     *  level camera at its far zoom and start the level-side fade-in from black. */
+     *  level camera at its far zoom and either show a game-start tip (modal,
+     *  level zoom-in deferred until the player dismisses it) or start the
+     *  level-side fade-in from black immediately. */
     private void endGraphPhase() {
         introGraphPhase = false;
         introTime = 0f;
         camera.zoom = INTRO_START_ZOOM;
         recenterCameraOnPlayer();
+        if (com.bjsp123.rl2.ui.skin.Settings.tipsEnabled()
+                && v2GameStartTipPopup != null
+                && !com.bjsp123.rl2.GameStartTipsRegistry.isEmpty()) {
+            boolean shown = v2GameStartTipPopup.show(
+                    new java.util.Random(), this::endGameStartTipPhase);
+            if (shown) {
+                introTipPhase = true;
+                return;
+            }
+        }
+        beginLevelZoomIn();
+    }
+
+    /** Tip-window dismiss callback - arm the level zoom-in fade-from-black
+     *  the same way {@link #endGraphPhase} does in the no-tip path. */
+    private void endGameStartTipPhase() {
+        introTipPhase = false;
+        beginLevelZoomIn();
+    }
+
+    /** Arm the level (second) zoom-in fade-from-black and play its audio sting.
+     *  Shared by the no-tip ({@link #endGraphPhase}) and post-tip
+     *  ({@link #endGameStartTipPhase}) paths so the second zoom-in sounds exactly
+     *  once per run, whichever path armed it. */
+    private void beginLevelZoomIn() {
         introFadeActive = true;
         introFadeTime = 0f;
+        if (game.sounds != null) game.sounds.play("sfx.game.zoomin");
+    }
+
+    /** Game-start tip phase render path: keep the swirling void backdrop alive
+     *  behind the modal tip window (the same swirl the graph fly-in used), so the
+     *  background stays in motion right up until the tip is dismissed. World stays
+     *  paused; the tip popup's input adapter swallows every tap. */
+    private void renderIntroTip(float delta) {
+        introGraph.swirlT += delta;
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        com.bjsp123.rl2.ui.v2.UiCtx ctx = game.ui;
+        float w = ctx.worldW(), h = ctx.worldH();
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.setProjectionMatrix(ctx.camera.combined);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(0.04f, 0.04f, 0.07f, 1f);         // dark void base
+        s.rect(0f, 0f, w, h);
+        s.end();
+        ctx.batch.setProjectionMatrix(ctx.camera.combined);
+        ctx.batch.begin();
+        com.bjsp123.rl2.ui.v2.SwirlBackground.render(ctx.batch, 0f, 0f, w, h, introGraph.swirlT);
+        ctx.batch.end();
+        if (v2GameStartTipPopup != null) v2GameStartTipPopup.renderSelf();
+    }
+
+    /** Whether a game-start tip will actually be shown after the graph fly-in -
+     *  used to skip the dip-to-black so the swirl flows seamlessly into the tip. */
+    private boolean willShowGameStartTip() {
+        return com.bjsp123.rl2.ui.skin.Settings.tipsEnabled()
+                && v2GameStartTipPopup != null
+                && !com.bjsp123.rl2.GameStartTipsRegistry.isEmpty();
     }
 
     /** Ease the camera back from play zoom toward {@link #DEATH_ZOOM_OUT} as the
@@ -1363,9 +1529,11 @@ public class PlayScreen implements Screen {
         lastSnapshot.victory = true;
         lastSnapshot.beaconsLit = beaconsLit;
         lastSnapshot.allBeaconsLit = allBeaconsLit;
-        lastSnapshot.score = com.bjsp123.rl2.logic.GameBalance.VICTORY_SCORE_BASE
-                + com.bjsp123.rl2.logic.GameBalance.SCORE_PER_BEACON * beaconsLit
-                + (allBeaconsLit ? com.bjsp123.rl2.logic.GameBalance.PERFECT_VICTORY_BONUS : 0);
+        // Final score uses the run-stats formula (RL-58); the snapshot is already
+        // refreshed each frame, so recompute here to capture the boss bonus.
+        lastSnapshot.killedGreatWraith = player.killedGreatWraith;
+        lastSnapshot.score = com.bjsp123.rl2.logic.GameBalance.runScore(
+                player.runStats, beaconsLit, player.killedGreatWraith, allBeaconsLit);
         game.hallOfFame.add(lastSnapshot);
         com.bjsp123.rl2.save.HallOfFameStore.save(game.persistence, game.hallOfFame);
         if (game.achievementSystem != null) {
@@ -1373,14 +1541,154 @@ public class PlayScreen implements Screen {
         }
         game.saveSystem.clear(saveSlot);
         game.currentPlay = null;
-        victoryTransitionPending = true;
-        victoryFadeFrame = 0;
-        // A column of light erupts from the escape stairs - triumph rather than
+        // Start the end-sequence outro (RL-58): zoom out to the world map, dissolve
+        // it to white, then the victory screen. Replaces the old gold-fade swap.
+        outroActive = true;
+        outroTime   = 0f;
+        // A column of light erupts from the exit portal - triumph rather than
         // the death outro's dim collapse.
         if (animator != null) {
             com.bjsp123.rl2.world.render.Effect.columnOfLight(
                     animator.stage, player.position, animator.rng());
         }
+    }
+
+    /** Outro cinematic render path (RL-58). Runs instead of the normal frame
+     *  once {@link #outroActive} is set: world graph zooms out from the exit
+     *  node while a white dissolve sweeps up from the deepest level (beacons
+     *  burst, levels flash + ring), then the whole screen ramps to white and
+     *  hands off to {@link com.bjsp123.rl2.ui.v2.V2Victory}. Tap to skip. */
+    private void renderOutro(float delta) {
+        if (com.badlogic.gdx.Gdx.input.justTouched() && outroTime > 0.25f) {
+            outroTime = OUTRO_GRAPH_SEC + OUTRO_WHITE_SEC;   // jump to the end
+        }
+        outroTime += delta;
+        float gT = Math.min(1f, outroTime / OUTRO_GRAPH_SEC);
+        float eased = gT * gT * (3f - 2f * gT);             // smoothstep
+
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        com.bjsp123.rl2.ui.v2.UiCtx ctx = game.ui;
+        com.bjsp123.rl2.ui.v2.Rect full =
+                new com.bjsp123.rl2.ui.v2.Rect(0f, 0f, ctx.worldW(), ctx.worldH());
+        introGraph.world        = world;
+        introGraph.layoutArea   = full;
+        introGraph.viewport     = full;
+        introGraph.zoom         = OUTRO_ZOOM_START + (OUTRO_ZOOM_END - OUTRO_ZOOM_START) * eased;
+        introGraph.selected     = -1;
+        introGraph.currentIndex = world.currentLevelIndex;
+        introGraph.swirlT      += delta;
+        introGraph.beaconPulseT += delta;
+        float[] p = introGraph.panToCenter(world.currentLevelIndex);
+        introGraph.panX = p[0];
+        introGraph.panY = p[1];
+
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
+        s.setProjectionMatrix(ctx.camera.combined);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        introGraph.draw(ctx);
+        s.end();
+
+        ctx.applyProjection();
+        ctx.batch.begin();
+        introGraph.drawUnvisitedGlyphs(ctx);
+        ctx.batch.end();
+
+        drawOutroDissolve(gT);
+
+        // Final ramp to a fully white screen, then hand off to the victory screen.
+        if (outroTime >= OUTRO_GRAPH_SEC) {
+            float wT = Math.min(1f, (outroTime - OUTRO_GRAPH_SEC) / OUTRO_WHITE_SEC);
+            drawColorOverlay(1f, 1f, 1f, wT);
+            if (outroTime >= OUTRO_GRAPH_SEC + OUTRO_WHITE_SEC) {
+                outroActive = false;
+                com.bjsp123.rl2.ui.skin.Settings.setAnimationTransientOverride(0f);
+                dispose();
+                game.setRootScreen(new com.bjsp123.rl2.ui.v2.V2Victory(game, lastSnapshot));
+            }
+        }
+    }
+
+    /** Bottom-up white dissolve over the world graph: each level node (and its
+     *  beacons) whitens, bursts, and rings out as a sweep front passes it,
+     *  ordered deepest-first. {@code gT} is the 0..1 dissolve progress. */
+    private void drawOutroDissolve(float gT) {
+        if (introGraph.boxRects.isEmpty()) return;
+        int minD = Integer.MAX_VALUE, maxD = Integer.MIN_VALUE;
+        for (int idx : introGraph.boxIndex) {
+            int d = (idx >= 0 && idx < world.levels.length && world.levels[idx] != null)
+                    ? world.levels[idx].depth : 0;
+            minD = Math.min(minD, d);
+            maxD = Math.max(maxD, d);
+        }
+        float span = Math.max(1, maxD - minD);
+        com.bjsp123.rl2.ui.v2.UiCtx ctx = game.ui;
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = ctx.shapes;
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.setProjectionMatrix(ctx.camera.combined);
+
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        // White node fills + beacon bursts.
+        for (int i = 0; i < introGraph.boxRects.size(); i++) {
+            com.bjsp123.rl2.ui.v2.Rect r = introGraph.boxRects.get(i);
+            float trigger = 1f - depthNorm(introGraph.boxIndex.get(i), minD, span);
+            float amt = clamp01((gT - trigger) / 0.12f);
+            if (amt > 0f) {
+                s.setColor(1f, 1f, 1f, amt);
+                s.rect(r.x, r.y, r.w, r.h);
+            }
+        }
+        for (int i = 0; i < introGraph.beaconRects.size(); i++) {
+            com.bjsp123.rl2.ui.v2.Rect br = introGraph.beaconRects.get(i);
+            float trigger = 1f - depthNorm(introGraph.beaconRefs.get(i)[0], minD, span);
+            float age = gT - trigger;
+            if (age >= 0f && age <= 0.4f) {
+                float k = age / 0.4f;
+                s.setColor(1f, 0.95f, 0.55f, (1f - k) * 0.85f);
+                s.circle(br.cx(), br.cy(), br.w * (0.6f + 3.5f * k), 24);
+            }
+        }
+        s.end();
+
+        // Expanding ring outlines (the "rings of sparks") at each node.
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Line);
+        for (int i = 0; i < introGraph.boxRects.size(); i++) {
+            com.bjsp123.rl2.ui.v2.Rect r = introGraph.boxRects.get(i);
+            float age = gT - (1f - depthNorm(introGraph.boxIndex.get(i), minD, span));
+            if (age >= 0f && age <= 0.45f) {
+                float k = age / 0.45f;
+                s.setColor(1f, 1f, 1f, 1f - k);
+                s.circle(r.cx(), r.cy(), Math.max(r.w, r.h) * (0.4f + 1.8f * k), 20);
+            }
+        }
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    /** Normalised depth (0 shallowest .. 1 deepest) of the level at world index
+     *  {@code idx}, for the deepest-first dissolve ordering. */
+    private float depthNorm(int idx, int minD, float span) {
+        int d = (idx >= 0 && idx < world.levels.length && world.levels[idx] != null)
+                ? world.levels[idx].depth : 0;
+        return (d - minD) / span;
+    }
+
+    private static float clamp01(float v) { return Math.max(0f, Math.min(1f, v)); }
+
+    /** Full-screen colour overlay at {@code alpha} (0 = clear). */
+    private void drawColorOverlay(float r, float g, float b, float alpha) {
+        if (alpha <= 0f) return;
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
+        s.setProjectionMatrix(game.ui.camera.combined);
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(r, g, b, Math.min(1f, alpha));
+        s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
+        s.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     /** Snap to play zoom and hand control to the player, blooming a dust cloud
@@ -1389,14 +1697,20 @@ public class PlayScreen implements Screen {
         if (!introActive) return;
         introActive = false;
         introGraphPhase = false;   // a skip during the graph fly-in lands here too
+        if (introTipPhase) {
+            introTipPhase = false;
+            if (v2GameStartTipPopup != null) v2GameStartTipPopup.hide();
+        }
         camera.zoom = DEFAULT_ZOOM;
         recenterCameraOnPlayer();
-        // Arrival: bloom a dust cloud around the player as control begins.
+        // Arrival: bloom a dust cloud around the player as control begins, and
+        // play the "player appears in the world" sting alongside it.
         Mob p = TurnSystem.findPlayer(world.currentLevel());
         if (p != null && animator != null) {
             com.bjsp123.rl2.world.render.Effect.arrivalCloud(
                     animator.stage, p.position, animator.rng());
         }
+        if (game.sounds != null) game.sounds.play("sfx.player.arrive");
     }
 
     /** First processor in the input chain. While the intro is running, any tap
@@ -1476,6 +1790,93 @@ public class PlayScreen implements Screen {
         s.rect(0f, 0f, game.ui.worldW(), game.ui.worldH());
         s.end();
         com.badlogic.gdx.Gdx.gl.glDisable(com.badlogic.gdx.graphics.GL20.GL_BLEND);
+    }
+
+    /** Jade Peach revive cinematic: the level fades to black, the peach blooms
+     *  over a rotating golden sunburst and bursts in a flash, then the level
+     *  fades back in. The game is frozen for the whole sequence. */
+    private void drawReviveCinematic(int f) {
+        final int B = com.badlogic.gdx.graphics.GL20.GL_BLEND;
+        final int SA = com.badlogic.gdx.graphics.GL20.GL_SRC_ALPHA;
+        final int OMSA = com.badlogic.gdx.graphics.GL20.GL_ONE_MINUS_SRC_ALPHA;
+        final int ONE = com.badlogic.gdx.graphics.GL20.GL_ONE;
+        float vw = game.ui.worldW(), vh = game.ui.worldH();
+        float cx = vw * 0.5f, cy = vh * 0.5f;
+
+        // Black backdrop: ramp in, hold, ramp out.
+        float black;
+        if (f < REVIVE_FADE_OUT)     black = f / (float) REVIVE_FADE_OUT;
+        else if (f < REVIVE_FADE_IN) black = 1f;
+        else                         black = Math.max(0f, 1f - (f - REVIVE_FADE_IN)
+                                              / (float) (REVIVE_TOTAL - REVIVE_FADE_IN));
+
+        com.badlogic.gdx.graphics.glutils.ShapeRenderer s = game.ui.shapes;
+        s.setProjectionMatrix(game.ui.camera.combined);
+        com.badlogic.gdx.Gdx.gl.glEnable(B);
+        com.badlogic.gdx.Gdx.gl.glBlendFunc(SA, OMSA);
+        s.begin(com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType.Filled);
+        s.setColor(0f, 0f, 0f, black);
+        s.rect(0f, 0f, vw, vh);
+
+        boolean showPeach = f >= REVIVE_FADE_OUT - 3 && f < REVIVE_FADE_IN + 2;
+        if (showPeach) {
+            // Additive golden sunburst rotating behind the peach, fading after the burst.
+            com.badlogic.gdx.Gdx.gl.glBlendFunc(SA, ONE);
+            float postBurst = f >= REVIVE_EXPLODE
+                    ? Math.max(0f, 1f - (f - REVIVE_EXPLODE) / (float) (REVIVE_FADE_IN - REVIVE_EXPLODE))
+                    : 1f;
+            float maxLen = Math.max(vw, vh);
+            int rays = 16;
+            float rot = f * 0.05f, half = 0.085f;
+            s.setColor(1f, 0.82f, 0.35f, 0.45f * black * postBurst);
+            for (int i = 0; i < rays; i++) {
+                float a = rot + i * (float) (Math.PI * 2 / rays);
+                s.triangle(cx, cy,
+                        cx + (float) Math.cos(a - half) * maxLen, cy + (float) Math.sin(a - half) * maxLen,
+                        cx + (float) Math.cos(a + half) * maxLen, cy + (float) Math.sin(a + half) * maxLen);
+            }
+            // White flash full-screen at the burst, fading fast.
+            if (f >= REVIVE_EXPLODE) {
+                float t = (f - REVIVE_EXPLODE) / (float) (REVIVE_FADE_IN - REVIVE_EXPLODE);
+                float flash = Math.max(0f, 1f - t * 1.6f) * black;
+                if (flash > 0f) {
+                    s.setColor(1f, 0.97f, 0.8f, flash);
+                    s.rect(0f, 0f, vw, vh);
+                }
+            }
+            com.badlogic.gdx.Gdx.gl.glBlendFunc(SA, OMSA);
+        }
+        s.end();
+
+        // The peach itself - grows in, then pops + fades on the burst.
+        if (showPeach) {
+            com.badlogic.gdx.graphics.g2d.TextureRegion peach =
+                    com.bjsp123.rl2.world.render.ItemSprites.regionFor("JADE_PEACH");
+            if (peach != null) {
+                float grow = f < REVIVE_FADE_OUT ? 0f
+                        : f < REVIVE_GROW_END ? (f - REVIVE_FADE_OUT) / (float) (REVIVE_GROW_END - REVIVE_FADE_OUT)
+                        : 1f;
+                float ease = grow * grow * (3f - 2f * grow);
+                float base = Math.min(vw, vh) * 0.22f;
+                float scale, pa;
+                if (f < REVIVE_EXPLODE) {
+                    scale = 0.4f + 0.6f * ease;
+                    pa = black;
+                } else {
+                    float t = (f - REVIVE_EXPLODE) / (float) (REVIVE_FADE_IN - REVIVE_EXPLODE);
+                    scale = 1f + 1.8f * t;
+                    pa = Math.max(0f, 1f - t) * black;
+                }
+                float sz = base * scale;
+                game.ui.batch.setProjectionMatrix(game.ui.camera.combined);
+                game.ui.batch.begin();
+                game.ui.batch.setColor(1f, 1f, 1f, pa);
+                game.ui.batch.draw(peach, cx - sz * 0.5f, cy - sz * 0.5f, sz, sz);
+                game.ui.batch.setColor(1f, 1f, 1f, 1f);
+                game.ui.batch.end();
+            }
+        }
+        com.badlogic.gdx.Gdx.gl.glDisable(B);
     }
 
     /** True iff any modal popup or input-claiming overlay is currently open.

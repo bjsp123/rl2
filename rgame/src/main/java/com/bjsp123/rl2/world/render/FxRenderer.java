@@ -76,15 +76,18 @@ final class FxRenderer {
      * source cell (dark-room effects stay hidden); THROWN_ITEM and MAGIC_MISSILE intentionally
      * ignore FOV so the player can see their own projectiles crossing dark tiles.
      */
-    void drawEffect(Level level, Effect effect) {
+    void drawEffect(Level level, Effect effect, float sub) {
         // Effects with a pending start delay are parked - EffectStage.tick is still
         // counting down the delay; nothing should render yet.
         if (effect.startDelay > 0) return;
+        // Sub-frame fraction for smooth interpolation above 60 Hz; each draw helper
+        // reads effect.sub where it derives a continuous position / fade from frame.
+        effect.sub = sub;
         int ex = effect.location.tileX(), ey = effect.location.tileY();
         if (ex < 0 || ey < 0 || ex >= level.width || ey >= level.height) return;
         if (effect.type == EffectType.FLOATING_TEXT) {
             if (!level.visible[ex][ey]) return;
-            float yOffset = effect.frame / 5f;
+            float yOffset = (effect.frame + sub) / 5f;
             font.setColor(tintToColor(effect.tint, Color.YELLOW));
             font.draw(batch, effect.text, ex * CELL, ey * CELL + CELL * 2 + yOffset);
         } else if (effect.type == EffectType.THROWN_ITEM
@@ -241,7 +244,7 @@ final class FxRenderer {
         if (e.particleX0 == null || e.particleY0 == null || e.particleVX == null) return;
         if (e.particleX0.length < 1) return;
         int total = e.totalFrames();
-        float t = e.frame;
+        float t = e.frame + e.sub;
         float lifeT = total > 0 ? t / (float) total : 1f;
         if (lifeT > 1f) lifeT = 1f;
         float baseX = e.location.tileX() * (float) CELL;
@@ -277,7 +280,7 @@ final class FxRenderer {
         if (e == null || e.location == null || font == null) return;
         int total = e.totalFrames();
         if (total <= 0) return;
-        float t = e.frame / (float) total;
+        float t = (e.frame + e.sub) / (float) total;
         if (t < 0f) t = 0f; else if (t > 1f) t = 1f;
         float baseX = e.location.tileX() * (float) CELL;
         float baseY = e.location.tileY() * (float) CELL;
@@ -300,7 +303,7 @@ final class FxRenderer {
     private void drawBlast(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float baseX = e.location.tileX() * (float) CELL;
         float baseY = e.location.tileY() * (float) CELL;
         float reach = CELL * 0.5f * (0.4f + 1.4f * lifeT);
@@ -333,12 +336,12 @@ final class FxRenderer {
     private void drawDamageFloater(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float alpha = lifeT < 0.65f ? 1f : Math.max(0f, 1f - (lifeT - 0.65f) / 0.35f);
         if (alpha <= 0f) return;
         float baseX  = e.location.tileX() * (float) CELL;
         float baseY  = e.location.tileY() * (float) CELL;
-        float yOff   = e.frame / 5f;
+        float yOff   = (e.frame + e.sub) / 5f;
         float textY  = baseY + CELL * 2f + yOff;
         com.badlogic.gdx.graphics.Color c = e.customColor != null
                 ? e.customColor
@@ -373,7 +376,7 @@ final class FxRenderer {
     private void drawBuffIcon(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float alpha = lifeT < 0.65f ? 1f : Math.max(0f, 1f - (lifeT - 0.65f) / 0.35f);
         if (alpha <= 0f) return;
         com.bjsp123.rl2.model.Buff.BuffType type = e.buffType;
@@ -381,7 +384,7 @@ final class FxRenderer {
         TextureRegion icon = BuffIcons.regionFor(type);
         float baseX = e.location.tileX() * (float) CELL;
         float baseY = e.location.tileY() * (float) CELL;
-        float yOffset = e.frame / 5f;
+        float yOffset = (e.frame + e.sub) / 5f;
         if (icon == null) {
             font.setColor(1f, 0.9f, 0.5f, alpha);
             font.draw(batch, e.text == null ? "+" : e.text, baseX, baseY + CELL * 2f + yOffset);
@@ -399,7 +402,7 @@ final class FxRenderer {
     /** Render a banishment-style ray as a thick bright line. */
     private void drawRay(Effect e) {
         if (e.endLocation == null) return;
-        float t     = e.frame;
+        float t     = e.frame + e.sub;
         int   total = e.totalFrames();
         if (total <= 0) return;
         float lifeT = Math.min(1f, t / (float) total);
@@ -440,7 +443,7 @@ final class FxRenderer {
         int extendFrames = Math.max(1, e.grappleExtendFrames);
         int total        = e.totalFrames();
         int tailFrames   = Math.max(1, total - extendFrames);
-        int frame        = e.frame;
+        float frame      = e.frame + e.sub;
         float x1 = e.location.tileX()    * (float) CELL + CELL * 0.5f;
         float y1 = e.location.tileY()    * (float) CELL + CELL * 0.5f;
         float x2 = e.endLocation.tileX() * (float) CELL + CELL * 0.5f;
@@ -513,7 +516,7 @@ final class FxRenderer {
         if (e.particleX0 == null || e.particleX0.length == 0) return;
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float phase    = e.particleX0[0];
         float jitterX  = e.particleY0[0];
         float speed    = e.particleVX != null && e.particleVX.length > 0 ? e.particleVX[0] : 1f;
@@ -545,7 +548,7 @@ final class FxRenderer {
         if (e.particleX0 == null || e.particleX0.length == 0) return;
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float phase   = e.particleX0[0];
         float scatter = e.particleY0[0];
         float speed   = e.particleVX != null && e.particleVX.length > 0 ? e.particleVX[0] : 1f;
@@ -580,7 +583,7 @@ final class FxRenderer {
         if (e.particleX0 == null || e.particleX0.length == 0) return;
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float initAngle = e.particleX0[0];
         float startR    = e.particleY0[0];
         float rotations = e.particleVX != null && e.particleVX.length > 0 ? e.particleVX[0] : 1f;
@@ -625,10 +628,11 @@ final class FxRenderer {
      *  so the flicker lays on top of the drawn world. {@code camera} is
      *  used to size the full-viewport quad. */
     void drawScreenSpaceEffects(EffectStage stage, com.badlogic.gdx.graphics.OrthographicCamera camera,
-                                Level level) {
+                                Level level, float sub) {
         if (stage == null || camera == null) return;
         for (Effect e : stage.active) {
             if (e.startDelay > 0) continue;
+            e.sub = sub;
             if (e.type == EffectType.LEVEL_FLICKER) {
                 drawLevelFlicker(e, camera);
             } else if (e.type == EffectType.ENCHANT_SHOWCASE) {
@@ -651,7 +655,7 @@ final class FxRenderer {
     private void drawLevelFlicker(Effect e, com.badlogic.gdx.graphics.OrthographicCamera camera) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float alpha = (float) Math.sin(Math.PI * lifeT) * 0.35f;
         if (alpha <= 0f) return;
         Color tint = tintToColor(e.tint, Color.YELLOW);
@@ -675,7 +679,7 @@ final class FxRenderer {
     private void drawScrollCast(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         Color c = tintToColor(e.tint, Color.WHITE);
         float baseX = e.location.tileX() * (float) CELL + CELL * 0.5f;
         float baseY = e.location.tileY() * (float) CELL + CELL * 0.5f;
@@ -721,7 +725,7 @@ final class FxRenderer {
     private void drawEnchantShowcase(Effect e, com.badlogic.gdx.graphics.OrthographicCamera camera) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float cx = camera.position.x, cy = camera.position.y;
         float screenH = camera.viewportHeight * camera.zoom;
         float grow = lifeT < 0.18f ? (lifeT / 0.18f) : 1f;
@@ -768,7 +772,7 @@ final class FxRenderer {
     private void drawItemBirth(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float lifeT = Math.min(1f, e.frame / (float) total);
+        float lifeT = Math.min(1f, (e.frame + e.sub) / (float) total);
         float cx = e.location.tileX() * (float) CELL + CELL * 0.5f;
         float cy = e.location.tileY() * (float) CELL + CELL * 0.5f;
         float grow = lifeT < 0.2f ? (lifeT / 0.2f) : 1f;
@@ -812,7 +816,7 @@ final class FxRenderer {
     /** Render a teleport streak burst - green vertical streaks moving purely along y. */
     private void drawTeleportStreaks(Effect e) {
         if (e.particleX0 == null) return;
-        float t     = e.frame;
+        float t     = e.frame + e.sub;
         int   total = e.totalFrames();
         float alpha = t < total / 2f
                 ? 1f
@@ -840,7 +844,7 @@ final class FxRenderer {
     /** Render an EXPLOSION effect - particles flying outward at constant velocity. */
     private void drawExplosion(Effect e) {
         if (e.particleX0 == null) return;
-        float t = e.frame;
+        float t = e.frame + e.sub;
         int total = e.totalFrames();
         if (total <= 0) return;
         float lifeT = Math.min(1f, t / (float) total);
@@ -891,7 +895,7 @@ final class FxRenderer {
             // so opaque silhouettes still look right.
             if (e.particleBright) batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
             for (int i = 0; i < e.particleX0.length; i++) {
-                int age = e.frame - e.particleSpawnFrame[i];
+                float age = (e.frame + e.sub) - e.particleSpawnFrame[i];
                 if (age < 0 || age >= AnimationVars.PARTICLE_LIFE) continue;
                 float lifeFrac = age / (float) AnimationVars.PARTICLE_LIFE;
                 // First half: tint -> white.  Second half: white, alpha fades.
@@ -921,7 +925,7 @@ final class FxRenderer {
         }
 
         // Original global-t path.
-        float t = e.frame;
+        float t = e.frame + e.sub;
         int total = EffectType.PARTICLE_BURST.frameCount;
         float lifeFrac = 1f - Math.max(0f, t - total / 2f) / (total / 2f);
         float alpha = Math.max(0f, Math.min(1f, lifeFrac));
@@ -988,7 +992,7 @@ final class FxRenderer {
         if (e.endLocation == null || e.particleX0 == null) return;
         int total = e.totalFrames();
         int flightEnd = Math.max(1, (int) Math.round(total * 0.7));
-        float headT = Math.min(1f, e.frame / (float) flightEnd);
+        float headT = Math.min(1f, (e.frame + e.sub) / (float) flightEnd);
         float sx = (e.location.tileX()    + 0.5f) * CELL;
         float sy = (e.location.tileY()    + 0.5f) * CELL;
         float dx = (e.endLocation.tileX() + 0.5f) * CELL;
@@ -1018,7 +1022,7 @@ final class FxRenderer {
         if (e.particleBright) batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         for (int i = 0; i < e.particleX0.length; i++) {
             int spawn = e.particleSpawnFrame[i];
-            int age = e.frame - spawn;
+            float age = (e.frame + e.sub) - spawn;
             if (age < 0 || age >= trailLife) continue;
             float spawnT = Math.min(1f, spawn / (float) flightEnd);
             float bx = sx + (dx - sx) * spawnT + e.particleX0[i];
@@ -1055,7 +1059,7 @@ final class FxRenderer {
         if (e.endLocation == null) return;
         int total = e.totalFrames();
         if (total <= 0) return;
-        float t = Math.min(1f, e.frame / (float) total);
+        float t = Math.min(1f, (e.frame + e.sub) / (float) total);
         if (t >= 1f) return;
         TextureRegion region = BuffIcons.attackFlashRegion(3);
         if (region == null) return;
@@ -1103,7 +1107,7 @@ final class FxRenderer {
     private void drawCloudPuff(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float t = Math.min(1f, e.frame / (float) total);
+        float t = Math.min(1f, (e.frame + e.sub) / (float) total);
         // Width: starts at the base random (5..9 px), grows ~100% over its
         // life so peak ~ 10..18 px.
         float w = e.dustStartW * (1f + 1.0f * t);
@@ -1118,11 +1122,13 @@ final class FxRenderer {
         // the lighter "wisps stack up" peak.
         float baseAlpha;
         float r, g, b;
+        boolean dotted = false;
         if (e.cloudType == null) return;
         switch (e.cloudType) {
             case SMOKE  -> { r = 0.02f; g = 0.02f; b = 0.02f; baseAlpha = 0.85f; }
             case STEAM  -> { r = 0.85f; g = 0.88f; b = 0.92f; baseAlpha = 0.55f; }
             case POISON -> { r = 0.18f; g = 0.62f; b = 0.20f; baseAlpha = 0.55f; }
+            case SPORE  -> { r = 0.74f; g = 0.66f; b = 0.30f; baseAlpha = 0.70f; dotted = true; }
             default     -> { return; }
         }
         float alpha;
@@ -1130,17 +1136,28 @@ final class FxRenderer {
         else            alpha = baseAlpha * (1f - (t - 0.25f) / 0.75f);
         if (alpha <= 0f) return;
 
-        float cx = e.dustPxX + e.dustVxPxPerFrame * e.frame;
-        float cy = e.dustPxY + e.dustVyPxPerFrame * e.frame + rise;
+        float cx = e.dustPxX + e.dustVxPxPerFrame * (e.frame + e.sub);
+        float cy = e.dustPxY + e.dustVyPxPerFrame * (e.frame + e.sub) + rise;
 
         batch.setColor(r, g, b, alpha);
-        int rows = Math.max(2, Math.round(h));
-        for (int i = 0; i < rows; i++) {
-            float yRel = (i + 0.5f) / rows * 2f - 1f;
-            float halfW = (w * 0.5f)
-                    * (float) Math.sqrt(Math.max(0f, 1f - yRel * yRel));
-            float yPx = cy - h * 0.5f + i;
-            batch.draw(whiteRegion, cx - halfW, yPx, halfW * 2f, 1f);
+        if (dotted) {
+            // Spore clouds read as a stipple of small specks rather than a
+            // smooth haze: each puff draws one little plus-shaped speck, and the
+            // many puffs per tile compose into a dotted cloud of crosses.
+            float dotSz = Math.max(2f, e.dustStartW * 0.34f);
+            float arm   = Math.max(1f, dotSz / 3f);             // bar thickness
+            // Horizontal bar then vertical bar, crossing at (cx, cy).
+            batch.draw(whiteRegion, cx - dotSz * 0.5f, cy - arm * 0.5f, dotSz, arm);
+            batch.draw(whiteRegion, cx - arm * 0.5f, cy - dotSz * 0.5f, arm, dotSz);
+        } else {
+            int rows = Math.max(2, Math.round(h));
+            for (int i = 0; i < rows; i++) {
+                float yRel = (i + 0.5f) / rows * 2f - 1f;
+                float halfW = (w * 0.5f)
+                        * (float) Math.sqrt(Math.max(0f, 1f - yRel * yRel));
+                float yPx = cy - h * 0.5f + i;
+                batch.draw(whiteRegion, cx - halfW, yPx, halfW * 2f, 1f);
+            }
         }
         batch.setColor(Color.WHITE);
     }
@@ -1148,7 +1165,7 @@ final class FxRenderer {
     private void drawDustCloud(Level level, Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float t = Math.min(1f, e.frame / (float) total);
+        float t = Math.min(1f, (e.frame + e.sub) / (float) total);
 
         // Width: starts at the cloud's randomised base (4..7 px), grows
         // ~60% over its lifetime so peak ~ 6..11 px. Height ~ 0.75x width
@@ -1176,8 +1193,8 @@ final class FxRenderer {
         float b = clamp01(tint.b * e.dustShade);
 
         // Pixel anchor + drift in player's direction x frame count + rise.
-        float cx = e.dustPxX + e.dustVxPxPerFrame * e.frame;
-        float cy = e.dustPxY + e.dustVyPxPerFrame * e.frame + rise;
+        float cx = e.dustPxX + e.dustVxPxPerFrame * (e.frame + e.sub);
+        float cy = e.dustPxY + e.dustVyPxPerFrame * (e.frame + e.sub) + rise;
 
         batch.setColor(r, g, b, alpha);
         // Stacked horizontal bars to approximate the ellipse.
@@ -1223,7 +1240,7 @@ final class FxRenderer {
         if (region == null) return;
         int total = e.totalFrames();
         if (total <= 0) return;
-        float t = Math.min(1f, e.frame / (float) total);
+        float t = Math.min(1f, (e.frame + e.sub) / (float) total);
         float flash = (e.frame <= 2 || (e.frame >= 5 && e.frame <= 7)) ? 1f : 0.75f;
         float alpha = t < 0.45f ? flash : Math.max(0f, flash * (1f - (t - 0.45f) / 0.55f));
         if (alpha <= 0f) return;
@@ -1274,7 +1291,7 @@ final class FxRenderer {
         TextureRegion region = ItemSprites.regionFor(e.thrownItem);
         if (region == null) return;
         int frames = e.totalFrames();
-        float t = frames <= 1 ? 1f : e.frame / (float) (frames - 1);
+        float t = frames <= 1 ? 1f : (e.frame + e.sub) / (float) (frames - 1);
         float sx = (e.location.tileX() + 0.5f) * CELL;
         float sy = (e.location.tileY() + 0.5f) * CELL;
         float dxTotal =  8f * CELL;   // right
@@ -1297,7 +1314,7 @@ final class FxRenderer {
         TextureRegion region = MobSprites.regionFor(e.fallenMob);
         if (region == null) return;
         int frames = e.totalFrames();
-        float t = frames <= 1 ? 1f : e.frame / (float) (frames - 1);
+        float t = frames <= 1 ? 1f : (e.frame + e.sub) / (float) (frames - 1);
         float scale = 1f - t;
         float alpha = 1f - t;
         if (alpha <= 0f) return;
@@ -1320,10 +1337,10 @@ final class FxRenderer {
     private void drawUpArrow(Effect e) {
         int total = e.totalFrames();
         if (total <= 0) return;
-        float t = Math.min(1f, e.frame / (float) total);
+        float t = Math.min(1f, (e.frame + e.sub) / (float) total);
         float alpha = 1f - t;
         if (alpha <= 0f) return;
-        float yOffset = e.frame * 0.7f;          // rises straight up
+        float yOffset = (e.frame + e.sub) * 0.7f;          // rises straight up
         float baseX = (e.location.tileX() + 0.5f) * CELL;
         float baseY = e.location.tileY() * CELL + CELL * 0.6f + yOffset;
         Color c = tintToColor(e.tint, Color.YELLOW);
@@ -1355,7 +1372,7 @@ final class FxRenderer {
         if (region == null) return;
         int total = e.totalFrames();
         if (total <= 0) return;
-        float t = Math.min(1f, e.frame / (float) total);
+        float t = Math.min(1f, (e.frame + e.sub) / (float) total);
         // Color cycle in three equal phases.
         Color base;
         if      (t < 1f / 3f) base = TINT_GREY;
@@ -1378,7 +1395,7 @@ final class FxRenderer {
         TextureRegion region = ItemSprites.regionFor(e.thrownItem);
         if (region == null) return;
         int frames = e.totalFrames();
-        float t = frames <= 1 ? 1f : e.frame / (float) (frames - 1);
+        float t = frames <= 1 ? 1f : (e.frame + e.sub) / (float) (frames - 1);
         float scale = 1f - t;
         float alpha = 1f - t;
         if (alpha <= 0f) return;
@@ -1404,7 +1421,7 @@ final class FxRenderer {
         if (region == null) return;
         float drawW = CELL, drawH = CELL;
         int frames = e.totalFrames();
-        float t = frames <= 1 ? 1f : e.frame / (float) (frames - 1);
+        float t = frames <= 1 ? 1f : (e.frame + e.sub) / (float) (frames - 1);
         float sx = (e.location.tileX()    + 0.5f) * CELL;
         float sy = (e.location.tileY()    + 0.5f) * CELL;
         float dx = (e.endLocation.tileX() + 0.5f) * CELL;

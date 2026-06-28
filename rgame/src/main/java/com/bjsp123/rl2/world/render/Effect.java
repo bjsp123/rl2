@@ -202,6 +202,12 @@ public class Effect {
     public Point endLocation;
     public EffectType type;
     public int frame;
+    /** Render-time sub-frame fraction (0..1) toward the next logical {@link #frame},
+     *  set by {@link FxRenderer#drawEffect} each draw so position/fade math can
+     *  interpolate between logical frames and stay smooth above 60 Hz. Not part
+     *  of the logical lifecycle - {@link EffectStage#tick()} only touches
+     *  {@link #frame}. */
+    public float sub;
     /** Per-instance override of the type's default lifetime; 0 means use the type default. */
     public int frameCount;
     /** Render frames to wait before this effect starts playing - see

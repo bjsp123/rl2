@@ -95,6 +95,11 @@ public final class StatBlock {
      *  (weapon + intrinsic both contribute). */
     public int knockbackSquares = 0;
 
+    /** Levels of x-ray vision (EYE_CHARM): the holder can see enemy bodies
+     *  through this many opaque tiles (walls + smoke). Composes by sum; 0 = none.
+     *  Read by {@link com.bjsp123.rl2.logic.LevelSystem#updateVisibility}. */
+    public int xRayEyes = 0;
+
     /** "Especially frightening" - terrifiable observers always flee. OR-merged. */
     public boolean terrifying = false;
     /** Susceptible to terrifying mobs. OR-merged so a "ring of fearlessness" can clear
@@ -145,6 +150,7 @@ public final class StatBlock {
         fireSpreadOnAttack = false;
         poisonsOnAttack    = false;
         knockbackSquares = 0;
+        xRayEyes = 0;
         terrifying  = false;
         terrifiable = false;
         hatesLight  = false;
@@ -183,6 +189,7 @@ public final class StatBlock {
         fireSpreadOnAttack = src.fireSpreadOnAttack;
         poisonsOnAttack    = src.poisonsOnAttack;
         knockbackSquares = src.knockbackSquares;
+        xRayEyes = src.xRayEyes;
         terrifying  = src.terrifying;
         terrifiable = src.terrifiable;
         hatesLight  = src.hatesLight;
@@ -234,6 +241,7 @@ public final class StatBlock {
         if (other.fireSpreadOnAttack) fireSpreadOnAttack = true;
         if (other.poisonsOnAttack)    poisonsOnAttack    = true;
         knockbackSquares += other.knockbackSquares;
+        xRayEyes += other.xRayEyes;
         if (other.terrifying)         terrifying         = true;
         if (other.terrifiable)        terrifiable        = true;
         if (other.hatesLight)         hatesLight         = true;

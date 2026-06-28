@@ -65,9 +65,9 @@ public final class V2CharacterSelect extends V2Screen {
      *  pre-activated, +10 teleport orbs in the starting inventory. */
     private boolean revealWholeWorld;
     /** Drop the player on the endgame Landing floor (1 below the last
-     *  regular dungeon depth) instead of depth 1. Defaults TRUE while we
-     *  iterate on the endgame floors - flip back to FALSE once they're
-     *  feature-complete and the regular dungeon start matters again. */
+     *  regular dungeon depth) instead of depth 1. Defaults FALSE (normal
+     *  depth-1 start); flip to TRUE to drop onto the Landing floor when
+     *  iterating on the endgame floors. */
     private boolean startOnLanding = false;
     /** Per-run difficulty - drives HP multipliers, regen, spawn cadence, and the
      *  number of Jade Peach revive charms granted at start. */

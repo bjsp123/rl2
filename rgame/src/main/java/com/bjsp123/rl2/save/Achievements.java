@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.save;
 
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -12,6 +13,11 @@ public final class Achievements {
 
     /** Earned achievements. Sorted by enum order at iteration time. */
     public final Set<Achievement> unlocked = EnumSet.noneOf(Achievement.class);
+
+    /** Mob types the player has killed at least once across every run. Used
+     *  by {@link AchievementSystem} to drive {@link Achievement#KILLED_ONE_OF_EACH}
+     *  - a long-term collection goal. Persisted alongside {@link #unlocked}. */
+    public final Set<String> killedMobTypes = new HashSet<>();
 
     /** {@code true} when the player has earned {@code a}. */
     public boolean isUnlocked(Achievement a) {

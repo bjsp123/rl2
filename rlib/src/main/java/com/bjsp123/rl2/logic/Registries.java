@@ -24,6 +24,8 @@ public final class Registries {
             new CsvRegistryStore<>("themedrooms.csv", ThemedRoomDefinition::parseAll, d -> d.type);
     private static final CsvRegistryStore<GemRecipe> RECIPES =
             new CsvRegistryStore<>("recipes.csv", GemRecipe::parseAll, r -> r.output);
+    private static final CsvRegistryStore<GemDefinition> GEMS =
+            new CsvRegistryStore<>("gems.csv", GemDefinition::parseAll, d -> d.species.name());
 
     private static final Map<String, Set<String>> mobFactionMembers = new LinkedHashMap<>();
     private static final Set<String> EMPTY_SET = Collections.emptySet();
@@ -89,4 +91,12 @@ public final class Registries {
     public static GemRecipe recipe(String output) { return RECIPES.get(output); }
     public static Set<String> recipeTypes() { return RECIPES.knownTypes(); }
     public static List<GemRecipe> recipes() { return List.copyOf(RECIPES.map().values()); }
+
+    public static void loadGems(String csv) { GEMS.load(csv); }
+    /** Gem data row for {@code species}, or {@code null} if gems.csv wasn't
+     *  loaded or omits it. */
+    public static GemDefinition gem(com.bjsp123.rl2.model.GemSpecies species) {
+        return species == null ? null : GEMS.get(species.name());
+    }
+    public static List<GemDefinition> gems() { return List.copyOf(GEMS.map().values()); }
 }

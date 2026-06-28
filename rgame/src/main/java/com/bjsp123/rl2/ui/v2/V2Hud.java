@@ -37,7 +37,7 @@ import java.util.function.Supplier;
  *   <li><b>Top-right</b> - burger button (opens settings / map / encyclopaedia /
  *       return-to-title via dropdown - dropdown not yet wired in this slice).</li>
  *   <li><b>Bottom-left</b> - Look button.</li>
- *   <li><b>Bottom-right</b> - six action quickslots + an inventory button at the
+ *   <li><b>Bottom-right</b> - action quickslots ({@code Settings.quickslotCount()} of them) + an inventory button at the
  *       far right, all flush to the bottom-right corner.</li>
  * </ul>
  *
@@ -80,6 +80,18 @@ public final class V2Hud {
     private Supplier<Mob> playerSupplier;
     private ActionBar actionBar;
     private int depth, tick;
+
+    /** Smoothed turn-clock hand position, in continuous turns (integer part =
+     *  turns elapsed, fractional part = position within the current turn). Eased
+     *  toward the real {@link #tick} each frame so the hand sweeps at frame-rate
+     *  resolution instead of snapping a tick at a time. */
+    private float clockDisplayTurns;
+    private boolean clockDisplayInit;
+    /** Exponential catch-up rate (1/sec). Higher = snappier. */
+    private static final float CLOCK_EASE_RATE = 9f;
+    /** Never let the hand fall more than this far behind the real position, so a
+     *  multi-turn jump (a long rest) catches up promptly instead of spinning. */
+    private static final float CLOCK_MAX_LAG_TURNS = 1f;
     /** RL-54 hazard level of the current floor, shown at the top of the HUD. */
     private int hazard;
 
@@ -212,7 +224,13 @@ public final class V2Hud {
             popLowHpChromeTint();
         }
         renderHitFlash();
-        if (hitFlashFrames > 0) hitFlashFrames--;
+        // Drain on wall-clock time (one frame = 1/60 s) so the flash lasts the
+        // same duration at any refresh rate, capping the dt like the world tick.
+        if (hitFlashFrames > 0) {
+            int dtMs = Math.min(100, (int) (Gdx.graphics.getDeltaTime() * 1000f));
+            hitFlashFrames = Math.max(0f,
+                    hitFlashFrames - com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs));
+        }
     }
 
     /** Flash the screen red + play a warning sfx. PlayScreen's animator hook
@@ -224,7 +242,7 @@ public final class V2Hud {
 
     /** Below 25% HP the HUD chrome reddens linearly; full red at 1%. */
     private float lowHpFactor;
-    private int   hitFlashFrames;
+    private float hitFlashFrames;
     private static final int HIT_FLASH_DURATION = 18;
 
     /** Saved chrome colors so the low-HP tint can be reverted after the HUD
@@ -479,8 +497,25 @@ public final class V2Hud {
         s.setColor(UIVars.TEXT_DIM);
         s.rectLine(cx, cy + r - 3f, cx, cy + r - 1f, 1f);
 
-        float frac = TurnSystem.tickWithinStandardTurn(tick)
-                / (float) TurnSystem.STANDARD_TURN_TICKS;
+        // Ease the hand toward the real tick position each frame (called once
+        // per render) so it sweeps continuously rather than snapping. tick is
+        // monotonic within a run, so the eased value only ever moves forward;
+        // a backward jump (new game / reset) snaps instead of unwinding.
+        float targetTurns = tick / (float) TurnSystem.STANDARD_TURN_TICKS;
+        if (!clockDisplayInit) {
+            clockDisplayTurns = targetTurns;
+            clockDisplayInit = true;
+        } else if (targetTurns < clockDisplayTurns
+                || targetTurns - clockDisplayTurns > CLOCK_MAX_LAG_TURNS) {
+            // Reset, or too far behind to chase smoothly - clamp close and ease in.
+            clockDisplayTurns = Math.min(targetTurns,
+                    Math.max(clockDisplayTurns, targetTurns - CLOCK_MAX_LAG_TURNS));
+        }
+        float dt = Math.min(0.1f, Gdx.graphics.getDeltaTime());
+        float alpha = 1f - (float) Math.exp(-dt * CLOCK_EASE_RATE);
+        clockDisplayTurns += (targetTurns - clockDisplayTurns) * alpha;
+
+        float frac = clockDisplayTurns - (float) Math.floor(clockDisplayTurns);
         float angle = (float) (Math.PI * 0.5 - frac * Math.PI * 2.0);
         float hx = cx + (float) Math.cos(angle) * (r - 4f);
         float hy = cy + (float) Math.sin(angle) * (r - 4f);

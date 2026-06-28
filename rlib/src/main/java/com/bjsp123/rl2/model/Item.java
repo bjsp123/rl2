@@ -130,8 +130,8 @@ public class Item {
     public enum UseBehavior {
         /** No use action; the "Use" button is grayed out. */
         NONE,
-        /** Consume the item; applies any buff it carries. {@code foodValue} marks it
-         *  edible but is otherwise inert (satiety was removed from the game). */
+        /** Eat the item, applying any buffs it carries, then consume it. All
+         *  FOOD-category items use this; some confer no buff (plain rations). */
         EAT,
         /** Element wand: fires a projectile that applies {@link Item#wandEffect} on
          *  impact. Summon-style wands (non-null {@link Item#summonsWhenUsed}) bypass
@@ -238,10 +238,6 @@ public class Item {
      *  bombs). Scales with item level via TILECOUNT_LEVEL_SCALE_FACTOR.
      *  Zero for items without an AOE component. */
     public int effectSize;
-    /** Marks the item as edible (positive = food). Retained from the old satiety
-     *  system but inert now - eating applies the item's buff, if any, and nothing else.
-     *  Zero for non-food. */
-    public int foodValue;
     public Point location; // null when in an inventory
     /** What happens when this item is thrown; null means it just lands on the floor. */
     public ItemEffect throwEffect;
@@ -329,6 +325,10 @@ public class Item {
     /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
     public int knockbackSquares;
 
+    /** Levels of x-ray vision granted while equipped (EYE_CHARM). The wielder
+     *  sees enemy bodies through this many opaque tiles (walls + smoke). 0 = none. */
+    public int xRayEyes;
+
     /** When true, an item lying on the floor emits an attention-catching twinkle
      *  particle stream so the player notices it. Power orbs use it; future
      *  glowing items just set the flag. */
@@ -356,7 +356,7 @@ public class Item {
 
     /** Count of identical items represented by this entry. {@code 1} for a singleton.
      *  Inventory operations merge new items into the existing stack via
-     *  {@link com.bjsp123.rl2.model.Inventory#addToBag}; consumption helpers decrement
+     *  {@link com.bjsp123.rl2.logic.InventorySystem#addToBag}; consumption helpers decrement
      *  the count and only drop the entry once it hits 0. Equipped items are always
      *  count 1 - equipping pulls one out of a bag stack. */
     public int count = 1;
@@ -434,8 +434,8 @@ public class Item {
     }
 
     /** True if {@code other} is "exactly identical" for stacking purposes - same type,
-     *  both stackable. Bombs ignore level so same-type bombs from different depths
-     *  merge freely; potions and food still require matching levels. */
+     *  same level, both stackable. Items from different depths (levels) never merge,
+     *  bombs included. */
     public boolean matchesStackKey(Item other) {
         if (other == null || other == this) return false;
         if (!isStackable() || !other.isStackable()) return false;

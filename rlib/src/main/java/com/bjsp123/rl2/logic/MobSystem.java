@@ -290,7 +290,9 @@ public class MobSystem {
             // NPCs grab whatever they step on; the player picks things up manually via
             // tryInteract (space / tap-on-self) so they don't get railroaded into
             // collecting every loot pile they walk through.
-            if (mob.behavior != Behavior.PLAYER) pickupAtFeet(level, mob);
+            // The SMART agent (isPlayer) drops its least valuable item to make
+            // room when full; ordinary enemies just skip a full bag.
+            if (mob.behavior != Behavior.PLAYER) pickupAtFeet(level, mob, mob.isPlayer);
             // Both swappers visibly stepped onto a new tile - apply door-leave / door-enter
             // bookkeeping symmetrically so a mouse-vs-cat shuffle through a doorway behaves
             // the same as a regular step.
@@ -306,7 +308,7 @@ public class MobSystem {
         if (!MobQueries.blocksMovement(level, mob, next)) {
             int oldX = cx, oldY = cy;
             mob.position = next;
-            if (mob.behavior != Behavior.PLAYER) pickupAtFeet(level, mob);
+            if (mob.behavior != Behavior.PLAYER) pickupAtFeet(level, mob, mob.isPlayer);
             onMobLeftTile(level, mob, oldX, oldY);
             onMobEnteredTile(level, mob, nx, ny);
             cost = moveCostOnto(mob, level, nx, ny);
@@ -468,7 +470,7 @@ public class MobSystem {
         // oily" case (it spreads to a neighbour instead).
         if (mob.effectiveStats().size >= Mob.BIG_ENOUGH_TO_DRIP_OIL && !mob.effectiveStats().flying
                 && BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.OILY)
-                && RANDOM.nextDouble() < 0.5) {
+                && RANDOM.nextDouble() < 0.125) {
             SurfaceSystem.addSurface(level, new Point(nx, ny), Surface.OIL);
         }
         // Water drip: a sufficiently big WET non-flying mob (size > 4) on
@@ -481,6 +483,17 @@ public class MobSystem {
                 && level.surface[nx][ny] == null
                 && RANDOM.nextDouble() < (1.0 / 3.0)) {
             SurfaceSystem.addSurface(level, new Point(nx, ny), Surface.WATER);
+        }
+        // Tree trample: a very large mob (size >= BIG_ENOUGH_TO_FLATTEN_TREES)
+        // crashing through trees flattens them to grass. Flying mobs clear the
+        // canopy.
+        if (mob.effectiveStats().size >= Mob.BIG_ENOUGH_TO_FLATTEN_TREES
+                && !mob.effectiveStats().flying
+                && level.vegetation != null
+                && level.vegetation[nx][ny] == com.bjsp123.rl2.model.Level.Vegetation.TREES) {
+            level.vegetation[nx][ny] = com.bjsp123.rl2.model.Level.Vegetation.GRASS;
+            VegetationSystem.emitVegetationChanged(level, nx, ny,
+                    com.bjsp123.rl2.model.Level.Vegetation.GRASS);
         }
         // POWERUP pickup-trigger - stepping onto a tile with a POWERUP
         // item destroys the item and applies its wandEffect to the
@@ -1294,10 +1307,10 @@ public class MobSystem {
         if (type == AttackType.MELEE) com.bjsp123.rl2.util.ActionTracker.bumpMelee(attacker);
         if (rawDealt < 0) rawDealt = 0;
         if (rawDealt > 0 && BuffSystem.hasBuff(target, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED)) return false;
-        // PHASE_DODGE: a mob with the dodge ability (wraiths) or the DODGE perk (player) slides
+        // WRAITH_DODGE: a mob with the dodge ability (wraiths) or the DODGE perk (player) slides
         // to a free adjacent square and avoids the whole hit, then goes on cooldown. Only fires
         // off-cooldown and when there's a suitable square to dash to.
-        if (rawDealt > 0 && tryPhaseDodge(level, target, attacker)) return false;
+        if (rawDealt > 0 && tryWraithDodge(level, target, attacker)) return false;
         // Stat-based per-element immunity: poisonImmune zeroes incoming POISON
         // before mitigation. The HIT event still fires below with dealt=0 so the
         // player sees "-0 poison" floating, signalling the immunity.
@@ -1349,12 +1362,12 @@ public class MobSystem {
             lastPlayerElement   = element;
             lastPlayerHitDealt  = dealt;
         }
-        // PHASE ends the moment the mob takes or deals damage.
+        // PHASE persists through both dealing and taking damage - the holder
+        // gets the full duration as a real combat window, not just a panic
+        // button. Earlier versions dropped on damage events, which made the
+        // rogue's jade fish purely escapist.
         if (dealt > 0) {
-            BuffSystem.removeBuff(target,   com.bjsp123.rl2.model.Buff.BuffType.PHASE);
             BuffSystem.shortenFrozenOnDamage(target);
-            if (attacker != null)
-                BuffSystem.removeBuff(attacker, com.bjsp123.rl2.model.Buff.BuffType.PHASE);
         }
         // God-mode clamp: damage applies normally but hp is floored at 1
         // so a god-mode target never dies. Set on the player Mob from
@@ -1433,8 +1446,13 @@ public class MobSystem {
                 && element == DamageElement.PHYSICAL
                 && !target.effectiveStats().poisonImmune) {
             int lvl = Math.max(1, attacker.characterLevel);
+            // The unique spider injects full-strength venom (~1.5 stacks/level);
+            // ordinary spiders inflict 2/3 of that (~1 stack/level).
+            int stacks = attacker.unique
+                    ? Math.max(1, lvl * 3 / 2)
+                    : Math.max(1, lvl);
             BuffSystem.apply(level, target, com.bjsp123.rl2.model.Buff.BuffType.POISONED,
-                    lvl * 3, attacker);
+                    stacks, attacker);
         }
         // Reactive fire burst. Mobs with {@link Mob#fireSpreadOnAttack} (e.g. blazing
         // firemouse) ignite their own tile + the four cardinal neighbours when they take
@@ -1463,6 +1481,14 @@ public class MobSystem {
             if (weapon != null && weapon.brand != null) {
                 BrandSystem.applyBrandOnHit(level, attacker, target, weapon);
             }
+        }
+        // Beacon spirits: a landed player blow on the Great Wraith may shatter
+        // one orbiting spirit (50%), recomputing the boss's power from the
+        // reduced count. Reaching this point means the hit landed (past the
+        // SHIELDED / WRAITH_DODGE early-returns), so even a fully-mitigated
+        // 0-damage swing counts. Only fires while the boss survives.
+        if (target.hp > 0) {
+            maybeShatterBeaconSpirit(level, attacker, target, type);
         }
         if (target.hp <= 0) {
             killMob(level, target, attacker);
@@ -1567,11 +1593,25 @@ public class MobSystem {
      *  Returns the number of items actually picked up - callers use this to decide whether
      *  to charge a move tick. */
     public static int pickupAtFeet(Level level, Mob mob) {
+        return pickupAtFeet(level, mob, false);
+    }
+
+    /**
+     * As {@link #pickupAtFeet(Level, Mob)}, but when {@code dropWorstWhenFull}
+     * is set, an AI picker (SMART agent / auto-explore) whose bag group is full
+     * drops its least valuable item in that group to make room - provided the
+     * item underfoot is worth strictly more. Manual players never auto-drop, so
+     * they keep full control of what leaves their bag.
+     */
+    public static int pickupAtFeet(Level level, Mob mob, boolean dropWorstWhenFull) {
         if (!mob.effectiveStats().canPickUp) return 0;
         int x = mob.position.tileX(), y = mob.position.tileY();
         boolean isPlayer = mob.isPlayer;
         String pickerName = mob.name != null ? mob.name : "?";
         int picked = 0;
+        // Items bumped out of the bag to make room - placed on the floor AFTER
+        // the loop so we don't mutate level.items mid-iteration.
+        java.util.List<Item> droppedToFloor = null;
         Iterator<Item> it = level.items.iterator();
         while (it.hasNext()) {
             Item item = it.next();
@@ -1593,7 +1633,22 @@ public class MobSystem {
             // ItemPickedUp event below can carry the source tile for the
             // arc-toward-bottom-right animation.
             Point fromTile = item.location;
-            if (!InventorySystem.addToBag(mob.inventory, item)) break;
+            if (!InventorySystem.addToBag(mob.inventory, item)) {
+                if (!dropWorstWhenFull) break;
+                // Bag group full: bump the least valuable item in that group, but
+                // only when the item underfoot is worth strictly more (no thrashing).
+                Item worst = InventorySystem.leastValuableInGroup(
+                        mob.inventory, item.inventoryCategory);
+                if (worst == null || worst.getValue() >= item.getValue()) break;
+                if (!InventorySystem.removeEntirely(mob.inventory, worst)) break;
+                if (droppedToFloor == null) droppedToFloor = new java.util.ArrayList<>();
+                droppedToFloor.add(worst);
+                if (isPlayer) {
+                    EventLog.add(Messages.itemDropped(pickerName,
+                            worst.name != null ? worst.name : worst.type));
+                }
+                if (!InventorySystem.addToBag(mob.inventory, item)) break;
+            }
             item.location = null;
             it.remove();
             picked++;
@@ -1609,6 +1664,18 @@ public class MobSystem {
             if (level.events != null) {
                 level.events.add(
                         new com.bjsp123.rl2.event.GameEvent.ItemPickedUp(mob, item, fromTile));
+            }
+            if (mob.isPlayer) {
+                mob.runStats.itemsPickedUp++;
+                if (item.isGem()) mob.runStats.gemsFound++;
+            }
+        }
+        // Place any bumped items on the floor at the picker's tile (done after
+        // iteration to avoid mutating level.items while iterating it).
+        if (droppedToFloor != null) {
+            for (Item d : droppedToFloor) {
+                d.location = new Point(x, y);
+                level.items.add(d);
             }
         }
         return picked;
@@ -1642,6 +1709,7 @@ public class MobSystem {
                 BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.ON_FIRE);
                 BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.POISONED);
                 BuffSystem.removeBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.BLEEDING);
+                rechargeAllItems(mob);
                 reviveShockwave(level, mob);
                 if (level.events != null && mob.position != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.PlayerRevived(mob.position));
@@ -1711,19 +1779,26 @@ public class MobSystem {
                     && !BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.REVENANT)) {
                 killer.killedRoster.add(mob.mobType);
             }
+            // Run-stats kill tally: every enemy the player kills (boss + revenants
+            // included), for the victory screen + score.
+            if (killer.isPlayer && !mob.isPlayer && !mob.isClone) {
+                killer.runStats.mobsKilled++;
+            }
         }
 
-        // Final-boss defeat (RL-19): killing the Great Wraith stamps the escape
-        // stairs at the arena centre and ends revenant support, regardless of any
-        // adds still alive. PlayScreen turns stepping onto these stairs into the win.
+        // Final-boss defeat (RL-19): killing the Great Wraith opens the descent
+        // stairs at the arena centre (down to the exit-portal floor) and ends
+        // revenant support, regardless of any adds still alive. The down-stairs
+        // target was wired to the exit floor in WorldTopology.appendSpecialLevels.
         if (level.kind == Level.LevelKind.FINAL_BOSS && "GREAT_WRAITH".equals(mob.mobType)) {
             level.bossDefeated = true;
             level.spawner = null;
+            if (killer != null && killer.isPlayer) killer.killedGreatWraith = true;
             if (level.lockedExit != null) {
                 int ex = level.lockedExit.tileX(), ey = level.lockedExit.tileY();
                 if (ex >= 0 && ey >= 0 && ex < level.width && ey < level.height) {
-                    level.tiles[ex][ey] = Tile.STAIRS_UP;
-                    level.stairsUp = new Point(ex, ey);
+                    level.tiles[ex][ey] = Tile.STAIRS_DOWN;
+                    level.stairsDown = new Point(ex, ey);
                 }
             }
         }
@@ -1740,6 +1815,20 @@ public class MobSystem {
                     mob, killer, mob.position.tileX(), mob.position.tileY(), visible));
         }
         level.mobs.remove(mob);
+    }
+
+    /** Refill every charge-bearing item the mob carries (bag + equipped) to its
+     *  max - the Jade Peach's revive tops up wands, blink tools, jade tools, etc. */
+    private static void rechargeAllItems(Mob mob) {
+        if (mob == null || mob.inventory == null) return;
+        if (mob.inventory.bag != null) {
+            for (Item it : mob.inventory.bag) {
+                if (it != null && it.baseChargeMax > 0) it.charge = it.maxCharge();
+            }
+        }
+        for (Item it : mob.inventory.allEquipped()) {
+            if (it != null && it.baseChargeMax > 0) it.charge = it.maxCharge();
+        }
     }
 
     /** First carried Jade Peach (revive charm) in the bag, or null. Classified by
@@ -2164,34 +2253,91 @@ public class MobSystem {
         }
         level.remainingRoster = roster;
 
+        // Boss-floor hazard is set from the player's total kills on arrival - a
+        // heavier body count makes the floor more dangerous, which drives the
+        // revenant spawn rate (see runLevelSpawner). Frozen here: TurnSystem
+        // skips the time-based hazard climb on the boss floor. Hazard is 0 up to
+        // the kill floor, then +1 per BOSS_HAZARD_KILLS_PER_POINT, capped at
+        // BOSS_HAZARD_MAX (0..7, wider than the normal HAZARD_MAX).
+        int kills = player.killedRoster.size();
+        level.hazardLevel = kills < GameBalance.BOSS_HAZARD_KILL_FLOOR ? 0
+                : Math.min(GameBalance.BOSS_HAZARD_MAX,
+                        1 + (kills - GameBalance.BOSS_HAZARD_KILL_FLOOR)
+                                / Math.max(1, GameBalance.BOSS_HAZARD_KILLS_PER_POINT));
+
         Point at = level.lockedExit != null ? level.lockedExit
                 : new Point(level.width / 2, level.height / 2);
         Mob boss = MobFactory.spawn("GREAT_WRAITH", at);
         if (boss == null) return;
-        int beacons = Math.max(0, player.beaconsLit);
-        int lvl = Math.min(GameBalance.MAX_CHARACTER_LEVEL,
-                GameBalance.BOSS_BASE_LEVEL + beacons * GameBalance.BOSS_LEVEL_PER_BEACON);
-        MobProgression.setSpawnLevel(boss, lvl);
-        // Stacked buffs scale survivability/threat past the level cap with beacons;
-        // ability milestones add haste.
-        if (beacons > 0) {
-            BuffSystem.apply(level, boss,
-                    com.bjsp123.rl2.model.Buff.BuffType.PROTECTION, Math.min(10, beacons), boss);
-            BuffSystem.apply(level, boss,
-                    com.bjsp123.rl2.model.Buff.BuffType.REGENERATION, Math.min(10, beacons), boss);
-            if (GameBalance.BOSS_ABILITY_PER_BEACONS > 0
-                    && beacons >= GameBalance.BOSS_ABILITY_PER_BEACONS) {
-                BuffSystem.apply(level, boss,
-                        com.bjsp123.rl2.model.Buff.BuffType.HASTED,
-                        Math.min(10, beacons / GameBalance.BOSS_ABILITY_PER_BEACONS), boss);
-            }
-        }
+        // The boss's beacon power is carried by its beacon spirits - one per
+        // beacon lit on arrival. Its level + buffs derive from that count; the
+        // player can destroy spirits (50% per landed hit) to weaken it.
+        boss.beaconSpirits = Math.max(0, player.beaconsLit);
+        applyBeaconSpiritPower(level, boss, /*seatFullHp=*/true);
         boss.stateOfMind = Mob.StateOfMind.AWAKE;
         level.mobs.add(boss);
         MobHooks.onSpawn(level, boss);
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobSpawned(boss, at));
         }
+    }
+
+    /** (Re)derive the Great Wraith's power from its living beacon-spirit count:
+     *  spawn level + PROTECTION / REGENERATION stacks + a haste milestone, all
+     *  scaling 1:1 with spirits (same numbers the per-beacon scaling used).
+     *  {@code seatFullHp} is true on spawn (full HP at the scaled level); false
+     *  on a spirit loss - the level drops and current HP is clamped down (so
+     *  destroying a spirit also chips the boss), never healed. */
+    static void applyBeaconSpiritPower(Level level, Mob boss, boolean seatFullHp) {
+        int n = Math.max(0, boss.beaconSpirits);
+        int lvl = Math.min(GameBalance.MAX_CHARACTER_LEVEL,
+                GameBalance.BOSS_BASE_LEVEL + n * GameBalance.BOSS_LEVEL_PER_BEACON);
+        if (seatFullHp) {
+            MobProgression.setSpawnLevel(boss, lvl);
+        } else {
+            boss.characterLevel = lvl;
+            boss.statsDirty = true;
+            int maxHp = (int) Math.round(boss.effectiveStats().maxHp);
+            if (boss.hp > maxHp) boss.hp = maxHp;
+        }
+        setBeaconBuff(level, boss, com.bjsp123.rl2.model.Buff.BuffType.PROTECTION,   Math.min(10, n));
+        setBeaconBuff(level, boss, com.bjsp123.rl2.model.Buff.BuffType.REGENERATION, Math.min(10, n));
+        int haste = (GameBalance.BOSS_ABILITY_PER_BEACONS > 0
+                && n >= GameBalance.BOSS_ABILITY_PER_BEACONS)
+                ? Math.min(10, n / GameBalance.BOSS_ABILITY_PER_BEACONS) : 0;
+        setBeaconBuff(level, boss, com.bjsp123.rl2.model.Buff.BuffType.HASTED, haste);
+    }
+
+    /** Set a beacon-derived buff to exactly {@code stacks}: apply it when absent
+     *  (spawn - one log line), otherwise mutate the live stack count silently
+     *  (recompute on spirit loss), or remove it at zero. */
+    private static void setBeaconBuff(Level level, Mob boss,
+                                      com.bjsp123.rl2.model.Buff.BuffType t, int stacks) {
+        if (stacks <= 0) { BuffSystem.removeBuff(boss, t); return; }
+        com.bjsp123.rl2.model.Buff existing = BuffSystem.get(boss, t);
+        if (existing == null) {
+            BuffSystem.apply(level, boss, t, stacks, boss);
+        } else {
+            existing.stacks = Math.min(stacks, BuffSystem.stackCap(t));
+            boss.statsDirty = true;
+        }
+    }
+
+    /** A landed player attack on the Great Wraith may shatter one beacon spirit
+     *  (chance {@link GameBalance#BOSS_SPIRIT_DESTROY_CHANCE}); the boss's power
+     *  is then recomputed from the reduced count. Only deliberate hits count -
+     *  environmental DOT (fire/poison ticks, falls) is excluded. No-op once the
+     *  spirits are gone. */
+    private static void maybeShatterBeaconSpirit(Level level, Mob attacker, Mob target,
+                                                 AttackType type) {
+        if (target == null || target.beaconSpirits <= 0) return;
+        if (type == AttackType.ENVIRONMENTAL) return;
+        if (attacker == null || !attacker.isPlayer) return;
+        if (!"GREAT_WRAITH".equals(target.mobType)) return;
+        if (RANDOM.nextDouble() >= GameBalance.BOSS_SPIRIT_DESTROY_CHANCE) return;
+        target.beaconSpirits--;
+        applyBeaconSpiritPower(level, target, /*seatFullHp=*/false);
+        EventLog.add(Messages.beaconSpiritDestroyed(target.beaconSpirits));
     }
 
     /** Data-driven per-turn mob spawner. Reads {@link Level#spawner} (null on
@@ -2207,8 +2353,15 @@ public class MobSystem {
         if (sp == null) return;
         boolean bossPool = level.remainingRoster != null;   // final-boss revenants
 
-        // Cadence: deterministic everyNTurns, else probabilistic chancePerTurn.
-        if (sp.everyNTurns > 0) {
+        // Cadence. The boss-floor revenant pool derives its cadence from the
+        // floor's hazard level (set from the player's kills on arrival); every
+        // other spawner uses its fixed everyNTurns / chancePerTurn.
+        if (bossPool) {
+            int[] table = GameBalance.BOSS_ADD_CADENCE_BY_HAZARD;
+            int hz = Math.max(0, Math.min(table.length - 1, level.hazardLevel));
+            int cad = Math.max(GameBalance.BOSS_ADD_CADENCE_MIN, table[hz]);
+            if (level.turnsOnLevel <= 0 || level.turnsOnLevel % cad != 0) return;
+        } else if (sp.everyNTurns > 0) {
             if (level.turnsOnLevel <= 0 || level.turnsOnLevel % sp.everyNTurns != 0) return;
         } else {
             if (sp.chancePerTurn <= 0) return;
@@ -2241,10 +2394,11 @@ public class MobSystem {
         if (bud == null) return;
 
         if (bossPool) {
-            // Reanimated kill: level to the boss-floor depth, REVENANT mark, and
-            // the boss's faction so it fights the player + allies with the boss.
+            // Reanimated kill: per-mob depth-adjusted (the boss floor is at
+            // max depth, so each revenant lands at the top of its band) +
+            // REVENANT mark + the boss's faction so it fights the player.
             MobProgression.setSpawnLevel(bud,
-                    Math.min(GameBalance.MAX_CHARACTER_LEVEL, 1 + level.depth));
+                    MobProgression.depthAdjustedSpawnLevel(level, Registries.mob(species)));
             BuffSystem.apply(level, bud,
                     com.bjsp123.rl2.model.Buff.BuffType.REVENANT, 9999, bud);
             Mob boss = findFinalBoss(level);
@@ -2254,9 +2408,13 @@ public class MobSystem {
                         ? new java.util.HashSet<>(boss.enemyFactions) : new java.util.HashSet<>();
             }
             level.remainingRoster.remove(rosterIdx);   // this individual is spent
-        } else if (sp.levelRampPer10Turns > 0) {
-            int lvl = Math.min(GameBalance.MAX_CHARACTER_LEVEL,
-                    1 + sp.levelRampPer10Turns * (level.turnsOnLevel / 10));
+        } else {
+            // Per-mob depth-adjusted base level, with the spawner's linger
+            // ramp added on top so a stalled level still escalates.
+            int base = MobProgression.depthAdjustedSpawnLevel(
+                    level, Registries.mob(species));
+            int ramp = sp.levelRampPer10Turns * (level.turnsOnLevel / 10);
+            int lvl  = Math.min(GameBalance.MAX_CHARACTER_LEVEL, base + ramp);
             MobProgression.setSpawnLevel(bud, lvl);
         }
         if (sp.spawnAwake) bud.stateOfMind = Mob.StateOfMind.AWAKE;
@@ -2446,8 +2604,8 @@ public class MobSystem {
         double vision = caster.effectiveStats().visionRadius;
         for (Mob.MobAbility ab : caster.abilities) {
             if (ab == null) continue;
-            // PHASE_DODGE is reactive (handled in processAttack), never cast proactively.
-            if (ab.kind == Mob.MobAbility.AbilityKind.PHASE_DODGE) continue;
+            // WRAITH_DODGE is reactive (handled in processAttack), never cast proactively.
+            if (ab.kind == Mob.MobAbility.AbilityKind.WRAITH_DODGE) continue;
             if (ab.cooldownTracker != null
                     && BuffSystem.hasBuff(caster, ab.cooldownTracker)) continue;
             Mob target = pickAbilityTarget(caster, level, ab, vision);
@@ -2498,10 +2656,10 @@ public class MobSystem {
         return false;
     }
 
-    /** PHASE_DODGE cooldown length (turns) for {@code m}, or {@code -1} if it can't dodge.
+    /** WRAITH_DODGE cooldown length (turns) for {@code m}, or {@code -1} if it can't dodge.
      *  The player gets it from the DODGE perk ({@code 11 - level}); other mobs from a
-     *  PHASE_DODGE ability's configured cooldown. */
-    private static int phaseDodgeCooldownTurns(Mob m) {
+     *  WRAITH_DODGE ability's configured cooldown. */
+    private static int wraithDodgeCooldownTurns(Mob m) {
         if (m == null) return -1;
         if (m.perks != null) {
             int lvl = m.perks.getOrDefault(com.bjsp123.rl2.model.Perk.DODGE, 0);
@@ -2509,7 +2667,7 @@ public class MobSystem {
         }
         if (m.abilities != null) {
             for (Mob.MobAbility ab : m.abilities) {
-                if (ab != null && ab.kind == Mob.MobAbility.AbilityKind.PHASE_DODGE) {
+                if (ab != null && ab.kind == Mob.MobAbility.AbilityKind.WRAITH_DODGE) {
                     return Math.max(1, ab.cooldownTurns);
                 }
             }
@@ -2517,14 +2675,14 @@ public class MobSystem {
         return -1;
     }
 
-    /** Reactive phase-dodge: if {@code self} can dodge (ability/perk), is off cooldown, and a
+    /** Reactive wraith-dodge: if {@code self} can dodge (ability/perk), is off cooldown, and a
      *  free adjacent square exists, slide there (avoiding the incoming hit), start the cooldown,
      *  and return true. Otherwise false (the attack resolves normally). */
-    private static boolean tryPhaseDodge(Level level, Mob self, Mob attacker) {
+    private static boolean tryWraithDodge(Level level, Mob self, Mob attacker) {
         if (level == null || self == null || self.position == null || self.hp <= 0) return false;
-        int cooldownTurns = phaseDodgeCooldownTurns(self);
+        int cooldownTurns = wraithDodgeCooldownTurns(self);
         if (cooldownTurns < 0) return false;
-        if (BuffSystem.hasBuff(self, com.bjsp123.rl2.model.Buff.BuffType.PHASE_DODGE_COOLDOWN)) {
+        if (BuffSystem.hasBuff(self, com.bjsp123.rl2.model.Buff.BuffType.WRAITH_DODGE_COOLDOWN)) {
             return false;
         }
         Point spot = pickDodgeTile(level, self, attacker);
@@ -2535,7 +2693,7 @@ public class MobSystem {
         if (level.events != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MobPhaseDodged(self, from, spot));
         }
-        BuffSystem.apply(level, self, com.bjsp123.rl2.model.Buff.BuffType.PHASE_DODGE_COOLDOWN,
+        BuffSystem.apply(level, self, com.bjsp123.rl2.model.Buff.BuffType.WRAITH_DODGE_COOLDOWN,
                 cooldownTurns, self);
         // Log whenever the player could witness the dodge - either the tile it
         // left or the tile it blinked to was in view. (Checking only the new
@@ -2543,7 +2701,7 @@ public class MobSystem {
         if (self.isPlayer
                 || tileVisibleToPlayer(level, from)
                 || tileVisibleToPlayer(level, spot)) {
-            EventLog.add(Messages.phaseDodged(nameForLog(level, self),
+            EventLog.add(Messages.wraithDodged(nameForLog(level, self),
                     self.isPlayer));
         }
         return true;
@@ -3803,6 +3961,7 @@ public class MobSystem {
         if (!it.isThrowable()) return;
         if (it.inventoryCategory == Item.InventoryCategory.BOMB) {
             com.bjsp123.rl2.util.ActionTracker.bumpBomb(thrower);
+            if (thrower.isPlayer) thrower.runStats.recordBombUse(it.type);
         } else {
             com.bjsp123.rl2.util.ActionTracker.bumpThrow(thrower);
         }
@@ -4154,6 +4313,13 @@ public class MobSystem {
                 if (smokeDur > 0) {
                     CloudSystem.addCloud(level, x, y,
                             com.bjsp123.rl2.model.Level.Cloud.SMOKE, smokeDur);
+                }
+                // The blast levels any trees in the disc down to grass.
+                if (level.vegetation != null
+                        && level.vegetation[x][y] == com.bjsp123.rl2.model.Level.Vegetation.TREES) {
+                    level.vegetation[x][y] = com.bjsp123.rl2.model.Level.Vegetation.GRASS;
+                    VegetationSystem.emitVegetationChanged(level, x, y,
+                            com.bjsp123.rl2.model.Level.Vegetation.GRASS);
                 }
                 Mob m = MobQueries.mobAt(level, p);
                 if (m != null && m != thrower) {

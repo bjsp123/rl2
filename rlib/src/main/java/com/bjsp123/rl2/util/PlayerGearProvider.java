@@ -262,7 +262,6 @@ public final class PlayerGearProvider {
         out.attackSpeed = src.attackSpeed;
         out.moveSpeed = src.moveSpeed;
         out.lightRadius = src.lightRadius;
-        out.foodValue = src.foodValue;
         out.effectSize = src.effectSize;
         out.effectDuration = src.effectDuration;
         out.effectRange = src.effectRange;

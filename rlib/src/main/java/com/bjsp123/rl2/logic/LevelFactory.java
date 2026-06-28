@@ -76,6 +76,11 @@ public final class LevelFactory {
 
     private LevelFactory() {}
 
+    /** Visual theme of the most recently generated level, or {@code null} before
+     *  any level has been built. UI that wants to render terrain in a "current"
+     *  theme (e.g. the encyclopaedia tile icons) reads this. */
+    public static Level.VisualTheme lastGeneratedTheme;
+
     /** Top-level RNG for picking the per-level seed when none was supplied. */
     private static final Random ROOT_RNG = new Random();
 
@@ -131,6 +136,7 @@ public final class LevelFactory {
 
         level.layout = layout;
         level.theme = theme;
+        lastGeneratedTheme = theme;
 
         List<int[]> rooms = switch (level.layout) {
             case BSP          -> buildBsp(level, rng);

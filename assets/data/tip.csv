@@ -1,0 +1,20 @@
+# Game-start tips. Shown once at the top of a new run, between the
+# world-graph fly-in and the level zoom-in. One row per tip; one is picked
+# at random. Use the * character to mark *emphasis* in body text; use the
+# literal escape sequence \n to break a body line.
+#
+# Columns:
+#   title      - displayed prefixed with "Tip:".
+#   spritelist - pipe-separated tokens, each resolved (in order) as: an item
+#                type from items.csv (e.g. XPPILL), a mob type from mobs.csv
+#                (e.g. UNIQUE_SPIDER), the literal BEACON (terrain ornament), or
+#                ARROWRIGHT (a rightward connector arrow). Empty = no sprite row.
+#                Items/mobs/beacon show their name as a caption; powerups get
+#                their in-game glow. E.g. CHARGEPILL|ARROWRIGHT|WAND_MAGIC_MISSILE
+#                or BEACON|TELEPORT_ORB.
+#   text       - body. Quote the cell if it contains commas.
+title,spritelist,text
+Levelling up,XPPILL|POWER_ORB,"In this game you *don't level up by killing mobs*; you're often better off leaving mobs alone.\nYou gain XP by exploring levels and picking up XP balls.\nWhen you level up you get a boost to hit/evade/hit points, and you can pick a perk to help you survive the dungeon."
+Item charges,CHARGEPILL|ARROWRIGHT|JADE_FISH|WAND_MAGIC_MISSILE,"Some items - wands and the jade item you start with - have *charges*. Items with higher levels can store more charges.\nCharges *do not regenerate over time*; you have to explore levels and pick up Mana balls."
+Beacons,BEACON|TELEPORT_ORB,"Beacons can be used to *teleport around the tomb rapidly*, at the cost of a teleport orb. Activate them by going near them.\nThe beacon system relies on strange and unnatural magic, and some say it was the first thing to fail when things began going wrong; certainly, these days the remaining beacons are surrounded by wraiths and echoes.\nIt's said that the *more beacons you activate, the more dangerous the bottom levels of the tomb get*; but some insist that they'll activate every single one anyway."
+Unique Creatures,UNIQUE_KOBOLD_GENERAL|ORC_PRESIDENT|UNIQUE_SPIDER,"In the tomb, most enemies don't carry anything very useful - and since you don't get XP by killing enemies, they're often better avoided than engaged.\nBut now and then you'll find powerful *unique* enemies and their guards - named individuals that have more abilities than regular foes, and drop valuable items.\nIf you can't fight one when you first encounter it, maybe come back when you have better tools..."

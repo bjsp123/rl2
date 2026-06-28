@@ -65,12 +65,19 @@ public final class LevelFactoryPopulate {
      *  a positive spawn chance. */
     private static final double POWER_EDGE_WEIGHT = 0.05;
 
-    /** Weight multiplier for a definition's theme relative to the level's theme.
-     *  Null theme = theme-neutral (1x); matching = twice as likely (2x);
-     *  mismatching = half as likely (0.5x). */
+    /** Soft theme-affinity weight for a mob definition relative to the level's
+     *  theme: a matching theme = twice as likely (2x), a mismatching theme =
+     *  half as likely (0.5x). SHINY is the generic theme - it carries no affinity
+     *  effect, whether it's the level's theme or the mob's own affinity (null) -
+     *  so a themed mob is 2x on its one theme, 0.5x on the two other real themes,
+     *  and 1x on SHINY, which leaves its overall frequency static across the
+     *  three equally-common themed columns. (Items / gems use a HARD theme gate
+     *  instead - see {@link ItemDefinition#allowsTheme}.) */
     private static double themeMultiplier(Level.VisualTheme defTheme,
                                           Level.VisualTheme levelTheme) {
-        if (defTheme == null) return 1.0;
+        if (defTheme == null
+                || defTheme == Level.VisualTheme.SHINY
+                || levelTheme == Level.VisualTheme.SHINY) return 1.0;
         return defTheme == levelTheme ? 2.0 : 0.5;
     }
 
@@ -97,7 +104,7 @@ public final class LevelFactoryPopulate {
         for (String type : Registries.itemTypes()) {
             ItemDefinition def = Registries.item(type);
             if (def == null || def.guaranteedPerLevel <= 0) continue;
-            if (def.theme != null && def.theme != level.theme) continue;
+            if (!def.allowsTheme(level.theme)) continue;   // never on themed-against levels
             if (powerWeight(def.powerMin, def.powerMax, f) <= 0) continue;
             out.add(type);
         }
@@ -265,7 +272,10 @@ public final class LevelFactoryPopulate {
         for (String type : guaranteedTypes(level)) {
             ItemDefinition gdef = Registries.item(type);
             if (gdef == null) continue;
-            int copies = gdef.guaranteedPerLevel;
+            // Sample the (possibly fractional) guaranteed count: integer part
+            // guaranteed, fractional part = chance of one more.
+            int copies = sampleCount(gdef.guaranteedPerLevel, rng);
+            if (copies <= 0) continue;
             if (gdef.inventoryCategory == Item.InventoryCategory.FOOD) {
                 // Powerups / food scatter across the level - they're meant to
                 // be stumbled on while exploring, not piled in one spot.
@@ -402,7 +412,10 @@ public final class LevelFactoryPopulate {
                                  com.bjsp123.rl2.model.UniqueTracker unique) {
         double[][] weightHolder = new double[1][];
         List<String> pool = eligibleMobs(level, weightHolder);
-        int spawnLevel = 1 + level.depth;
+        // -1 = per-mob depth-adjusted (see spawnMobAt). Retainers and cluster
+        // members each pass through the same sentinel so a kobold general's
+        // entourage doesn't ride the boss's deeper spawn band.
+        int spawnLevel = -1;
 
         // -- Regular weighted scatter --------------------------------------
         if (!pool.isEmpty()) {
@@ -488,7 +501,7 @@ public final class LevelFactoryPopulate {
             if (seed == null) return null;
             if (mobAt(level, seed.tileX(), seed.tileY())) continue;
             if (level.isReserved(seed.tileX(), seed.tileY())) continue;
-            Mob m = spawnMobAt(level, type, seed, 1 + level.depth, rng,
+            Mob m = spawnMobAt(level, type, seed, -1, rng,
                     /* withRetainers= */ true);
             if (m != null && unique != null && m.unique) unique.mobs.add(type);
             if (m != null && level.events != null) {
@@ -509,6 +522,12 @@ public final class LevelFactoryPopulate {
                           Random rng, boolean withRetainers) {
         Mob m = MobFactory.spawn(type, pos);
         if (m == null) return null;
+        // Sentinel: a negative spawnLevel means "compute from this mob's own
+        // depth band". Lets every caller default to the unified per-mob
+        // depth-adjusted rule without each one repeating the lookup.
+        if (spawnLevel < 0) {
+            spawnLevel = MobProgression.depthAdjustedSpawnLevel(level, Registries.mob(type));
+        }
         MobProgression.setSpawnLevel(m, spawnLevel);
         brandStartingInventory(m, rng);
         // CSV-driven "give this mob a level-appropriate kit": ENEMY_PLAYER_*
@@ -555,7 +574,11 @@ public final class LevelFactoryPopulate {
             if (r == null) continue;
             brandStartingInventory(r, rng);
             r.owner = parent;
-            MobProgression.setSpawnLevel(r, spawnLevel);
+            // Retainer follows the per-mob depth-adjusted rule, not the
+            // parent's level - a low-band retainer of a high-band parent
+            // shouldn't inherit the boss's spawn level.
+            int retLvl = MobProgression.depthAdjustedSpawnLevel(level, Registries.mob(t));
+            MobProgression.setSpawnLevel(r, retLvl);
             LootSystem.rollAndStashLoot(level, r, rng);
             level.mobs.add(r);
             placed++;

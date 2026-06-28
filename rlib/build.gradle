@@ -35,6 +35,18 @@ tasks.register('lootStats', JavaExec) {
     workingDir  = rootProject.projectDir
 }
 
+// [DEV] Headless object census: generate N worlds and tabulate every generated
+// item by type / enchantment / depth / drop-kind (level, mob, unique). Writes
+// results/world_objects.csv. Optional world count: --args="25"
+tasks.register('objectTable', JavaExec) {
+    group       = 'diagnostics'
+    description = 'Generate worlds and tabulate objects by type/enchantment/depth/drop'
+    mainClass   = 'com.bjsp123.rl2.util.WorldObjectTableMain'
+    classpath   = sourceSets.main.runtimeClasspath
+    workingDir  = rootProject.projectDir
+    standardOutput = System.out
+}
+
 // [DEV] Headless gem-recipe validator + balance report (RL-50).
 tasks.register('dumpRecipes', JavaExec) {
     group       = 'diagnostics'

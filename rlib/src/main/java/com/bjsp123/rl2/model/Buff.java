@@ -36,7 +36,7 @@ public class Buff {
         /** Mob flees all other mobs while active. Applied when adjacent to a mob with
          *  {@link Mob#terrifying} (and the receiver is {@link Mob#terrifiable}). */
         FRIGHTENED,
-        /** Mob is drawn semi-transparent, gains +20 evasion, can't be picked as a
+        /** Mob is drawn semi-transparent, gains +40 evasion, can't be picked as a
          *  ranged-attack target. Effect ends if the mob attacks. */
         INVISIBLE,
         /** Mob flies, can pass through walls, +20 evasion. */
@@ -44,16 +44,16 @@ public class Buff {
         /** Mob flies but doesn't pass through walls. */
         LEVITATING,
         /** Resists non-physical damage (magic missiles, fire). Damage is divided by
-         *  {@code 2^level} before application. */
+         *  {@code 2^stacks} before application. */
         ANTI_MAGIC,
         /** Resists physical damage (melee, thrown). Damage is divided by
-         *  {@code 2^level} before application. */
+         *  {@code 2^stacks} before application. */
         PROTECTION,
-        /** Heals {@code 1 + level/2} HP per turn. */
+        /** Heals {@code 2 + 3*stacks/2} HP per turn (tapers as stacks deplete). */
         REGENERATION,
-        /** Cannot regenerate. Loses {@code 1 + level/2} HP per turn. */
+        /** Cannot regenerate. Loses {@code 2 + 3*stacks/2} HP per turn. */
         POISONED,
-        /** Move cost multiplied by {@code 0.8^level} (faster at higher levels). */
+        /** Move cost multiplied by {@code 0.8^stacks} (faster at higher stacks). */
         HASTED,
         /** Slight accuracy + evasion bonus, plus immunity to {@link #FRIGHTENED}. */
         HOPE,
@@ -87,8 +87,8 @@ public class Buff {
         HASTE_COOLDOWN,
         /** Recharging heal-cast ability (kobold general, etc.). */
         HEAL_COOLDOWN,
-        /** Recharging PHASE_DODGE (wraiths, the DODGE perk). Present means "can't dodge yet". */
-        PHASE_DODGE_COOLDOWN,
+        /** Recharging WRAITH_DODGE (wraiths, the DODGE perk). Present means "can't dodge yet". */
+        WRAITH_DODGE_COOLDOWN,
         /** {@code EXPLORE_HIDE} mob is hunkered in cover; AI keeps it stationary while
          *  the buff is present. Applied when the mob reaches a tile no hostile can see
          *  it from. */
@@ -100,11 +100,10 @@ public class Buff {
          *  standard turns, refreshed on each kill. */
         KILLER,
         /** Open-wound DOT. Per standard turn the mob loses
-         *  {@code (level * standardTurnsRemaining) / 2} HP - strong at first
-         *  then tapers as the duration counts down. {@code standardTurnsRemaining}
-         *  is {@code durationTicks / STANDARD_TURN_TICKS} (truncated). Doesn't
-         *  stack with itself (apply takes the max of level / duration via the
-         *  standard {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
+         *  {@code max(1, 3*stacks/4)} HP - strong at first then tapers as the
+         *  stacks count down each turn. Doesn't stack with itself (apply takes
+         *  the max of incoming/existing stacks via the standard
+         *  {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
         BLEEDING,
         /** Mob moves at 30% of normal action cost (+20 evasion). Ends instantly when
          *  the mob takes or deals any damage. */
@@ -122,8 +121,9 @@ public class Buff {
     /** Combined strength + lifetime. Counts down by 1 each turn and the buff drops at 0,
      *  so it is also the remaining duration in turns. Magnitude-scaling buffs read this
      *  current value (their effect fades as it depletes); binary buffs treat it purely as
-     *  a timer. {@code 1} is the minimum live value; the maximum is {@code BuffSystem
-     *  .stackCap(type)} (default 10). */
+     *  a timer. {@code 1} is the minimum live value; the maximum is the per-type
+     *  {@code BuffSystem.stackCap(type)} (default 10, but e.g. 30 for KILLER, 20
+     *  for PHASE - and a caller may raise it, as the Invulnerability scroll does). */
     public int stacks;
     /** Mob that originally applied this buff (e.g. the player who drank a sorcery
      *  potion, or the kissyblob that frightened a kobold). Used by death messages and

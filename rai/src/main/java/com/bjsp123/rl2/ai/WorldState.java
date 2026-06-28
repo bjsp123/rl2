@@ -98,7 +98,7 @@ public final class WorldState {
                     && lastKnownEnemyTurnsSince <= RECENT_THREAT_TURNS);
     }
 
-    /** Window used by goals that want a *recent* sighting bias (e.g. KILL ranking). */
+    /** Window for treating a threat sighting as *recent* when ranking combat targets. */
     public static final int RECENT_THREAT_TURNS = 30;
 
     /** Lazy-cached stairs-reachability for this tick - set by {@link com.bjsp123.rl2.ai.goal.GoalDescend}
@@ -110,10 +110,9 @@ public final class WorldState {
         return cachedStairsReachable;
     }
 
-    /** Lazy-cached reachability of the {@link #lastKnownEnemyTile}. Lets
-     *  {@link com.bjsp123.rl2.ai.goal.GoalKill} drop its score to 0 when the
-     *  chase target is unreachable, so KILL doesn't pin the agent into Wait
-     *  forever while EXPLORE could be making progress. */
+    /** Lazy-cached reachability of the {@link #lastKnownEnemyTile}. Lets the
+     *  fight/search branches drop an unreachable chase target so the agent
+     *  doesn't pin itself into Wait forever while exploring could make progress. */
     private Boolean cachedLastKnownReachable;
     public boolean lastKnownEnemyReachable() {
         if (cachedLastKnownReachable != null) return cachedLastKnownReachable;

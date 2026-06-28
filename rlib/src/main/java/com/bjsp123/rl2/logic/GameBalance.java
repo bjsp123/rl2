@@ -26,8 +26,8 @@ public final class GameBalance {
 
     /** Read {@code assets/data/config.csv} rows with kind=gamebalance and override matching {@code public
      *  static} field on this class. Unknown keys are ignored; missing keys keep their
-     *  Java-side baseline. Currently handles {@code int} and {@code double} fields - that
-     *  covers every tunable we have today. Call once at startup, before gameplay code
+     *  Java-side baseline. Handles {@code int}, {@code double}, {@code long}, and
+     *  {@code boolean} fields. Call once at startup, before gameplay code
      *  reads any of these fields. */
     public static void load(String text) {
         if (text == null || text.isEmpty()) return;
@@ -209,7 +209,7 @@ public final class GameBalance {
 
     // Per-difficulty presets (config.csv-tunable). applyDifficulty copies the
     // chosen level's values into the active fields above.
-    public static double DIFFICULTY_EASY_PLAYER_HP_MULT      = 2.0;
+    public static double DIFFICULTY_EASY_PLAYER_HP_MULT      = 1.6;
     public static double DIFFICULTY_EASY_ENEMY_HP_MULT       = 1.0;
     public static double DIFFICULTY_EASY_REGEN_FRAC          = 0.015;
     public static double DIFFICULTY_EASY_SPAWN_CADENCE_MULT  = 2.0;
@@ -217,28 +217,28 @@ public final class GameBalance {
     public static int    DIFFICULTY_EASY_REVIVE_CHARMS       = 8;
 
     // Gentle sits midway between Easy and Normal on every axis.
-    public static double DIFFICULTY_GENTLE_PLAYER_HP_MULT     = 1.5;
+    public static double DIFFICULTY_GENTLE_PLAYER_HP_MULT     = 1.2;
     public static double DIFFICULTY_GENTLE_ENEMY_HP_MULT      = 1.0;
     public static double DIFFICULTY_GENTLE_REGEN_FRAC         = 0.005;
     public static double DIFFICULTY_GENTLE_SPAWN_CADENCE_MULT = 1.5;
     public static double DIFFICULTY_GENTLE_SPEED_MULT         = 1.1;
     public static int    DIFFICULTY_GENTLE_REVIVE_CHARMS      = 4;
 
-    public static double DIFFICULTY_NORMAL_PLAYER_HP_MULT     = 1.0;
+    public static double DIFFICULTY_NORMAL_PLAYER_HP_MULT     = 0.8;
     public static double DIFFICULTY_NORMAL_ENEMY_HP_MULT      = 1.0;
     public static double DIFFICULTY_NORMAL_REGEN_FRAC         = 0.0;
     public static double DIFFICULTY_NORMAL_SPAWN_CADENCE_MULT = 1.0;
     public static double DIFFICULTY_NORMAL_SPEED_MULT         = 1.0;
     public static int    DIFFICULTY_NORMAL_REVIVE_CHARMS      = 0;
 
-    public static double DIFFICULTY_HARD_PLAYER_HP_MULT       = 1.0;
+    public static double DIFFICULTY_HARD_PLAYER_HP_MULT       = 0.8;
     public static double DIFFICULTY_HARD_ENEMY_HP_MULT        = 1.3;
     public static double DIFFICULTY_HARD_REGEN_FRAC           = 0.0;
     public static double DIFFICULTY_HARD_SPAWN_CADENCE_MULT   = 1.0;
     public static double DIFFICULTY_HARD_SPEED_MULT           = 1.0;
     public static int    DIFFICULTY_HARD_REVIVE_CHARMS        = 0;
 
-    public static double DIFFICULTY_VERY_HARD_PLAYER_HP_MULT     = 1.0;
+    public static double DIFFICULTY_VERY_HARD_PLAYER_HP_MULT     = 0.8;
     public static double DIFFICULTY_VERY_HARD_ENEMY_HP_MULT      = 1.5;
     public static double DIFFICULTY_VERY_HARD_REGEN_FRAC         = 0.0;
     public static double DIFFICULTY_VERY_HARD_SPAWN_CADENCE_MULT = 0.5;
@@ -246,7 +246,7 @@ public final class GameBalance {
     public static int    DIFFICULTY_VERY_HARD_REVIVE_CHARMS      = 0;
 
     // SuperEasy (debug): like Easy but triple HP and free jade charges.
-    public static double DIFFICULTY_SUPEREASY_PLAYER_HP_MULT      = 3.0;
+    public static double DIFFICULTY_SUPEREASY_PLAYER_HP_MULT      = 2.4;
     public static double DIFFICULTY_SUPEREASY_ENEMY_HP_MULT       = 1.0;
     public static double DIFFICULTY_SUPEREASY_REGEN_FRAC          = 0.015;
     public static double DIFFICULTY_SUPEREASY_SPAWN_CADENCE_MULT  = 2.0;
@@ -362,7 +362,7 @@ public final class GameBalance {
     // factor → bigger per-level jumps for high-base items.
 
     /** Divisor for the per-level increment of "amount" stats (damage,
-     *  armor, apDamage, magicResist, accuracy, evasion, foodValue,
+     *  armor, apDamage, magicResist, accuracy, evasion,
      *  knockbackSquares, lightRadius, effectDuration, effectRange). At
      *  factor=3 a base-3 stat grows +1/level, a base-6 stat +2/level,
      *  a base-9 stat +3/level. */
@@ -412,12 +412,12 @@ public final class GameBalance {
     public static int BAG_EQUIPMENT_SIZE = 20;
     /** Maximum bag slots for gem items not yet socketed. */
     public static int BAG_GEMS_SIZE = 20;
-    /** Maximum bag slots for food items (FOOD). Identical food items at the same
-     *  level merge into a single counted stack. */
-    public static int BAG_FOOD_SIZE = 20;
-    /** Maximum bag slots for consumable / tool items (POTION, WAND, ORB, BOMB, ITEM).
-     *  Potions and bombs at the same type + level merge into stacks; wands, orbs, and
-     *  tools are always singletons. */
+    /** Maximum bag slots for consumables (FOOD + POTION combined). Identical
+     *  food / potions at the same level merge into a single counted stack. */
+    public static int BAG_CONSUMABLE_SIZE = 20;
+    /** Maximum bag slots for the remaining throwable / tool items (BOMB, ORB,
+     *  THROWN). Bombs at the same type + level merge into stacks; orbs are
+     *  always singletons. */
     public static int BAG_ITEMS_SIZE = 20;
 
     // ------------------------- Item-level scaling ----------------------------
@@ -456,10 +456,15 @@ public final class GameBalance {
      *  intermediate depths each carry one or two levels picked from the three
      *  themed columns (CONCRETE/west, CRYSTAL/center, GOTHIC/east). */
     public static int DUNGEON_DEPTH = 8;
-    /** Per-depth probability that an intermediate depth carries two levels
-     *  (any 2 of the 3 themed columns) instead of a single CRYSTAL/center
+    /** Per-depth probability that an intermediate depth carries exactly two
+     *  levels (a random 2 of the 3 themed columns - one theme missing).
+     *  {@code THREE_LEVEL_PROBABILITY} carries all three; the remaining
+     *  probability ({@code 1 - two - three}) yields a single random-column
      *  level. */
     public static double TWO_LEVEL_PROBABILITY = 0.6;
+    /** Per-depth probability that an intermediate depth carries all three
+     *  themed columns (one level each). See {@link #TWO_LEVEL_PROBABILITY}. */
+    public static double THREE_LEVEL_PROBABILITY = 0.1;
     /** Per-level probability that a level gets a second "diagonal" downstair
      *  to a different-column level at depth+1, in addition to its primary
      *  (same-column-preferred) downstair. */
@@ -480,6 +485,22 @@ public final class GameBalance {
      *  0.5 = half. Fractional parts are probabilistic: a scaled count of 1.5
      *  gives each drop a 50 % chance of one extra copy. */
     public static double LOOT_DROP_FREQUENCY_COEFF = 1.0;
+    /** Number of pills yielded per POWERUPS drop pick - powerups come as a pair
+     *  since individual pills are minor. One {@code dropAmount} unit that lands
+     *  on POWERUPS therefore drops this many pills. */
+    public static int POWERUPS_PER_DROP = 2;
+
+    // ------------------------- Mob spawn-level scaling -----------------------
+    // Mobs spawned anywhere in the dungeon scale up with depth via the same
+    // rule: a mob spawning at the depth that matches its {@code minPowerLevel}
+    // is level 1; for every {@link #MOB_DEPTH_LEVEL_SCALE} of depth-fraction
+    // above its min the mob gains one level, capped at
+    // {@link #MAX_MOB_DEPTH_LEVEL_SCALE} extra levels. Replaces the old
+    // {@code 1 + level.depth} rule, which over-leveled mobs deep in the dungeon
+    // because every spawn jumped by the floor's full depth regardless of how
+    // far the mob's own power band reached.
+    public static double MOB_DEPTH_LEVEL_SCALE     = 0.3;
+    public static int    MAX_MOB_DEPTH_LEVEL_SCALE = 3;
 
     // ------------------------- Mob population caps ---------------------------
     /** Hard cap on mobs alive on a level - magical / scripted spawn effects
@@ -512,22 +533,87 @@ public final class GameBalance {
     public static int BOSS_BASE_LEVEL = 18;
     /** Extra boss spawn-level per beacon lit (capped at MAX_CHARACTER_LEVEL). */
     public static int BOSS_LEVEL_PER_BEACON = 1;
-    /** The boss gains one extra ability per this many beacons lit. */
+    /** The boss gains one extra ability per this many beacon spirits. */
     public static int BOSS_ABILITY_PER_BEACONS = 3;
-    /** Standard turns between revenant-add spawns on the boss floor. */
-    public static int BOSS_ADD_SPAWN_CADENCE = 6;
+    /** Chance that a landed hit on the Great Wraith shatters one beacon spirit
+     *  (each spirit destroyed weakens the boss by one beacon's worth of power). */
+    public static double BOSS_SPIRIT_DESTROY_CHANCE = 0.5;
+    // Boss-floor revenant adds. The floor's hazardLevel is set from the player's
+    // total kills on arrival (kills -> hazard, below), and the hazard indexes a
+    // lookup of spawn intervals. Boss hazard ranges 0..BOSS_HAZARD_MAX (7), wider
+    // than the normal HAZARD_MAX (5); regular floors are unaffected.
+    /** Kills at/below which boss hazard is 0 (the slow end). */
+    public static int BOSS_HAZARD_KILL_FLOOR = 50;
+    /** Kills per +1 boss hazard above {@link #BOSS_HAZARD_KILL_FLOOR}. */
+    public static int BOSS_HAZARD_KILLS_PER_POINT = 10;
+    /** Boss-floor hazard cap (distinct from the normal-floor {@link #HAZARD_MAX}).
+     *  Must be < {@link #BOSS_ADD_CADENCE_BY_HAZARD}.length. */
+    public static int BOSS_HAZARD_MAX = 7;
+    /** Standard turns between revenant-add spawns, indexed by boss hazard 0..7.
+     *  Kills 0-49 -> hz0 (12), 50-59 -> hz1 (10), ... 110+ -> hz7 (2). Arrays are
+     *  NOT config.csv-overridable - tune this table in code. */
+    public static int[] BOSS_ADD_CADENCE_BY_HAZARD = { 12, 10, 8, 6, 5, 4, 3, 2 };
+    /** Safety floor on the revenant spawn cadence. */
+    public static int BOSS_ADD_CADENCE_MIN = 2;
     /** Max live revenant adds before the add-spawner pauses. */
     public static int BOSS_ADD_MAX_ALIVE = 8;
     /** Cap on the total reanimated kills reproduced over the fight (0 = all). */
     public static int BOSS_ADD_TOTAL_CAP = 0;
 
-    // ------------------------- Victory score (RL-19) -------------------------
-    /** Base score for any victory - far above any death (deaths score 0). */
-    public static int VICTORY_SCORE_BASE = 10000;
-    /** Score per beacon lit over the run. */
-    public static int SCORE_PER_BEACON = 500;
-    /** Bonus for a perfect victory (all beacons lit + boss slain). */
-    public static int PERFECT_VICTORY_BONUS = 5000;
+    // ------------------------- Run score (RL-19 / RL-58) ---------------------
+    // score = (mobsKilled*PER_MOB + gemsFound*PER_GEM + foodEaten*PER_FOOD
+    //          + beaconsLit*PER_BEACON_LIT + (killedWraith ? WRAITH_BONUS : 0)
+    //          + (allBeaconsLit ? PERFECT_VICTORY_BONUS : 0))
+    //         * scoreMultiplier(difficulty).  Applies to every run (deaths too).
+    public static int SCORE_PER_MOB        = 1;
+    public static int SCORE_PER_GEM        = 10;
+    public static int SCORE_PER_FOOD       = 20;
+    public static int SCORE_PER_BEACON_LIT = 1000;
+    public static int SCORE_WRAITH_BONUS   = 10000;
+    /** Bonus for a perfect victory (every beacon in the world lit). */
+    public static int PERFECT_VICTORY_BONUS = 500;
+
+    // Per-difficulty score coefficient (config.csv-tunable).
+    public static double DIFFICULTY_SUPEREASY_SCORE_MULT = 0.25;
+    public static double DIFFICULTY_EASY_SCORE_MULT      = 0.5;
+    public static double DIFFICULTY_GENTLE_SCORE_MULT    = 0.75;
+    public static double DIFFICULTY_NORMAL_SCORE_MULT    = 1.0;
+    public static double DIFFICULTY_HARD_SCORE_MULT      = 1.5;
+    public static double DIFFICULTY_VERY_HARD_SCORE_MULT = 2.0;
+
+    /** Score coefficient for difficulty {@code d}. */
+    public static double scoreMultiplier(Difficulty d) {
+        if (d == null) return DIFFICULTY_NORMAL_SCORE_MULT;
+        return switch (d) {
+            case SUPEREASY -> DIFFICULTY_SUPEREASY_SCORE_MULT;
+            case EASY      -> DIFFICULTY_EASY_SCORE_MULT;
+            case GENTLE    -> DIFFICULTY_GENTLE_SCORE_MULT;
+            case NORMAL    -> DIFFICULTY_NORMAL_SCORE_MULT;
+            case HARD      -> DIFFICULTY_HARD_SCORE_MULT;
+            case VERY_HARD -> DIFFICULTY_VERY_HARD_SCORE_MULT;
+        };
+    }
+
+    /** Pre-multiplier score subtotal (before the difficulty coefficient). */
+    public static long scoreSubtotal(com.bjsp123.rl2.model.RunStats stats,
+                                     int beaconsLit, boolean killedWraith,
+                                     boolean allBeaconsLit) {
+        if (stats == null) return 0;
+        return (long) stats.mobsKilled * SCORE_PER_MOB
+             + (long) stats.gemsFound  * SCORE_PER_GEM
+             + (long) stats.foodEaten  * SCORE_PER_FOOD
+             + (long) beaconsLit       * SCORE_PER_BEACON_LIT
+             + (killedWraith   ? SCORE_WRAITH_BONUS    : 0)
+             + (allBeaconsLit  ? PERFECT_VICTORY_BONUS : 0);
+    }
+
+    /** Final run score: {@link #scoreSubtotal} times the active difficulty's
+     *  {@link #scoreMultiplier}. Used for both deaths and victories. */
+    public static int runScore(com.bjsp123.rl2.model.RunStats stats,
+                               int beaconsLit, boolean killedWraith, boolean allBeaconsLit) {
+        return (int) Math.round(scoreSubtotal(stats, beaconsLit, killedWraith, allBeaconsLit)
+                * scoreMultiplier(difficulty));
+    }
 
     // ------------------------- Gem recycle (RL-50) ---------------------------
     /** Expected gems from recycling an item = {@code RECYCLE_BASE_GEMS +
@@ -538,6 +624,20 @@ public final class GameBalance {
     public static double RECYCLE_GEMS_PER_POWER = 2.75;
     /** Hard cap on gems from a single recycle. */
     public static int RECYCLE_MAX_GEMS = 4;
+
+    /** Manifest Elixirs scroll: how many random potions it conjures, and the
+     *  depth bonus their generation uses (like other creation scrolls). */
+    public static int ELIXIR_FORMULA_POTION_COUNT = 5;
+    public static int ELIXIR_FORMULA_DEPTH_BONUS  = 2;
+    /** Flat depth bonus shared by the creation scrolls: every conjured item is
+     *  generated as if found {@code current_depth + this} levels down, so the
+     *  reward scales with progress instead of saturating on early floors. */
+    public static int CREATION_SCROLL_DEPTH_BONUS = 4;
+    /** Number of bombs the Manifest Munitions scroll conjures. */
+    public static int INVOCATION_CHIYOU_BOMB_COUNT = 10;
+    /** Hard cap on any item's effective maximum charges, however much its level
+     *  would otherwise scale it. */
+    public static int MAX_ITEM_CHARGES = 8;
 
     // ------------------------- Throw range -----------------------------------
     /** Default Chebyshev throw range for the player targeting overlay. */
@@ -628,6 +728,15 @@ public final class GameBalance {
     public static double STEAM_EMIT_CHANCE = 0.50;
     /** Steam duration emitted by a water tile next to fire. */
     public static int STEAM_EMIT_DURATION = 3;
+    /** Turns between spore-cloud emissions from a mushroom tile (the firing
+     *  frequency). Each mushroom is phase-staggered 0-6 turns so they don't fire
+     *  in lockstep. */
+    public static int MUSHROOM_SPORE_INTERVAL = 30;
+    /** POISONED stacks applied per turn to a mob standing in a spore cloud. */
+    public static int SPORE_CLOUD_STACKS = 2;
+    /** Per-turn chance that a water / blood surface adjacent to fire evaporates
+     *  (the surface is removed) in addition to emitting steam. */
+    public static double SURFACE_EVAPORATION_CHANCE = 0.25;
 
     /** POISONED stacks applied per poison-cloud tick. Small - the cloud re-applies it
      *  next turn if the mob is still standing in it. */

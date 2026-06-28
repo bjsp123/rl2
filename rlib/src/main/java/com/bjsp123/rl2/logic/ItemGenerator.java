@@ -168,6 +168,44 @@ public final class ItemGenerator {
         return rollNonGem(powerLevel, theme, c, includeRestricted, rng);
     }
 
+    /** Roll one mob-drop item for a {@code dropType} token (see
+     *  {@link com.bjsp123.rl2.logic.MobDefinition#dropTypes}). Recognised tokens:
+     *  EQUIPMENT, MAGIC_ITEMS, FOOD, POTION, GEM, SPECIAL_GEM, POWERUPS, BOMBS.
+     *  Unknown tokens (including the NOTHING_AT_ALL control marker) yield
+     *  {@code null}. */
+    public static Item generateDrop(String dropType, double powerLevel,
+                                    VisualTheme theme, Random rng) {
+        if (dropType == null || rng == null) return null;
+        return switch (dropType.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "EQUIPMENT"          -> rollEquipment(powerLevel, theme, rng);
+            case "MAGIC_ITEMS"        -> generateItem(powerLevel, theme, LootCategory.MAGIC_ITEMS, rng);
+            case "FOOD"               -> generateItem(powerLevel, theme, LootCategory.FOOD, rng);
+            case "POTION", "POTIONS"  -> generateItem(powerLevel, theme, LootCategory.POTIONS, rng);
+            case "GEM"                -> rollGem(theme, rng);
+            case "SPECIAL_GEM"        -> rollSpecialGem(theme, rng);
+            case "POWERUPS"           -> generateItem(powerLevel, theme, LootCategory.POWERUPS, rng);
+            case "BOMBS"              -> generateItem(powerLevel, theme, LootCategory.BOMBS, rng);
+            default                   -> null;
+        };
+    }
+
+    /** Equipment drop: weapon and armor are each twice as likely as an offhand
+     *  or amulet. Picks the slot first (so the ratio is independent of how many
+     *  item types each slot has), then rolls a themed, power-weighted item of
+     *  that slot. */
+    private static final InventoryCategory[] EQUIPMENT_SLOTS = {
+            InventoryCategory.WEAPON, InventoryCategory.WEAPON,
+            InventoryCategory.ARMOR,  InventoryCategory.ARMOR,
+            InventoryCategory.OFFHAND, InventoryCategory.AMULET
+    };
+
+    private static Item rollEquipment(double powerLevel, VisualTheme theme, Random rng) {
+        InventoryCategory slot = EQUIPMENT_SLOTS[rng.nextInt(EQUIPMENT_SLOTS.length)];
+        Item it = rollOfSlot(slot, powerLevel, theme, rng);
+        // Fall back to the broad equipment pool if that slot had no candidate.
+        return it != null ? it : rollNonGem(powerLevel, theme, LootCategory.EQUIPMENT, false, rng);
+    }
+
     /** Build a specific item type and apply plusses for the given power level.
      *  Used for literal item references in themed-room {@code items} cells
      *  (e.g. a row that pre-declares {@code HEALING_POTION*1} instead of a
@@ -294,7 +332,10 @@ public final class ItemGenerator {
     private static double gemFraction(VisualTheme theme) {
         if (theme == null) return 0;
         int gems = 0;
-        for (GemSpecies g : GemSpecies.values()) if (g.theme == theme) gems++;
+        for (GemSpecies g : GemSpecies.values()) {
+            GemDefinition gd = Registries.gem(g);
+            if (gd != null && gd.theme == theme) gems++;
+        }
         if (gems == 0) return 0;
         int items = categoryTypes(LootCategory.NON_GEM).size();
         if (items == 0) return 1;
@@ -306,13 +347,13 @@ public final class ItemGenerator {
         return species == null ? null : GemSystem.createGem(species);
     }
 
-    /** Special-room / unique-mob reward gem: 25% an exotic gem; failing that, 50% a metal
-     *  gem; else nothing. Net ~25% exotic / ~37.5% metal / ~37.5% nothing. */
+    /** Special-room / unique-mob reward gem: 40% an exotic gem, otherwise a
+     *  metal gem (60%), themed to the level. Returns {@code null} if no valid
+     *  species exists for the rolled class + theme. */
     private static Item rollSpecialGem(VisualTheme theme, Random rng) {
-        GemSpecies.GemClass cls;
-        if (rng.nextDouble() < 0.25)      cls = GemSpecies.GemClass.EXOTIC;
-        else if (rng.nextDouble() < 0.50) cls = GemSpecies.GemClass.METAL;
-        else return null;
+        GemSpecies.GemClass cls = rng.nextDouble() < 0.40
+                ? GemSpecies.GemClass.EXOTIC
+                : GemSpecies.GemClass.METAL;
         GemSpecies species = GemSystem.rollSpeciesOfClass(cls, theme, rng);
         return species == null ? null : GemSystem.createGem(species);
     }
@@ -332,9 +373,9 @@ public final class ItemGenerator {
             ItemDefinition d = Registries.item(type);
             if (d == null) continue;
             if (d.restrictedDrop && !includeRestricted) continue;
-            double w = powerWeight(d.powerMin, d.powerMax, powerLevel);
+            if (!d.allowsTheme(theme)) continue;   // hard theme gate (SHINY generic)
+            double w = powerWeight(d.powerMin, d.powerMax, powerLevel) * d.dropWeight;
             if (w <= 0) continue;
-            w *= themeMultiplier(d.theme, theme);
             pool.add(type);
             weights.add(w);
             total += w;
@@ -350,20 +391,54 @@ public final class ItemGenerator {
             if (r < acc) { pick = pool.get(i); break; }
         }
 
+        return finishItem(pick, powerLevel, rng);
+    }
+
+    /** Roll a single item restricted to one inventory category / slot (e.g.
+     *  WEAPON, ARMOR). Same theme + power weighting as {@link #rollNonGem} but
+     *  with an arbitrary slot filter; not cached (slot rolls are infrequent).
+     *  Returns {@code null} when no eligible candidate exists. */
+    private static Item rollOfSlot(InventoryCategory slot, double powerLevel,
+                                   VisualTheme theme, Random rng) {
+        List<String> pool = new ArrayList<>();
+        List<Double> weights = new ArrayList<>();
+        double total = 0;
+        for (String type : Registries.itemTypes()) {
+            ItemDefinition d = Registries.item(type);
+            if (d == null || d.inventoryCategory != slot) continue;
+            if (d.restrictedDrop) continue;
+            if (!d.allowsTheme(theme)) continue;   // hard theme gate (SHINY generic)
+            double w = powerWeight(d.powerMin, d.powerMax, powerLevel) * d.dropWeight;
+            if (w <= 0) continue;
+            pool.add(type);
+            weights.add(w);
+            total += w;
+        }
+        if (pool.isEmpty()) return null;
+        double r = rng.nextDouble() * total;
+        String pick = pool.get(pool.size() - 1);
+        double acc = 0;
+        for (int i = 0; i < pool.size(); i++) {
+            acc += weights.get(i);
+            if (r < acc) { pick = pool.get(i); break; }
+        }
+        return finishItem(pick, powerLevel, rng);
+    }
+
+    /** Materialise a chosen item type: build it, stamp plusses for the power
+     *  level (gems / FOOD-category items stay level 0, matching
+     *  effectiveLevel's POWERUP->0 rule), top up charges, and roll a brand. */
+    private static Item finishItem(String pick, double powerLevel, Random rng) {
         Item it = ItemFactory.build(pick);
         if (it == null) return null;
         ItemDefinition d = Registries.item(pick);
-        // Food-category items (edible food AND walk-over powerups) and gems
-        // don't carry plusses; WANDs / EQUIPMENT / etc. all do. Gating on the
-        // FOOD category (not just useBehavior==EAT) keeps powerups level 0,
-        // matching effectiveLevel's POWERUP->0 rule.
         if (d != null && it.inventoryCategory != Item.InventoryCategory.FOOD) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
         if (it.baseChargeMax > 0) {
             it.charge = it.maxCharge();
         }
-        BrandSystem.applyRandomBrand(it, rng);
+        if (rng != null) BrandSystem.applyRandomBrand(it, rng);
         return it;
     }
 
@@ -383,11 +458,7 @@ public final class ItemGenerator {
 
     private static final double POWER_EDGE_WEIGHT = 0.05;
 
-    /** Weight multiplier for a definition's theme relative to the level's theme.
-     *  Null theme = theme-neutral (1x); matching = twice as likely (2x);
-     *  mismatching = half as likely (0.5x). */
-    private static double themeMultiplier(VisualTheme defTheme, VisualTheme levelTheme) {
-        if (defTheme == null) return 1.0;
-        return defTheme == levelTheme ? 2.0 : 0.5;
-    }
+    // Item theme handling is now a hard gate (ItemDefinition.allowsTheme), not a
+    // soft weight multiplier - see rollNonGem / rollOfSlot. (Mob theme weighting
+    // still lives in LevelFactoryPopulate.)
 }

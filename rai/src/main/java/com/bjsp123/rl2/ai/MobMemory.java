@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.ai;
 
-import com.bjsp123.rl2.ai.goal.Goal;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
@@ -8,7 +7,6 @@ import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -21,9 +19,6 @@ import java.util.Set;
  * <p>Refreshed each tick by {@link SmartAi#refreshMemory}: a bounded shadow-cast FOV updates
  * {@link #knownTiles}, the {@link #knownItems} index, the {@link #stairsDown} sighting,
  * {@link #knownInactiveBeacons}, and {@link #lastSeenThreat} for any enemy still in vision.
- *
- * <p>The {@link #lastGoal} pair plus 0.1 hysteresis margin lives in {@link #lastGoalScore};
- * see {@link com.bjsp123.rl2.ai.goal.GoalSelector}.
  */
 public final class MobMemory {
 
@@ -35,8 +30,6 @@ public final class MobMemory {
     public Point stairsDown;
     public Point stairsUp;
 
-    public Goal   lastGoal;
-    public double lastGoalScore;
     public int    levelStamp = -1;
     /** Current exploration target; cleared on arrival or when no longer a frontier.
      *  Caching the target prevents the "step one tile, switch frontier, step back"
@@ -44,8 +37,9 @@ public final class MobMemory {
     public Point  exploreTarget;
     public int    exploreTargetAge;
     /** Ticks spent on the current level. Reset by {@link #onLevelChange}. Drives
-     *  the {@code GoalDescend} fatigue boost so the agent always eventually
-     *  commits to stairs instead of looping in EXPLORE/SURVIVE forever. */
+     *  {@link com.bjsp123.rl2.ai.Decider}'s committed-descent branch (past
+     *  {@code EXPLORE_FATIGUE_LIMIT}) so the agent always eventually commits to
+     *  stairs instead of looping in explore forever. */
     public int    ticksOnCurrentLevel;
     /** Consecutive agent turns spent on Wait. Resets when any non-Wait action runs.
      *  Used by {@code SmartAi} to break out of stuck states by forcing a random

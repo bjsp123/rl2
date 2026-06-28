@@ -34,6 +34,12 @@ public final class V2HallOfFame extends V2Screen {
     private final ScrollBand achievementsBand = new ScrollBand();
     private float heroesContentH;
     private float achievementsContentH;
+    /** Clickable hit rects + entries for the visible hero rows (rebuilt each
+     *  frame). A tap on a row opens its game-over-style detail screen. */
+    private final List<Rect> heroRowRects = new ArrayList<>();
+    private final List<HallOfFameEntry> heroRowEntries = new ArrayList<>();
+    /** Touch-down Y, to tell a row tap from a scroll drag. */
+    private float pressVy;
 
     public V2HallOfFame(Rl2Game game) {
         super(game.ui);
@@ -103,7 +109,13 @@ public final class V2HallOfFame extends V2Screen {
     private float bandBottom() { return window.y + UIVars.BACK_SIZE + 2 * BackBtn.INSET; }
 
     private void drawHeroesTab(UiCtx ctx) {
-        List<HallOfFameEntry> entries = game.hallOfFame.entries;
+        // Display ordered by score, highest first (defensive - older saves may
+        // predate the score-sort in HallOfFame.add).
+        List<HallOfFameEntry> entries = new ArrayList<>(game.hallOfFame.entries);
+        entries.sort(java.util.Comparator
+                .comparingInt((HallOfFameEntry x) -> x.score).reversed());
+        heroRowRects.clear();
+        heroRowEntries.clear();
         float bodyLeft  = window.x + 12f;
         float bodyRight = window.right() - 12f;
         float lh        = ctx.lineH();
@@ -163,6 +175,14 @@ public final class V2HallOfFame extends V2Screen {
                 if (yTop <= visibleBottom) break;
                 HallOfFameEntry e = entries.get(i);
 
+                // Clickable hit rect for this row, clamped to the visible band.
+                float hitTop = Math.min(yTop, visibleTop);
+                float hitBot = Math.max(yBot, visibleBottom);
+                if (hitTop > hitBot) {
+                    heroRowRects.add(new Rect(window.x, hitBot, window.w, hitTop - hitBot));
+                    heroRowEntries.add(e);
+                }
+
                 // Portrait on the left, vertically centred in the row.
                 com.bjsp123.rl2.model.Mob.CharacterClass cls = parseClass(e.charClass);
                 if (cls != null) {
@@ -185,11 +205,24 @@ public final class V2HallOfFame extends V2Screen {
                         bodyRight, upperY,
                         summaryW);
 
-                // Stat chips - turns / beasts tamed / favourite perk.
+                // Stat chips. Victory runs lead with a gold star + the number of
+                // beacons lit, then the usual score / turns / tamed chips.
                 float nextY = upperY - lh;
+                float chipX = textLeft;
+                if (e.victory) {
+                    float starSz = lh * 0.95f;
+                    ctx.batch.setColor(1f, 1f, 1f, 1f);
+                    ctx.batch.draw(goldStar(), chipX, nextY - starSz + 1f, starSz, starSz);
+                    chipX += starSz + 3f;
+                    String bc = Integer.toString(e.beaconsLit);
+                    TextDraw.left(ctx, ctx.fontRegular, UIVars.ACCENT, bc, chipX, nextY);
+                    ctx.layout.setText(ctx.fontRegular, bc);
+                    chipX += ctx.layout.width + 10f;
+                }
                 if (hasStatChips(e)) {
                     TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                            statChipLine(e), textLeft, nextY, maxDeathW);
+                            statChipLine(e), chipX, nextY,
+                            Math.max(40f, maxDeathW - (chipX - textLeft)));
                     nextY -= lh;
                 }
 
@@ -207,16 +240,58 @@ public final class V2HallOfFame extends V2Screen {
     }
 
     private static boolean hasStatChips(HallOfFameEntry e) {
-        return e.totalTurns > 0
-                || e.beastsTamed > 0
-                || (e.favPerk != null && !e.favPerk.isEmpty());
+        return true;   // the score chip is always shown
+    }
+
+    /** Lazily-built small gold 5-point star, drawn beside victory runs. */
+    private static com.badlogic.gdx.graphics.g2d.TextureRegion goldStarTex;
+    private static com.badlogic.gdx.graphics.g2d.TextureRegion goldStar() {
+        if (goldStarTex != null) return goldStarTex;
+        int s = 24;
+        com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(
+                s, s, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
+        pm.setColor(0f, 0f, 0f, 0f);
+        pm.fill();
+        float cx = s / 2f, cy = s / 2f, outer = s / 2f - 1f, inner = outer * 0.42f;
+        float[] xs = new float[10], ys = new float[10];
+        for (int i = 0; i < 10; i++) {
+            double ang = -Math.PI / 2 + i * Math.PI / 5;
+            float rr = (i % 2 == 0) ? outer : inner;
+            xs[i] = cx + (float) (Math.cos(ang) * rr);
+            ys[i] = cy + (float) (Math.sin(ang) * rr);
+        }
+        pm.setColor(1f, 0.84f, 0.30f, 1f);
+        for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+                if (pointInPoly(x + 0.5f, y + 0.5f, xs, ys)) pm.drawPixel(x, y);
+        com.badlogic.gdx.graphics.Texture t = new com.badlogic.gdx.graphics.Texture(pm);
+        t.setFilter(com.badlogic.gdx.graphics.Texture.TextureFilter.Nearest,
+                com.badlogic.gdx.graphics.Texture.TextureFilter.Nearest);
+        pm.dispose();
+        goldStarTex = new com.badlogic.gdx.graphics.g2d.TextureRegion(t);
+        return goldStarTex;
+    }
+
+    private static boolean pointInPoly(float px, float py, float[] xs, float[] ys) {
+        boolean in = false;
+        for (int i = 0, j = xs.length - 1; i < xs.length; j = i++) {
+            if (((ys[i] > py) != (ys[j] > py))
+                    && (px < (xs[j] - xs[i]) * (py - ys[i]) / (ys[j] - ys[i]) + xs[i])) {
+                in = !in;
+            }
+        }
+        return in;
     }
 
     private static String statChipLine(HallOfFameEntry e) {
         StringBuilder sb = new StringBuilder();
-        if (e.totalTurns > 0)
+        sb.append(TextCatalog.format("ui.hall.score",
+                TextCatalog.vars("score", e.score)));
+        if (e.totalTurns > 0) {
+            sb.append("   ");
             sb.append(TextCatalog.format("ui.hall.turns",
                     TextCatalog.vars("turns", e.totalTurns)));
+        }
         if (e.beastsTamed > 0) {
             if (sb.length() > 0) sb.append("   ");
             sb.append(TextCatalog.format("ui.hall.tamed",
@@ -282,6 +357,7 @@ public final class V2HallOfFame extends V2Screen {
 
     @Override
     protected boolean onTouchDownInBody(float vx, float vy) {
+        pressVy = vy;
         if (tabs.touchDown(vx, vy) >= 0) return true;
         if (!window.contains(vx, vy)) return false;
         return activeBand().touchDown(vx, vy);
@@ -290,6 +366,19 @@ public final class V2HallOfFame extends V2Screen {
     @Override
     protected boolean onTouchDragged(float vx, float vy) {
         return activeBand().touchDragged(vy);
+    }
+
+    @Override
+    protected boolean onTouchUpInBody(float vx, float vy) {
+        // A tap (not a scroll drag) on a hero row opens its detail screen.
+        if (currentTab != Tab.HEROES || Math.abs(vy - pressVy) > 6f) return false;
+        for (int i = 0; i < heroRowRects.size(); i++) {
+            if (heroRowRects.get(i).contains(vx, vy)) {
+                game.pushScreen(new V2GameOver(game, heroRowEntries.get(i), game::popScreen));
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

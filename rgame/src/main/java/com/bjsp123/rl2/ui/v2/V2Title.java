@@ -12,8 +12,8 @@ import com.bjsp123.rl2.save.SaveSystem;
  * filling the centre, burger top-right. No back button (this is the root).
  *
  * <p>Layout follows CLAUDE.md's "vertical list of large buttons" rule -
- * every entry is the same {@link UIVars#BTN_W} x {@link UIVars#BTN_H}, stacked
- * with a small gap, centred horizontally on the viewport.
+ * every entry is the same width (a viewport-clamped {@code btnW}, max 220) x
+ * {@code TITLE_BTN_H} (42), stacked with a small gap, centred horizontally.
  */
 public final class V2Title extends V2Screen {
 

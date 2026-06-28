@@ -54,11 +54,30 @@ public final class RegressionRunMain {
      *  printed by {@link #printDepthPacing} as the average pace-to-depth. */
     private static final long[] DEPTH_TURN_SUM = new long[64];
     private static final int[]  DEPTH_TURN_N   = new int[64];
+    /** Cross-run aggregator for incoming-damage breakdowns. Lets the final
+     *  summary tell the user where the agent's HP is leaking globally. */
+    private static final java.util.Map<String, Long> DMG_TAKEN_BY_MEDIUM =
+            new java.util.LinkedHashMap<>();
+    private static final java.util.Map<String, Long> DMG_TAKEN_BY_SOURCE =
+            new java.util.LinkedHashMap<>();
+    /** Count of agent deaths by killer mob type ({@code "ENV"} for
+     *  environmental), aggregated across all runs. */
+    private static final java.util.Map<String, Integer> DEATHS_BY_KILLER =
+            new java.util.LinkedHashMap<>();
 
     private RegressionRunMain() {}
 
     /** One run's headline numbers. Depth is 1-based (matches Level.depth). */
-    private record RunResult(int depth, int charLevel, long turns, String outcome) {}
+    private record RunResult(int depth, int charLevel, long turns, String outcome,
+                             int meleeAttacks, int meleeDamage,
+                             int wandsFired,   int wandDamage,
+                             int bombsThrown,  int bombDamage,
+                             int mobsKilled) {}
+
+    /** Per-win kill total for the end-of-sweep summary. Indexed by
+     *  "{class}/{difficulty}" so the report can break down wins by tier. */
+    private static final java.util.List<String> WIN_LABELS = new java.util.ArrayList<>();
+    private static final java.util.List<Integer> WIN_KILLS = new java.util.ArrayList<>();
 
     public static void main(String[] args) throws IOException {
         int runs = DEFAULT_RUNS;
@@ -81,7 +100,9 @@ public final class RegressionRunMain {
         Path csvOut = Paths.get("results", "regression.csv").toAbsolutePath();
         Files.createDirectories(csvOut.getParent());
         try (PrintWriter csv = new PrintWriter(Files.newBufferedWriter(csvOut))) {
-            csv.println("seed,char_class,difficulty,outcome,turns,depth_reached,final_char_level");
+            csv.println("seed,char_class,difficulty,outcome,turns,depth_reached,final_char_level,"
+                    + "melee_attacks,melee_damage,wands_fired,wand_damage,bombs_thrown,bomb_damage,"
+                    + "mobs_killed");
             System.out.printf("[regression] SMART agent  |  %d run(s)/cell  |  timeout %d ticks%n%n",
                     runs, TICK_BUDGET);
 
@@ -99,17 +120,36 @@ public final class RegressionRunMain {
                         grantReviveCharms(g.agent, GameBalance.STARTING_REVIVE_CHARMS);
                         AutoplayStats s = g.runUntil(TICK_BUDGET);
                         RunResult r = new RunResult(s.depthReached + 1,
-                                s.finalCharLevel, s.turnsSurvived, s.outcome);
+                                s.finalCharLevel, s.turnsSurvived, s.outcome,
+                                s.meleeAttacks, s.meleeDamage,
+                                s.wandsFired,   s.wandDamage,
+                                s.bombsThrown,  s.bombDamage,
+                                s.mobsKilled);
                         cell.add(r);
-                        csv.printf("%s,%s,%s,%s,%d,%d,%d%n",
+                        csv.printf("%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d%n",
                                 SeedCode.encode(seed), cls.name(), diff.name(),
-                                r.outcome, r.turns, r.depth, r.charLevel);
+                                r.outcome, r.turns, r.depth, r.charLevel,
+                                r.meleeAttacks, r.meleeDamage,
+                                r.wandsFired,   r.wandDamage,
+                                r.bombsThrown,  r.bombDamage,
+                                r.mobsKilled);
+                        if ("WIN".equals(r.outcome)) {
+                            WIN_LABELS.add(cls.name() + "/" + diff.name());
+                            WIN_KILLS.add(r.mobsKilled);
+                        }
                         for (int d = 0; d < s.arrivalTickPerDepth.length
                                 && d < DEPTH_TURN_SUM.length; d++) {
                             if (s.arrivalTickPerDepth[d] >= 0) {
                                 DEPTH_TURN_SUM[d] += s.arrivalTickPerDepth[d];
                                 DEPTH_TURN_N[d]++;
                             }
+                        }
+                        s.damageTakenByMedium.forEach((k, v) ->
+                                DMG_TAKEN_BY_MEDIUM.merge(k, v.longValue(), Long::sum));
+                        s.damageTakenBySource.forEach((k, v) ->
+                                DMG_TAKEN_BY_SOURCE.merge(k, v.longValue(), Long::sum));
+                        if (s.deathCause != null) {
+                            DEATHS_BY_KILLER.merge(s.deathCause, 1, Integer::sum);
                         }
                     }
                     printCell(cls, diff, cell);
@@ -120,7 +160,64 @@ public final class RegressionRunMain {
         }
         System.out.println("\n[regression] per-run CSV: " + csvOut);
         printDepthPacing();
+        printIncomingDamage();
         printDecisions();
+        printWinKills();
+    }
+
+    /** Total mob kills per winning run, listed inline. Empty when the sweep
+     *  produced no wins. Useful for sanity-checking that winning runs are
+     *  killing roughly the expected number of mobs - too few means the agent
+     *  ran past everything; too many means it ground out the floor instead
+     *  of descending. */
+    private static void printWinKills() {
+        if (WIN_LABELS.isEmpty()) {
+            System.out.println("[regression] no wins this sweep");
+            return;
+        }
+        long total = 0;
+        for (int k : WIN_KILLS) total += k;
+        double avg = total / (double) WIN_KILLS.size();
+        System.out.printf("[regression] kills per winning run (%d wins, avg %.1f):%n",
+                WIN_KILLS.size(), avg);
+        for (int i = 0; i < WIN_LABELS.size(); i++) {
+            System.out.printf("    %-22s  kills=%d%n", WIN_LABELS.get(i), WIN_KILLS.get(i));
+        }
+    }
+
+    /** Where the agent is losing HP across the whole sweep — by the
+     *  cause-medium ("blow", "magic", "throw", "fire", "wall-slam", ...)
+     *  and by the source mob type. Tells you whether to tune mob melee,
+     *  ranged DOTs, environment, or a specific species. */
+    private static void printIncomingDamage() {
+        long totalMedium = DMG_TAKEN_BY_MEDIUM.values().stream()
+                .mapToLong(Long::longValue).sum();
+        if (totalMedium == 0) return;
+        System.out.println("[regression] agent HP lost by mechanism "
+                + "(total " + totalMedium + " across all runs):");
+        DMG_TAKEN_BY_MEDIUM.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .limit(15)
+                .forEach(e -> System.out.printf("    %-16s %6.1f%%  (%d)%n",
+                        e.getKey(), 100.0 * e.getValue() / totalMedium, e.getValue()));
+        long totalSrc = DMG_TAKEN_BY_SOURCE.values().stream()
+                .mapToLong(Long::longValue).sum();
+        if (totalSrc == 0) return;
+        System.out.println("[regression] agent HP lost by attacker:");
+        DMG_TAKEN_BY_SOURCE.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .limit(15)
+                .forEach(e -> System.out.printf("    %-22s %6.1f%%  (%d)%n",
+                        e.getKey(), 100.0 * e.getValue() / totalSrc, e.getValue()));
+        int totalDeaths = DEATHS_BY_KILLER.values().stream()
+                .mapToInt(Integer::intValue).sum();
+        if (totalDeaths == 0) return;
+        System.out.println("[regression] agent deaths by killer (" + totalDeaths + " total):");
+        DEATHS_BY_KILLER.entrySet().stream()
+                .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+                .limit(15)
+                .forEach(e -> System.out.printf("    %-22s %6.1f%%  (%d kills)%n",
+                        e.getKey(), 100.0 * e.getValue() / totalDeaths, e.getValue()));
     }
 
     /** Average cumulative turns to FIRST reach each depth, across all runs that
@@ -197,6 +294,9 @@ public final class RegressionRunMain {
         int win = 0, death = 0, timeout = 0;
         int maxDepth = 0, maxLvl = 0;
         long maxTurns = 0, sumDepth = 0, sumLvl = 0, sumTurns = 0;
+        long sumMeleeAttacks = 0, sumMeleeDamage = 0;
+        long sumWandsFired   = 0, sumWandDamage  = 0;
+        long sumBombsThrown  = 0, sumBombDamage  = 0;
         for (RunResult r : cell) {
             switch (r.outcome) {
                 case "WIN"   -> win++;
@@ -209,6 +309,12 @@ public final class RegressionRunMain {
             sumDepth += r.depth;
             sumLvl   += r.charLevel;
             sumTurns += r.turns;
+            sumMeleeAttacks += r.meleeAttacks;
+            sumMeleeDamage  += r.meleeDamage;
+            sumWandsFired   += r.wandsFired;
+            sumWandDamage   += r.wandDamage;
+            sumBombsThrown  += r.bombsThrown;
+            sumBombDamage   += r.bombDamage;
         }
         System.out.printf(
             "%-8s %-7s runs=%d  W/D/T=%d/%d/%d  depth max=%d avg=%.1f  lvl max=%d avg=%.1f  turns max=%d avg=%.0f%n",
@@ -216,6 +322,14 @@ public final class RegressionRunMain {
             maxDepth, sumDepth / (double) n,
             maxLvl,   sumLvl   / (double) n,
             maxTurns, sumTurns / (double) n);
+        // Combat-mix line: per-run averages of attack count + total damage
+        // by source. Lets you see, e.g., that a class is hitting often but
+        // doing low damage, or leaning on wands more than melee.
+        System.out.printf(
+            "         combat       melee atk=%5.1f dmg=%6.1f   wands fired=%5.1f dmg=%6.1f   bombs thrown=%5.1f dmg=%6.1f%n",
+            sumMeleeAttacks / (double) n, sumMeleeDamage / (double) n,
+            sumWandsFired   / (double) n, sumWandDamage  / (double) n,
+            sumBombsThrown  / (double) n, sumBombDamage  / (double) n);
     }
 
     // -- headless data load (mirrors AutoplayRunMain) -------------------------

@@ -36,6 +36,28 @@ public class HallOfFameEntry {
     /** True if every beacon in the world was lit (perfect victory). */
     public boolean allBeaconsLit = false;
 
+    // --- Run stats (RL-58) - surfaced on the victory screen + score breakdown.
+    //     All default 0 / "" so older save records load cleanly.
+    public int    mobsKilled    = 0;
+    public int    itemsPickedUp = 0;
+    public int    foodEaten     = 0;
+    public int    gemsFound     = 0;
+    /** True if the Great Wraith was slain this run (score bonus). */
+    public boolean killedGreatWraith = false;
+    /** Difficulty name (Difficulty.name()) the run was played at - labels the
+     *  score multiplier on the breakdown. Defaults NORMAL for old records. */
+    public String difficulty   = "NORMAL";
+    /** Most-used item type per category (item type string, "" if none used). */
+    public String topWand      = "";
+    public String topBomb      = "";
+    public String topTool      = "";
+    /** Equipped item type strings at run-end (for victory-screen icons). */
+    public List<String> equipmentTypes = new ArrayList<>();
+    /** Use-counts for the most-used item in each category. */
+    public int    topWandCount = 0;
+    public int    topBombCount = 0;
+    public int    topToolCount = 0;
+
     public HallOfFameEntry() {}
 
     public HallOfFameEntry(String charClass, int level, int score, int depth, List<String> equipment, long ts) {

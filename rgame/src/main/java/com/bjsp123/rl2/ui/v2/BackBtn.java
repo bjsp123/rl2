@@ -6,8 +6,8 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
  * Bottom-left back glyph - drawn fixed-position on every V2 screen except
- * the title (which is the root). A 56x56 button containing a left-pointing
- * triangle drawn from primitives. Tap unwinds one level of navigation.
+ * the title (which is the root). A {@code UIVars.BACK_SIZE} (40px) button
+ * showing the {@code IconSprites.Icon.BACK} glyph. Tap unwinds one level of navigation.
  *
  * <p>The screen is responsible for routing the click - {@link V2Screen}
  * provides {@code onBack()} for ESC and tap-outside, and the BackBtn calls

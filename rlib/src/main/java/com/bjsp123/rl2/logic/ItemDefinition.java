@@ -5,13 +5,16 @@ import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.InventoryCategory;
 import com.bjsp123.rl2.model.Item.ItemEffect;
 import com.bjsp123.rl2.model.Item.UseBehavior;
+import com.bjsp123.rl2.model.Level.VisualTheme;
 import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob.Material;
 import com.bjsp123.rl2.util.CsvTable;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * One row from {@code assets/data/items.csv} parsed into a typed POJO.
@@ -48,7 +51,6 @@ public final class ItemDefinition {
     public double attackSpeed = Item.ATTACK_SPEED_DEFAULT;
     public double moveSpeed   = Item.MOVE_SPEED_DEFAULT;
     public double lightRadius;
-    public int    foodValue;
     /** Base AOE tile count for wands and bombs. See {@link Item#effectSize}. */
     public int    effectSize;
 
@@ -90,6 +92,10 @@ public final class ItemDefinition {
     /** Squares to knock the target back on a successful melee hit. 0 = no knockback. */
     public int knockbackSquares;
 
+    /** Levels of x-ray vision granted while equipped (CSV column {@code xRayEyes}).
+     *  See {@link Item#xRayEyes}. */
+    public int xRayEyes;
+
     /** Floor-twinkle flag - see {@link Item#glows}. */
     public boolean glows;
 
@@ -107,14 +113,37 @@ public final class ItemDefinition {
     /** Cluster size N when this item shows up: when picked, the populator
      *  scatters {@code ceil(N/2)..N} copies on adjacent floor tiles. */
     public int clusterSize = 1;
-    /** Optional theme gate. When non-null, the item is only eligible on levels
-     *  whose {@code theme} matches; null means "any theme". */
-    public com.bjsp123.rl2.model.Level.VisualTheme theme;
+    /** Multiplier on this row's weight in the random-pool draws (level scatter,
+     *  slot rolls, category-typed mob loot). {@code 1.0} is the baseline;
+     *  {@code 2.0} makes the row twice as likely to be picked when eligible.
+     *  Stacks multiplicatively with {@link #powerMin}/{@link #powerMax}
+     *  triangular weighting, so a high-drop-weight row still respects its
+     *  depth band. Does not affect guaranteed drops, unique-room/unique-mob
+     *  loot, or themed-room explicit item cells. */
+    public double dropWeight = 1.0;
+    /** Allowed level themes for this item - a HARD gate. {@code null} (or empty
+     *  cell) means "appears anywhere". The {@code theme} CSV column accepts: a
+     *  single theme ({@code CRYSTAL}); a pipe list ({@code CONCRETE|GOTHIC|CRYSTAL});
+     *  or an exclusion ({@code !CONCRETE} = every theme except concrete). An item
+     *  NEVER generates on a non-SHINY level it's themed against; on allowed
+     *  levels theming has no further effect (no weight bonus). */
+    public Set<VisualTheme> allowedThemes;
 
-    /** Minimum copies guaranteed on every eligible level. {@code 0}
-     *  means "not guaranteed" (the default); {@code 1+} forces that
-     *  many copies to be placed before random clusters are rolled. */
-    public int guaranteedPerLevel;
+    /** True when this item may generate on a level of theme {@code t}. SHINY is
+     *  the generic theme, so theming never gates a SHINY level; otherwise the
+     *  item must have no affinity or list {@code t} among its allowed themes. */
+    public boolean allowsTheme(VisualTheme t) {
+        if (t == VisualTheme.SHINY) return true;
+        return allowedThemes == null || allowedThemes.contains(t);
+    }
+
+    /** Copies guaranteed on every eligible level, sampled per level. {@code 0}
+     *  means "not guaranteed" (the default). The value may be fractional: the
+     *  integer part is always placed and the fraction is the chance of one more
+     *  (e.g. {@code 0.5} = a 50% chance of one copy, {@code 2.5} = two copies
+     *  plus a 50% chance of a third). Guaranteed copies are placed before the
+     *  random clusters are rolled. */
+    public double guaranteedPerLevel;
 
     /** When TRUE, this item is excluded from the random-generator pool
      *  used by mob loot drops and the random-scatter pass on level
@@ -156,12 +185,11 @@ public final class ItemDefinition {
         d.armor       = CsvTable.intCell(row, "armor", 0);
         d.apDamage    = CsvTable.intCell(row, "apDamage", 0);
         d.magicResist = CsvTable.intCell(row, "antiMagic", 0);
-        d.accuracy    = CsvTable.intCell(row, "accuracy", 0);
+        d.accuracy    = CsvTable.intCell(row, "accuracyBonus", 0);
         d.evasion     = CsvTable.intCell(row, "evasion", 0);
         d.attackSpeed = CsvTable.dblCell(row, "attackSpeed", Item.ATTACK_SPEED_DEFAULT);
         d.moveSpeed   = CsvTable.dblCell(row, "moveSpeed",   Item.MOVE_SPEED_DEFAULT);
         d.lightRadius = CsvTable.dblCell(row, "lightRadius", 0);
-        d.foodValue   = CsvTable.intCell(row, "foodValue", 0);
         d.effectSize  = CsvTable.intCell(row, "effectSize", 0);
 
         d.throwEffect = CsvTable.enumCell(row, "throwEffect", ItemEffect.class, null);
@@ -188,15 +216,16 @@ public final class ItemDefinition {
         d.baseChargeMax =         CsvTable.intCell(row, "baseChargeMax", 0);
 
         d.knockbackSquares      = CsvTable.intCell(row, "knockbackSquares", 0);
+        d.xRayEyes              = CsvTable.intCell(row, "xRayEyes", 0);
         d.glows                 = CsvTable.boolCell(row, "glows", false);
         d.inventoryCategory     = CsvTable.enumCell(row, "inventoryCategory",
                 InventoryCategory.class, null);
         d.powerMin          = CsvTable.dblCell(row, "minPowerLevel", 0.3);
         d.powerMax          = CsvTable.dblCell(row, "maxPowerLevel", 0.7);
         d.clusterSize       = CsvTable.intCell(row, "clusterSize", 1);
-        d.theme             = CsvTable.enumCell(row, "theme",
-                com.bjsp123.rl2.model.Level.VisualTheme.class, null);
-        d.guaranteedPerLevel = CsvTable.intCell(row, "guaranteedPerLevel", 0);
+        d.dropWeight        = CsvTable.dblCell(row, "dropWeight", 1.0);
+        d.allowedThemes     = parseThemeSpec(CsvTable.str(row, "theme", null));
+        d.guaranteedPerLevel = CsvTable.dblCell(row, "guaranteedPerLevel", 0);
         d.restrictedDrop     = CsvTable.boolCell(row, "restrictedDrop", false);
         d.revivesOnDeath     = CsvTable.boolCell(row, "revivesOnDeath", false);
 
@@ -204,6 +233,40 @@ public final class ItemDefinition {
         d.spriteRow     = CsvTable.intCell(row, "spriteRow", 0);
 
         return d;
+    }
+
+    /** Parse the {@code theme} CSV cell into an allowed-theme set. Tolerant of
+     *  hand-edits: an empty cell, a cell with no recognised themes, or a bare
+     *  {@code "!"} all yield {@code null} ("any theme") rather than throwing,
+     *  and unknown tokens inside a list are skipped with a warning.
+     *  <ul>
+     *    <li>{@code ""}                       -> null (any)</li>
+     *    <li>{@code CRYSTAL}                  -> {CRYSTAL}</li>
+     *    <li>{@code CONCRETE|GOTHIC|CRYSTAL}  -> {CONCRETE, GOTHIC, CRYSTAL}</li>
+     *    <li>{@code !CONCRETE}                -> all themes except CONCRETE</li>
+     *  </ul> */
+    static Set<VisualTheme> parseThemeSpec(String cell) {
+        if (cell == null) return null;
+        String s = cell.trim();
+        if (s.isEmpty()) return null;
+        boolean exclude = s.startsWith("!");
+        if (exclude) s = s.substring(1).trim();
+        Set<VisualTheme> named = EnumSet.noneOf(VisualTheme.class);
+        for (String tok : s.split("\\|")) {
+            String name = tok.trim();
+            if (name.isEmpty()) continue;
+            try {
+                named.add(VisualTheme.valueOf(name));
+            } catch (IllegalArgumentException bad) {
+                System.err.println("[items.csv] ignoring unknown theme '" + name
+                        + "' in cell '" + cell + "'");
+            }
+        }
+        if (named.isEmpty()) return null;            // nothing valid -> any theme
+        if (!exclude) return named;
+        Set<VisualTheme> allowed = EnumSet.allOf(VisualTheme.class);
+        allowed.removeAll(named);
+        return allowed;
     }
 
     /** Stamp this definition's fields onto a fresh {@link Item}. */
@@ -223,7 +286,6 @@ public final class ItemDefinition {
         it.attackSpeed  = attackSpeed;
         it.moveSpeed    = moveSpeed;
         it.lightRadius  = lightRadius;
-        it.foodValue    = foodValue;
         it.effectSize    = effectSize;
 
         it.throwEffect    = throwEffect;
@@ -241,6 +303,7 @@ public final class ItemDefinition {
         it.chargeGain     = chargeGain;
         it.baseChargeMax  = baseChargeMax;
         it.knockbackSquares = knockbackSquares;
+        it.xRayEyes         = xRayEyes;
         it.glows                 = glows;
         it.inventoryCategory     = inventoryCategory;
         it.minPowerLevel         = powerMin;

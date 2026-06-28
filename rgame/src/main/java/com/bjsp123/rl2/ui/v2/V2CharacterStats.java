@@ -213,7 +213,7 @@ public final class V2CharacterStats extends BasePopup {
             Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
             int cur = (player != null && player.perks != null && p != null)
                     ? player.perks.getOrDefault(p, 0) : 0;
-            boolean canSpend = hasPoints && cur < 5;
+            boolean canSpend = hasPoints && cur < 8;
             Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             if (!canSpend) {
                 s.setColor(UIVars.WIN_BG);
@@ -273,14 +273,14 @@ public final class V2CharacterStats extends BasePopup {
         }
 
         // Perk-tab plus-button glyphs - a centred "+" character. Dimmed
-        // when the player has no perk points or the perk is already at level 5.
+        // when the player has no perk points or the perk is already at level 8.
         boolean hasPoints = player != null && player.perkPoints > 0;
         for (int i = 0; i < perkPlusRects.size(); i++) {
             Rect r = perkPlusRects.get(i);
             Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
             int cur = (player != null && player.perks != null && p != null)
                     ? player.perks.getOrDefault(p, 0) : 0;
-            boolean canSpend = hasPoints && cur < 5;
+            boolean canSpend = hasPoints && cur < 8;
             com.badlogic.gdx.graphics.Color c = !canSpend
                     ? UIVars.TEXT_DIM
                     : (i == perkPlusPressed ? UIVars.ACCENT : UIVars.TEXT_BODY);
@@ -533,7 +533,7 @@ public final class V2CharacterStats extends BasePopup {
                             player.perks = new java.util.EnumMap<>(Perk.class);
                         }
                         int cur = player.perks.getOrDefault(perk, 0);
-                        if (cur >= 5) return true;
+                        if (cur >= 8) return true;
                         player.perks.put(perk, cur + 1);
                         player.perkPoints--;
                         // First-encounter tip: fires the first time the

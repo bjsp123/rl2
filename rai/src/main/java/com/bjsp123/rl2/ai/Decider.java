@@ -28,10 +28,15 @@ import java.util.Map;
  * picks the concrete action.
  *
  * <pre>
- *   if levelFullyExplored:                            → planDescend
- *   if enemiesInSight:
+ *   if mustClearToExit (locked-exit floor, e.g. Mirrormatch):
+ *       if enemiesInSight:                            → planFight
+ *       else:                                         → move toward the exit-blocking foe / exit
+ *   if descentCommitted (dwelt too long AND stairsReachable): → planDescend
+ *   if enemiesInSight:                                // engage BEFORE descending
  *       if enemiesStronger AND canEscape:             → planFlee
  *       else:                                         → planFight
+ *   if levelFullyExplored:                            → planDescend
+ *   if explorationStalled AND stairsReachable:        → planDescend
  *   if hpBelowThreshold AND healingAvailable:         → planHeal
  *   if usefulPowerupAvailable:                        → planPickupPowerup
  *   if betterOrConsumableItemAvailable:               → planPickupItem
@@ -270,6 +275,7 @@ public final class Decider {
         List<Action> candidates = new ArrayList<>();
         ActionLibrary.addMeleeAdjacent(s, candidates);
         ActionLibrary.addThrowsAtNearest(s, candidates);
+        ActionLibrary.addRetreatToThrowBomb(s, candidates);
         ActionLibrary.addWandAtNearest(s, candidates);
         ActionLibrary.addGrappleNearest(s, candidates);
         ActionLibrary.addChargeNearest(s, candidates);
@@ -338,8 +344,8 @@ public final class Decider {
     }
 
     /** Argmax of applicable actions by utility; ActionWait if none are
-     *  applicable. Mirrors {@link com.bjsp123.rl2.ai.Planner#plan} but stays
-     *  local to the branch so the top-level GoalSelector race is gone. */
+     *  applicable. Each branch builds its own candidate list and picks locally -
+     *  there is no top-level goal-score race. */
     private static Action pickBest(WorldState s, List<Action> candidates) {
         Action best = null;
         double bestU = -Double.MAX_VALUE;

@@ -1,6 +1,7 @@
 package com.bjsp123.rl2.screen;
 
 import com.bjsp123.rl2.logic.EventLog;
+import com.bjsp123.rl2.logic.GemSystem;
 import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.Messages;
@@ -368,7 +369,7 @@ final class PlayController {
             itemPicker.open(eligible,
                     (u, chosen) -> {
                         Level cur = world.currentLevel();
-                        if (ItemSystem.triggerGemOnItem(cur, u, gem, chosen)) {
+                        if (GemSystem.triggerGemOnItem(cur, u, gem, chosen)) {
                             playScrollFx(u, gem);
                             // Showcase the enchanted item centre-screen.
                             if (animator != null) {
@@ -388,7 +389,7 @@ final class PlayController {
             triggerCraftedGemWand(user, gem);
             return;
         }
-        if (ItemSystem.triggerGem(level, user, gem, null)) {
+        if (GemSystem.triggerGem(level, user, gem, null)) {
             playScrollFx(user, gem);
             com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
             afterMove(level);
@@ -455,17 +456,17 @@ final class PlayController {
     /** Colour for a scroll's cast effect, matching its emblem art. */
     private static com.bjsp123.rl2.world.render.Effect.EffectTint scrollTint(String t) {
         return switch (t) {
-            case "BLOOD_FLOWER", "INVOCATION_OF_MO_YE" -> com.bjsp123.rl2.world.render.Effect.EffectTint.RED;
-            case "FERVENT_ASPIRATION", "INVOCATION_OF_JIUTIAN", "EIGHTFOLD_MULTIPLICATION",
-                 "PILL_OF_IMMORTALITY" -> com.bjsp123.rl2.world.render.Effect.EffectTint.YELLOW;
-            case "BLIZZARD_PETAL", "THIRTY_SIX_STRATAGEMS", "GREATER_SEAL",
-                 "ELEMENTAL_INSCRIPTION" -> com.bjsp123.rl2.world.render.Effect.EffectTint.CYAN;
-            case "HARVEST_BLOSSOM", "POLYMORPH_SIGN" -> com.bjsp123.rl2.world.render.Effect.EffectTint.GREEN;
-            case "EIGHT_DIRECTIONS_DEFENCE", "INVOCATION_OF_RU_SHOU" -> com.bjsp123.rl2.world.render.Effect.EffectTint.BLUE;
-            case "HEAVENLY_PEACH", "CRYSTAL_OF_INVERSION" -> com.bjsp123.rl2.world.render.Effect.EffectTint.PINK;
-            case "BLIND_MASTER", "SYMBOL_OF_INSANITY" -> com.bjsp123.rl2.world.render.Effect.EffectTint.MAUVE;
-            case "INVOCATION_OF_CHIYOU", "INVOCATION_OF_THE_FOXES", "STONE_BURNER" -> com.bjsp123.rl2.world.render.Effect.EffectTint.ORANGE;
-            case "LESSER_SEAL", "INVOCATION_OF_TAISHAN" -> com.bjsp123.rl2.world.render.Effect.EffectTint.BROWN;
+            case "SC_BLOOD_NOVA", "SC_CONJURE_BRANDED_SWORD" -> com.bjsp123.rl2.world.render.Effect.EffectTint.RED;
+            case "SC_UPGRADE_WEAPON", "SC_CONJURE_WAND", "SC_SUMMON_CLONES",
+                 "SC_SHIELD_SELF" -> com.bjsp123.rl2.world.render.Effect.EffectTint.YELLOW;
+            case "SC_FREEZE_ALL_ENEMIES", "SC_RANDOM_TELEPORT", "SC_SEAL_DOORS_CRYSTAL",
+                 "SC_BRAND_WEAPON" -> com.bjsp123.rl2.world.render.Effect.EffectTint.CYAN;
+            case "SC_HARVEST_PLANTS", "SC_POLYMORPH_ENEMIES" -> com.bjsp123.rl2.world.render.Effect.EffectTint.GREEN;
+            case "SC_GREAT_WARD", "SC_CONJURE_ARMOR" -> com.bjsp123.rl2.world.render.Effect.EffectTint.BLUE;
+            case "SC_FULL_RESTORE", "SC_BLAST_THROUGH_WALLS" -> com.bjsp123.rl2.world.render.Effect.EffectTint.PINK;
+            case "SC_SMOKE_LEVEL_AND_ESP", "SC_MADDEN_ENEMIES" -> com.bjsp123.rl2.world.render.Effect.EffectTint.MAUVE;
+            case "SC_CONJURE_BOMBS", "SC_CONJURE_TOOLS", "SC_IGNITE_NEAR_STATUES" -> com.bjsp123.rl2.world.render.Effect.EffectTint.ORANGE;
+            case "SC_SEAL_DOORS_ONETIME", "SC_CONJURE_ITEMS" -> com.bjsp123.rl2.world.render.Effect.EffectTint.BROWN;
             default -> com.bjsp123.rl2.world.render.Effect.EffectTint.WHITE;
         };
     }
@@ -474,12 +475,12 @@ final class PlayController {
      *  buffs/seals/creation-of-gear, sparks for offensive/elemental. */
     private static int scrollStyle(String t) {
         return switch (t) {
-            case "THIRTY_SIX_STRATAGEMS", "ELEMENTAL_INSCRIPTION", "POLYMORPH_SIGN",
-                 "EIGHTFOLD_MULTIPLICATION", "SYMBOL_OF_INSANITY", "PATH_THROUGH_OBLIVION"
+            case "SC_RANDOM_TELEPORT", "SC_BRAND_WEAPON", "SC_POLYMORPH_ENEMIES",
+                 "SC_SUMMON_CLONES", "SC_MADDEN_ENEMIES", "SC_VOID_NEARBY_FLOOR"
                     -> com.bjsp123.rl2.world.render.Effect.SCROLL_WHIRLPOOL;
-            case "FERVENT_ASPIRATION", "BLIND_MASTER", "EIGHT_DIRECTIONS_DEFENCE",
-                 "HEAVENLY_PEACH", "HARVEST_BLOSSOM", "LESSER_SEAL", "GREATER_SEAL",
-                 "INVOCATION_OF_TAISHAN", "INVOCATION_OF_RU_SHOU", "PILL_OF_IMMORTALITY"
+            case "SC_UPGRADE_WEAPON", "SC_SMOKE_LEVEL_AND_ESP", "SC_GREAT_WARD",
+                 "SC_FULL_RESTORE", "SC_HARVEST_PLANTS", "SC_SEAL_DOORS_ONETIME", "SC_SEAL_DOORS_CRYSTAL",
+                 "SC_CONJURE_ITEMS", "SC_CONJURE_ARMOR", "SC_SHIELD_SELF"
                     -> com.bjsp123.rl2.world.render.Effect.SCROLL_GLOW;
             default -> com.bjsp123.rl2.world.render.Effect.SCROLL_SPARKS;
         };
@@ -504,7 +505,7 @@ final class PlayController {
         targetingOverlay.setValidTiles(lineOfFireGrid(level, user), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
-            if (ItemSystem.triggerGem(cur, user, gem, target)) {
+            if (GemSystem.triggerGem(cur, user, gem, target)) {
                 playScrollFx(user, gem);
                 com.bjsp123.rl2.logic.MobSystem.removeFromInventoryPublic(user, gem);
                 animator.consume(cur);
@@ -762,21 +763,39 @@ final class PlayController {
 
     HallOfFameEntry snapshotOf(Mob p) {
         List<String> equipment = new ArrayList<>();
+        List<String> equipmentTypes = new ArrayList<>();
         for (Item it : p.inventory.allEquipped()) {
             String cat = it.inventoryCategory != null ? it.inventoryCategory.name()
                     : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.equipped");
             equipment.add(cat + ": " + it.describe());
+            if (it.type != null) equipmentTypes.add(it.type);
         }
+        int score = com.bjsp123.rl2.logic.GameBalance.runScore(
+                p.runStats, p.beaconsLit, p.killedGreatWraith, /*allBeaconsLit=*/false);
         HallOfFameEntry entry = new HallOfFameEntry(
                 p.characterClass != null ? p.characterClass.displayName()
                         : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer"),
                 p.characterLevel,
-                p.score, world.currentLevel().depth, equipment, System.currentTimeMillis());
+                score, world.currentLevel().depth, equipment, System.currentTimeMillis());
         entry.totalTurns  = TurnSystem.standardTurnForTick(world.tick);
         entry.beastsTamed = p.beastsTamed;
         entry.favPerk     = favPerkOf(p);
+        entry.beaconsLit        = p.beaconsLit;
+        entry.killedGreatWraith = p.killedGreatWraith;
+        entry.difficulty        = com.bjsp123.rl2.logic.GameBalance.difficulty.name();
+        com.bjsp123.rl2.model.RunStats rs = p.runStats;
+        entry.mobsKilled    = rs.mobsKilled;
+        entry.itemsPickedUp = rs.itemsPickedUp;
+        entry.foodEaten     = rs.foodEaten;
+        entry.gemsFound     = rs.gemsFound;
+        entry.topWand = nz(rs.topWand()); entry.topWandCount = rs.topWandCount();
+        entry.topBomb = nz(rs.topBomb()); entry.topBombCount = rs.topBombCount();
+        entry.topTool = nz(rs.topTool()); entry.topToolCount = rs.topToolCount();
+        entry.equipmentTypes = equipmentTypes;
         return entry;
     }
+
+    private static String nz(String s) { return s == null ? "" : s; }
 
     private static String favPerkOf(Mob p) {
         if (p.perks == null || p.perks.isEmpty()) return "";
@@ -894,7 +913,34 @@ final class PlayController {
             openForgeScreen.run();
             return;
         }
+        // Waiting beside a beacon opens the teleport map (no turn cost - it's a
+        // menu, like the stairs / forge transitions above).
+        if (openMapScreen != null && adjacentToBeacon(cur, player.position)) {
+            openMapScreen.run();
+            return;
+        }
         TurnSystem.applyMoveCost(player, player.effectiveStats().moveCost);
+    }
+
+    /** Open the teleport-enabled map - triggered by walking into a beacon
+     *  (from {@link com.bjsp123.rl2.input.GameInput}) or waiting beside one. */
+    public void openBeaconMap() {
+        if (openMapScreen != null) openMapScreen.run();
+    }
+
+    /** True when any 8-neighbour of {@code at} is a beacon tile. */
+    private static boolean adjacentToBeacon(Level level, Point at) {
+        if (at == null) return false;
+        int px = at.tileX(), py = at.tileY();
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int x = px + dx, y = py + dy;
+                if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
+                if (level.tiles[x][y].isBeacon()) return true;
+            }
+        }
+        return false;
     }
 
     /** True when any 8-neighbour of {@code at} is a gem-hearth tile
@@ -1007,7 +1053,10 @@ final class PlayController {
         recenterCamera.run();
         levelRenderer.markDirty();
 
-        if (sounds != null) sounds.play("sfx.world.action.enter_level");
+        if (sounds != null) {
+            if (destLevel.kind == Level.LevelKind.LANDING) sounds.play("sfx.world.arrive.landing");
+            else sounds.play("sfx.world.action.enter_level");
+        }
         return true;
     }
 
@@ -1023,7 +1072,11 @@ final class PlayController {
         afterMove(next);
         recenterCamera.run();
         levelRenderer.markDirty();
-        if (sounds != null) sounds.play("sfx.world.action.enter_level");
+        if (sounds != null) {
+            // Arriving on the endgame Landing gets its own suspense sting.
+            if (next.kind == Level.LevelKind.LANDING) sounds.play("sfx.world.arrive.landing");
+            else sounds.play("sfx.world.action.enter_level");
+        }
         String playerName = player.name != null ? player.name
                 : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
         EventLog.add(Messages.enterLevel(playerName, next.depth, next.flags));

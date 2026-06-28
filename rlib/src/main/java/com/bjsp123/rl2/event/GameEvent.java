@@ -50,6 +50,7 @@ public sealed interface GameEvent permits
         GameEvent.MobSpawned,
         GameEvent.SurfaceChanged,
         GameEvent.VegetationChanged,
+        GameEvent.SporeEmitted,
         GameEvent.RainbowBurst,
         GameEvent.XPGainBurst,
         GameEvent.PeriodicBuffDamage,
@@ -200,6 +201,12 @@ public sealed interface GameEvent permits
      *  kind. Skipped when the new value matches the previous one. */
     record VegetationChanged(Point pos, Level.Vegetation vegetation) implements GameEvent {}
 
+    /** A mushroom tile just puffed a spore cloud (see
+     *  {@code CloudSystem.emitSpores}). Carries the firing tile so the renderer
+     *  can play a spatial "puff" sfx; the cloud visuals themselves are polled
+     *  from {@code level.cloud}, so this event exists purely for the sound. */
+    record SporeEmitted(Point pos) implements GameEvent {}
+
     /** Multi-coloured radial particle burst at {@code pos}. Used for the
      *  power-orb absorb celebration and on character level-up. Blocking - the
      *  Animator parks the freeze gate for the burst's duration so the
@@ -220,7 +227,7 @@ public sealed interface GameEvent permits
     /** An item was conjured onto the floor by a creation scroll (RL-50). The
      *  renderer plays a glow + spark "birth" burst behind the item sprite at
      *  {@code at} so the player sees what was created and where it landed. */
-    record ItemCreated(Item item, Point at) implements GameEvent {}
+    record ItemCreated(Item item, Point at, boolean showcase) implements GameEvent {}
 
     /** A single item was just picked up by a mob - the renderer plays a brief
      *  arc from the item's tile toward the bottom-right of the screen (where the

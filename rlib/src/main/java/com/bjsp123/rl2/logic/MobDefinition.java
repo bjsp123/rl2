@@ -87,11 +87,17 @@ public final class MobDefinition {
      *  checks {@code World.unique.mobs} and adds the type-name on spawn so
      *  subsequent levels skip it. Used by the elder-* boss variants. */
     public boolean unique;
-    /** Items this mob drops on death. Each {@link com.bjsp123.rl2.util.CsvTable.DropSpec}
-     *  entry declares a keyword ({@code NONE}, {@code STUFF}, a category name, or a
-     *  literal type), an optional explicit plus level ({@code +n}), and a fractional
-     *  count ({@code *n}). Empty list = no drops. */
-    public java.util.List<com.bjsp123.rl2.util.CsvTable.DropSpec> drops = new java.util.ArrayList<>();
+    /** Drop types this mob yields on death - a {@code |}-separated list of
+     *  {@link com.bjsp123.rl2.logic.ItemGenerator} drop categories (EQUIPMENT,
+     *  MAGIC_ITEMS, FOOD, POTION, GEM, SPECIAL_GEM, POWERUPS, BOMBS), or the
+     *  special {@code NOTHING_AT_ALL} marker. Each rolled item picks one type at
+     *  random from this list. Empty list = no rolled drops. */
+    public java.util.List<String> dropTypes = new java.util.ArrayList<>();
+    /** Total number of items to roll on death. The integer part is guaranteed;
+     *  the fractional part is the probability of one bonus item. Items roll as if
+     *  for {@code level.depth + floor(dropAmount)} - a more generous drop also
+     *  yields deeper-quality loot. */
+    public double dropAmount = 0;
     /** Where in the dungeon this species is meant to appear. Expressed as a
      *  fraction-of-depth window (0 = depth 1, 1 = {@code DUNGEON_DEPTH}); the
      *  populator filters out levels whose depth-fraction falls outside
@@ -297,7 +303,8 @@ public final class MobDefinition {
         d.faction         = CsvTable.str(row, "faction", null);
         d.enemyFactions.addAll(CsvTable.listCell(row, "enemyFactions"));
         d.unique          = CsvTable.boolCell(row, "unique", false);
-        d.drops           = com.bjsp123.rl2.util.CsvTable.parseDropSpecList(CsvTable.str(row, "dropQuality", null));
+        d.dropTypes.addAll(CsvTable.listCell(row, "dropType"));
+        d.dropAmount      = CsvTable.dblCell(row, "dropAmount", 0);
         d.powerMin        = CsvTable.dblCell(row, "minPowerLevel", 0.3);
         d.powerMax        = CsvTable.dblCell(row, "maxPowerLevel", 0.7);
         d.rarity          = CsvTable.dblCell(row, "rarity", 1.0);
@@ -371,9 +378,9 @@ public final class MobDefinition {
                 a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.TELEPORT;
                 a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[1]);
                 a.cooldownTurns   = Integer.parseInt(parts[2]);
-            } else if ("phasedodge".equals(kind)) {
-                // phasedodge:<cooldownBuff>:<cooldownTurns>
-                a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.PHASE_DODGE;
+            } else if ("wraithdodge".equals(kind)) {
+                // wraithdodge:<cooldownBuff>:<cooldownTurns>
+                a.kind            = com.bjsp123.rl2.model.Mob.MobAbility.AbilityKind.WRAITH_DODGE;
                 a.cooldownTracker = com.bjsp123.rl2.model.Buff.BuffType.valueOf(parts[1]);
                 a.cooldownTurns   = Integer.parseInt(parts[2]);
             } else {
@@ -529,7 +536,7 @@ public final class MobDefinition {
                         a.healAmount, a.cooldownTracker, a.cooldownTurns));
                 case TELEPORT -> m.abilities.add(Mob.MobAbility.teleport(
                         a.cooldownTracker, a.cooldownTurns));
-                case PHASE_DODGE -> m.abilities.add(Mob.MobAbility.phaseDodge(
+                case WRAITH_DODGE -> m.abilities.add(Mob.MobAbility.wraithDodge(
                         a.cooldownTracker, a.cooldownTurns));
             }
         }

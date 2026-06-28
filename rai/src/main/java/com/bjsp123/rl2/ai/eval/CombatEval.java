@@ -453,8 +453,8 @@ public final class CombatEval {
                 // these as offensive moves unless damage > 0 (most have 0).
                 return wand.damage > 0;
             case TELEPORT:
-                // Defensive blink; handled by addEscapeWandAtNearest, but if
-                // it reaches this path treat the hit as fine.
+                // Defensive blink; handled by ActionLibrary.addTeleportEscapes,
+                // but if it reaches this path treat the hit as fine.
                 return true;
             default:
                 return wand.damage > 0;

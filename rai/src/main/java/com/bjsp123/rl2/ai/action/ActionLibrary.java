@@ -1,129 +1,24 @@
 package com.bjsp123.rl2.ai.action;
 
 import com.bjsp123.rl2.ai.WorldState;
-import com.bjsp123.rl2.ai.eval.CombatEval;
 import com.bjsp123.rl2.ai.eval.ItemEval;
-import com.bjsp123.rl2.ai.goal.Goal;
-import com.bjsp123.rl2.ai.goal.GoalActivateBeacon;
-import com.bjsp123.rl2.ai.goal.GoalDescend;
-import com.bjsp123.rl2.ai.goal.GoalEquipBetter;
-import com.bjsp123.rl2.ai.goal.GoalExplore;
-import com.bjsp123.rl2.ai.goal.GoalPickupKnown;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Item.InventoryCategory;
 import com.bjsp123.rl2.model.Item.UseBehavior;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Per-tick, produces every {@link Action} that could plausibly satisfy the active
- * {@link Goal}. Filtering by goal keeps branching factor sane: KILL doesn't
- * enumerate "walk to that floor item", EXPLORE doesn't enumerate "fire wand".
- *
- * <p>{@link com.bjsp123.rl2.ai.Planner} picks the highest-utility entry and the
- * SmartAi entry executes step 0.
+ * Stats-based enumerators that append candidate {@link Action}s to a list. The
+ * live {@link com.bjsp123.rl2.ai.Decider} calls the relevant {@code add*}
+ * helpers per branch, then picks the highest-utility entry. No item-identity
+ * matching - every filter reads {@code useBehavior} / {@code wandEffect} / buffs.
  */
 public final class ActionLibrary {
 
     private ActionLibrary() {}
-
-    public static List<Action> enumerate(WorldState s, Goal goal) {
-        List<Action> out = new ArrayList<>();
-        if (goal == null) { out.add(new ActionWait()); return out; }
-        String n = goal.name();
-        switch (n) {
-            case "SURVIVE", "HEAL" -> {
-                // SURVIVE means: get out of range of the threat, then heal or
-                // explore. Order matches that intent:
-                //   1. Drink an immediate-cure potion if held.
-                //   2. Escape: jump / blink / phase / retreat - whichever puts
-                //      meaningful distance or LOS-break between us and the threat.
-                //   3. Adjacent enemy: melee it (finishing is a valid escape).
-                //   4. Wait as last resort - the wait-streak escape kicks in
-                //      after a few of these.
-                // Offensive ranged options (throws, wands, charges, chasing the
-                // last-known threat) are NOT survive moves and don't appear here.
-                // If the agent wants to keep fighting, KILL re-asserts next tick.
-                addHealingConsumables(s, out);
-                addJumpAway(s, out);
-                addEscapeWandAtNearest(s, out);
-                addSelfBuff(s, out);
-                addRetreatStep(s, out);
-                addMeleeAdjacent(s, out);
-                addAbility(s, out);
-                addWait(out);
-            }
-            case "KILL" -> {
-                addMeleeAdjacent(s, out);
-                // Heal mid-combat when HP drops - matches the MOB AI which fires
-                // tryUseInventoryItem every turn regardless of goal. wouldDrinkHelp
-                // gates entry at hp < 0.7 * maxHp so fresh fighters don't waste it.
-                addHealingConsumables(s, out);
-                addThrowsAtNearest(s, out);
-                addWandAtNearest(s, out);
-                addGrappleNearest(s, out);
-                addChargeNearest(s, out);
-                addJumpToward(s, out);
-                addSelfBuff(s, out);
-                addAbility(s, out);
-                addCloseStep(s, out);
-                addChaseLastKnown(s, out);
-            }
-            case "FLEE" -> {
-                addRetreatStep(s, out);
-                addAbility(s, out);
-                addThrowsAtNearest(s, out);
-                addMeleeAdjacent(s, out);
-            }
-            case "EQUIP" -> {
-                Item best = GoalEquipBetter.bestBagUpgrade(s);
-                if (best != null) out.add(new ActionEquip(best));
-                addWait(out);
-            }
-            case "PICKUP" -> {
-                Point t = GoalPickupKnown.bestPickupTarget(s);
-                if (t != null) {
-                    if (t.equals(s.mob.position)) out.add(new ActionPickup());
-                    else out.add(new ActionMoveToward(t, "pickup", 0.6));
-                }
-                addWait(out);
-            }
-            case "EXPLORE" -> {
-                Point f = GoalExplore.frontier(s);
-                // useBfsStep=true: step source is the same BFS that picked the
-                // frontier, so a "reachable" frontier always produces a step.
-                // Also bypasses the ONETIME_DOOR safety bail - exploring a low-HP
-                // agent should walk through onetime doors to find heals beyond them.
-                if (f != null) out.add(new ActionMoveToward(f, "explore", 0.6, true));
-                addWait(out);
-            }
-            case "BEACON" -> {
-                Point adj = GoalActivateBeacon.adjacentTo(s);
-                if (adj != null) out.add(new ActionMoveToward(adj, "activate beacon", 0.55));
-                addWait(out);
-            }
-            case "DESCEND" -> {
-                if (GoalDescend.onStairs(s)) {
-                    out.add(new ActionDescendStairs());
-                } else {
-                    Point dest = s.memory.stairsDown != null ? s.memory.stairsDown : s.level.stairsDown;
-                    if (dest != null) {
-                        // useBfsStep=true: same BFS rules as GoalDescend.computeStairsReachable,
-                        // so a reachable-per-BFS staircase always produces a step. Also
-                        // bypasses ONETIME_DOOR safety so the agent commits to the descent.
-                        out.add(new ActionMoveToward(dest, "descend", 0.6, true));
-                    }
-                }
-                addWait(out);
-            }
-            default -> out.add(new ActionWait());
-        }
-        if (out.isEmpty()) out.add(new ActionWait());
-        return out;
-    }
 
     /* ---------- helpers ---------- */
 
@@ -209,33 +104,6 @@ public final class ActionLibrary {
         return false;
     }
 
-    /** When no enemy is visible but one was sighted, path toward the last known tile
-     *  so we resume contact instead of falling through to EXPLORE/Wait. If we're
-     *  already standing on that tile, sweep outward toward the nearest unknown or
-     *  walkable neighbour - "search the last known location" rather than stand still.
-     *
-     *  <p>Also handles the "enemy is on an unreachable tile" case (flying mob on a
-     *  CHASM border): if the exact lastKnownEnemyTile can't be pathfound to, walk
-     *  to the nearest walkable cell adjacent to it instead, so we hover within
-     *  attack/wand range until the enemy moves back into reach. */
-    public static void addChaseLastKnown(WorldState s, List<Action> out) {
-        if (s.nearestEnemy != null) return;
-        if (s.lastKnownEnemyTile == null) return;
-        Point dest = s.lastKnownEnemyTile;
-        if (s.mob.position.equals(dest)) {
-            dest = pickSearchSweepTarget(s);
-            if (dest != null) out.add(new ActionMoveToward(dest, "search last-seen", 0.6));
-            return;
-        }
-        // Path direct to the enemy tile first; if that fails (flying enemy over
-        // chasm, etc.), pick the nearest walkable neighbour of the enemy tile.
-        if (com.bjsp123.rl2.logic.Pathfinder.nextStep(s.level, s.mob, dest) == null) {
-            Point reachable = nearestWalkableNeighbour(s, s.lastKnownEnemyTile);
-            if (reachable != null) dest = reachable;
-        }
-        out.add(new ActionMoveToward(dest, "search last-seen", 0.6));
-    }
-
     /** Pick a walkable tile adjacent to {@code target} that the SMART agent can
      *  pathfind to - used when the target tile itself is movement-blocked (CHASM
      *  for non-flying mobs, etc.). */
@@ -253,39 +121,6 @@ public final class ActionLibrary {
                         && !s.mob.position.equals(cand)) continue;
                 int d = WorldState.chebyshev(s.mob.position, cand);
                 if (d < bestDist) { bestDist = d; best = cand; }
-            }
-        }
-        return best;
-    }
-
-    /** From the last-known tile, pick the nearest unknown walkable cell to head to;
-     *  if the whole level is known, pick a walkable tile a few cells from the
-     *  last-known position so the agent circles instead of standing still. */
-    static Point pickSearchSweepTarget(WorldState s) {
-        if (s.memory == null) return null;
-        Point me = s.mob.position;
-        Point best = null;
-        int bestDist = Integer.MAX_VALUE;
-        if (s.memory.knownTiles != null) {
-            for (int y = 1; y < s.level.height - 1; y++) {
-                for (int x = 1; x < s.level.width - 1; x++) {
-                    if (s.memory.knownTiles[x][y]) continue;
-                    if (s.level.tiles[x][y].blocksMovement()) continue;
-                    int d = WorldState.chebyshev(me, new Point(x, y));
-                    if (d < bestDist) { bestDist = d; best = new Point(x, y); }
-                }
-            }
-        }
-        if (best != null) return best;
-        // Fully-known level (arena): pick a walkable tile a few cells from here.
-        for (int r = 3; r <= 5 && best == null; r++) {
-            for (int dy = -r; dy <= r && best == null; dy++) {
-                for (int dx = -r; dx <= r && best == null; dx++) {
-                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;
-                    int x = me.tileX() + dx, y = me.tileY() + dy;
-                    if (x < 1 || y < 1 || x > s.level.width - 2 || y > s.level.height - 2) continue;
-                    if (!s.level.tiles[x][y].blocksMovement()) best = new Point(x, y);
-                }
             }
         }
         return best;
@@ -313,6 +148,62 @@ public final class ActionLibrary {
             dest = new Point(tx, ty);
         }
         if (dest != null) out.add(new ActionMoveToward(dest, "retreat", 0.65));
+    }
+
+    /** Step back from an adjacent threat so the next turn can throw a damaging
+     *  bomb at range. Only enumerated under FIGHT when (a) the agent carries a
+     *  ready damage bomb, (b) a hostile sits within 2 tiles, and (c) the
+     *  expected bomb damage exceeds the agent's expected melee damage on that
+     *  same target. Solves the rogue's "commits to melee even with a heavy
+     *  bomb in hand" pattern - the planner now has a "back up and throw"
+     *  candidate scored off the bomb's expected hit, not the flat 0.65 of a
+     *  pure flee step. */
+    public static void addRetreatToThrowBomb(WorldState s, List<Action> out) {
+        if (s.mob.inventory == null || s.nearestEnemy == null) return;
+        if (s.nearestEnemyDist > 2) return;
+        // Pick the strongest available damage bomb and use its expected damage
+        // to score the retreat. If we have several, the best one wins.
+        Item bestBomb = null;
+        double bestDmg = 0.0;
+        for (Item it : s.mob.inventory.bag) {
+            if (it == null) continue;
+            if (it.inventoryCategory != InventoryCategory.BOMB) continue;
+            if (it.damage <= 0) continue;
+            double dmg = com.bjsp123.rl2.ai.eval.CombatEval.expectedAttackValue(
+                    s.mob, s.nearestEnemy, it,
+                    com.bjsp123.rl2.ai.eval.CombatEval.AttackKind.THROW);
+            if (dmg > bestDmg) { bestDmg = dmg; bestBomb = it; }
+        }
+        if (bestBomb == null || bestDmg <= 0) return;
+        // Only retreat-to-throw when the bomb's expected hit exceeds melee.
+        // Against weak / lightly-armored foes the rogue just whacks them.
+        double meleeDmg = com.bjsp123.rl2.ai.eval.CombatEval.expectedAttackValue(
+                s.mob, s.nearestEnemy, null,
+                com.bjsp123.rl2.ai.eval.CombatEval.AttackKind.MELEE);
+        if (meleeDmg >= bestDmg) return;
+        // Reuse the same "walk back along the away-vector" target the flee
+        // branch uses; if no retreat tile exists (boxed against a wall),
+        // this turn falls through to melee instead.
+        Point threat = s.nearestEnemy.position;
+        Point me = s.mob.position;
+        int dx = Integer.signum(me.tileX() - threat.tileX());
+        int dy = Integer.signum(me.tileY() - threat.tileY());
+        if (dx == 0 && dy == 0) { dx = 1; dy = 0; }
+        Point dest = null;
+        for (int step = 4; step >= 2 && dest == null; step--) {
+            int tx = me.tileX() + dx * step;
+            int ty = me.tileY() + dy * step;
+            if (tx < 1 || ty < 1 || tx > s.level.width - 2 || ty > s.level.height - 2) continue;
+            if (s.level.tiles[tx][ty].blocksMovement()) continue;
+            dest = new Point(tx, ty);
+        }
+        if (dest == null) return;
+        // Score parallels the bomb's own utility at d>2 minus a small one-turn
+        // penalty for spending this turn on the back-step rather than the
+        // throw - so melee against a foe whose bomb edge is marginal still
+        // wins, but a heavy bomb dominates.
+        double util = Math.min(0.95, 0.55 + bestDmg / 30.0);
+        out.add(new ActionMoveToward(dest, "retreat-to-throw", util));
     }
 
     /** Healing consumables held in the bag: beneficial potions to drink, plus
@@ -350,28 +241,11 @@ public final class ActionLibrary {
             if (it == null) continue;
             if (it.useBehavior != UseBehavior.WAND) continue;
             if (!ItemEval.isFireableWand(it)) continue;
-            // Skip TELEPORT-effect wands here - those are escape tools, scored
-            // under addEscapeWandAtNearest with SURVIVE-tier utility.
+            // Skip TELEPORT-effect wands here - those are defensive escape tools,
+            // enumerated as blinks by addTeleportEscapes, not offensive fire.
             if (it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) continue;
             if (!com.bjsp123.rl2.logic.LevelUtilities.getLineOfSight(s.level, s.mob, s.nearestEnemy.position)) continue;
             out.add(new ActionFireWandAt(it, s.nearestEnemy.position));
-        }
-    }
-
-    /** TELEPORT-effect wands (BLINKSTONE) fired at an adjacent or near-adjacent
-     *  threat blink the threat away - a defensive get-them-off-me action that
-     *  belongs alongside JUMP and PHASE under SURVIVE. */
-    public static void addEscapeWandAtNearest(WorldState s, List<Action> out) {
-        if (s.mob.inventory == null) return;
-        Point threatPos = s.nearestEnemy != null ? s.nearestEnemy.position : s.lastKnownEnemyTile;
-        if (threatPos == null) return;
-        if (!com.bjsp123.rl2.logic.LevelUtilities.getLineOfSight(s.level, s.mob, threatPos)) return;
-        for (Item it : s.mob.inventory.bag) {
-            if (it == null) continue;
-            if (it.useBehavior != UseBehavior.WAND) continue;
-            if (it.wandEffect != com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) continue;
-            if (!ItemEval.isFireableWand(it)) continue;
-            out.add(new ActionEscapeWand(it, threatPos));
         }
     }
 
@@ -482,10 +356,6 @@ public final class ActionLibrary {
         }
         return best;
     }
-
-    public static void addWait(List<Action> out) { out.add(new ActionWait()); }
-
-    private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
 
     /* ---------- escape-tool enumerators (stats-based, no item identity) ---------- */
 

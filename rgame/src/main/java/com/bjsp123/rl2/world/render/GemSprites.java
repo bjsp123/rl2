@@ -34,32 +34,20 @@ public final class GemSprites {
         return cache.get(species);
     }
 
-    /** (col, row) of each species on gems2.png. */
-    private static int col(GemSpecies s) {
-        return switch (s) {
-            case LETTUSTONE, SILVER, BLOODHIVE -> 0;
-            case HAMETHYST,  COPPER, BLACKGLASS -> 1;
-            case SALAMITE,   GOLD,   MALACHOR   -> 2;
-            case ICELANDSPAR,        FLUORON    -> 3;
-        };
-    }
-
-    private static int row(GemSpecies s) {
-        return switch (s.gemClass) {
-            case BASIC  -> 0;
-            case METAL  -> 1;
-            case EXOTIC -> 4;
-        };
-    }
-
     private static void load() {
         cache = new EnumMap<>(GemSpecies.class);
         SpriteAtlas.load();
         gemTex = SpriteAtlas.texture();
         if (gemTex == null) return;
         for (GemSpecies s : GemSpecies.values()) {
-            int x = col(s) * CELL;
-            int y = SpriteAtlas.gemsY() + row(s) * CELL;
+            // Atlas cell comes from gems.csv (GemDefinition); fall back to cell
+            // (0,0) if the row is missing so the gem still renders something.
+            com.bjsp123.rl2.logic.GemDefinition def =
+                    com.bjsp123.rl2.logic.Registries.gem(s);
+            int colCell = def == null ? 0 : def.spriteCol;
+            int rowCell = def == null ? 0 : def.spriteRow;
+            int x = colCell * CELL;
+            int y = SpriteAtlas.gemsY() + rowCell * CELL;
             cache.put(s, new TextureRegion(gemTex, x, y, CELL, CELL));
         }
     }

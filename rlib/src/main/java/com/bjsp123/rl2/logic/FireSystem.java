@@ -2,6 +2,7 @@ package com.bjsp123.rl2.logic;
 
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Tile;
 import com.bjsp123.rl2.model.Level.Surface;
 import com.bjsp123.rl2.model.Level.Vegetation;
 
@@ -55,6 +56,9 @@ public final class FireSystem {
      */
     public static boolean ignite(Level level, int x, int y) {
         if (!isFlammable(level, x, y)) return false;
+        // A closed wooden door catching fire burns open (becomes a floor-like
+        // doorway), so the flame can occupy and spread through it.
+        if (level.tiles[x][y] == Tile.DOOR) level.tiles[x][y] = Tile.DOOR_OPEN;
         // Trees burn much longer than other fuel, so check what was on the cell BEFORE we
         // overwrite vegetation with FIRE.
         boolean wasTree = level.vegetation[x][y] == Vegetation.TREES;
@@ -74,10 +78,15 @@ public final class FireSystem {
         return true;
     }
 
-    /** A tile is flammable if it's a floor-like cell that isn't covered by water or blood. */
+    /** A tile is flammable if it's fuel (a floor-like cell, or a wooden door -
+     *  crystal doors never burn) that isn't covered by water or blood. */
     public static boolean isFlammable(Level level, int x, int y) {
         if (x < 0 || y < 0 || x >= level.width || y >= level.height) return false;
-        if (!level.tiles[x][y].isFloorLike()) return false;
+        Tile t = level.tiles[x][y];
+        boolean fuel = t.isDoor()
+                ? t.doorBehavior() == com.bjsp123.rl2.model.DoorBehavior.WOODEN  // wooden doors burn; crystal don't
+                : t.isFloorLike();
+        if (!fuel) return false;
         Surface s = level.surface[x][y];
         return s != Surface.WATER && s != Surface.BLOOD;
     }

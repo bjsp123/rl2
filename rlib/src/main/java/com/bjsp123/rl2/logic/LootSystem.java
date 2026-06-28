@@ -6,7 +6,6 @@ import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.Tile;
-import com.bjsp123.rl2.util.CsvTable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,12 +22,12 @@ import java.util.Random;
  * given the seed) and inspecting a sleeping mob's bag mid-run will reveal
  * exactly what they're going to drop.
  *
- * <p>Drops are declared via the {@code dropQuality} CSV column as a
- * pipe-separated {@link CsvTable.DropSpec} list. Each entry names a keyword
- * ({@code NONE}, {@code STUFF}, a {@link ItemGenerator.LootCategory}, or a
- * literal item type), with optional {@code +n} (forced plus level) and
- * {@code *n} (fractional count: integer part guaranteed, decimal part =
- * probability of one bonus item).
+ * <p>Drops are declared via two CSV columns: {@code dropType} (a {@code |}-separated
+ * list of {@link ItemGenerator} drop categories - EQUIPMENT, MAGIC_ITEMS, FOOD,
+ * POTION, GEM, SPECIAL_GEM, POWERUPS, BOMBS, or the {@code NOTHING_AT_ALL} marker)
+ * and {@code dropAmount} (total item count; integer part guaranteed, fractional part
+ * = chance of one bonus). Each rolled item independently picks one type from the
+ * list, and items roll as if at {@code depth + floor(dropAmount)}.
  */
 public final class LootSystem {
 
@@ -48,30 +47,33 @@ public final class LootSystem {
         if (level == null || mob == null || mob.inventory == null) return;
         if (mob.isPlayer) return;
         MobDefinition def = Registries.mob(mob.mobType);
-        if (def == null || def.drops == null || def.drops.isEmpty()) return;
+        if (def == null || def.dropTypes == null || def.dropTypes.isEmpty()) return;
+        // NOTHING_AT_ALL is a control marker, not a rollable type.
+        if (def.dropTypes.size() == 1
+                && "NOTHING_AT_ALL".equalsIgnoreCase(def.dropTypes.get(0))) return;
 
-        double powerLevel = itemLevelToPower(Math.max(1, mob.characterLevel - 2));
+        // Items roll as if for the current dungeon depth plus one level per whole
+        // unit of dropAmount: a more generous drop is also deeper-quality loot.
+        // (Powerups / gems carry no level, so depth has no effect on them.)
+        int depthBonus = (int) Math.floor(Math.max(0, def.dropAmount));
+        double powerLevel = itemLevelToPower(Math.max(1, level.depth) + depthBonus);
 
-        for (CsvTable.DropSpec spec : def.drops) {
-            if (spec.keyword == null
-                    || "NONE".equalsIgnoreCase(spec.keyword)
-                    || "NOTHING_AT_ALL".equalsIgnoreCase(spec.keyword)) continue;
+        // Integer part = guaranteed count; fractional part = probability of one
+        // bonus. LOOT_DROP_FREQUENCY_COEFF scales the whole quantity globally.
+        double scaledCount = def.dropAmount * GameBalance.LOOT_DROP_FREQUENCY_COEFF;
+        int n = (int) Math.floor(scaledCount);
+        double frac = scaledCount - n;
+        if (frac > 0 && rng.nextDouble() < frac) n++;
 
-            // Integer part = guaranteed count; fractional part = probability of +1.
-            // LOOT_DROP_FREQUENCY_COEFF scales the whole quantity so a coefficient
-            // of 2 doubles every drop entry; 0.5 halves it.
-            double scaledCount = spec.count * GameBalance.LOOT_DROP_FREQUENCY_COEFF;
-            int n = (int) Math.floor(scaledCount);
-            double frac = scaledCount - n;
-            if (frac > 0 && rng.nextDouble() < frac) n++;
-
-            for (int i = 0; i < n; i++) {
-                Item it = resolveItem(level, spec, powerLevel, rng);
+        for (int i = 0; i < n; i++) {
+            // Each dropped item independently picks one of the declared types.
+            String type = def.dropTypes.get(rng.nextInt(def.dropTypes.size()));
+            // Powerups come as a pair per pick - individual pills are minor.
+            int copies = "POWERUPS".equalsIgnoreCase(type) ? GameBalance.POWERUPS_PER_DROP : 1;
+            for (int c = 0; c < copies; c++) {
+                Item it = ItemGenerator.generateDrop(type, powerLevel, level.theme, rng);
                 if (it == null) continue;
-                // RL-36 mirror: a non-player mob must never carry the teleport
-                // orb. A STUFF / NON_GEM / BOMBS drop roll can surface one (it
-                // isn't restrictedDrop), and the AI would then fling the player
-                // to a random level - the same reason floor pickup skips it.
+                // RL-36 mirror: a non-player mob must never carry the teleport orb.
                 if (it.scattersOnThrow()) continue;
                 mob.inventory.bag.add(it);
             }
@@ -84,39 +86,11 @@ public final class LootSystem {
      *  from a plain {@code NONE} entry, which only skips the rolled drop
      *  table but still drops what the mob was carrying. */
     private static boolean dropsNothingAtAll(MobDefinition def) {
-        if (def == null || def.drops == null) return false;
-        for (CsvTable.DropSpec spec : def.drops) {
-            if (spec.keyword != null && "NOTHING_AT_ALL".equalsIgnoreCase(spec.keyword)) {
-                return true;
-            }
+        if (def == null || def.dropTypes == null) return false;
+        for (String type : def.dropTypes) {
+            if ("NOTHING_AT_ALL".equalsIgnoreCase(type)) return true;
         }
         return false;
-    }
-
-    /** Build one item from a drop spec. {@code STUFF} maps to {@link
-     *  ItemGenerator.LootCategory#NON_GEM}; other keywords try the
-     *  {@link ItemGenerator.LootCategory} enum first, then fall back to a
-     *  literal item-type lookup. If {@code spec.plusLevel >= 0} the item's
-     *  level is forced to that value after generation. */
-    private static Item resolveItem(Level level, CsvTable.DropSpec spec,
-                                    double powerLevel, Random rng) {
-        String keyword = spec.keyword;
-        // STUFF = shorthand for "any non-gem item"
-        if ("STUFF".equalsIgnoreCase(keyword)) keyword = "NON_GEM";
-
-        ItemGenerator.LootCategory cat = ItemGenerator.LootCategory.parse(keyword);
-        Item it;
-        if (cat != null) {
-            it = ItemGenerator.generateItem(powerLevel, level.theme, cat, rng);
-        } else {
-            it = ItemGenerator.buildItem(keyword, powerLevel, rng);
-        }
-
-        if (it != null && spec.plusLevel >= 0) {
-            it.level = spec.plusLevel;
-            if (it.useBehavior == Item.UseBehavior.WAND) it.charge = it.maxCharge();
-        }
-        return it;
     }
 
     public static void dropLootOnDeath(Level level, Mob mob) {

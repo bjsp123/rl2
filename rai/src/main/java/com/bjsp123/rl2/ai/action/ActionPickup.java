@@ -20,7 +20,8 @@ public final class ActionPickup implements Action {
     }
     @Override public double utility(WorldState s) { return 0.6; }
     @Override public void execute(Mob mob, Level level) {
-        MobSystem.pickupAtFeet(level, mob);
+        // AI picker: when full, drop the least valuable item to make room.
+        MobSystem.pickupAtFeet(level, mob, true);
         TurnSystem.applyActionCost(mob, mob.effectiveStats().attackCost);
     }
 }

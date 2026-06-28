@@ -10,10 +10,13 @@ import java.util.Map;
  * Lazy-loaded sprite source for the {@link BuffType} icons that live in
  * {@code sprites/buffs16.png}. Sheet layout:
  * <ul>
- *   <li>Top 16-px band - buff-icon row, 16x16 cells, single row.</li>
- *   <li>Second 32-px band (y = 32..64) - attack-slash sprites, 32x32 cells.</li>
+ *   <li>Top two 16-px bands (y = 0..31) - buff-icon cells, 16x16, 20 per row
+ *       (flat index = col + row*20).</li>
+ *   <li>32-px band (y = 32..63) - attack-slash sprites + particle grid, 32x32 cells.</li>
+ *   <li>Two 32-px rows (y = 64..127) - 32x32 perk placeholder icons then cloud
+ *       icons, addressed by {@link #perkRegion} / {@link #cloudRegion}.</li>
  * </ul>
- * {@link #iconCol} maps each buff to its column in the buff row.
+ * {@link #iconIndex} maps each buff to its flat index in the buff bands.
  *
  * <p>The texture is held as a singleton because it's tiny, doesn't need to
  * be reloaded between screens, and gets a fresh handle on every screen
@@ -63,6 +66,38 @@ public final class BuffIcons {
         return new TextureRegion(sheet, sx, sy, BUFF_CELL, BUFF_CELL);
     }
 
+    /** Perk + cloud icons are 32x32 cells in the two 32-px rows below the slash
+     *  band (32-grid rows {@value #ICON32_ROW0}+, y = 64..127), 10 cells per
+     *  row. Flat index k -> col = k % {@value #ICON32_COLS}, grid-row =
+     *  {@value #ICON32_ROW0} + k / {@value #ICON32_COLS}. */
+    private static final int ICON32_COLS  = 10;     // 320 / SLASH_CELL
+    private static final int ICON32_ROW0  = 2;      // grid rows 0,1 = buff bands + slash
+    /** First cloud's flat index - clouds follow the 11-perk block (Perk has 11
+     *  ordinals). Keep in sync with {@code assets/scratch/gen_icons.py}. */
+    private static final int CLOUD_ICON_K0 = 11;
+
+    /** Placeholder 32x32 icon for the perk with the given {@code Perk} ordinal,
+     *  or {@code null} on load failure / out-of-bounds. */
+    public static TextureRegion perkRegion(int perkOrdinal) {
+        return perkOrdinal < 0 ? null : icon32(perkOrdinal);
+    }
+
+    /** 32x32 icon for the cloud with the given {@code Level.Cloud} ordinal,
+     *  matching its in-game puff color, or {@code null} on load / bounds failure. */
+    public static TextureRegion cloudRegion(int cloudOrdinal) {
+        return cloudOrdinal < 0 ? null : icon32(CLOUD_ICON_K0 + cloudOrdinal);
+    }
+
+    /** 32x32 perk/cloud icon cell at flat 32-grid index {@code k}. */
+    private static TextureRegion icon32(int k) {
+        if (cache == null) load();
+        if (sheet == null || k < 0) return null;
+        int sx = (k % ICON32_COLS) * SLASH_CELL;
+        int sy = SpriteAtlas.buffsY() + (ICON32_ROW0 + k / ICON32_COLS) * SLASH_CELL;
+        if (sx + SLASH_CELL > sheet.getWidth() || sy + SLASH_CELL > sheet.getHeight()) return null;
+        return new TextureRegion(sheet, sx, sy, SLASH_CELL, SLASH_CELL);
+    }
+
     /** Attack-flash sprite from {@code buffs16.png}'s slash band. Player
      *  slash at col 0 -> source (0, 32, 32, 32); mob slash at col 1 -> (32, 32,
      *  32, 32). Returns {@code null} if the sheet failed to load or doesn't
@@ -91,6 +126,30 @@ public final class BuffIcons {
     /** Glow sprite for HP/mana-type powerups (col 5 of the slash band). */
     public static TextureRegion hpManaGlowRegion() {
        return attackFlashRegion(5);
+    }
+
+    /** Glow halo region for a POWERUP item: the HP/mana glow for HP_UP / MANA_UP
+     *  effects, otherwise the perk glow. Shared by the in-world renderer and the
+     *  game-start tip popup so powerups glow the same way in both. */
+    public static TextureRegion powerupGlowRegion(com.bjsp123.rl2.model.Item it) {
+        return isHpManaGlow(it) ? hpManaGlowRegion() : perkGlowRegion();
+    }
+
+    /** Additive {@code {r,g,b}} tint for a POWERUP's glow halo, keyed off its
+     *  effect: gold for level-up, green for HP, blue for mana, warm default. */
+    public static float[] powerupGlowColor(com.bjsp123.rl2.model.Item it) {
+        if (it.wandEffect == null) return new float[]{1f, 0.9f, 0.4f};
+        return switch (it.wandEffect) {
+            case LEVEL_UP -> new float[]{1f, 0.85f, 0.2f};
+            case HP_UP    -> new float[]{0.3f, 0.85f, 0.15f};
+            case MANA_UP  -> new float[]{0.25f, 0.5f,  1f};
+            default       -> new float[]{1f, 0.9f, 0.4f};
+        };
+    }
+
+    private static boolean isHpManaGlow(com.bjsp123.rl2.model.Item it) {
+        return it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.HP_UP
+            || it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MANA_UP;
     }
 
     /** Surprise-attack marker (col 6 of the 32x32 slash band). */
@@ -191,11 +250,12 @@ public final class BuffIcons {
      * pixel (x, y). Renderer-side mapping — lives in rgame because the
      * sheet layout is presentation, not game logic.
      *
-     * <p>Row 0 (left → right): on fire, invisible, frightened, oily,
-     * sorcerous, levitating, regenerating, poisoned, blessed, ghostly,
-     * hasted, protection, anti-magic, ESP, chilled, (unused), recharging
+     * <p>Row 0 (cols 0..19, left → right): on fire, invisible, frightened,
+     * oily, sorcerous, levitating, regenerating, poisoned, blessed, ghostly,
+     * hasted, protection, anti-magic, (unused), chilled, (unused), recharging
      * (cooldown), killer, wet, bleeding.
-     * <p>Row 1: phase (col 0), frozen (col 1).
+     * <p>Row 1 (cols 20+): phase (20), frozen (21), shielded (22), …,
+     * cancelled (26), ESP (27), insight (28).
      */
     /** Flat atlas index for {@code type}, or -1 when the buff has no mapped
      *  cell. Public so non-cache consumers (e.g. the buff-expired floater)
@@ -224,7 +284,7 @@ public final class BuffIcons {
             case CHILLED      -> 14;
             // Cooldown / dormant buffs share the "recharging" (clock) icon.
             case TELEPORT_COOLDOWN, RANGED_COOLDOWN, HASTE_COOLDOWN, HEAL_COOLDOWN,
-                 PHASE_DODGE_COOLDOWN, HIDING -> 16;
+                 WRAITH_DODGE_COOLDOWN, HIDING -> 16;
             case KILLER       -> 17;
             case WET          -> 18;
             case BLEEDING     -> 19;

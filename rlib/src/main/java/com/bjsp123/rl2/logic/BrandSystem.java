@@ -20,6 +20,11 @@ public final class BrandSystem {
 
     private BrandSystem() {}
 
+    /** 8-neighbour offsets, cardinals first, for spreading poison-brand clouds. */
+    private static final int[][] ADJ8 = {
+            {0, 1}, {0, -1}, {1, 0}, {-1, 0}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
+    };
+
     // -- Brand assignment ------------------------------------------------------
 
     /**
@@ -83,10 +88,25 @@ public final class BrandSystem {
                         dmgRange, weapon, attacker);
             }
             case POISONCLOUD -> {
-                // Drop a single-tile poison cloud lasting `power` turns.
+                // Poison cloud on the hit tile, plus one extra cloud on an
+                // adjacent tile for every 2 weapon levels - never on the
+                // wielder's own tile, never on a wall. Each lasts `power` turns.
                 if (tx >= 0 && ty >= 0 && tx < level.width && ty < level.height) {
-                    CloudSystem.addCloud(level, tx, ty,
-                            Level.Cloud.POISON, power);
+                    CloudSystem.addCloud(level, tx, ty, Level.Cloud.POISON, power);
+                    int extra = effLvl / 2;
+                    if (extra > 0 && attacker.position != null) {
+                        int ax = attacker.position.tileX(), ay = attacker.position.tileY();
+                        int placed = 0;
+                        for (int[] d : ADJ8) {
+                            if (placed >= extra) break;
+                            int nx = tx + d[0], ny = ty + d[1];
+                            if (nx == ax && ny == ay) continue;
+                            if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                            if (level.tiles[nx][ny].blocksMovement()) continue;
+                            CloudSystem.addCloud(level, nx, ny, Level.Cloud.POISON, power);
+                            placed++;
+                        }
+                    }
                     if (level.events != null) {
                         level.events.add(
                                 new com.bjsp123.rl2.event.GameEvent.BlastEffect(

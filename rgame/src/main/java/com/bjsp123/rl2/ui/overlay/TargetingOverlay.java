@@ -36,7 +36,8 @@ import com.bjsp123.rl2.world.render.LevelRenderer;
  *   <li>Arrow keys / numpad nudge the reticle but do NOT fire.</li>
  *   <li>Enter / Space confirms and fires the callback.</li>
  *   <li>A mouse click or touch anywhere in the world fires immediately at that tile.</li>
- *   <li>Tab cycles to the nearest visible hostile.</li>
+ *   <li>Tab cycles through visible hostiles in Chebyshev-distance order,
+ *       advancing past the current target and wrapping around.</li>
  *   <li>Escape cancels without firing.</li>
  *   <li>Re-triggering the same source item externally (via {@link #confirm()}) fires at
  *       the current reticle - the calling screen detects the re-trigger and calls it.</li>
@@ -255,6 +256,7 @@ public class TargetingOverlay extends InputAdapter {
         renderTargetingChip();
         renderCycleHighlight();
         renderChargeLabels();
+        renderLightningArcLabels();
     }
 
     /** For a CHARGE source (Jade Bull), label every visible hostile that is NOT
@@ -298,6 +300,49 @@ public class TargetingOverlay extends InputAdapter {
             float vy = uiCtx.unprojectY(sx, sy);
             uiCtx.layout.setText(font, cp.text);
             font.draw(uiCtx.batch, cp.text, vx - uiCtx.layout.width * 0.5f,
+                    vy + UIVars.CHIP_LIFT + uiCtx.layout.height);
+        }
+        font.setColor(Color.WHITE);
+        uiCtx.batch.end();
+        font.getData().setScale(prevScale);
+    }
+
+    /** Electric-blue tint for the lightning ARC! labels. */
+    private static final Color ARC_LABEL_COLOR = new Color(0.55f, 0.85f, 1f, 1f);
+
+    /** When aiming a wand of lightning, label every mob the bolt will arc to -
+     *  including the player itself (the chain can backfire) - with a small
+     *  "ARC!" so the player can see the whole chain before firing. */
+    private void renderLightningArcLabels() {
+        if (player == null || player.position == null || level == null
+                || uiCtx == null || worldCamera == null || target == null) return;
+        if (!(sourceKey instanceof Item it)
+                || it.useBehavior != Item.UseBehavior.WAND
+                || it.wandEffect != Item.ItemEffect.LIGHTNING) return;
+        // The bolt lands on the first mob the trajectory meets (which may be
+        // short of the aimed tile), then chains from there.
+        Point impact = com.bjsp123.rl2.logic.MobSystem.firstMobBlocking(
+                level, player.position, target, player);
+        List<Mob> chain = com.bjsp123.rl2.logic.ItemSystem.lightningChainTargets(level, impact);
+        if (chain.isEmpty()) return;
+
+        uiCtx.applyProjection();
+        BitmapFont font = uiCtx.fontRegular;
+        float prevScale = font.getScaleX();
+        font.getData().setScale(prevScale * UIVars.CHIP_SCALE);
+        uiCtx.batch.begin();
+        font.setColor(ARC_LABEL_COLOR);
+        for (Mob m : chain) {
+            if (m == null || m.position == null) continue;
+            projectBuf.set(m.position.tileX() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE * 0.5f,
+                    m.position.tileY() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE, 0f);
+            worldCamera.project(projectBuf);
+            int sx = Math.round(projectBuf.x);
+            int sy = Gdx.graphics.getHeight() - Math.round(projectBuf.y);
+            float vx = uiCtx.unprojectX(sx, sy);
+            float vy = uiCtx.unprojectY(sx, sy);
+            uiCtx.layout.setText(font, "ARC!");
+            font.draw(uiCtx.batch, "ARC!", vx - uiCtx.layout.width * 0.5f,
                     vy + UIVars.CHIP_LIFT + uiCtx.layout.height);
         }
         font.setColor(Color.WHITE);

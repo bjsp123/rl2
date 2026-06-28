@@ -172,8 +172,10 @@ public final class CloudSystem {
             }
         }
 
-        // (4) Emission - fire makes smoke; water adjacent to fire makes steam.
+        // (4) Emission - fire makes smoke; water adjacent to fire makes steam;
+        //     mushrooms periodically puff spore clouds.
         emitFromFireAndWater(level);
+        emitSpores(level);
     }
 
     private static void applyPoisonEffects(Level level) {
@@ -181,9 +183,57 @@ public final class CloudSystem {
         for (Mob m : level.mobs) {
             if (m == null || m.position == null || m.hp <= 0) continue;
             int x = m.position.tileX(), y = m.position.tileY();
-            if (typeAt(level, x, y) != Cloud.POISON) continue;
-            BuffSystem.apply(level, m, Buff.BuffType.POISONED,
-                    GameBalance.POISON_CLOUD_STACKS, null);
+            // POISON and SPORE clouds both inflict POISONED, at their own per-turn
+            // stack rate. (Smoke/steam have no standing-in effect.)
+            Cloud c = typeAt(level, x, y);
+            int stacks = c == Cloud.POISON ? GameBalance.POISON_CLOUD_STACKS
+                       : c == Cloud.SPORE  ? GameBalance.SPORE_CLOUD_STACKS
+                       : 0;
+            if (stacks <= 0) continue;
+            BuffSystem.apply(level, m, Buff.BuffType.POISONED, stacks, null);
+        }
+    }
+
+    /** Mushroom spore emission. Each {@code MUSHROOMS} tile counts down in
+     *  {@link Level#sporeCountdown}; on reaching 0 it emits a {@link Cloud#SPORE}
+     *  cloud and resets to {@code MUSHROOM_SPORE_INTERVAL}. The countdowns are
+     *  seeded with a random 0-6 stagger the first time this runs for a level
+     *  (after generation or load, gated by {@link Level#sporesSeeded}), so a
+     *  level's mushrooms don't all fire on the same turn. */
+    private static void emitSpores(Level level) {
+        if (level.vegetation == null || level.sporeCountdown == null) return;
+        int w = level.width, h = level.height;
+        if (!level.sporesSeeded) {
+            for (int x = 0; x < w; x++)
+                for (int y = 0; y < h; y++)
+                    if (level.vegetation[x][y] == Vegetation.MUSHROOMS)
+                        level.sporeCountdown[x][y] = RNG.nextInt(7);   // 0..6 stagger
+            level.sporesSeeded = true;
+        }
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (level.vegetation[x][y] != Vegetation.MUSHROOMS) continue;
+                if (level.sporeCountdown[x][y] <= 0) {
+                    // A firing mushroom puffs out TWO short-lived spore clouds
+                    // (1-3 turns each): one on its own tile, one on a random
+                    // neighbour. A room packed with mushrooms thus stays thick
+                    // with spores - the short lifetime keeps it from growing
+                    // without bound.
+                    addCloud(level, x, y, Cloud.SPORE, 1 + RNG.nextInt(3));
+                    int[] nb = pickAdjacentInBounds(level, x, y);
+                    int tx = nb != null ? nb[0] : x, ty = nb != null ? nb[1] : y;
+                    addCloud(level, tx, ty, Cloud.SPORE, 1 + RNG.nextInt(3));
+                    level.sporeCountdown[x][y] = GameBalance.MUSHROOM_SPORE_INTERVAL;
+                    // Notify the renderer so it can play a spatial "puff" sfx
+                    // (the cloud visuals themselves are polled from level.cloud).
+                    if (level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.SporeEmitted(
+                                new com.bjsp123.rl2.model.Point(x, y)));
+                    }
+                } else {
+                    level.sporeCountdown[x][y]--;
+                }
+            }
         }
     }
 
@@ -198,10 +248,16 @@ public final class CloudSystem {
                     addCloud(level, x, y, Cloud.SMOKE, GameBalance.SMOKE_EMIT_DURATION);
                 }
                 if (level.surface != null
-                        && level.surface[x][y] == Surface.WATER
-                        && hasFireNeighbour(level, x, y)
-                        && RNG.nextDouble() < GameBalance.STEAM_EMIT_CHANCE) {
-                    addCloud(level, x, y, Cloud.STEAM, GameBalance.STEAM_EMIT_DURATION);
+                        && (level.surface[x][y] == Surface.WATER
+                            || level.surface[x][y] == Surface.BLOOD)
+                        && hasFireNeighbour(level, x, y)) {
+                    if (RNG.nextDouble() < GameBalance.STEAM_EMIT_CHANCE) {
+                        addCloud(level, x, y, Cloud.STEAM, GameBalance.STEAM_EMIT_DURATION);
+                    }
+                    // Fire boils the liquid off: a chance per turn to evaporate it.
+                    if (RNG.nextDouble() < GameBalance.SURFACE_EVAPORATION_CHANCE) {
+                        level.surface[x][y] = null;
+                    }
                 }
             }
         }

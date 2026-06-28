@@ -545,12 +545,20 @@ final class ThemedRoomPainter {
     private static void spawnBeaconEncounter(Level level, int bx, int by,
                                              Random rng) {
         double frac = LevelFactoryPopulate.depthFraction(level);
+        // Wraith species still escalates by depth band, but the count is
+        // fixed at 2 per beacon room — earlier 4/3/2 ramp put too many
+        // wraith bodies on the player at once.
         String wraithType;
-        int wraithCount;
-        if      (frac < 0.5) { wraithType = "WRAITH";       wraithCount = 4; }
-        else if (frac < 0.8) { wraithType = "LARGE_WRAITH"; wraithCount = 3; }
-        else                 { wraithType = "AWFUL_WRAITH"; wraithCount = 2; }
-        int spawnLevel = 1 + level.depth;
+        if      (frac < 0.5) wraithType = "WRAITH";
+        else if (frac < 0.8) wraithType = "LARGE_WRAITH";
+        else                 wraithType = "AWFUL_WRAITH";
+        int wraithCount = 2;
+        int wraithSpawnLevel = MobProgression.depthAdjustedSpawnLevel(
+                level, Registries.mob(wraithType));
+        // Mirror boss uses the per-mob rule too - it reads as the encounter
+        // boss because the band-bonus of ENEMY_PLAYER_* lands a level above
+        // the wraith pack at the same floor.
+        int mirrorSpawnLevel = -1;
 
         Mob.CharacterClass[] classes = Mob.CharacterClass.values();
         // Beacon encounter boss: use the data-driven ENEMY_PLAYER_* mob row
@@ -592,11 +600,11 @@ final class ThemedRoomPainter {
         // bombs plus its class jade. Spawn level is the dungeon depth (one
         // higher than the wraith pack at 1+depth) so it reads as the boss.
         LevelFactoryPopulate.spawnMobAt(level, mirrorType, spots.get(idx++),
-                level.depth, rng, /*withRetainers=*/ false);
+                mirrorSpawnLevel, rng, /*withRetainers=*/ false);
         for (int i = 0; i < wraithCount && idx < spots.size(); i++) {
             Mob w = MobFactory.spawn(wraithType, spots.get(idx++));
             if (w == null) continue;
-            MobProgression.setSpawnLevel(w, spawnLevel);
+            MobProgression.setSpawnLevel(w, wraithSpawnLevel);
             level.mobs.add(w);
         }
     }
@@ -633,20 +641,81 @@ final class ThemedRoomPainter {
                 level.tiles[i][j] = Tile.WALL;
             }
         }
+        // A preserved door alcove can end up touching the round interior only
+        // diagonally (the cells orthogonally inward got walled by the ellipse).
+        // A diagonal link isn't walkable, so carve a bridging FLOOR cell to give
+        // every door a full orthogonal connection into the room.
+        connectDoorAlcovesOrthogonally(level, x, y, w, h);
     }
 
-    /** True if any of {@code (i, j)}'s four cardinal neighbours is a {@link Tile#DOOR} or
-     *  {@link Tile#DOOR_OPEN}. Used by {@link #paintRound} to keep a 1-tile floor alcove
-     *  alive for doors near corner positions. */
+    /** True if any of {@code (i, j)}'s four cardinal neighbours is a door (any
+     *  type). Used by {@link #paintRound} to keep a 1-tile floor alcove alive for
+     *  doors near corner positions. Recognises ONETIME_DOOR / CRYSTAL_DOOR too,
+     *  since a round room can share a wall with an already-converted unique room. */
     private static boolean hasAdjacentDoor(Level level, int i, int j) {
         int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
         for (int[] d : dirs) {
             int ni = i + d[0], nj = j + d[1];
             if (!LevelFactoryUtils.inBounds(level, ni, nj)) continue;
-            Tile t = level.tiles[ni][nj];
-            if (t == Tile.DOOR || t == Tile.DOOR_OPEN) return true;
+            if (level.tiles[ni][nj].isDoor()) return true;
         }
         return false;
+    }
+
+    /** For every door bordering the round room rect, ensure its inward FLOOR
+     *  alcove links orthogonally to the room body. If the alcove only touches
+     *  the interior diagonally, carve the single shared orthogonal cell to FLOOR
+     *  so the door is genuinely reachable. */
+    private static void connectDoorAlcovesOrthogonally(Level level, int x, int y, int w, int h) {
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        // Doors live on the rect's outer ring, so scan one cell beyond it.
+        for (int i = x - 1; i <= x + w; i++) {
+            for (int j = y - 1; j <= y + h; j++) {
+                if (!LevelFactoryUtils.inBounds(level, i, j)) continue;
+                if (!level.tiles[i][j].isDoor()) continue;
+                // The alcove is the door's inward neighbour that sits inside the
+                // rect and survived as FLOOR.
+                for (int[] d : dirs) {
+                    int ai = i + d[0], aj = j + d[1];
+                    if (ai < x || ai >= x + w || aj < y || aj >= y + h) continue;
+                    if (!LevelFactoryUtils.inBounds(level, ai, aj)) continue;
+                    if (level.tiles[ai][aj] != Tile.FLOOR) continue;
+                    bridgeDiagonalAlcove(level, ai, aj, i, j);
+                }
+            }
+        }
+    }
+
+    /** {@code (ai, aj)} is a door alcove (FLOOR); {@code (di, dj)} is the door it
+     *  serves. If the alcove already has an orthogonal FLOOR neighbour other than
+     *  the door it's connected - return. Otherwise find a diagonal FLOOR neighbour
+     *  (the room body reaching it diagonally) and carve the shared orthogonal cell
+     *  between them to FLOOR. */
+    private static void bridgeDiagonalAlcove(Level level, int ai, int aj, int di, int dj) {
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] d : dirs) {
+            int ni = ai + d[0], nj = aj + d[1];
+            if (ni == di && nj == dj) continue;       // back toward the door
+            if (!LevelFactoryUtils.inBounds(level, ni, nj)) continue;
+            if (level.tiles[ni][nj] == Tile.FLOOR) return;   // already linked
+        }
+        int[][] diag = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+        for (int[] dd : diag) {
+            int ni = ai + dd[0], nj = aj + dd[1];
+            if (!LevelFactoryUtils.inBounds(level, ni, nj)) continue;
+            if (level.tiles[ni][nj] != Tile.FLOOR) continue;
+            // Carve whichever of the two shared orthogonal cells is a wall.
+            int hx = ai + dd[0], hy = aj;             // horizontal step
+            int vx = ai,         vy = aj + dd[1];     // vertical step
+            if (LevelFactoryUtils.inBounds(level, hx, hy)
+                    && level.tiles[hx][hy] == Tile.WALL) {
+                level.tiles[hx][hy] = Tile.FLOOR;
+            } else if (LevelFactoryUtils.inBounds(level, vx, vy)
+                    && level.tiles[vx][vy] == Tile.WALL) {
+                level.tiles[vx][vy] = Tile.FLOOR;
+            }
+            return;
+        }
     }
 
     // -- WALKWAY ------------------------------------------------------------
@@ -685,7 +754,11 @@ final class ThemedRoomPainter {
     private static void carveWalkwayFromDoor(Level level, int dx, int dy, int ix, int iy,
                                              int cx, int cy) {
         if (!LevelFactoryUtils.inBounds(level, dx, dy)) return;
-        if (level.tiles[dx][dy] != Tile.DOOR) return;
+        // Any door type, not just plain DOOR: a walkway room can share a wall
+        // with an already-stamped unique room whose doors were converted to
+        // ONETIME_DOOR (or the all-crystal sweep), and those still need a plank
+        // leading to them or the door opens onto an empty chasm pit.
+        if (!level.tiles[dx][dy].isDoor()) return;
         int sx = dx + ix, sy = dy + iy;
         for (int xx = Math.min(sx, cx); xx <= Math.max(sx, cx); xx++) plankCell(level, xx, sy);
         for (int yy = Math.min(sy, cy); yy <= Math.max(sy, cy); yy++) plankCell(level, cx, yy);

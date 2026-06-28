@@ -65,11 +65,6 @@ public final class Animator {
      *  same jitter source. */
     public Random rng() { return RNG; }
 
-
-    /** Wall-clock emit interval for fire-particle effects. Mirrors the legacy
-     *  {@code GameBalance.FIRE_PARTICLE_INTERVAL_MS}. */
-    /** Wall-clock window for sleep-Z emission cadence (1.2 s - 2.0 s). */
-
     public MobAnimState stateOf(Mob mob) {
         if (mob == null) return null;
         MobAnimState s = states.get(mob);
@@ -119,8 +114,13 @@ public final class Animator {
         // queue.tick() is driven by PlayScreen at the top of render(), BEFORE the
         // game-tick gate check, so a step that ends "this frame" can immediately
         // chain into the next one without leaving a stationary gap.
-        float n = framesPerRender();
-        frameProgress += n;
+        //
+        // Logical animation frames advance on WALL-CLOCK time (one logical frame =
+        // 1/60 s) rather than once per render frame, so a 120 Hz display plays
+        // event animations at the same duration as a 60 Hz one instead of 2x
+        // speed. The animation-speed multiplier (0.5/1/2/4x) still scales it.
+        float speed = framesPerRender();
+        frameProgress += frameDelta(dtMs);
 
         int framesToAdvance = (int) Math.floor(frameProgress);
 
@@ -198,7 +198,7 @@ public final class Animator {
         // Teleport-fades are event-driven (the engine's MobTeleported
         // event spawns them) so they share the speed multiplier with
         // every other event animation.
-        int scaledDtMs = (int)((float)dtMs * n);
+        int scaledDtMs = (int)((float)dtMs * speed);
         if (level != null && scaledDtMs > 0) {
             tickTeleportFades(level, scaledDtMs);
         }
@@ -358,6 +358,8 @@ public final class Animator {
         if (sounds != null) sounds.beginFrame();
         // Reset sequential counter so scaleFrames() reads a fresh depth for this batch.
         queue.resetSequentialCount();
+        // Stagger index for scroll item-create showcases drained this batch.
+        itemShowcaseCount = 0;
         // Cache the player once for this drain pass so the achievement
         // observer (and any future per-event hooks) don't re-scan
         // level.mobs per event.
@@ -511,6 +513,7 @@ public final class Animator {
         if (target == null || target.position == null) return;
         if (!MobSystem.isVisibleToPlayer(level, target)) return;
         stage.add(Effect.surpriseIcon(target.position));
+        if (sounds != null) sounds.playAt("sfx.combat.surprise", level, target.position);
         // First-encounter tip: explain the 1.5x damage mechanic. Fires on any
         // visible surprise (player surprising a mob OR a mob surprising the
         // player); once shown, the tip stays dismissed for the rest of the run.
@@ -537,14 +540,24 @@ public final class Animator {
                 dx / n * AnimationVars.HIT_FLINCH_PX, dy / n * AnimationVars.HIT_FLINCH_PX,
                 AnimationVars.FLINCH_OUT_FRAMES, AnimationVars.FLINCH_OUT_FRAMES + AnimationVars.FLINCH_BACK_FRAMES,
                 /*concurrent=*/true);
+        // Fires alongside the DamageDealt HIT sound; leave the key empty in
+        // sounds.csv unless a distinct flinch thud is wanted.
+        if (sounds != null) sounds.playAt("sfx.combat.flinch", level, target.position, 0.5f);
     }
 
     void onMobKilled(Level level, GameEvent.MobKilled m) {
         if (!m.visibleAtKill()) return;
         if (sounds != null) {
-            boolean playerDied = m.mob() != null && m.mob().isPlayer;
-            sounds.playAt(playerDied ? "sfx.player.combat.die" : "sfx.mob.combat.die",
-                    level, new Point(m.x(), m.y()));
+            Mob dead = m.mob();
+            if (dead != null && dead.isPlayer) {
+                sounds.playAt("sfx.player.combat.die", level, new Point(m.x(), m.y()));
+            } else if (level.kind == Level.LevelKind.FINAL_BOSS
+                    && dead != null && "GREAT_WRAITH".equals(dead.mobType)) {
+                // Final-boss death: a climactic scream at full volume (non-spatial).
+                sounds.play("sfx.boss.death");
+            } else {
+                sounds.playAt("sfx.mob.combat.die", level, new Point(m.x(), m.y()));
+            }
         }
         boolean facingEast = m.mob() != null && m.mob().facingEast;
         ghosts.add(new Ghost(m.mob(), m.x(), m.y(), facingEast));
@@ -559,13 +572,15 @@ public final class Animator {
         else          queue.concurrent(deathFrames);
     }
 
-    void onMobTeleported(GameEvent.MobTeleported m) {
+    void onMobTeleported(Level level, GameEvent.MobTeleported m) {
         if (m.mob() == null) return;
         MobAnimState s = stateOf(m.mob());
         s.teleportFromX = m.fromX();
         s.teleportFromY = m.fromY();
         s.teleportFadeMs = MobSystem.TELEPORT_FADE_TOTAL_MS;
-        stage.add(Effect.teleportStreaks(new Point(m.fromX(), m.fromY()), /*up=*/true, RNG));
+        Point from = new Point(m.fromX(), m.fromY());
+        stage.add(Effect.teleportStreaks(from, /*up=*/true, RNG));
+        if (sounds != null) sounds.playAt("sfx.mob.action.teleport", level, from);
     }
 
     void onMagicMissileFired(Level level, GameEvent.MagicMissileFired m) {
@@ -668,20 +683,30 @@ public final class Animator {
 
     void onBeaconActivated(GameEvent.BeaconActivated m) {
         Effect.beaconActivation(stage, m.pos(), RNG);
+        // Climactic, always at the player's feet - full-volume non-spatial.
+        if (sounds != null) sounds.play("sfx.world.beacon.activate");
         com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
                 "concept:beacon", "concept.beacon.tip", "concept.beacon.name", null);
     }
 
     void onPlayerTeleportOut(GameEvent.PlayerTeleportOut m) {
         stage.add(Effect.playerTeleportOut(m.pos(), RNG));
+        if (sounds != null) sounds.play("sfx.player.teleport.out");
     }
 
     void onPlayerTeleportIn(GameEvent.PlayerTeleportIn m) {
         stage.add(Effect.playerTeleportIn(m.pos(), RNG));
+        if (sounds != null) sounds.play("sfx.player.teleport.in");
     }
+
+    /** Latched true for one consume() when the player's Jade Peach fires, so
+     *  PlayScreen can kick off the full-screen revive cinematic. */
+    public boolean playerRevivedSignal = false;
 
     void onPlayerRevived(GameEvent.PlayerRevived m) {
         Effect.reviveRing(stage, m.pos(), RNG);
+        if (sounds != null) sounds.play("sfx.player.revive");
+        playerRevivedSignal = true;
     }
 
     void onItemThrown(Level level, GameEvent.ItemThrown m) {
@@ -719,16 +744,30 @@ public final class Animator {
 
     /** Loot tossed off a dying mob - arc the item from the corpse to its
      *  landing tile. Non-blocking (LOOT_TOSS is excluded from the freeze tally). */
-    void onLootDropped(GameEvent.LootDropped m) {
+    void onLootDropped(Level level, GameEvent.LootDropped m) {
         if (m.item() == null || m.from() == null || m.to() == null) return;
         stage.add(Effect.lootToss(m.from(), m.to(), m.item()));
+        if (sounds != null) sounds.playAt("sfx.world.loot.drop", level, m.to(), 0.6f);
     }
 
+    /** Frames between successive scroll item-create showcases (rapid succession). */
+    private static final int SCROLL_SHOWCASE_STAGGER = 16;
+    /** Per-consume stagger index for scroll create showcases (reset in consume). */
+    private int itemShowcaseCount = 0;
+
     /** Item conjured onto the floor by a creation scroll - glow + spark birth
-     *  burst behind the item sprite at its drop tile. Non-blocking. */
-    void onItemCreated(GameEvent.ItemCreated m) {
+     *  burst behind the item sprite at its drop tile. Scroll creations also get a
+     *  centre-screen glow showcase of the item (staggered for several at once). */
+    void onItemCreated(Level level, GameEvent.ItemCreated m) {
         if (m.item() == null || m.at() == null) return;
         stage.add(Effect.itemBirth(m.at(), m.item(), Effect.EffectTint.YELLOW, RNG));
+        if (sounds != null) sounds.playAt("sfx.item.create", level, m.at());
+        if (m.showcase()) {
+            Effect show = Effect.enchantShowcase(m.item(), Effect.EffectTint.YELLOW, RNG);
+            show.startDelay = itemShowcaseCount * SCROLL_SHOWCASE_STAGGER;
+            stage.add(show);
+            itemShowcaseCount++;
+        }
     }
 
     /** Item picked up by a mob - arc the item off its tile toward the bottom-
@@ -794,6 +833,7 @@ public final class Animator {
         s.stepTotal  = frames;
         s.delayFrames = queue.sequential(frames);
         stage.add(Effect.particleBurst(start, Effect.EffectTint.WHITE, 10, RNG));
+        if (sounds != null) sounds.playAt("sfx.combat.knockback", level, end);
         // Two knockback impact flashes:
         //   1) at the start tile, the moment of the original hit;
         //   2) at the end tile, only when the slide stopped because of an
@@ -910,15 +950,17 @@ public final class Animator {
      *  falling via {@link GameEvent.ItemFallingIntoChasm}) or relocated
      *  the survivor to the next dungeon level. Non-blocking - same
      *  pattern as the falling-item visual. */
-    void onMobFellThroughChasm(GameEvent.MobFellThroughChasm m) {
+    void onMobFellThroughChasm(Level level, GameEvent.MobFellThroughChasm m) {
         if (m.mob() == null || m.fromTile() == null) return;
         stage.add(Effect.fallingMob(m.fromTile(), m.mob()));
+        if (sounds != null) sounds.playAt("sfx.world.chasm.fall", level, m.fromTile(), 0.7f);
     }
 
     /** Item fell into a chasm - revolve-shrink-fade at its tile. Non-blocking. */
-    void onItemFallingIntoChasm(GameEvent.ItemFallingIntoChasm m) {
+    void onItemFallingIntoChasm(Level level, GameEvent.ItemFallingIntoChasm m) {
         if (m.item() == null || m.position() == null) return;
         stage.add(Effect.fallingItem(m.position(), m.item()));
+        if (sounds != null) sounds.playAt("sfx.world.chasm.itemfall", level, m.position(), 0.5f);
     }
 
     void onDamageDealt(Level level, GameEvent.DamageDealt m) {
@@ -982,6 +1024,8 @@ public final class Animator {
         if (mob == null || mob.position == null) return;
         if (!MobSystem.isVisibleToPlayer(level, mob)) return;
         stage.add(Effect.floatingText(mob.position, "+" + m.amount(), Effect.EffectTint.GREEN));
+        if (sounds != null) sounds.playAt(mob.isPlayer ? "sfx.player.heal" : "sfx.mob.heal",
+                level, mob.position);
     }
 
     void onMobTamed(Level level, GameEvent.MobTamed m) {
@@ -1005,6 +1049,10 @@ public final class Animator {
         if (mob == null || mob.position == null) return;
         if (!MobSystem.isVisibleToPlayer(level, mob)) return;
         stage.add(Effect.buffExpiredIcon(mob.position, m.type()));
+        // Per-type key (e.g. sfx.buff.remove.on_fire = extinguish), falling back
+        // to the generic sfx.buff.remove. Empty in csv = silent.
+        if (sounds != null && m.type() != null)
+            sounds.playAt("sfx.buff.remove." + m.type().name().toLowerCase(), level, mob.position);
     }
 
     void onBuffApplied(Level level, GameEvent.BuffApplied m) {
@@ -1017,6 +1065,10 @@ public final class Animator {
         } else {
             stage.add(Effect.floatingText(mob.position, m.displayName(), Effect.EffectTint.YELLOW));
         }
+        // Per-type key (e.g. sfx.buff.apply.on_fire = ignite, .frozen = freeze,
+        // .poisoned = poison), falling back to the generic sfx.buff.apply.
+        if (sounds != null && m.type() != null)
+            sounds.playAt("sfx.buff.apply." + m.type().name().toLowerCase(), level, mob.position);
         // First-encounter tip: buffs trigger their tip the first time the
         // player is on the receiving end. Other-mob buff applications stay
         // silent (would spam the popup in busy rooms).
@@ -1201,6 +1253,8 @@ public final class Animator {
         Effect burst = Effect.particleBurst(m.pos(), tint, 8, RNG);
         stage.add(burst);
         queue.concurrent(burst.totalFrames());
+        if (sounds != null) sounds.playAt("sfx.world.surface." + m.surface().name().toLowerCase(),
+                level, m.pos(), 0.6f);
     }
 
     /** Vegetation just changed on a tile (grass / mushrooms / fire / trees) -
@@ -1217,6 +1271,17 @@ public final class Animator {
         Effect burst = Effect.particleBurst(m.pos(), tint, 8, RNG);
         stage.add(burst);
         queue.concurrent(burst.totalFrames());
+        if (sounds != null) sounds.playAt("sfx.world.vegetation." + m.vegetation().name().toLowerCase(),
+                level, m.pos(), 0.6f);
+    }
+
+    /** A mushroom puffed a spore cloud - spatial "puff" sfx. Visual-only event
+     *  (the spore cloud itself is polled from {@code level.cloud}); the
+     *  per-key cooldown collapses a whole room of mushrooms firing on one turn
+     *  into a single puff. */
+    void onSporeEmitted(Level level, GameEvent.SporeEmitted m) {
+        if (m.pos() == null) return;
+        if (sounds != null) sounds.playAt("sfx.world.spore", level, m.pos(), 0.6f);
     }
 
     /** Multi-coloured rainbow burst (power-orb absorb, level-up). Blocking -
@@ -1286,6 +1351,10 @@ public final class Animator {
             default       -> Effect.EffectTint.RED;
         };
         stage.add(Effect.floatingText(mob.position, "-" + m.amount(), tint));
+        // DOT tick (e.g. sfx.buff.dot.on_fire, .poisoned). Quiet + cooldown-gated
+        // since it fires every turn the buff persists.
+        if (sounds != null && m.buff() != null)
+            sounds.playAt("sfx.buff.dot." + m.buff().name().toLowerCase(), level, mob.position, 0.5f);
     }
 
     // -- Pending-impact resolution --------------------------------------------------
@@ -1690,4 +1759,25 @@ public final class Animator {
         double f = animationSpeedSupplier.getAsDouble();
         return (float) (f > 0 ? f : 1);
     }
+
+    /** Base rate the authored frame counts were tuned for: one logical animation
+     *  frame is 1/60 s. */
+    private static final float BASE_FPS = 60f;
+
+    /** Logical animation frames to advance this render, given the real elapsed
+     *  {@code dtMs}. Scales the authored-frame durations to wall-clock time so
+     *  animations play at the same speed at any display refresh rate, while the
+     *  animation-speed multiplier (0.5/1/2/4x) still compresses them. Used by
+     *  both {@link #tick} (the anim accumulator) and PlayScreen's freeze-gate
+     *  drain so the two stay in lock-step. */
+    public static float frameDelta(int dtMs) {
+        return framesPerRender() * dtMs * (BASE_FPS / 1000f);
+    }
+
+    /** Residual fraction (0..1) toward the next not-yet-applied logical frame,
+     *  left over after {@link #tick} floors the accumulator. The renderer adds
+     *  this to interpolation numerators (step slide, lunge/flinch, spawn-grow,
+     *  ghost fade) so motion is smooth at frame rates above 60 Hz instead of
+     *  snapping a logical frame at a time. */
+    public float subFrame() { return frameProgress; }
 }

@@ -37,7 +37,7 @@ import java.util.Random;
  * banner are primitive ShapeRenderer + SpriteBatch elements drawn directly
  * by this screen.
  *
- * <p>HUD across the top of the screen: Pause / Fast Forward / Speed /
+ * <p>HUD across the top of the screen: Pause / Fast Forward / Speed / Log /
  * Abort, all as standard V2 buttons. When the fight ends, a centred V2
  * popup with "Fight again" + "Back to setup" buttons appears.
  *

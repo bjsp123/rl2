@@ -167,6 +167,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  frame from {@code LookMode.mobAtCursor()}; null clears the overlay. */
     private Mob lookedAtMob;
     public void setLookedAtMob(Mob m) { this.lookedAtMob = m; }
+
+    /** When true, looking at a mob overlays its state-of-mind and every other
+     *  visible mob's attitude marker. Off by default and deliberately NOT
+     *  surfaced on the settings screen - an internal/optional toggle only. */
+    private boolean showLookAnnotations = false;
+    public void setShowLookAnnotations(boolean on) { this.showLookAnnotations = on; }
     private Texture         waterTex;
     private Texture         bloodTex;
     private Texture         oilTex;
@@ -228,6 +234,21 @@ public class DefaultLevelRenderer implements LevelRenderer {
     /** Real-time accumulator for the stair-label fade animation, in seconds. Bumped each
      *  frame from {@link com.badlogic.gdx.Gdx#graphics}. */
     private float           stairLabelTime;
+    /** Per-axis padding inside the stair sign panel, in screen pixels. The
+     *  sign renders in screen-space (see {@link #drawStairLabelAt}) so glyph
+     *  positions snap to whole display pixels at every camera zoom. */
+    private static final float STAIR_SIGN_PAD_X = 6f;
+    private static final float STAIR_SIGN_PAD_Y = 3f;
+    /** Stair-sign glyph scale in SCREEN pixels. The sign's WORLD position still
+     *  tracks its staircase, but its size is fixed in screen space so it stays
+     *  the same readable size at every camera zoom (in or out) instead of
+     *  shrinking when the player zooms out. Tuned for legibility. */
+    private static final float STAIR_SIGN_FONT_SCALE = 1.25f;
+    /** Scratch matrices reused per sign to avoid GC churn on the render path. */
+    private final com.badlogic.gdx.math.Matrix4 stairSignSavedProj =
+            new com.badlogic.gdx.math.Matrix4();
+    private final com.badlogic.gdx.math.Matrix4 stairSignScreenProj =
+            new com.badlogic.gdx.math.Matrix4();
     private TextureRegion   whiteRegion;
     private final FogOverlay fog = new FogOverlay();
 
@@ -251,6 +272,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  very first render after creation. Fx are NOT cached - they get added / removed
      *  every frame via {@code advanceEffects}, so the fx index is rebuilt per frame. */
     private boolean indexesDirty = true;
+    /** The {@link Level} drawn on the previous frame. When the level object changes
+     *  (stairs, arena, new game) the per-level caches (index buckets, fog) must be
+     *  rebuilt on the very first frame of the new level - otherwise a dirty flag
+     *  cleared while the prior level was still being drawn would leave the new
+     *  level rendering with the old level's caches until the next mutation. */
+    private Level lastRenderedLevel;
 
     /**
      * One drawable entity frame.
@@ -520,6 +547,17 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
     @Override
     public void render(Level level, OrthographicCamera camera) {
+        // A level swap (stairs / arena / new game) must force a clean rebuild of
+        // every per-level cache on the new level's first frame. Relying on
+        // markDirty() alone is fragile: the dirty flag can be set and then cleared
+        // again while the OUTGOING level is still being drawn for one frame, so the
+        // incoming level would otherwise render with the previous level's index
+        // buckets / fog until the next tick.
+        if (level != lastRenderedLevel) {
+            lastRenderedLevel = level;
+            indexesDirty = true;
+            fog.markDirty();
+        }
         fog.createFor(level.width, level.height);
         fog.update(level);
 
@@ -698,8 +736,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         // Look-mode annotations layer - drawn above the world but under the fog overlay
         // so unseen tiles still darken normally. Only fires when the player is looking at
-        // a mob; otherwise it's a no-op.
-        if (lookedAtMob != null) drawLookAnnotations(level);
+        // a mob AND the (off-by-default, no settings UI) annotation toggle is on.
+        if (lookedAtMob != null && showLookAnnotations) drawLookAnnotations(level);
 
         long _t4 = System.nanoTime(); int _f4 = batch.renderCalls;
         if (DRAW_FOG) fog.render(batch);
@@ -712,7 +750,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Screen-space FX overlay: beacon-activation level flicker, plus buff-acquire
         // icons (also above fog for the same north-clipping reason).
         if (animator != null) {
-            fxRenderer.drawScreenSpaceEffects(animator.stage, camera, level);
+            fxRenderer.drawScreenSpaceEffects(animator.stage, camera, level, animator.subFrame());
         }
         // Stair signs - drawn LAST so each explored staircase's destination sign
         // sits on top of walls, fog, mobs, and overhead icons, and shows in its
@@ -722,7 +760,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 if (!level.explored[x][y]) continue;
                 Tile t = level.tiles[x][y];
                 if (t == Tile.STAIRS_UP || t == Tile.STAIRS_DOWN) {
-                    drawStairLabelAt(level, x, y);
+                    drawStairLabelAt(level, x, y, camera);
                 }
             }
         }
@@ -1287,10 +1325,14 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (region == null) return;
         int jx = vegJitterX(x, y);
         int lift = vegRearLiftPx(x, y);
+        // A mushroom about to puff spores shimmies a sub-pixel as a tell. The rear
+        // sprite shears one way (+vib) and the front sprite the other (-vib, in
+        // drawFrontVegetationAt) so the cap visibly rocks back and forth.
+        float vib = mushroomShimmyPx(level, x, y);
         // Rear vegetation rides 3-6 px above the tile floor so the front sprite (drawn at
         // the base) reads as the foreground blades and the rear sprite reads as the body
         // poking up behind it.
-        float dx = x * (float) CELL + jx;
+        float dx = x * (float) CELL + jx + vib;
         float dy = y * (float) CELL + lift;
         outlines.drawRegion(batch, region, dx, dy, CELL, CELL);
         batch.setColor(Color.WHITE);
@@ -1372,11 +1414,25 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // tile's occupant. X jitter matches the rear sprite so the two layers line up
         // horizontally.
         int jx = vegJitterX(x, y);
-        float dx = x * (float) CELL + jx;
+        // Opposite shear to the rear sprite (which uses +vib) so a puffing
+        // mushroom's front and back rock apart, not in lockstep.
+        float dx = x * (float) CELL + jx - mushroomShimmyPx(level, x, y);
         float dy = y * (float) CELL;
         outlines.drawRegion(batch, region, dx, dy, CELL, CELL);
         batch.setColor(Color.WHITE);
         batch.draw(region, dx, dy, CELL, CELL);
+    }
+
+    /** Sub-pixel horizontal shimmy for a mushroom about to puff spores
+     *  ({@code sporeCountdown < 2} = fires this or next turn); {@code 0} for any
+     *  other tile, or before the level's spore timers are seeded (the
+     *  freshly-zeroed array must not make every mushroom buzz pre-first-tick).
+     *  The rear pass adds this and the front pass subtracts it, so the cap shears. */
+    private float mushroomShimmyPx(Level level, int x, int y) {
+        if (level.vegetation == null || level.vegetation[x][y] != Vegetation.MUSHROOMS) return 0f;
+        if (!level.sporesSeeded || level.sporeCountdown == null
+                || level.sporeCountdown[x][y] >= 2) return 0f;
+        return (float) Math.sin(stairLabelTime * 38.0 + (x * 1.7f + y * 2.3f));
     }
 
     /** Rear-pass texture pick: each veg type has two source variants in surfaces.png; the
@@ -1599,7 +1655,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  draws a small panel reading "Stairs Up/Down" / "Depth N, &lt;theme or
      *  special kind&gt;" / "N% explored" (explored % of the DESTINATION level).
      *  No-op if the world isn't set or this cell isn't a named stair. */
-    private void drawStairLabelAt(Level level, int x, int y) {
+    private void drawStairLabelAt(Level level, int x, int y,
+                                  com.badlogic.gdx.graphics.OrthographicCamera camera) {
         if (world == null) return;
         boolean ascending;
         int target;
@@ -1612,56 +1669,95 @@ public class DefaultLevelRenderer implements LevelRenderer {
         Level dst = world.levels[target];
         if (dst == null) return;
 
+        // Signs are wayfinding and must be visible at every zoom level - no
+        // zoom-based fade.
+        float fadeAlpha = 1f;
+
         String l1 = ascending ? "Stairs Up" : "Stairs Down";
         String l2 = "Depth " + dst.depth + ", " + stairDestName(dst);
         String l3 = exploredPercent(dst) + "% explored";
 
-        // Gently bob the whole sign; per-stair phase so neighbours don't sync.
+        // The previous world-space implementation scaled the font to 0.30 in
+        // WORLD units and drew through the world projection. With
+        // useIntegerPositions (true by default) glyphs snapped to whole
+        // world units, which at the default 0.35 zoom is ~2.86 screen
+        // pixels — so letter advances landed at inconsistent sub-pixel
+        // offsets and the text read as randomly-spaced and case-warped.
+        // Fix is to render in SCREEN-PIXEL space, scaling the font so the
+        // panel sits at a chosen multiple of the tile sprite's world size
+        // (so the sign grows with the world on zoom-in, like every other
+        // world object) while keeping every glyph on an integer pixel.
         float phase = x * 0.7f + y * 1.3f;
-        float bob = (float) Math.sin(stairLabelTime * 1.8f + phase) * 0.7f;
+        float bobWorld = (float) Math.sin(stairLabelTime * 1.8f + phase) * 0.7f;
+        float worldCx = x * (float) CELL + CELL / 2f;
+        float worldAnchorY = y * (float) CELL + 2f * CELL + 6f + bobWorld;
 
-        // Small sign: scale the font down for both measurement and draw,
-        // restored at the end of this method.
-        font.getData().setScale(0.14f);
+        // Manual orthographic project: the camera fills its viewport with
+        // (viewportWidth * zoom) world units centred on camera.position.
+        // (worldP - cameraP) / zoom + viewport/2 → pixel within the FBO /
+        // window, with Y up (matches batch convention).
+        float invZoom = 1f / camera.zoom;
+        float screenCx = (worldCx       - camera.position.x) * invZoom
+                + camera.viewportWidth  * 0.5f;
+        float screenBottom = (worldAnchorY - camera.position.y) * invZoom
+                + camera.viewportHeight * 0.5f;
 
+        // FIXED screen-pixel font scale: the glyphs are the same readable size
+        // at every camera zoom (only the panel's screen POSITION above tracks
+        // the staircase through the zoom). The panel is then sized to fit the
+        // text rather than the text squeezed to fit a zoom-scaled panel.
+        float fontScale = STAIR_SIGN_FONT_SCALE;
+        font.getData().setScale(fontScale);
         com.badlogic.gdx.graphics.g2d.GlyphLayout gl =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout();
-        float lineH = font.getLineHeight();
-        gl.setText(font, l1); float w = gl.width;
-        gl.setText(font, l2); w = Math.max(w, gl.width);
-        gl.setText(font, l3); w = Math.max(w, gl.width);
+        gl.setText(font, l1); float wText = gl.width;
+        gl.setText(font, l2); wText = Math.max(wText, gl.width);
+        gl.setText(font, l3); wText = Math.max(wText, gl.width);
 
-        float padX = 3f, padY = 2f;
-        float panelW = w + 2f * padX;
-        float panelH = 3f * lineH + 2f * padY;
-        float cx = x * (float) CELL + CELL / 2f;
-        float panelX = cx - panelW / 2f;
-        float panelY = y * (float) CELL + 2f * CELL + 6f + bob;   // above the staircase sprite
+        float lineH  = font.getLineHeight();
+        float panelW = Math.round(wText + 2f * STAIR_SIGN_PAD_X);
+        float panelH = Math.round(3f * lineH + 2f * STAIR_SIGN_PAD_Y);
+        float panelX = Math.round(screenCx - panelW * 0.5f);
+        float panelY = Math.round(screenBottom);
 
-        // Sign panel: dark translucent fill + thin warm border.
-        batch.setColor(0f, 0f, 0f, 0.66f);
+        // Flush the world-space batch and switch to screen-pixel projection.
+        // Drawing only one sign per call keeps the begin/end overhead small
+        // (typical screen has 0–2 visible stair signs).
+        batch.end();
+        stairSignSavedProj.set(batch.getProjectionMatrix());
+        stairSignScreenProj.setToOrtho2D(0f, 0f,
+                camera.viewportWidth, camera.viewportHeight);
+        batch.setProjectionMatrix(stairSignScreenProj);
+        batch.begin();
+
+        // Frame: a single dark translucent fill, no border. Reads as an
+        // unobtrusive shadow behind the text rather than a framed plaque.
+        batch.setColor(0f, 0f, 0f, 0.55f * fadeAlpha);
         batch.draw(whiteRegion, panelX, panelY, panelW, panelH);
-        batch.setColor(0.85f, 0.7f, 0.4f, 0.9f);
-        batch.draw(whiteRegion, panelX, panelY, panelW, 1f);
-        batch.draw(whiteRegion, panelX, panelY + panelH - 1f, panelW, 1f);
-        batch.draw(whiteRegion, panelX, panelY, 1f, panelH);
-        batch.draw(whiteRegion, panelX + panelW - 1f, panelY, 1f, panelH);
-
-        // Three lines, centred, top-down (font.draw y = top of the line).
-        float top = panelY + panelH - padY;
-        drawSignLine(gl, l1, cx, top,              1f,    0.95f, 0.70f);
-        drawSignLine(gl, l2, cx, top - lineH,      0.86f, 0.86f, 0.86f);
-        drawSignLine(gl, l3, cx, top - 2f * lineH, 0.70f, 0.88f, 0.70f);
-        font.setColor(Color.WHITE);
         batch.setColor(Color.WHITE);
-        font.getData().setScale(1f);   // restore for every other font user
+
+        float top = panelY + panelH - STAIR_SIGN_PAD_Y;
+        float cxPx = panelX + panelW * 0.5f;
+        drawSignLine(gl, l1, cxPx, top,              1f,    0.95f, 0.70f, fadeAlpha);
+        drawSignLine(gl, l2, cxPx, top - lineH,      0.86f, 0.86f, 0.86f, fadeAlpha);
+        drawSignLine(gl, l3, cxPx, top - 2f * lineH, 0.70f, 0.88f, 0.70f, fadeAlpha);
+        font.setColor(Color.WHITE);
+        font.getData().setScale(1f);   // restore for any other font user
+
+        batch.end();
+        batch.setProjectionMatrix(stairSignSavedProj);
+        batch.begin();
     }
 
     private void drawSignLine(com.badlogic.gdx.graphics.g2d.GlyphLayout gl,
-                              String s, float cx, float topY, float r, float g, float b) {
+                              String s, float cx, float topY,
+                              float r, float g, float b, float a) {
         gl.setText(font, s);
-        font.setColor(r, g, b, 1f);
-        font.draw(batch, s, cx - gl.width / 2f, topY);
+        font.setColor(r, g, b, a);
+        // Snap to whole pixels in the current (screen-pixel) projection so
+        // every glyph lands on an integer x — useIntegerPositions takes
+        // care of the rest.
+        font.draw(batch, s, Math.round(cx - gl.width / 2f), Math.round(topY));
     }
 
     private static boolean matches(com.bjsp123.rl2.model.Point p, int x, int y) {
@@ -2085,7 +2181,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         if (animator == null) return;
         for (Effect e : animator.stage.active) {
             if (e.type != Effect.EffectType.DUST_CLOUD) continue;
-            fxRenderer.drawEffect(level, e);
+            fxRenderer.drawEffect(level, e, animator.subFrame());
         }
     }
 
@@ -2103,18 +2199,19 @@ public class DefaultLevelRenderer implements LevelRenderer {
             Sprite s = spriteForGhost(g);
             if (s == null) continue;
             com.bjsp123.rl2.world.anim.MobAnimState as = animator.stateOf(g.mob);
+            float sub = animator.subFrame();
             // Slide offset, identical to drawMob's: at t=0 the sprite is
             // pulled back by stepFromDx tiles, ramping to zero by t=1.
             float ox = 0f, oy = 0f;
             if (as != null && as.stepTotal > 0) {
-                float t = Math.min(1f, as.stepFrame / (float) as.stepTotal);
+                float t = Math.min(1f, (as.stepFrame + sub) / (float) as.stepTotal);
                 ox = as.stepFromDx * (1f - t) * CELL;
                 oy = as.stepFromDy * (1f - t) * CELL;
             }
             // Death-fade alpha (Animator parks ghost.frame while a slide
             // is queued, so this stays at 1 during the slide and only
             // begins fading once the slide finishes).
-            float alpha = g.alpha();
+            float alpha = g.alpha(sub);
             if (alpha <= 0f) continue;
             drawMobSprite(s, gx, gy, ox, oy, alpha);
         }
@@ -2233,7 +2330,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         List<Effect> list = fxByCell.at(x, y);
         if (list == null) return;
         batch.setColor(Color.WHITE);
-        for (Effect e : list) fxRenderer.drawEffect(level, e);
+        for (Effect e : list) fxRenderer.drawEffect(level, e, animator.subFrame());
         batch.setColor(Color.WHITE);
     }
 
@@ -2294,15 +2391,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  col 5 for HP/mana powerups). Two passes at different sizes give depth
      *  without drawing squares. */
     private void drawPowerupGlow(Item it, float dx, float dy, float phase) {
-        com.badlogic.gdx.graphics.g2d.TextureRegion glow = isHpManaGlow(it)
-                ? BuffIcons.hpManaGlowRegion()
-                : BuffIcons.perkGlowRegion();
+        com.badlogic.gdx.graphics.g2d.TextureRegion glow = BuffIcons.powerupGlowRegion(it);
         if (glow == null) return;
 
         float pulse = 0.4f + 0.15f * (float) Math.sin(stairLabelTime * 2.0f + phase);
         float cx = dx + CELL * 0.5f;
         float cy = dy + CELL * 0.5f;
-        float[] rgb = powerupGlowColor(it);
+        float[] rgb = BuffIcons.powerupGlowColor(it);
 
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
 
@@ -2316,21 +2411,6 @@ public class DefaultLevelRenderer implements LevelRenderer {
 
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         batch.setColor(Color.WHITE);
-    }
-
-    private static boolean isHpManaGlow(Item it) {
-        return it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.HP_UP
-            || it.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MANA_UP;
-    }
-
-    private static float[] powerupGlowColor(Item it) {
-        if (it.wandEffect == null) return new float[]{1f, 0.9f, 0.4f};
-        return switch (it.wandEffect) {
-            case LEVEL_UP -> new float[]{1f, 0.85f, 0.2f};
-            case HP_UP    -> new float[]{0.3f, 0.85f, 0.15f};
-            case MANA_UP  -> new float[]{0.25f, 0.5f,  1f};
-            default       -> new float[]{1f, 0.9f, 0.4f};
-        };
     }
 
     /** Small {@code +N} marker drawn at the top-right corner of an item's tile to
@@ -2376,15 +2456,19 @@ public class DefaultLevelRenderer implements LevelRenderer {
             }
         }
         if (!inBounds(level, mx, my) || !level.visible[mx][my]) return;
+        // Sub-frame fraction (0..1) toward the next logical animation frame, so
+        // step / lunge / flinch motion is smooth at refresh rates above 60 Hz
+        // instead of snapping one logical frame at a time.
+        float sub = animator.subFrame();
         // Melee-lunge / hit-flinch offset: world y-up matches MobAnimState.animOffsetY()
         // (positive Y = north = up on screen).
-        float ox = as.animOffsetX();
-        float oy = as.animOffsetY();
+        float ox = as.animOffsetX(sub);
+        float oy = as.animOffsetY(sub);
         // Step-interpolation offset - slides the mob from its previous tile into its
         // current logical tile linearly over the animation. Suppressed during a teleport
         // fade (the mob isn't sliding, it's blinking from one cell to another).
         if (as.stepTotal > 0 && as.teleportFadeMs <= 0) {
-            float t = Math.min(1f, as.stepFrame / (float) as.stepTotal);
+            float t = Math.min(1f, (as.stepFrame + sub) / (float) as.stepTotal);
             ox += as.stepFromDx * (1f - t) * CELL;
             oy += as.stepFromDy * (1f - t) * CELL;
         }
@@ -2402,7 +2486,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // of the floor. Defaults to 1.0 when no spawn anim is active.
         float spawnScale = 1f;
         if (as.spawnTotalFrames > 0) {
-            spawnScale = Math.min(1f, as.spawnFrame / (float) as.spawnTotalFrames);
+            spawnScale = Math.min(1f, (as.spawnFrame + sub) / (float) as.spawnTotalFrames);
         }
         // INVISIBLE buff: alpha oscillates between 0.2 and 0.5.
         if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.INVISIBLE)) {
@@ -2445,8 +2529,13 @@ public class DefaultLevelRenderer implements LevelRenderer {
                     mob, com.bjsp123.rl2.model.Buff.BuffType.SHIELDED);
             boolean levitatingActive  = com.bjsp123.rl2.logic.BuffSystem.hasBuff(
                     mob, com.bjsp123.rl2.model.Buff.BuffType.LEVITATING);
+            // Beacon spirits orbiting the Great Wraith: the rear half of the
+            // orbit is drawn BEFORE the body so those glows pass behind the
+            // silhouette and vanish; the front half is drawn after the sprite.
+            if (mob.beaconSpirits > 0) drawBeaconSpirits(mob, mx, my, ox, oy, /*behind=*/true);
             drawMobSprite(s, mx, my, ox, oy, alpha, spawnScale,
                     pulseR, pulseG, pulseB, phaseActive, frozenActive, shieldedActive, levitatingActive, mob);
+            if (mob.beaconSpirits > 0) drawBeaconSpirits(mob, mx, my, ox, oy, /*behind=*/false);
         } else {
             System.err.println("No sprite for mob " + mob.mobType + " at (" + mx + ", " + my + ")");
             //placeholder drawn here?
@@ -2473,6 +2562,44 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // Over-head buff icons are drawn in drawBuffOverheadIconsPass (above the fog).
     }
 
+    /** Draw the Great Wraith's orbiting beacon spirits - one small dancing glow
+     *  per living {@link Mob#beaconSpirits}. Each spirit circles the body on a
+     *  flattened ellipse: it swings left-right by {@code cos} of its phase and
+     *  rises/falls by {@code sin}, so it sweeps in front of the silhouette (front
+     *  half, drawn after the sprite) then passes behind it (rear half, drawn
+     *  before the sprite and thus occluded). The {@code behind} flag selects
+     *  which half this pass renders. Pure presentation - the spirit count is the
+     *  only model state, and spirits have no logical tile position. */
+    private void drawBeaconSpirits(Mob mob, int mx, int my, float ox, float oy, boolean behind) {
+        int n = mob.beaconSpirits;
+        if (n <= 0) return;
+        TextureRegion glow = com.bjsp123.rl2.world.render.BuffIcons.beaconGlowRegion();
+        if (glow == null) return;
+        // Orbit centred on the wraith's torso (mid-silhouette height).
+        float cx = mx * CELL + CELL * 0.5f + ox;
+        float cy = my * CELL + ENTITY_Y_OFFSET + oy + MOB_VISIBLE_H * 0.55f;
+        float radiusX = CELL * 0.95f;     // horizontal swing
+        float tiltY   = CELL * 0.40f;     // shallow vertical bob (perspective)
+        float speed   = 1.6f;             // radians / second
+        for (int i = 0; i < n; i++) {
+            float theta = stairLabelTime * speed + i * (float) (Math.PI * 2.0 / n);
+            float depth = (float) Math.cos(theta);          // >0 front, <0 behind
+            boolean isBehind = depth < 0f;
+            if (isBehind != behind) continue;
+            float sx = cx + (float) Math.sin(theta) * radiusX;
+            float sy = cy - depth * tiltY;                  // front dips lower, rear lifts
+            // Front spirits read a touch larger / brighter than the occluded rear.
+            float fd    = 0.5f + 0.5f * depth;              // 0 (deep rear) .. 1 (full front)
+            float size  = 7f + 4f * fd;
+            float alpha = 0.45f + 0.4f * fd;
+            batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+            batch.setColor(0.55f, 0.85f, 1f, alpha);        // ghostly beacon-cyan
+            batch.draw(glow, sx - size * 0.5f, sy - size * 0.5f, size, size);
+            batch.setColor(Color.WHITE);
+            batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        }
+    }
+
     /** Post-fog pass: draw every visible mob's over-head buff icons above the fog overlay
      *  so they aren't clipped by unexplored tiles to the north (RL-44). */
     private void drawBuffOverheadIconsPass(Level level) {
@@ -2482,9 +2609,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
             int mx = mob.position.tileX(), my = mob.position.tileY();
             if (!inBounds(level, mx, my) || !level.visible[mx][my]) continue;
             com.bjsp123.rl2.world.anim.MobAnimState as = animator.stateOf(mob);
-            float ox = as.animOffsetX(), oy = as.animOffsetY();
+            float sub = animator.subFrame();
+            float ox = as.animOffsetX(sub), oy = as.animOffsetY(sub);
             if (as.stepTotal > 0 && as.teleportFadeMs <= 0) {
-                float t = Math.min(1f, as.stepFrame / (float) as.stepTotal);
+                float t = Math.min(1f, (as.stepFrame + sub) / (float) as.stepTotal);
                 ox += as.stepFromDx * (1f - t) * CELL;
                 oy += as.stepFromDy * (1f - t) * CELL;
             }

@@ -9,10 +9,11 @@ import com.bjsp123.rl2.model.Mob;
  * delegate to existing rlib system calls (MobSystem, ItemSystem, InventorySystem,
  * LevelSystem) and charge their own action/move cost via {@link com.bjsp123.rl2.logic.TurnSystem}.
  *
- * <p>Actions are produced fresh by {@link ActionLibrary#enumerate} each tick.
+ * <p>Actions are produced fresh by {@link ActionLibrary}'s {@code add*}
+ * enumerators each tick.
  *
- * <p>{@link #utility} scores how well the action advances the active goal under
- * the current state - the {@link com.bjsp123.rl2.ai.Planner} picks {@code argmax}.
+ * <p>{@link #utility} scores how well the action advances the current branch's
+ * intent - {@link com.bjsp123.rl2.ai.Decider} picks {@code argmax}.
  */
 public interface Action {
     /** Short identifier used in logs / intent detail. */

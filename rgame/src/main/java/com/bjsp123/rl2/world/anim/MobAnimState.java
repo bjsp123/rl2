@@ -56,17 +56,23 @@ public final class MobAnimState {
      *  {@code MobSpawned} event; advanced by the per-frame tick loop. */
     public int spawnFrame;
     public int spawnTotalFrames;
-    public float animOffsetX() { return animOffsetAlong(animPeakX); }
-    public float animOffsetY() { return animOffsetAlong(animPeakY); }
+    public float animOffsetX() { return animOffsetX(0f); }
+    public float animOffsetY() { return animOffsetY(0f); }
 
-    private float animOffsetAlong(float peak) {
+    /** Lunge/flinch offset, interpolated {@code sub} (0..1) frames past the
+     *  current logical {@link #animFrame} so the arc is smooth above 60 Hz. */
+    public float animOffsetX(float sub) { return animOffsetAlong(animPeakX, sub); }
+    public float animOffsetY(float sub) { return animOffsetAlong(animPeakY, sub); }
+
+    private float animOffsetAlong(float peak, float sub) {
         if (animEndFrame <= 0 || animPeakFrame <= 0) return 0f;
-        if (animFrame <= animPeakFrame) {
-            return peak * (animFrame / (float) animPeakFrame);
+        float f = animFrame + sub;
+        if (f <= animPeakFrame) {
+            return peak * (f / (float) animPeakFrame);
         }
         float span = animEndFrame - animPeakFrame;
         if (span <= 0f) return 0f;
-        float t = (animFrame - animPeakFrame) / span;
+        float t = Math.min(1f, (f - animPeakFrame) / span);
         return peak * (1f - t);
     }
 }

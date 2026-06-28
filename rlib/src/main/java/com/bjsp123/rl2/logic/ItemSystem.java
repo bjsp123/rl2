@@ -15,7 +15,9 @@ public final class ItemSystem {
 
     private ItemSystem() {}
 
-    private static final java.util.Random RANDOM =
+    // Package-private so GemSystem (gem-scroll effects, moved out of this class)
+    // can share the same registered RNG stream.
+    static final java.util.Random RANDOM =
             com.bjsp123.rl2.util.SimRng.register("ItemSystem", new java.util.Random());
 
     private static String actorName(Mob mob) {
@@ -41,14 +43,19 @@ public final class ItemSystem {
     /**
      * Consume a food item: apply any buff carried by the item
      * ({@link Item#appliesBuff} - silvery pear's HOPE, conference pear's ESP, etc.),
-     * then remove it from the eater's inventory. {@code foodValue} marks an item as
-     * edible but is otherwise inert - eating no longer restores any stat. No-op for
-     * items without food value.
+     * then remove it from the eater's inventory. Edibility is the EAT use-behavior;
+     * some foods confer no buff (plain rations) and are simply consumed.
      */
     public static void eat(Level level, Mob eater, Item item) {
-        if (eater == null || item == null || item.foodValue <= 0) return;
+        if (eater == null || item == null
+                || item.useBehavior != Item.UseBehavior.EAT) return;
         com.bjsp123.rl2.util.ActionTracker.bumpEat(eater);
+        if (eater.isPlayer) eater.runStats.foodEaten++;
         applyConsumableBuff(level, eater, item);
+        // Charge-restoring food (e.g. blue pear) refills wands like manapills.
+        if (item.wandEffect == Item.ItemEffect.MANA_UP) {
+            absorbManaPills(eater, manaPillStrength(item));
+        }
         applyManaFountRecharge(level, eater);
         MobSystem.removeFromInventory(eater, item);
         if (eater.isPlayer) {
@@ -151,21 +158,7 @@ public final class ItemSystem {
                             picker, delta));
                 }
             }
-            case MANA_UP -> {
-                if (picker.inventory == null) break;
-                for (Item bagItem : picker.inventory.bag) {
-                    if (bagItem == null || bagItem.baseChargeMax <= 0) continue;
-                    bagItem.charge = Math.min(
-                            ItemStats.effectiveMaxCharge(bagItem, ItemStats.effectiveLevel(bagItem, picker)),
-                            bagItem.charge + (bagItem.chargeGain*GameBalance.MANA_PER_PILL));
-                }
-                for (Item eq : picker.inventory.allEquipped()) {
-                    if (eq == null || eq.baseChargeMax <= 0) continue;
-                    eq.charge = Math.min(
-                            ItemStats.effectiveMaxCharge(eq, ItemStats.effectiveLevel(eq, picker)),
-                            eq.charge + (eq.chargeGain*GameBalance.MANA_PER_PILL));
-                }
-            }
+            case MANA_UP -> absorbManaPills(picker, manaPillStrength(item));
             default -> { /* not a POWERUP effect - ignore */ }
         }
         // Floating-text feedback so the player sees the absorption land.
@@ -179,6 +172,41 @@ public final class ItemSystem {
                             TextCatalog.vars("actor", actorName(picker),
                                     "item", itemName(item, "eventlog.item.powerupFallback"))),
                     com.bjsp123.rl2.model.LogEvent.EventPriority.LOW, true));
+        }
+    }
+
+    /** How many manapills' worth of charge a consumable restores. A plain
+     *  chargepill (or any MANA_UP item) defaults to 1; an item with a higher
+     *  {@code effectPower} restores that many pills' worth (blue pear = 2),
+     *  so the magnitude is data-driven from items.csv. */
+    private static int manaPillStrength(Item item) {
+        if (item == null) return 1;
+        return Math.max(1, (int) Math.round(item.effectPower));
+    }
+
+    /**
+     * Refill every wand-bearing item in {@code picker}'s bag and equipped slots
+     * as if {@code pills} manapills were absorbed: each item gains
+     * {@code chargeGain * MANA_PER_PILL * pills} charge, clamped at its
+     * effective maximum. Shared by the MANA_UP powerup ({@link #applyPowerup})
+     * and charge-restoring foods ({@link #eat}).
+     */
+    private static void absorbManaPills(Mob picker, int pills) {
+        if (picker == null || picker.inventory == null || pills <= 0) return;
+        int mult = GameBalance.MANA_PER_PILL * pills;
+        if (picker.inventory.bag != null) {
+            for (Item bagItem : picker.inventory.bag) {
+                if (bagItem == null || bagItem.baseChargeMax <= 0) continue;
+                bagItem.charge = Math.min(
+                        ItemStats.effectiveMaxCharge(bagItem, ItemStats.effectiveLevel(bagItem, picker)),
+                        bagItem.charge + (bagItem.chargeGain * mult));
+            }
+        }
+        for (Item eq : picker.inventory.allEquipped()) {
+            if (eq == null || eq.baseChargeMax <= 0) continue;
+            eq.charge = Math.min(
+                    ItemStats.effectiveMaxCharge(eq, ItemStats.effectiveLevel(eq, picker)),
+                    eq.charge + (eq.chargeGain * mult));
         }
     }
 
@@ -654,7 +682,7 @@ public final class ItemSystem {
      *  filter entirely (used as a last-resort fallback when the strict
      *  band has no candidates). Returns {@code null} when no such
      *  species exists in the registry. */
-    private static String pickPolymorphReplacement(int oldSize, String excludeType) {
+    static String pickPolymorphReplacement(int oldSize, String excludeType) {
         boolean ignoreSize = oldSize == Integer.MIN_VALUE;
         java.util.List<String> candidates = new java.util.ArrayList<>();
         for (String type : Registries.mobTypes()) {
@@ -676,7 +704,7 @@ public final class ItemSystem {
      *  starts at full HP with the species' default stats. The MobSpawned
      *  event drives the renderer's spawn-grow animation, which reads as
      *  a polymorph poof. */
-    private static void polymorphMob(Level level, Mob old, String newType) {
+    static void polymorphMob(Level level, Mob old, String newType) {
         com.bjsp123.rl2.model.Point pos = old.position;
         Mob fresh = MobFactory.spawn(newType, pos);
         if (fresh == null) return;
@@ -731,6 +759,38 @@ public final class ItemSystem {
         applyLightningChain(level, caster, target, ItemStats.effectiveDamageRange(wand, effectiveLevel),
                 wand, null);
         if (primary != null) BrandSystem.applyBrandOnHit(level, caster, primary, wand);
+    }
+
+    /** Predict the ordered chain of mobs a lightning bolt fired at {@code target}
+     *  would strike - the same traversal {@link #applyLightningChain} runs, but
+     *  with NO damage applied. The caster is a candidate (backfire), so the
+     *  player can appear in the list. Used by the targeting overlay to label
+     *  every mob the bolts will arc to. Empty when the target tile has no mob. */
+    public static java.util.List<Mob> lightningChainTargets(Level level, Point target) {
+        java.util.List<Mob> out = new java.util.ArrayList<>();
+        if (level == null || target == null || level.surface == null) return out;
+        int tx = target.tileX(), ty = target.tileY();
+        if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return out;
+        Mob first = MobQueries.mobAt(level, target);
+        if (first == null) return out;
+        Level.Surface impactSurf = level.surface[tx][ty];
+        int jumpRadius = (impactSurf == Level.Surface.WATER
+                       || impactSurf == Level.Surface.BLOOD) ? 4 : 2;
+        java.util.Set<Mob> hit = new java.util.HashSet<>();
+        java.util.ArrayDeque<Mob> frontier = new java.util.ArrayDeque<>();
+        frontier.add(first);
+        hit.add(first);
+        out.add(first);
+        while (!frontier.isEmpty()) {
+            Mob v = frontier.poll();
+            Mob next = nearestChainCandidate(level, v, hit, jumpRadius);
+            if (next != null) {
+                hit.add(next);
+                frontier.add(next);
+                out.add(next);
+            }
+        }
+        return out;
     }
 
     /** Package-private overload for brand-triggered lightning - caller supplies
@@ -848,6 +908,7 @@ public final class ItemSystem {
         }
         // Counted past the fizzle gate so only successful zaps tally.
         com.bjsp123.rl2.util.ActionTracker.bumpWand(caster);
+        if (caster.isPlayer) caster.runStats.recordWandUse(wand.type);
         if (wand.summonsWhenUsed != null) {
             castSummonWand(level, caster, wand);
             wand.charge = Math.max(0f, wand.charge - 1f);
@@ -948,353 +1009,10 @@ public final class ItemSystem {
         return acted;
     }
 
-    /**
-     * Trigger a crafted gem-item (RL-50) the player has equipped in a gem slot.
-     * Dispatches on the gem's item type. Returns {@code true} if the gem fired
-     * (the caller then consumes it from the gem slot); {@code false} for
-     * gem-items whose effect isn't forged yet - those log a stub and are NOT
-     * consumed, so no charge is wasted.
-     *
-     * <p>Only three representative effects are wired in this slice; the rest of
-     * the RL-50 roster falls through to the stub. {@code target} is non-null
-     * only for gems whose {@code useBehavior} is {@link Item.UseBehavior#WAND}
-     * (the controller gathered a tile first).
-     */
-    public static boolean triggerGem(Level level, Mob user, Item gem, com.bjsp123.rl2.model.Point target) {
-        if (level == null || user == null || gem == null || gem.type == null) return false;
-        switch (gem.type) {
-            case "CRYSTAL_OF_INVERSION" -> {
-                if (target == null) return false;
-                // Single-use: prime one charge, fire the detonation, then the
-                // caller destroys the gem - so the charge gate is moot.
-                gem.charge = 1f;
-                fireWand(level, user, gem, target);
-                return true;
-            }
-            case "BLIZZARD_PETAL" -> {
-                for (Mob m : enemiesOnLevel(level, user)) {
-                    BuffSystem.apply(level, m, com.bjsp123.rl2.model.Buff.BuffType.FROZEN, 99, user, gem);
-                }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "BLIND_MASTER" -> {
-                BuffSystem.apply(level, user, com.bjsp123.rl2.model.Buff.BuffType.ESP, 99, user, gem);
-                BuffSystem.apply(level, user, com.bjsp123.rl2.model.Buff.BuffType.INSIGHT, 99, user, gem);
-                // Fill EVERY eligible (non-blocking) square on the level with smoke.
-                for (int x = 0; x < level.width; x++) {
-                    for (int y = 0; y < level.height; y++) {
-                        if (level.tiles[x][y].blocksMovement()) continue;
-                        CloudSystem.addCloud(level, x, y, com.bjsp123.rl2.model.Level.Cloud.SMOKE, 8);
-                    }
-                }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "ELEMENTAL_INSCRIPTION" -> {
-                // "Grant a brand to a selected equippable item." No in-engine
-                // item-picker exists, so we brand the equipped weapon.
-                Item w = user.inventory != null ? user.inventory.weapon : null;
-                if (w == null) { gemFizzle(user, gem, "has nothing to inscribe"); return false; }
-                for (int i = 0; i < 80 && w.brand == null; i++) BrandSystem.applyRandomBrand(w, RANDOM);
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "FERVENT_ASPIRATION" -> {
-                // "+1 level to a selected equippable item." Applies to the
-                // equipped weapon (no item-picker UI in the engine).
-                Item w = user.inventory != null ? user.inventory.weapon : null;
-                if (w == null) { gemFizzle(user, gem, "finds nothing to empower"); return false; }
-                w.level += 1;
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "THIRTY_SIX_STRATAGEMS" -> {
-                // Cross-level beacon travel needs the map UI; in the model we do
-                // the documented fallback: teleport to a random walkable tile.
-                java.util.List<Point> spots = new java.util.ArrayList<>();
-                for (int x = 0; x < level.width; x++) {
-                    for (int y = 0; y < level.height; y++) {
-                        if (!level.tiles[x][y].isFloorLike()) continue;
-                        if (occupied(level, x, y)) continue;
-                        spots.add(new Point(x, y));
-                    }
-                }
-                if (spots.isEmpty()) { gemFizzle(user, gem, "finds nowhere to send you"); return false; }
-                user.position = spots.get(RANDOM.nextInt(spots.size()));
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "EIGHT_DIRECTIONS_DEFENCE" -> {
-                // Eightfold Defence: 8 stacks of heavy physical + magical
-                // mitigation. (Full negative-status immunity has no dedicated
-                // buff yet; PROTECTION + ANTI_MAGIC cover the armour/resist half.)
-                BuffSystem.apply(level, user, Buff.BuffType.PROTECTION, 8, user, gem);
-                BuffSystem.apply(level, user, Buff.BuffType.ANTI_MAGIC, 8, user, gem);
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "HEAVENLY_PEACH" -> {
-                MobSystem.heal(level, user, (int) Math.ceil(user.effectiveStats().maxHp));
-                rechargeAllItems(user);
-                int need = MobProgression.xpToReach(user.characterLevel + 1) - user.xp;
-                if (need > 0) MobProgression.awardXp(level, user, need);
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "INVOCATION_OF_CHIYOU" -> {
-                // Two sets of five bombs, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
-                java.util.List<Item> bombs = ItemGenerator.generateItems(10,
-                        gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS), level.theme,
-                        ItemGenerator.LootCategory.BOMBS, RANDOM);
-                dropItemsNearPlayer(level, user, bombs);
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "HARVEST_BLOSSOM" -> {
-                // Destroy visible grass/trees; leave a healing or mana pill behind.
-                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
-                int reaped = 0;
-                for (int x = 0; x < level.width; x++) {
-                    for (int y = 0; y < level.height; y++) {
-                        Level.Vegetation v = level.vegetation != null ? level.vegetation[x][y] : null;
-                        if (v != Level.Vegetation.GRASS && v != Level.Vegetation.TREES) continue;
-                        if (!MobSystem.tileVisibleToPlayer(level, new Point(x, y))) continue;
-                        level.vegetation[x][y] = null;
-                        Item pill = ItemGenerator.buildItem(
-                                RANDOM.nextBoolean() ? "HEALTHPILL" : "CHARGEPILL", power, RANDOM);
-                        if (pill != null) {
-                            pill.location = new Point(x, y);
-                            level.items.add(pill);
-                        }
-                        reaped++;
-                    }
-                }
-                if (reaped == 0) { gemFizzle(user, gem, "finds nothing to harvest"); return false; }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "LESSER_SEAL" -> {
-                int n = convertDoors(level, com.bjsp123.rl2.model.Tile.ONETIME_DOOR);
-                if (n == 0) { gemFizzle(user, gem, "finds no doors to seal"); return false; }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "GREATER_SEAL" -> {
-                int n = convertDoors(level, com.bjsp123.rl2.model.Tile.CRYSTAL_DOOR);
-                if (n == 0) { gemFizzle(user, gem, "finds no doors to seal"); return false; }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "POLYMORPH_SIGN" -> {
-                java.util.List<Mob> vis = visibleEnemies(level, user);
-                if (vis.isEmpty()) { gemFizzle(user, gem, "finds no foe to reshape"); return false; }
-                for (Mob m : vis) {
-                    String pick = pickPolymorphReplacement(Integer.MIN_VALUE, m.mobType);
-                    if (pick != null) polymorphMob(level, m, pick);
-                }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "INVOCATION_OF_JIUTIAN" -> {
-                // A random wand, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
-                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
-                Item wand = null;
-                for (int i = 0; i < 30; i++) {
-                    Item it = ItemGenerator.generateItem(power, level.theme,
-                            ItemGenerator.LootCategory.MAGIC_ITEMS, RANDOM);
-                    if (isJadeItem(it)) continue;   // scrolls never forge jade
-                    if (it != null && it.useBehavior == Item.UseBehavior.WAND) { wand = it; break; }
-                    if (wand == null) wand = it;
-                }
-                if (wand == null) { gemFizzle(user, gem, "fails to conjure a wand"); return false; }
-                dropItemsNearPlayer(level, user, java.util.List.of(wand));
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "INVOCATION_OF_THE_FOXES" -> {
-                // Two random tools, never jade items.
-                java.util.List<String> tools = new java.util.ArrayList<>(
-                        Registries.itemTypesMatching(d ->
-                                d.inventoryCategory == Item.InventoryCategory.TOOL));
-                tools.removeIf(t -> t.startsWith("JADE"));
-                if (tools.isEmpty()) { gemFizzle(user, gem, "fails to summon the foxes"); return false; }
-                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
-                java.util.List<Item> made = new java.util.ArrayList<>();
-                for (int i = 0; i < 2; i++) {
-                    Item it = ItemGenerator.buildItem(tools.get(RANDOM.nextInt(tools.size())), power, RANDOM);
-                    if (it != null) made.add(it);
-                }
-                dropItemsNearPlayer(level, user, made);
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "BLOOD_FLOWER" -> {
-                // Clear visible blood; damage every visible enemy, scaled by blood.
-                int blood = 0;
-                for (int x = 0; x < level.width; x++) {
-                    for (int y = 0; y < level.height; y++) {
-                        if (level.surface == null || level.surface[x][y] != Level.Surface.BLOOD) continue;
-                        if (!MobSystem.tileVisibleToPlayer(level, new Point(x, y))) continue;
-                        level.surface[x][y] = null;
-                        blood++;
-                    }
-                }
-                int dmg = 10 + 6 * blood;
-                for (Mob m : visibleEnemies(level, user)) {
-                    MobSystem.processAttack(level, user, m, dmg,
-                            MobSystem.AttackType.MAGIC, MobSystem.DamageElement.PHYSICAL);
-                }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "STONE_BURNER" -> {
-                // Ignite every flammable square beside a statue or lamp.
-                for (int x = 0; x < level.width; x++) {
-                    for (int y = 0; y < level.height; y++) {
-                        if (!isStatueOrLamp(level.tiles[x][y])) continue;
-                        for (int dx = -1; dx <= 1; dx++) {
-                            for (int dy = -1; dy <= 1; dy++) {
-                                if (dx == 0 && dy == 0) continue;
-                                FireSystem.ignite(level, x + dx, y + dy);
-                            }
-                        }
-                    }
-                }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "EIGHTFOLD_MULTIPLICATION" -> {
-                // Eight autonomous allied clones of the player on adjacent tiles.
-                if (user.characterClass == null || user.position == null) {
-                    gemFizzle(user, gem, "cannot split itself"); return false;
-                }
-                String key = "ENEMY_PLAYER_" + user.characterClass.name();
-                int px = user.position.tileX(), py = user.position.tileY(), made = 0;
-                for (int dy = -1; dy <= 1 && made < 8; dy++) {
-                    for (int dx = -1; dx <= 1 && made < 8; dx++) {
-                        if (dx == 0 && dy == 0) continue;
-                        int x = px + dx, y = py + dy;
-                        if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                        if (!level.tiles[x][y].isFloorLike() || occupied(level, x, y)) continue;
-                        Point spot = new Point(x, y);
-                        Mob clone = MobFactory.spawn(key, spot);
-                        if (clone == null) continue;
-                        clone.isClone = true;   // render from the clone sprite column
-                        clone.owner = user;
-                        clone.faction = user.faction;
-                        clone.enemyFactions = user.enemyFactions != null
-                                ? new java.util.HashSet<>(user.enemyFactions) : new java.util.HashSet<>();
-                        MobProgression.setSpawnLevel(clone, Math.max(1, user.characterLevel));
-                        level.mobs.add(clone);
-                        if (level.events != null) level.events.add(new GameEvent.MobSpawned(clone, spot));
-                        made++;
-                    }
-                }
-                if (made == 0) { gemFizzle(user, gem, "has no room to multiply"); return false; }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "SYMBOL_OF_INSANITY" -> {
-                java.util.List<Mob> vis = visibleEnemies(level, user);
-                if (vis.isEmpty()) { gemFizzle(user, gem, "finds no mind to break"); return false; }
-                java.util.Set<String> all = new java.util.HashSet<>();
-                if (user.faction != null) all.add(user.faction);
-                for (Mob m : level.mobs) if (m != null && m.faction != null) all.add(m.faction);
-                int idx = 0;
-                for (Mob m : vis) { String f = "INSANE_" + (idx++); m.faction = f; all.add(f); }
-                for (Mob m : vis) {
-                    java.util.Set<String> en = new java.util.HashSet<>(all);
-                    en.remove(m.faction);
-                    m.enemyFactions = en;
-                }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "INVOCATION_OF_TAISHAN" -> {
-                // Three objects, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
-                java.util.List<Item> made = ItemGenerator.generateItems(3,
-                        gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS), level.theme,
-                        ItemGenerator.LootCategory.NON_GEM, RANDOM);
-                dropItemsNearPlayer(level, user, made);
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "INVOCATION_OF_RU_SHOU" -> {
-                // A piece of armour, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
-                double power = gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS);
-                Item armor = null;
-                for (int i = 0; i < 30; i++) {
-                    Item it = ItemGenerator.generateItem(power, level.theme,
-                            ItemGenerator.LootCategory.EQUIPMENT, RANDOM);
-                    if (isJadeItem(it)) continue;   // scrolls never forge jade
-                    if (it != null && it.inventoryCategory == Item.InventoryCategory.ARMOR) { armor = it; break; }
-                    if (armor == null) armor = it;
-                }
-                if (armor == null) { gemFizzle(user, gem, "fails to forge armour"); return false; }
-                dropItemsNearPlayer(level, user, java.util.List.of(armor));
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "INVOCATION_OF_MO_YE" -> {
-                // A branded sword, as if found CREATION_SCROLL_DEPTH_BONUS levels deeper.
-                Item sword = ItemGenerator.buildItem("SWORD", gemPowerForDepth(level, CREATION_SCROLL_DEPTH_BONUS), RANDOM);
-                if (sword == null) { gemFizzle(user, gem, "fails to forge a blade"); return false; }
-                for (int i = 0; i < 80 && sword.brand == null; i++) BrandSystem.applyRandomBrand(sword, RANDOM);
-                dropItemsNearPlayer(level, user, java.util.List.of(sword));
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "PATH_THROUGH_OBLIVION" -> {
-                // Eight turns of levitation, then floor within 8 squares becomes
-                // chasm. The caster is levitating (flying) so they stay aloft;
-                // any non-flying mob now standing over the void falls in.
-                BuffSystem.apply(level, user, Buff.BuffType.LEVITATING, 8, user, gem);
-                if (user.position != null) {
-                    int px = user.position.tileX(), py = user.position.tileY();
-                    for (int x = Math.max(0, px - 8); x <= Math.min(level.width - 1, px + 8); x++) {
-                        for (int y = Math.max(0, py - 8); y <= Math.min(level.height - 1, py + 8); y++) {
-                            if (level.tiles[x][y].isFloorLike()) level.tiles[x][y] = com.bjsp123.rl2.model.Tile.CHASM;
-                        }
-                    }
-                }
-                // Drop anyone left standing on the new void (snapshot first -
-                // fallToNextLevel relocates mobs off this level's list).
-                if (level.mobs != null) {
-                    for (Mob m : new java.util.ArrayList<>(level.mobs)) {
-                        if (m == null || m == user || m.position == null || m.hp <= 0) continue;
-                        int mx = m.position.tileX(), my = m.position.tileY();
-                        if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
-                        if (level.tiles[mx][my] == com.bjsp123.rl2.model.Tile.CHASM
-                                && !m.effectiveStats().flying) {
-                            MobSystem.fallToNextLevel(level, m);
-                        }
-                    }
-                }
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "PILL_OF_IMMORTALITY" -> {
-                BuffSystem.apply(level, user, Buff.BuffType.SHIELDED, 100, user, gem);
-                announceGemUse(user, gem);
-                return true;
-            }
-            default -> {
-                // Effect not forged yet (RL-50 body). Log a stub; do NOT consume.
-                if (user.isPlayer) {
-                    EventLog.add(new com.bjsp123.rl2.model.LogEvent(
-                            "The " + (gem.name != null ? gem.name : gem.type)
-                                    + " shimmers, but its power is not yet forged.",
-                            com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
-                }
-                return false;
-            }
-        }
-    }
 
     /** Log a "the scroll fizzles" line for a read that found nothing to act on;
      *  the caller returns false so the scroll is NOT consumed. */
-    private static void gemFizzle(Mob user, Item gem, String why) {
+    static void gemFizzle(Mob user, Item gem, String why) {
         if (user.isPlayer) {
             EventLog.add(new com.bjsp123.rl2.model.LogEvent(
                     "The " + (gem.name != null ? gem.name : gem.type) + " " + why + ".",
@@ -1302,13 +1020,8 @@ public final class ItemSystem {
         }
     }
 
-    /** Flat depth bonus for creation scrolls: every conjured item is generated
-     *  as if found {@code current_depth + 4} levels down, so the reward scales
-     *  smoothly with progress instead of saturating to max-tier on early floors. */
-    private static final int CREATION_SCROLL_DEPTH_BONUS = 4;
-
     /** Power-level (0..1) for an item "found {@code deeper} levels below" this one. */
-    private static double gemPowerForDepth(Level level, int deeper) {
+    static double gemPowerForDepth(Level level, int deeper) {
         int total = Math.max(2, GameBalance.DUNGEON_DEPTH);
         int itemLevel = (level != null ? level.depth : 1) + deeper;
         double f = (itemLevel - 1) / (double) (total - 1);
@@ -1342,7 +1055,7 @@ public final class ItemSystem {
         it.location = spot;
         level.items.add(it);
         if (level.events != null) {
-            level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemCreated(it, spot));
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemCreated(it, spot, false));
         }
         String who  = user.name != null ? user.name : "You";
         String what = it.name != null ? it.name : it.type;
@@ -1351,10 +1064,10 @@ public final class ItemSystem {
         return true;
     }
 
-    private static void dropItemsNearPlayer(Level level, Mob user, java.util.List<Item> items) {
+    static void dropItemsNearPlayer(Level level, Mob user, java.util.List<Item> items) {
         if (user == null || user.position == null) return;
         dropItemsNear(level, user.position.tileX(), user.position.tileY(), items,
-                /*filterConjure*/ true);
+                /*filterConjure*/ true, /*showcase*/ true);
     }
 
     /** Drop {@code items} on the floor as near as possible to the gem hearth the
@@ -1369,16 +1082,19 @@ public final class ItemSystem {
                 : (user.position != null ? user.position.tileX() : 0);
         int ay = hearth != null ? hearth.tileY()
                 : (user.position != null ? user.position.tileY() : 0);
-        dropItemsNear(level, ax, ay, items, /*filterConjure*/ false);
+        dropItemsNear(level, ax, ay, items, /*filterConjure*/ false, /*showcase*/ false);
     }
 
     /** Core drop: place each item on the nearest free floor tile to anchor
      *  ({@code ax},{@code ay}), spreading across expanding rings (each placed
      *  item marks its tile occupied so the next lands one ring out). When
      *  {@code filterConjure} is set, jade companions and scatter-on-throw items
-     *  are skipped (creation-scroll safety). */
+     *  are skipped (creation-scroll safety). {@code showcase} flags the ItemCreated
+     *  events so the renderer plays the centre-screen glow-showcase (scroll
+     *  creations) rather than only the floor birth burst (forge / recycle). */
     private static void dropItemsNear(Level level, int ax, int ay,
-                                      java.util.List<Item> items, boolean filterConjure) {
+                                      java.util.List<Item> items, boolean filterConjure,
+                                      boolean showcase) {
         if (level == null || items == null || items.isEmpty() || level.items == null) return;
         for (Item it : items) {
             if (it == null) continue;
@@ -1388,7 +1104,7 @@ public final class ItemSystem {
             it.location = spot;
             level.items.add(it);
             if (level.events != null) {
-                level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemCreated(it, spot));
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.ItemCreated(it, spot, showcase));
             }
         }
     }
@@ -1450,7 +1166,7 @@ public final class ItemSystem {
     /** Creation scrolls must never conjure a Jade companion item (RL-50). For
      *  now this is a simple name/type match on "jade" - every jade item carries
      *  it in both. */
-    private static boolean isJadeItem(Item it) {
+    static boolean isJadeItem(Item it) {
         if (it == null) return false;
         if (it.type != null && it.type.toUpperCase(java.util.Locale.ROOT).contains("JADE")) return true;
         return it.name != null && it.name.toLowerCase(java.util.Locale.ROOT).contains("jade");
@@ -1476,14 +1192,16 @@ public final class ItemSystem {
                     if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;   // ring edge only
                     int x = px + dx, y = py + dy;
                     if (x < 0 || y < 0 || x >= level.width || y >= level.height) continue;
-                    if (!level.tiles[x][y].isFloorLike()) continue;
+                    if (!level.tiles[x][y].canHoldItem()) continue;
                     if (itemAtTile(level, x, y)) continue;
                     return new Point(x, y);
                 }
             }
         }
-        // Last resort: the player's own tile if it's clear.
-        if (level.tiles[px][py].isFloorLike() && !itemAtTile(level, px, py)) {
+        // Last resort: the player's own tile if it's clear. (canHoldItem, not
+        // isFloorLike: never anchor onto the hearth/lamp/stairs - those block
+        // movement or can't hold loot, leaving the drop unreachable.)
+        if (level.tiles[px][py].canHoldItem() && !itemAtTile(level, px, py)) {
             return new Point(px, py);
         }
         return null;
@@ -1501,7 +1219,7 @@ public final class ItemSystem {
 
     /** Hostile mobs (per {@link #enemiesOnLevel}) that are currently in the
      *  player's field of view. */
-    private static java.util.List<Mob> visibleEnemies(Level level, Mob user) {
+    static java.util.List<Mob> visibleEnemies(Level level, Mob user) {
         java.util.List<Mob> out = new java.util.ArrayList<>();
         for (Mob m : enemiesOnLevel(level, user)) {
             if (m.position != null && MobSystem.tileVisibleToPlayer(level, m.position)) out.add(m);
@@ -1510,7 +1228,7 @@ public final class ItemSystem {
     }
 
     /** True if a living mob already stands on tile (x, y). */
-    private static boolean occupied(Level level, int x, int y) {
+    static boolean occupied(Level level, int x, int y) {
         if (level.mobs == null) return false;
         for (Mob m : level.mobs) {
             if (m == null || m.position == null || m.hp <= 0) continue;
@@ -1520,7 +1238,7 @@ public final class ItemSystem {
     }
 
     /** Replace every closed/open wooden door on the level with {@code into}. */
-    private static int convertDoors(Level level, com.bjsp123.rl2.model.Tile into) {
+    static int convertDoors(Level level, com.bjsp123.rl2.model.Tile into) {
         int n = 0;
         for (int x = 0; x < level.width; x++) {
             for (int y = 0; y < level.height; y++) {
@@ -1535,7 +1253,7 @@ public final class ItemSystem {
     }
 
     /** Recharge every charge-bearing item the player carries or wears to full. */
-    private static void rechargeAllItems(Mob user) {
+    static void rechargeAllItems(Mob user) {
         if (user == null || user.inventory == null) return;
         if (user.inventory.bag != null) {
             for (Item it : user.inventory.bag) {
@@ -1549,8 +1267,8 @@ public final class ItemSystem {
         }
     }
 
-    /** Statue / lamp scenery tiles, used by Stone Burner. */
-    private static boolean isStatueOrLamp(com.bjsp123.rl2.model.Tile t) {
+    /** Statue / lamp scenery tiles, used by the Scroll of Widespread Immolation. */
+    static boolean isStatueOrLamp(com.bjsp123.rl2.model.Tile t) {
         return t == com.bjsp123.rl2.model.Tile.STATUE_SMALL_L
                 || t == com.bjsp123.rl2.model.Tile.STATUE_SMALL_R
                 || t == com.bjsp123.rl2.model.Tile.STATUE_LARGE_L
@@ -1568,45 +1286,17 @@ public final class ItemSystem {
     public static java.util.function.Predicate<Item> gemItemTarget(Item gem) {
         if (gem == null || gem.type == null) return null;
         return switch (gem.type) {
-            case "ELEMENTAL_INSCRIPTION" -> BrandSystem::isBrandable;
-            case "FERVENT_ASPIRATION"   -> i -> i != null && (i.isEquippable() || isJadeItem(i));
+            case "SC_BRAND_WEAPON" -> BrandSystem::isBrandable;
+            case "SC_UPGRADE_WEAPON"   -> i -> i != null && (i.isEquippable() || isJadeItem(i));
             default -> null;
         };
     }
 
-    /**
-     * Apply an item-targeting scroll's effect to the player-chosen
-     * {@code targetItem}. Returns {@code true} when the effect applied (caller
-     * then consumes the scroll); {@code false} otherwise.
-     */
-    public static boolean triggerGemOnItem(Level level, Mob user, Item gem, Item targetItem) {
-        if (gem == null || gem.type == null || targetItem == null) return false;
-        switch (gem.type) {
-            case "ELEMENTAL_INSCRIPTION" -> {
-                if (!BrandSystem.isBrandable(targetItem)) return false;
-                for (int i = 0; i < 80 && targetItem.brand == null; i++) {
-                    BrandSystem.applyRandomBrand(targetItem, RANDOM);
-                }
-                if (user != null) user.statsDirty = true;
-                announceGemUse(user, gem);
-                return true;
-            }
-            case "FERVENT_ASPIRATION" -> {
-                // Equipment and jade companions both have a meaningful level.
-                if (!targetItem.isEquippable() && !isJadeItem(targetItem)) return false;
-                targetItem.level += 1;
-                if (user != null) user.statsDirty = true;
-                announceGemUse(user, gem);
-                return true;
-            }
-            default -> { return false; }
-        }
-    }
 
     /** Hostile, untamed, living mobs on the level (excludes {@code user},
      *  the player, allies, and inanimate scenery). Used by level-wide gem
      *  effects. */
-    private static java.util.List<Mob> enemiesOnLevel(Level level, Mob user) {
+    static java.util.List<Mob> enemiesOnLevel(Level level, Mob user) {
         java.util.List<Mob> out = new java.util.ArrayList<>();
         if (level == null || level.mobs == null) return out;
         for (Mob m : level.mobs) {
@@ -1620,7 +1310,7 @@ public final class ItemSystem {
     }
 
     /** Standard "player invokes the gem" log line. */
-    private static void announceGemUse(Mob user, Item gem) {
+    static void announceGemUse(Mob user, Item gem) {
         if (user.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(user),
                     useVerb(gem, "eventlog.item.verb.use"), gem.name));
@@ -1640,6 +1330,7 @@ public final class ItemSystem {
         }
         applyConsumableBuff(level, user, item);
         com.bjsp123.rl2.util.ActionTracker.bumpTool(user);
+        if (user.isPlayer) user.runStats.recordToolUse(item.type);
         spendChargeIfAny(item);
         if (level != null && level.events != null && user.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.PotionBurst(user.position, item));

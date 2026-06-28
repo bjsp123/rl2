@@ -19,7 +19,14 @@ public class DesktopLauncher {
         com.bjsp123.rl2.ai.RaiBootstrap.init();
 
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-        config.setForegroundFPS(60);
+        // Render at the monitor's native refresh rate (60, 120, 144, ...) rather
+        // than a fixed 60. VSync paces frames to the display; the foreground-FPS
+        // ceiling (refresh + 1) is a safety bound for when the driver disables
+        // VSync. Animations are dt-scaled (frame-rate independent), so a higher
+        // refresh just renders the same motion more smoothly.
+        config.useVsync(true);
+        int refreshHz = Lwjgl3ApplicationConfiguration.getDisplayMode().refreshRate;
+        config.setForegroundFPS(Math.max(60, refreshHz) + 1);
         config.setTitle("rl2");
         config.setWindowedMode(size[0], size[1]);
         new Lwjgl3Application(new Rl2Game(persistence), config);

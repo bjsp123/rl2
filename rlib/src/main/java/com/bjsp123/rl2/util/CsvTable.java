@@ -302,10 +302,23 @@ public final class CsvTable {
         return out;
     }
 
+    /** Parse an enum cell, defensively. A blank cell returns {@code def}; an
+     *  unrecognised value (typo / stale name in a hand-edited CSV) logs a warning
+     *  and returns {@code def} rather than throwing and aborting the whole load.
+     *  Leading/trailing whitespace is tolerated. */
     public static <E extends Enum<E>> E enumCell(Map<String, String> row, String key,
                                                  Class<E> type, E def) {
         String v = row.get(key);
-        if (v == null || v.isEmpty()) return def;
-        return Enum.valueOf(type, v);
+        if (v == null) return def;
+        v = v.trim();
+        if (v.isEmpty()) return def;
+        try {
+            return Enum.valueOf(type, v);
+        } catch (IllegalArgumentException bad) {
+            System.err.println("[csv] column '" + key + "': unknown "
+                    + type.getSimpleName() + " value '" + v + "' - using default "
+                    + def);
+            return def;
+        }
     }
 }

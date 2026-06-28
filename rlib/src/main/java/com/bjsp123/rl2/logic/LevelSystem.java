@@ -361,9 +361,52 @@ public class LevelSystem {
                 }
             }
         }
+        // X-ray vision (EYE_CHARM): reveal enemy bodies through up to N opaque
+        // tiles (walls + smoke). Counts blockers on the BASE grid built above -
+        // NOT the KEEN_SIGHT-relaxed one - so x-ray's smoke penetration is
+        // independent of the KEEN_SIGHT perk; the two do not stack. Like ESP it
+        // lights up only mob tiles, never terrain (the explored pass below keeps
+        // the sprite from drawing over an unexplored void).
+        for (Mob mob : level.mobs) {
+            if (!mob.isPlayer || mob.position == null) continue;
+            int xray = mob.effectiveStats().xRayEyes;
+            if (xray <= 0) continue;
+            int px = mob.position.tileX(), py = mob.position.tileY();
+            int reach = (int) Math.ceil(mob.effectiveStats().visionRadius);
+            for (Mob other : level.mobs) {
+                if (other == mob || other.isPlayer || other.position == null) continue;
+                int ox = other.position.tileX(), oy = other.position.tileY();
+                if (ox < 0 || oy < 0 || ox >= w || oy >= h) continue;
+                if (level.visible[ox][oy]) continue;                 // already seen
+                if (Math.max(Math.abs(ox - px), Math.abs(oy - py)) > reach) continue;
+                if (blockersBetween(blocking, w, px, py, ox, oy) <= xray) {
+                    level.visible[ox][oy] = true;
+                }
+            }
+        }
+
         for (int x = 0; x < w; x++)
             for (int y = 0; y < h; y++)
                 if (level.visible[x][y]) level.explored[x][y] = true;
+    }
+
+    /** Count the opaque (sight-blocking) tiles strictly between {@code (x0,y0)}
+     *  and {@code (x1,y1)} along a Bresenham line - the endpoints are not
+     *  counted. Used by the EYE_CHARM x-ray pass to test whether an enemy sits
+     *  within its opaque-tile budget. */
+    private static int blockersBetween(boolean[] blocking, int w,
+                                       int x0, int y0, int x1, int y1) {
+        int dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy, x = x0, y = y0, count = 0;
+        while (x != x1 || y != y1) {
+            int e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 <  dx) { err += dx; y += sy; }
+            if (x == x1 && y == y1) break;          // reached target - don't count endpoint
+            if (blocking[y * w + x]) count++;
+        }
+        return count;
     }
 
     /**

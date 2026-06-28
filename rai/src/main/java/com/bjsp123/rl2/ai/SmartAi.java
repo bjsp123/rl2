@@ -146,8 +146,8 @@ public final class SmartAi implements MobBrains.Brain {
         updateStalemateCounter(mem, state);
 
         // Hardcoded priority tree (see Decider). Top-level branch selection is
-        // deterministic; scored argmax happens inside each branch only. The
-        // GoalSelector / Goal-vs-Goal scoring race is gone.
+        // deterministic; scored argmax happens inside each branch only. There is
+        // no goal-vs-goal scoring race.
         Action step = Decider.decide(state);
         annotate(mob, step);
         DECISION_COUNTS.merge(Decider.LAST_BRANCH.get() + "/" + step.name(), 1L, Long::sum);
@@ -293,7 +293,7 @@ public final class SmartAi implements MobBrains.Brain {
         com.bjsp123.rl2.model.Perk[] all = com.bjsp123.rl2.model.Perk.values();
         java.util.List<com.bjsp123.rl2.model.Perk> candidates = new java.util.ArrayList<>();
         java.util.Random rng = PERK_RNG;
-        int cap = 10;  // mirrors MobProgression.PERK_LEVEL_CAP (private)
+        int cap = 8;  // mirrors MobProgression.PERK_LEVEL_CAP (private)
         while (mob.perkPoints > 0) {
             candidates.clear();
             for (var p : signatures) {

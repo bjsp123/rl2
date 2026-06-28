@@ -7,7 +7,7 @@ import com.bjsp123.rl2.model.Mob;
 
 /**
  * No-op fallback: charge a move-cost tick and do nothing. Last-resort when no
- * other action is applicable, also used by HEAL_IN_SAFETY to rest until full.
+ * other action is applicable, also used by the heal branch to rest until full.
  */
 public final class ActionWait implements Action {
     @Override public String name() { return "wait"; }

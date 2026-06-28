@@ -197,6 +197,42 @@ public final class MobLore {
         return sb.toString().trim();
     }
 
+    /** Just the special behaviours / immunities + abilities of {@code m} - the
+     *  "what makes this creature dangerous" summary, without the raw stat block,
+     *  senses, factions or carried gear. Empty when the mob has no special
+     *  traits. Used by the look-popup's special-abilities section. */
+    public static String describeSpecials(Mob m) {
+        if (m == null) return "";
+        StatBlock s = m.effectiveStats();
+        StringBuilder flags = new StringBuilder();
+        if (s.flying)             flag(flags, TextCatalog.get("mob.flag.flying"));
+        if (s.fireImmune)         flag(flags, TextCatalog.get("mob.flag.fireImmune"));
+        if (s.poisonImmune)       flag(flags, TextCatalog.get("mob.flag.poisonImmune"));
+        if (!s.canPickUp)         flag(flags, TextCatalog.get("mob.flag.noPickup"));
+        if (s.fireSpreadOnAttack) flag(flags, TextCatalog.get("mob.flag.fireSpreadOnAttack"));
+        if (s.poisonsOnAttack)    flag(flags, TextCatalog.get("mob.flag.poisonsOnAttack"));
+        if (s.terrifying)         flag(flags, TextCatalog.get("mob.flag.terrifying"));
+        if (!s.terrifiable)       flag(flags, TextCatalog.get("mob.flag.notTerrifiable"));
+        if (m.banishable)         flag(flags, TextCatalog.get("mob.flag.banishable"));
+        if (s.fireExplosionRadiusOnDeath > 0)
+            flag(flags, TextCatalog.get("mob.flag.fireExplosionOnDeath"));
+        if (s.eatSpawnChance > 0)
+            flag(flags, TextCatalog.get("mob.flag.eatSpawn"));
+        if (s.mushroomEatSpawnChance > 0)
+            flag(flags, TextCatalog.get("mob.flag.mushroomEatSpawn"));
+        if (s.turnSpawnChance > 0 && m.turnSpawnType != null)
+            flag(flags, TextCatalog.get("mob.flag.turnSpawn"));
+
+        StringBuilder out = new StringBuilder();
+        if (flags.length() > 0) out.append(flags);
+        if (m.abilities != null && !m.abilities.isEmpty()) {
+            for (Mob.MobAbility a : m.abilities) {
+                out.append("* ").append(describeAbility(a)).append('\n');
+            }
+        }
+        return out.toString().trim();
+    }
+
     /** Render a comma-separated list of item names with " +N" enchantment
      *  badges for items above the design baseline level. Stack counts
      *  ({@code count > 1}) print as "name xN". */
@@ -227,7 +263,7 @@ public final class MobLore {
                 yield TextCatalog.format("mob.ability.BUFF", TextCatalog.vars("buff", name, "duration", dur, "cooldown", cd));
             }
             case TELEPORT -> TextCatalog.format("mob.ability.TELEPORT", TextCatalog.vars("cooldown", cd));
-            case PHASE_DODGE -> TextCatalog.format("mob.ability.PHASE_DODGE", TextCatalog.vars("cooldown", cd));
+            case WRAITH_DODGE -> TextCatalog.format("mob.ability.WRAITH_DODGE", TextCatalog.vars("cooldown", cd));
         };
     }
 

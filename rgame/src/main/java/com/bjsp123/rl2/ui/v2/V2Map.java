@@ -72,25 +72,38 @@ public final class V2Map extends V2Screen {
     /** Set when the map is (re)shown so the next frame pans the graph to
      *  centre the player's current level in the viewport. Cleared once done. */
     private boolean needsCenter = true;
-    /** Zoom factor for the level graph. Snapped to one of {@link #ZOOM_STEPS}
-     *  so the map jumps cleanly between four well-defined sizes instead of
-     *  drifting through continuous factors. */
+    /** Current zoom factor for the level graph. Eases smoothly toward
+     *  {@link #targetZoom} each frame. */
     private float zoom = 1.0f;
-    /** Discrete zoom steps the wheel/pinch cycles through. Indexed by
-     *  {@link #zoomIndex}; defaults to index 1 (1x). */
-    private static final float[] ZOOM_STEPS = { 0.5f, 1.0f, 2.0f, 3.0f };
-    private int zoomIndex = 1;
+    /** Zoom target the wheel sets; {@link #zoom} eases toward it so zooming is
+     *  smooth and continuous rather than stepped. */
+    private float targetZoom = 1.0f;
+    private static final float MIN_ZOOM = 0.4f, MAX_ZOOM = 3.0f;
+    /** Multiplicative zoom change per wheel notch. */
+    private static final float ZOOM_STEP_FACTOR = 1.2f;
+    /** Exponential ease rate (per second) of zoom toward target. */
+    private static final float ZOOM_LERP_RATE = 14f;
     /** Last known cursor / finger position; updated on touchDown so
      *  drag-pan can compute deltas without losing the anchor across
      *  release-then-redrag pairs. */
     private float dragLastX, dragLastY;
     private boolean dragging;
 
+    /** When false, beacons are shown but cannot be used to teleport - the map
+     *  was opened for viewing (burger / HUD), not via a beacon interaction. */
+    private final boolean teleportEnabled;
+
     public V2Map(Rl2Game game, UiCtx ctx, Runnable onBack, World world) {
+        this(game, ctx, onBack, world, false);
+    }
+
+    public V2Map(Rl2Game game, UiCtx ctx, Runnable onBack, World world,
+                 boolean teleportEnabled) {
         super(ctx);
         this.game   = game;
         this.onBack = onBack;
         this.world  = world;
+        this.teleportEnabled = teleportEnabled;
     }
 
     @Override
@@ -139,6 +152,10 @@ public final class V2Map extends V2Screen {
         // to box selection).
         for (int i = 0; i < graph.beaconRects.size(); i++) {
             if (!graph.beaconRects.get(i).contains(vx, vy)) continue;
+            // Teleport is only offered when the map was opened via a beacon
+            // interaction (walked into / waited beside one). Otherwise the
+            // beacon is informational - swallow the tap with no teleport.
+            if (!teleportEnabled) return true;
             if (!Boolean.TRUE.equals(graph.beaconActive.get(i))) return true;
             int[] ref = graph.beaconRefs.get(i);
             // Out-of-orbs: silently swallow the click. The orb counter at
@@ -191,16 +208,12 @@ public final class V2Map extends V2Screen {
 
     @Override
     protected boolean onScrolled(float amountY) {
-        // Mouse-wheel zoom - jump to the next discrete step in or out. Wheel
-        // up (negative amountY) -> larger; down -> smaller. Pan anchored on
-        // the graph centre after the step lands.
-        int prev = zoomIndex;
-        if (amountY > 0) zoomIndex = Math.max(0, zoomIndex - 1);
-        else             zoomIndex = Math.min(ZOOM_STEPS.length - 1, zoomIndex + 1);
-        if (zoomIndex != prev) {
-            zoom = ZOOM_STEPS[zoomIndex];
-            clampPan();
-        }
+        // Smooth mouse-wheel zoom: nudge the target multiplicatively; the actual
+        // zoom eases toward it each frame in drawBodyShape. Wheel up (negative
+        // amountY) -> larger; down -> smaller.
+        if (amountY > 0) targetZoom /= ZOOM_STEP_FACTOR;
+        else             targetZoom *= ZOOM_STEP_FACTOR;
+        targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
         return true;
     }
 
@@ -210,6 +223,12 @@ public final class V2Map extends V2Screen {
         float dt = Gdx.graphics.getDeltaTime();
         beaconPulseT += dt;
         bgSwirlT     += dt;
+
+        // Ease zoom toward its target for smooth, continuous zooming.
+        if (zoom != targetZoom) {
+            zoom += (targetZoom - zoom) * Math.min(1f, dt * ZOOM_LERP_RATE);
+            if (Math.abs(targetZoom - zoom) < 0.002f) zoom = targetZoom;
+        }
 
         if (world == null || world.levels == null) return;
 
@@ -229,9 +248,10 @@ public final class V2Map extends V2Screen {
             float[] p = graph.panToCenter(world.currentLevelIndex);
             panX = p[0];
             panY = p[1];
-            clampPan();
             needsCenter = false;
         }
+        // Re-clamp every frame so the zoom ease can't leave content out of view.
+        clampPan();
         graph.panX = panX;
         graph.panY = panY;
 
@@ -301,15 +321,28 @@ public final class V2Map extends V2Screen {
      *  retain at least a small overlap with the viewport so the user
      *  can't pan it entirely off-screen. */
     private void clampPan() {
-        // Soft cap proportional to viewport - generous, only kicks in
-        // when the user pans really far. The graph stays at least
-        // half-visible no matter how far the pan tries to go.
+        if (graph == null) return;
+        float[] cb = graph.contentBoundsZeroPan();   // {x, y, w, h} at pan = 0
+        if (cb == null) return;
         Rect vp = graphViewport();
-        float maxPan = Math.max(vp.w, vp.h) * 1.5f;
-        if (panX >  maxPan) panX =  maxPan;
-        if (panX < -maxPan) panX = -maxPan;
-        if (panY >  maxPan) panY =  maxPan;
-        if (panY < -maxPan) panY = -maxPan;
+        panX = clampAxis(panX, cb[0], cb[2], vp.x, vp.w);
+        panY = clampAxis(panY, cb[1], cb[3], vp.y, vp.h);
+    }
+
+    /** Clamp one pan axis so the graph can be scrolled until a far edge reaches
+     *  the viewport edge (a small margin of breathing room), but never so far
+     *  that the content leaves the viewport. Content smaller than the viewport
+     *  is centred and can't be scrolled. */
+    private static float clampAxis(float pan, float contentMin, float contentLen,
+                                   float vpMin, float vpLen) {
+        float margin = 28f;
+        float contentMax = contentMin + contentLen;
+        if (contentLen + 2f * margin <= vpLen) {
+            return vpMin + vpLen * 0.5f - (contentMin + contentMax) * 0.5f;
+        }
+        float hi = vpMin + margin - contentMin;            // most positive shift
+        float lo = vpMin + vpLen - margin - contentMax;    // most negative shift
+        return Math.max(lo, Math.min(hi, pan));
     }
 
     /** Count of TELEPORT_ORBs the player currently carries in their bag.

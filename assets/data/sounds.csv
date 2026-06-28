@@ -1,5 +1,10 @@
 key,sfx
 sfx.game.start,sfx/t_magic_spell_healing_07.wav
+sfx.game.zoomin,sfx/magic_spell_portal_04.wav
+sfx.player.arrive,sfx/gong1.wav
+sfx.player.death,sfx/deathbeat1.wav
+sfx.boss.death,sfx/deathscreamwraith1.wav
+sfx.world.arrive.landing,sfx/susp1.wav
 sfx.item.use,sfx/t_magic_spell_potion_01.wav
 sfx.item.fail,sfx/t_ui_confirm_cancel_01.wav
 sfx.item.use.wand,sfx/t_magic_spell_black_01.wav
@@ -119,7 +124,7 @@ sfx.ui.popup,sfx/SFX_FastUiClick16.wav
 sfx.ui.popup.map,
 sfx.ui.popup.inventory,
 sfx.ui.popup.log,
-sfx.combat.result.  miss,sfx/combat_whoosh_01.wav
+sfx.combat.result.miss,sfx/combat_whoosh_01.wav
 sfx.combat.result.hit,sfx/t_hit_blood_flesh_gore_01.wav
 sfx.combat.result.block,sfx/t_shield_wood_deflect.wav
 sfx.player.combat.hit,sfx/t_hit_blood_flesh_gore_03.wav
@@ -128,3 +133,41 @@ sfx.player.combat.die,
 sfx.mob.combat.die,sfx/bone_flesh_crunch_01.wav
 sfx.player.action.eat,
 sfx.world.action.enter_level,sfx/magic_spell_portal_04.wav
+# --- newly-wired event sounds (placeholders: add a file path to enable) ---
+# combat
+sfx.combat.surprise,
+sfx.combat.flinch,
+sfx.combat.knockback,
+# heal
+sfx.player.heal,
+sfx.mob.heal,
+# buffs - generic fallback + a few per-type overrides (key = BuffType lowercased)
+sfx.buff.apply,
+sfx.buff.apply.on_fire,
+sfx.buff.apply.frozen,
+sfx.buff.apply.poisoned,
+sfx.buff.remove,
+sfx.buff.remove.on_fire,
+sfx.buff.dot,
+sfx.buff.dot.on_fire,
+sfx.buff.dot.poisoned,
+# teleport / revive
+sfx.mob.action.teleport,
+sfx.player.teleport.out,
+sfx.player.teleport.in,
+sfx.player.revive,
+# world
+sfx.world.beacon.activate,
+sfx.world.loot.drop,
+sfx.item.create,
+sfx.world.chasm.fall,
+sfx.world.chasm.itemfall,
+# surface spread - generic fallback + per-type (water/oil/blood/ice)
+sfx.world.surface,
+sfx.world.surface.water,
+sfx.world.surface.ice,
+# vegetation spread - generic fallback + per-type (grass/mushrooms/fire/trees)
+sfx.world.vegetation,
+sfx.world.vegetation.fire,
+# mushroom spore puff
+sfx.world.spore,

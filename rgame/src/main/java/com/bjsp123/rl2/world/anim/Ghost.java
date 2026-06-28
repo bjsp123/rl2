@@ -27,13 +27,17 @@ public final class Ghost {
         return frame >= AnimationVars.deathTotalFrames();
     }
 
-    /** Render alpha for the ghost - flicker twice then linear fade to zero. */
-    public float alpha() {
+    public float alpha() { return alpha(0f); }
+
+    /** Render alpha for the ghost - flicker twice then linear fade to zero.
+     *  {@code sub} (0..1) smooths the linear fade above 60 Hz; the flicker phase
+     *  stays on integer frames since it is a deliberate hard on/off blink. */
+    public float alpha(float sub) {
         if (frame < AnimationVars.deathFlickerFrames()) {
             int half = frame / AnimationVars.DEATH_FLICKER_HALF_FRAMES;
             return (half % 2 == 0) ? AnimationVars.DEATH_FLICKER_LOW_ALPHA : 1f;
         }
-        int fadeFrame = frame - AnimationVars.deathFlickerFrames();
+        float fadeFrame = (frame + sub) - AnimationVars.deathFlickerFrames();
         if (fadeFrame >= AnimationVars.DEATH_FADE_FRAMES) return 0f;
         return 1f - fadeFrame / (float) AnimationVars.DEATH_FADE_FRAMES;
     }

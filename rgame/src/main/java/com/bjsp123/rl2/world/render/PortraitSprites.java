@@ -9,15 +9,15 @@ import java.util.Map;
 
 /**
  * Lazy-loaded sprite source for the HUD's character portrait. Pulls the head + upper
- * body (top 32x32 cell) of each PLAYER class pose from the same {@code sprites/mobs.png}
+ * body (top 32x32 cell) of each PLAYER class pose from the same {@code sprites/mobs_simple.png}
  * atlas {@link MobSprites} owns. The atlas Texture itself is borrowed via
  * {@link MobSprites#sheetTexture()} so the file is only ever loaded once.
  *
- * <p>Source layout (row 0 of mobs.png at 32 px per cell):
+ * <p>Source layout (row 0 of mobs_simple.png at 32 px per cell):
  * <ul>
- *   <li>col 2 - Rogue</li>
- *   <li>col 3 - Mage</li>
- *   <li>col 4 - Warrior</li>
+ *   <li>col 0 - Rogue</li>
+ *   <li>col 3 - Warrior</li>
+ *   <li>col 4 - Mage</li>
  * </ul>
  * Each class occupies a 1x2 cell block; the upper cell ({@code y = 0..31}) is the
  * head + shoulders, which is what we extract for the portrait.
@@ -51,10 +51,10 @@ public final class PortraitSprites {
         regions.put(CharacterClass.ROGUE,   head(mobsTex, cell, COL_ROGUE));
     }
 
-    /** Crop the portrait window from the player column. We pull pixel rows 8-40
+    /** Crop the portrait window from the player column. We pull pixel rows 10-42
      *  (a 32-row band) rather than the top 32x32 cell because the player sprite's
-     *  silhouette starts a few pixels down inside its cell - the top 8 rows are
-     *  blank padding above the head, and rows 8-40 frame the head + chest cleanly
+     *  silhouette starts a few pixels down inside its cell - the top 10 rows are
+     *  blank padding above the head, and rows 10-42 frame the head + chest cleanly
      *  for a HUD avatar. */
     private static final int PORTRAIT_Y0     = 10;
     private static final int PORTRAIT_HEIGHT = 32;

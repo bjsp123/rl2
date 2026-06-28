@@ -113,8 +113,8 @@ public final class AutoplayGame {
         if (traceWriter != null) writeTraceRow(m, state, step);
     }
 
-    /** Enable per-decision tracing for this run. Opens a file
-     *  {@code rogue-trace-<seed>.csv} on first decision and writes one row
+    /** Enable per-decision tracing for this run. Opens
+     *  {@code autoplay-trace-<class>-<seed>.csv} immediately and writes one row
      *  per SmartAi decision until the run ends. Header is written immediately. */
     public void enableDecisionTrace() {
         try {
@@ -275,7 +275,7 @@ public final class AutoplayGame {
                         weapon = "FISTS";
                     }
                 }
-                case "throw", "wand", "fire wand", "grapple", "charge", "drink", "jump" -> {
+                case "throw", "wand", "grapple", "charge", "drink", "jump" -> {
                     weapon = step.intentDetail() == null ? "-"
                             : safeCsv(step.intentDetail());
                 }
@@ -642,6 +642,17 @@ public final class AutoplayGame {
                 String type = k.mob().mobType;
                 boolean byAgent = k.killer() == agent;
                 stats.bumpKill(type, depthIdx, byAgent);
+                // Death-cause attribution: when the agent itself dies, record
+                // the killer's mob type (or "ENV" for environmental). Lets the
+                // regression report tell us "agent died to ENEMY_PLAYER_ROGUE
+                // N times" alongside the cumulative-damage breakdown.
+                if (k.mob() == agent) {
+                    if (k.killer() != null && k.killer().mobType != null) {
+                        stats.deathCause = k.killer().mobType;
+                    } else {
+                        stats.deathCause = "ENV";
+                    }
+                }
             } else if (ev instanceof GameEvent.ItemThrown t) {
                 if (t.thrower() == agent && t.item() != null
                         && t.item().inventoryCategory == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
@@ -655,7 +666,46 @@ public final class AutoplayGame {
                 // Player-fired magic missile wand also lands here.
                 if (m.caster() == agent) stats.wandsFired++;
             } else if (ev instanceof GameEvent.MobMeleeAttacked m) {
-                if (m.attacker() == agent) stats.meleeAttacks++;
+                if (m.attacker() == agent) {
+                    stats.meleeAttacks++;
+                    if (m.dealt() > 0) stats.meleeDamage += m.dealt();
+                }
+            } else if (ev instanceof GameEvent.DamageDealt d) {
+                // Outgoing damage: classify wand / bomb by the cause's
+                // originating item. Melee damage is already captured from
+                // MobMeleeAttacked above; skipping it here avoids
+                // double-counting.
+                if (d.source() == agent && d.cause() != null
+                        && d.cause().originItem() != null) {
+                    com.bjsp123.rl2.model.Item.InventoryCategory cat =
+                            d.cause().originItem().inventoryCategory;
+                    if (cat == com.bjsp123.rl2.model.Item.InventoryCategory.WAND) {
+                        stats.wandDamage += d.amount();
+                    } else if (cat == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
+                        stats.bombDamage += d.amount();
+                    }
+                }
+                // Incoming damage: bucket by cause.medium (mechanism) and
+                // by source-mob type (who hit me) so the harness can show
+                // where HP is leaking.
+                if (d.target() == agent && d.amount() > 0) {
+                    stats.damageTaken += d.amount();
+                    String medium = "unknown";
+                    String src    = "ENV";
+                    if (d.cause() != null) {
+                        if (d.cause() == com.bjsp123.rl2.logic.MobSystem.DamageCause.NONE) {
+                            medium = "environment";
+                        } else if (d.cause().medium() != null
+                                && !d.cause().medium().isEmpty()) {
+                            medium = d.cause().medium();
+                        }
+                        if (d.cause().origin() != null && d.cause().origin().mobType != null) {
+                            src = d.cause().origin().mobType;
+                        }
+                    }
+                    stats.damageTakenByMedium.merge(medium, d.amount(), Integer::sum);
+                    stats.damageTakenBySource.merge(src,    d.amount(), Integer::sum);
+                }
             } else if (ev instanceof GameEvent.HealApplied h) {
                 // HealApplied fires when a potion's REGEN tick lands - imperfect
                 // proxy for "drinks". Better signal: ItemUsed events, but none of

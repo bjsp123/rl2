@@ -5,9 +5,16 @@
       "Bash(./gradlew :rlib:compileJava :rgame:compileJava)",
       "Bash(./gradlew :rlib:test)",
       "Bash(./gradlew :rlib:compileJava)",
-      "Bash(awk *)"
+      "Bash(awk *)",
+      "Bash(./gradlew :rlib:objectTable *)",
+      "mcp__notion__notion-fetch",
+      "mcp__notion__notion-query-data-sources"
     ]
   },
+  "enabledMcpjsonServers": [
+    "notion",
+    "sprite-ai"
+  ],
   "disabledMcpjsonServers": [
     "pixellab"
   ]

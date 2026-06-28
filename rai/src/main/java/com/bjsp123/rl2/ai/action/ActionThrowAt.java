@@ -45,7 +45,6 @@ public final class ActionThrowAt implements Action {
         // At point-blank prefer melee - bombs may friendly-fire / miss high-evasion.
         int d = WorldState.chebyshev(s.mob.position, s.nearestEnemy.position);
         if (d <= 1) return 0.3;
-        if (d == 2) return 0.45;
         // Stalemate-aware damping (kept so we stop spamming bombs at a kiter).
         double stalemateDamp = 0.0;
         if (s.memory != null && s.memory.stalemateTurns > 4) {
@@ -56,7 +55,13 @@ public final class ActionThrowAt implements Action {
         double dmg = com.bjsp123.rl2.ai.eval.CombatEval.expectedAttackValue(
                 s.mob, s.nearestEnemy, item,
                 com.bjsp123.rl2.ai.eval.CombatEval.AttackKind.THROW);
-        return Math.max(0.2, Math.min(1.0, 0.6 + dmg / 30.0 - stalemateDamp));
+        // d==2 used to flat-score 0.45 which lost to walk-to-melee (0.58) every
+        // time, so the agent committed to melee even with a damaging bomb in
+        // hand. Score it the same way as the d>2 case minus a small
+        // close-quarters penalty - keeps melee competitive against weak foes
+        // but lets a heavy bomb win against an armored / dodgy / dangerous one.
+        double base = d == 2 ? 0.55 : 0.6;
+        return Math.max(0.2, Math.min(1.0, base + dmg / 30.0 - stalemateDamp));
     }
     @Override public void execute(Mob mob, Level level) {
         MobSystem.throwItem(level, mob, item, dest);

@@ -97,6 +97,17 @@ public final class BuffSystem {
     public static Buff apply(Level level, Mob target, BuffType type,
                              int stacks, Mob source,
                              com.bjsp123.rl2.model.Item sourceItem) {
+        return apply(level, target, type, stacks, source, sourceItem, stackCap(type));
+    }
+
+    /** Apply overload that overrides the normal {@link #stackCap(BuffType)} for
+     *  this single application, letting a special source push a buff past its
+     *  usual ceiling. Used by the Invulnerability scroll (SC_SHIELD_SELF) to
+     *  grant 100 turns of SHIELDED even though the ordinary cap is 10. Every
+     *  routine call still goes through the cap-respecting overloads above. */
+    public static Buff apply(Level level, Mob target, BuffType type,
+                             int stacks, Mob source,
+                             com.bjsp123.rl2.model.Item sourceItem, int capOverride) {
         if (target == null || type == null) return null;
         if (target.buffs == null) target.buffs = new java.util.ArrayList<>();
         // Hope grants immunity to FRIGHTENED - silently swallow incoming fear while
@@ -113,7 +124,7 @@ public final class BuffSystem {
             removeBuff(target, BuffType.CHILLED);
         }
 
-        int cap = stackCap(type);
+        int cap = Math.max(stackCap(type), capOverride);
         int newStacks = Math.max(1, Math.min(cap, stacks));
         Buff existing = get(target, type);
         if (existing != null) {
@@ -331,7 +342,7 @@ public final class BuffSystem {
             || type == Buff.BuffType.RANGED_COOLDOWN
             || type == Buff.BuffType.HASTE_COOLDOWN
             || type == Buff.BuffType.HEAL_COOLDOWN
-            || type == Buff.BuffType.PHASE_DODGE_COOLDOWN;
+            || type == Buff.BuffType.WRAITH_DODGE_COOLDOWN;
     }
 
     /** Per-turn effect for one buff. Damage / heal happens via
@@ -456,10 +467,14 @@ public final class BuffSystem {
                 // other ground hazards gated on flying) for the buff's duration.
                 case LEVITATING -> dst.flying = true;
                 case PHASE -> {
-                    // Phasing makes the mob very hard to hit - it's flickering
-                    // half out of reality. Far above INVISIBLE's +40.
-                    dst.evasion += 150;
-                    moveMultiplier *= 0.3;
+                    // Phasing is the rogue's signature: she flickers half
+                    // out of reality, harder to hit and twice as fast at
+                    // both moving and attacking. Persists through both
+                    // dealing and taking damage (see MobSystem.processAttack),
+                    // so the full duration runs out before the buff drops.
+                    dst.evasion     += 100;
+                    moveMultiplier   *= 0.5;
+                    actionMultiplier *= 0.5;
                 }
                 case HASTED -> moveMultiplier *= Math.pow(0.8, b.stacks);
                 case KILLER -> {

@@ -16,7 +16,8 @@ import java.util.List;
  * a list of buttons (so subclasses just append rather than implementing hit
  * tests), and the always-on chrome (top-right burger, optional bottom-right
  * back). Screens override {@link #buildLayout()} once on show, and
- * {@link #drawBody(UiCtx)} every frame.
+ * {@link #drawBodyShape(UiCtx)} + {@link #drawBodyText(UiCtx)} every frame
+ * (a shape pass then a batch/text pass).
  *
  * <p>Render lifecycle each frame:
  * <ol>

@@ -20,10 +20,27 @@ public enum Achievement {
     INTO_THE_DEPTHS    (Category.EXPLORATION, false),
     FIRST_BLOOD        (Category.COMBAT, false),
     GIANT_SLAYER       (Category.COMBAT, true),
+    KILLED_ONE_OF_EACH (Category.COMBAT, true),
+    PEST_CONTROLLER    (Category.COMBAT, true),
+    KOBOLD_KRUSHER     (Category.COMBAT, true),
+    CAT_MURDERER       (Category.COMBAT, true),
+    ORC_SLAYER         (Category.COMBAT, true),
+    BLOBBICIDE         (Category.COMBAT, true),
     LEVELED_UP         (Category.PROGRESSION, false),
     WAND_NEWBIE        (Category.ITEMS, false),
     THROWN_AWAY        (Category.ITEMS, false),
-    HALL_OF_FAMER      (Category.RUN, false);
+    LIT_5_BEACONS      (Category.PROGRESSION, false),
+    LIT_10_BEACONS     (Category.PROGRESSION, false),
+    HALL_OF_FAMER      (Category.RUN, false),
+    WIN_WARRIOR        (Category.RUN, false),
+    WIN_ROGUE          (Category.RUN, false),
+    WIN_MAGE           (Category.RUN, false),
+    PERFECT_WIN_WARRIOR(Category.RUN, false),
+    PERFECT_WIN_ROGUE  (Category.RUN, false),
+    PERFECT_WIN_MAGE   (Category.RUN, false),
+    WIN_NORMAL         (Category.RUN, false),
+    WIN_HARD           (Category.RUN, false),
+    WIN_VERY_HARD      (Category.RUN, false);
 
     public final Category category;
     public final boolean  hidden;

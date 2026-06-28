@@ -39,7 +39,7 @@ public final class MobProgression {
     private MobProgression() {}
 
     /** Hard cap on per-perk level used by {@link #autoLevelUpPerks}. */
-    private static final int PERK_LEVEL_CAP = 10;
+    private static final int PERK_LEVEL_CAP = 8;
 
     /** XP cost to advance from {@code fromLevel} to {@code fromLevel + 1}. */
     public static int xpToAdvanceFrom(int fromLevel) {
@@ -73,6 +73,30 @@ public final class MobProgression {
             gained++;
         }
         return gained;
+    }
+
+    /**
+     * Depth-adjusted spawn level for a mob of definition {@code def} appearing
+     * on {@code level}. A mob whose depth-fraction band starts exactly at this
+     * level spawns at level 1; for every {@link GameBalance#MOB_DEPTH_LEVEL_SCALE}
+     * the level's depth-fraction is above {@code def.powerMin} the spawn gains
+     * one level, capped at {@link GameBalance#MAX_MOB_DEPTH_LEVEL_SCALE} extra
+     * levels. Clamped to [1, {@link GameBalance#MAX_CHARACTER_LEVEL}].
+     *
+     * <p>When {@code def} is null (unknown mob type) or its band isn't set,
+     * falls back to level 1 - safer than the old {@code 1 + level.depth} which
+     * over-leveled unknown / out-of-band spawns.
+     */
+    public static int depthAdjustedSpawnLevel(com.bjsp123.rl2.model.Level level,
+                                              MobDefinition def) {
+        if (level == null) return 1;
+        double frac = LevelFactoryPopulate.depthFraction(level);
+        double min  = def == null ? frac : def.powerMin;
+        double over = frac - min;
+        int extra   = over <= 0 ? 0
+                : Math.min(GameBalance.MAX_MOB_DEPTH_LEVEL_SCALE,
+                        (int) Math.floor(over / Math.max(1e-9, GameBalance.MOB_DEPTH_LEVEL_SCALE)));
+        return Math.min(GameBalance.MAX_CHARACTER_LEVEL, 1 + extra);
     }
 
     /**

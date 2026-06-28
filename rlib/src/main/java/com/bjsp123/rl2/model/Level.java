@@ -74,7 +74,7 @@ public class Level {
      * for the per-turn drift / spread / emission rules.
      */
     public enum Cloud {
-        SMOKE, STEAM, POISON
+        SMOKE, STEAM, POISON, SPORE
     }
 
     /**
@@ -105,7 +105,7 @@ public class Level {
      * rules (stairs vanishing on entry, horde spawner, win conditions).
      */
     public enum LevelKind {
-        REGULAR, LANDING, MIRRORMATCH, HORDE, WALKWAY, FINAL_BOSS
+        REGULAR, LANDING, MIRRORMATCH, HORDE, WALKWAY, FINAL_BOSS, EXIT_PORTAL
     }
 
     public int width;
@@ -184,6 +184,18 @@ public class Level {
      *  {@link com.bjsp123.rl2.logic.FireSystem}; on zero/negative, a particle Effect is
      *  spawned and the counter resets to ~50. Transient - emit cadence is purely visual. */
     public transient int[][] fireEmitCountdown;
+
+    /** Per-tile countdown until a MUSHROOMS vegetation tile emits a spore cloud;
+     *  0 elsewhere. Ticked by {@link com.bjsp123.rl2.logic.CloudSystem}; on
+     *  reaching 0 the tile emits a {@link Cloud#SPORE} cloud and resets to
+     *  {@code MUSHROOM_SPORE_INTERVAL}. Transient - re-seeded (staggered 0-6 so
+     *  mushrooms don't fire in lockstep) on the first tick after gen / load,
+     *  gated by {@link #sporesSeeded}. */
+    public transient int[][] sporeCountdown;
+    /** False until {@link com.bjsp123.rl2.logic.CloudSystem} has seeded the
+     *  {@link #sporeCountdown} for this level's mushroom tiles. Transient, so a
+     *  loaded level re-seeds (fresh stagger) on its next tick. */
+    public transient boolean sporesSeeded;
 
     /** Back-reference to the {@link World} that owns this level. Set by
      *  {@link World#linkLevels} on construction and on save load (after
@@ -404,6 +416,7 @@ public class Level {
         this.vegetation = new Vegetation[width][height];
         this.fireRemaining     = new int[width][height];
         this.fireEmitCountdown = new int[width][height];
+        this.sporeCountdown    = new int[width][height];
         this.explored = new boolean[width][height];
         this.lit = new boolean[width][height];
         this.visible = new boolean[width][height];
@@ -430,6 +443,7 @@ public class Level {
         if (vegetation == null) vegetation = new Vegetation[width][height];
         if (fireRemaining     == null) fireRemaining     = new int[width][height];
         if (fireEmitCountdown == null) fireEmitCountdown = new int[width][height];
+        if (sporeCountdown == null) sporeCountdown = new int[width][height];
         if (flags      == null) flags      = new HashSet<>();
         if (theme      == null) theme      = VisualTheme.CRYSTAL;
         if (layout     == null) layout     = Layout.BSP;

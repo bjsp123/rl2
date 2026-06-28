@@ -67,9 +67,21 @@ public final class AchievementSystem {
         if (ev instanceof GameEvent.MobKilled m) {
             if (player != null && m.killer() == player && m.mob() != null) {
                 unlock(Achievement.FIRST_BLOOD);
-                MobDefinition def = Registries.mob(m.mob().mobType);
+                String type = m.mob().mobType;
+                MobDefinition def = Registries.mob(type);
                 if (def != null && def.unique) {
                     unlock(Achievement.GIANT_SLAYER);
+                }
+                // Career bestiary: track every species killed so the player
+                // can chase "kill one of each" plus the per-faction subsets
+                // (kobolds, orcs, pests, blobs, Pangur Ban). Player-class kit
+                // rows aren't killable mobs; skip them so the all-species
+                // goal stays achievable.
+                if (type != null && !isPlayerKitType(type)
+                        && achievements != null
+                        && achievements.killedMobTypes.add(type)) {
+                    AchievementsStore.save(persistence, achievements);
+                    checkBestiaryUnlocks();
                 }
             }
         } else if (ev instanceof GameEvent.WandMissileFired m) {
@@ -103,7 +115,118 @@ public final class AchievementSystem {
     public void observeRunEnded(HallOfFameEntry entry) {
         if (entry == null) return;
         unlock(Achievement.HALL_OF_FAMER);
+        // Career beacon thresholds: the entry carries the BEST single-run
+        // beacon count, but we want the per-run total. {@code entry.beaconsLit}
+        // is the run total - good enough as the trigger.
+        if (entry.beaconsLit >= 5)  unlock(Achievement.LIT_5_BEACONS);
+        if (entry.beaconsLit >= 10) unlock(Achievement.LIT_10_BEACONS);
+        // Win-conditional achievements: class win, perfect win per class,
+        // and difficulty-tier wins. {@code entry.charClass} is the enum
+        // name ("WARRIOR" / "ROGUE" / "MAGE"); {@code entry.difficulty}
+        // is the GameBalance.Difficulty enum name; legacy entries default
+        // to NORMAL so a pre-difficulty save still scores the easier
+        // achievement.
+        if (!entry.victory) return;
+        String cls  = entry.charClass == null ? "" : entry.charClass;
+        String diff = entry.difficulty == null ? "" : entry.difficulty;
+        switch (cls) {
+            case "WARRIOR" -> {
+                unlock(Achievement.WIN_WARRIOR);
+                if (entry.allBeaconsLit) unlock(Achievement.PERFECT_WIN_WARRIOR);
+            }
+            case "ROGUE" -> {
+                unlock(Achievement.WIN_ROGUE);
+                if (entry.allBeaconsLit) unlock(Achievement.PERFECT_WIN_ROGUE);
+            }
+            case "MAGE" -> {
+                unlock(Achievement.WIN_MAGE);
+                if (entry.allBeaconsLit) unlock(Achievement.PERFECT_WIN_MAGE);
+            }
+            default -> { /* unknown class - skip per-class achievements */ }
+        }
+        switch (diff) {
+            case "NORMAL"    -> unlock(Achievement.WIN_NORMAL);
+            case "HARD"      -> unlock(Achievement.WIN_HARD);
+            case "VERY_HARD" -> unlock(Achievement.WIN_VERY_HARD);
+            default -> { /* EASY / GENTLE / SUPEREASY wins don't unlock anything here */ }
+        }
     }
+
+    /** Player-class kit rows in mobs.csv that the player never actually
+     *  encounters as a mob to fight. Their ENEMY_PLAYER_* counterparts are
+     *  the enemy mirror-matches and DO count. */
+    private static boolean isPlayerKitType(String type) {
+        return "PLAYER_WARRIOR".equals(type)
+            || "PLAYER_ROGUE".equals(type)
+            || "PLAYER_MAGE".equals(type);
+    }
+
+    /** True when {@link Achievements#killedMobTypes} contains every
+     *  killable mob species. Walked over the live registry so future
+     *  species automatically join the requirement. */
+    private boolean killedAllSpecies() {
+        if (achievements == null) return false;
+        for (String type : Registries.mobTypes()) {
+            if (isPlayerKitType(type)) continue;
+            if (!achievements.killedMobTypes.contains(type)) return false;
+        }
+        return true;
+    }
+
+    /** Faction kill-set achievements (kobolds, orcs, pests, blobs, Pangur Ban)
+     *  plus the bestiary-complete sweep. Each requirement is a list of slots;
+     *  every slot must be filled by killing ANY species in its alternatives
+     *  set, so a unique counts the same as its base species (e.g. either RAT
+     *  or UNIQUE_RAT satisfies the "rat" slot). Called after a new species
+     *  lands in {@link Achievements#killedMobTypes}; each {@code unlock}
+     *  short-circuits if already on the books, so re-evaluating every kill
+     *  is cheap. */
+    private void checkBestiaryUnlocks() {
+        if (achievements == null) return;
+        java.util.Set<String> killed = achievements.killedMobTypes;
+        if (slotsFilled(killed, PEST_SLOTS))   unlock(Achievement.PEST_CONTROLLER);
+        if (slotsFilled(killed, KOBOLD_SLOTS)) unlock(Achievement.KOBOLD_KRUSHER);
+        if (slotsFilled(killed, CAT_SLOTS))    unlock(Achievement.CAT_MURDERER);
+        if (slotsFilled(killed, ORC_SLOTS))    unlock(Achievement.ORC_SLAYER);
+        if (slotsFilled(killed, BLOB_SLOTS))   unlock(Achievement.BLOBBICIDE);
+        if (killedAllSpecies())                unlock(Achievement.KILLED_ONE_OF_EACH);
+    }
+
+    /** Every slot satisfied: each slot is an alternatives set, and the slot
+     *  is filled when {@code killed} contains at least one of its options. */
+    private static boolean slotsFilled(java.util.Set<String> killed,
+                                       java.util.List<java.util.Set<String>> slots) {
+        for (java.util.Set<String> slot : slots) {
+            boolean any = false;
+            for (String opt : slot) {
+                if (killed.contains(opt)) { any = true; break; }
+            }
+            if (!any) return false;
+        }
+        return true;
+    }
+
+    /** Each slot lists every species that fills it - a base species and any
+     *  {@code UNIQUE_*} variant. Killing either counts. */
+    private static final java.util.List<java.util.Set<String>> PEST_SLOTS = java.util.List.of(
+            java.util.Set.of("RAT",           "UNIQUE_RAT"),
+            java.util.Set.of("SPIDER",        "UNIQUE_SPIDER"),
+            java.util.Set.of("SOLDIER_BUG",   "UNIQUE_SOLDIER_BUG"),
+            java.util.Set.of("LOATHESOME_BUG","UNIQUE_LOATHESOME_BUG"));
+    private static final java.util.List<java.util.Set<String>> KOBOLD_SLOTS = java.util.List.of(
+            java.util.Set.of("KOBOLD_FIGHTER",  "UNIQUE_KOBOLD_FIGHTER"),
+            java.util.Set.of("KOBOLD_SPEARMAN", "UNIQUE_KOBOLD_SPEARMAN"),
+            java.util.Set.of("KOBOLD_CLEAVER",  "UNIQUE_KOBOLD_CLEAVER"),
+            java.util.Set.of("KOBOLD_GENERAL",  "UNIQUE_KOBOLD_GENERAL"));
+    private static final java.util.List<java.util.Set<String>> ORC_SLOTS = java.util.List.of(
+            java.util.Set.of("ORC_HALBERDIER", "UNIQUE_ORC_HALBERDIER"),
+            java.util.Set.of("ORC_PRESIDENT",  "UNIQUE_ORC_PRESIDENT"),
+            java.util.Set.of("ORC_SNIPER",     "UNIQUE_ORC_SNIPER"));
+    private static final java.util.List<java.util.Set<String>> BLOB_SLOTS = java.util.List.of(
+            java.util.Set.of("BLOB",      "UNIQUE_BLOB"),
+            java.util.Set.of("KISSYBLOB", "UNIQUE_KISSYBLOB"));
+    private static final java.util.List<java.util.Set<String>> CAT_SLOTS = java.util.List.of(
+            java.util.Set.of("CAT_PB", "UNIQUE_CAT_PB"));
 
     // -- Internal --------------------------------------------------------
 

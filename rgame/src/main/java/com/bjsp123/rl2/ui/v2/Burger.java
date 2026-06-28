@@ -6,8 +6,8 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
  * Top-right burger icon - present on every V2 screen per CLAUDE.md ("burger
- * menu always present"). Draws a 56x56 button containing three short
- * horizontal bars stacked vertically. Tap behaviour is owned by the screen
+ * menu always present"). Draws a {@code SIZE}x{@code SIZE} (36px) button
+ * containing three short horizontal bars stacked vertically. Tap behaviour is owned by the screen
  * (typically: open a small overlay with Title / Settings / Encyclopaedia).
  *
  * <p>For now the click target is wired but the overlay isn't implemented - it
