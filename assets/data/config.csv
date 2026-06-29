@@ -95,11 +95,11 @@ gamebalance,HURLER_RANGE_PER_LEVEL,2
 gamebalance,FIRE_DAMAGE_PER_TURN,8
 gamebalance,BOMB_DODGER_DAMAGE_BASE,0.5
 gamebalance,KNOCKBACK_TILE_CAP,5
-gamebalance,rules.surprise.damageMult,1.5
-gamebalance,rules.surprise.surpriseIfNoLOSNow,true
-gamebalance,rules.surprise.surpriseIfNoLOSLastTurn,true
-gamebalance,rules.surprise.allowThrow,true
-gamebalance,rules.surprise.allowAllTargetedAttackTypes,false
+gamebalance,RULES_SURPRISE_DAMAGE_MULT,1.5
+gamebalance,RULES_SURPRISE_SURPRISE_IF_NO_LOS_NOW,true
+gamebalance,RULES_SURPRISE_SURPRISE_IF_NO_LOS_LAST_TURN,true
+gamebalance,RULES_SURPRISE_ALLOW_THROW,true
+gamebalance,RULES_SURPRISE_ALLOW_ALL_TARGETED_ATTACK_TYPES,false
 gamebalance,AI_GUARDRAIL_COST,150
 gamebalance,TURN_LOOP_FRAME_BUDGET_MS,8
 gamebalance,PROFILING_ENABLED,true

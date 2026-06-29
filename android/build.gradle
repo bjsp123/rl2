@@ -79,6 +79,9 @@ configurations.all {
 
 dependencies {
     implementation project(':rgame')
+    // Registers the SMART player brain + AutoExplore driver (RaiBootstrap.init);
+    // without it auto-explore is a no-op on Android (mirrors the desktop launcher).
+    implementation project(':rai')
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
     implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
     // Play Billing - dependency only; the BillingService wrapper that uses

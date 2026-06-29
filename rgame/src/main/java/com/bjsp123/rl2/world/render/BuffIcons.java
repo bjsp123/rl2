@@ -72,9 +72,9 @@ public final class BuffIcons {
      *  {@value #ICON32_ROW0} + k / {@value #ICON32_COLS}. */
     private static final int ICON32_COLS  = 10;     // 320 / SLASH_CELL
     private static final int ICON32_ROW0  = 2;      // grid rows 0,1 = buff bands + slash
-    /** First cloud's flat index - clouds follow the 11-perk block (Perk has 11
+    /** First cloud's flat index - clouds follow the 12-perk block (Perk has 12
      *  ordinals). Keep in sync with {@code assets/scratch/gen_icons.py}. */
-    private static final int CLOUD_ICON_K0 = 11;
+    private static final int CLOUD_ICON_K0 = 12;
 
     /** Placeholder 32x32 icon for the perk with the given {@code Perk} ordinal,
      *  or {@code null} on load failure / out-of-bounds. */

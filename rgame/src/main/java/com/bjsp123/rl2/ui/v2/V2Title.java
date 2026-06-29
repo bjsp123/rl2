@@ -4,8 +4,8 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.logic.TextCatalog;
-import com.bjsp123.rl2.save.SaveMetadata;
 import com.bjsp123.rl2.save.SaveSystem;
+import com.bjsp123.rl2.save.SaveSystem.SaveMetadata;
 
 /**
  * V2 title screen - game logo at the top, vertical column of chunky buttons
@@ -118,10 +118,15 @@ public final class V2Title extends V2Screen {
     }
 
     private void drawButtonGlow(ShapeRenderer s, Btn b) {
-        for (int i = 4; i >= 1; i--) {
-            float grow = i * 5f;
-            float alpha = 0.08f + i * 0.035f;
-            s.setColor(0f, 0f, 0f, alpha);
+        // Many thin concentric rings at a low constant alpha, drawn
+        // outer -> inner. The overlap accumulates so the halo is darkest
+        // hugging the button and fades smoothly to nothing at the edge,
+        // over a narrow spread (no hard outer band, no visible steps).
+        int n = 8;
+        float spread = 6f;
+        for (int i = n; i >= 1; i--) {
+            float grow = spread * i / n;
+            s.setColor(0f, 0f, 0f, 0.05f);
             s.rect(b.rect.x - grow, b.rect.y - grow,
                     b.rect.w + grow * 2f, b.rect.h + grow * 2f);
         }

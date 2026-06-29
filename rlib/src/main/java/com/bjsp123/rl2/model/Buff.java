@@ -32,17 +32,17 @@ public class Buff {
         /** Mob is currently burning. Takes fire damage per turn, ignites flammable
          *  terrain underfoot, drops a {@code fire} VFX. Source: stepping on a fire
          *  tile or being hit by a wand of fire / fire bomb / etc. */
-        ON_FIRE,
+        ON_FIRE(8),
         /** Mob flees all other mobs while active. Applied when adjacent to a mob with
          *  {@link Mob#terrifying} (and the receiver is {@link Mob#terrifiable}). */
-        FRIGHTENED,
+        FRIGHTENED(2),
         /** Mob is drawn semi-transparent, gains +40 evasion, can't be picked as a
          *  ranged-attack target. Effect ends if the mob attacks. */
-        INVISIBLE,
+        INVISIBLE(20),
         /** Mob flies, can pass through walls, +20 evasion. */
-        GHOSTLY,
+        GHOSTLY(20),
         /** Mob flies but doesn't pass through walls. */
-        LEVITATING,
+        LEVITATING(20),
         /** Resists non-physical damage (magic missiles, fire). Damage is divided by
          *  {@code 2^stacks} before application. */
         ANTI_MAGIC,
@@ -69,12 +69,12 @@ public class Buff {
         /** Slick with oil. Takes double damage from fire. If size > 2 and not flying,
          *  has a 50% chance per step to leave an OIL surface in the cell it left.
          *  Applied by oil bombs / oil-wand impacts that splash directly onto the mob. */
-        OILY,
+        OILY(3),
         /** Soaked through. Takes double damage from lightning attacks. */
-        WET,
+        WET(2),
         /** Encased in ice after being chilled and wet at the same time. Cannot
          *  move or act; taking damage chips two turns off the duration. */
-        FROZEN,
+        FROZEN(5),
         /** Cooldown buffs - present means "can't fire yet"; duration counts down per
          *  standard turn until the buff drops and the action becomes available again.
          *  Replace the legacy {@code MobCooldowns} fields. They share a single
@@ -98,7 +98,7 @@ public class Buff {
          *  {@code BuffSystem.KILLER_MIN_COST} so a long kill streak tops out
          *  rather than reaching near-zero cost. Duration {@code 8 + 2*stacks}
          *  standard turns, refreshed on each kill. */
-        KILLER,
+        KILLER(30),
         /** Open-wound DOT. Per standard turn the mob loses
          *  {@code max(1, 3*stacks/4)} HP - strong at first then tapers as the
          *  stacks count down each turn. Doesn't stack with itself (apply takes
@@ -107,14 +107,23 @@ public class Buff {
         BLEEDING,
         /** Mob moves at 30% of normal action cost (+20 evasion). Ends instantly when
          *  the mob takes or deals any damage. */
-        PHASE,
+        PHASE(20),
         /** Complete immunity to all incoming damage. Duration counts down per
          *  standard turn. Does not block self-inflicted healing or stat effects. */
         SHIELDED,
         /** A reanimated kill fighting for the final boss (final-boss floor).
          *  Cosmetic only - the renderer desaturates + blurs the mob's edges;
          *  no stat effect. Used to mark + visually distinguish boss revenants. */
-        REVENANT
+        REVENANT;
+
+        /** Maximum stacks a buff of this type can hold; re-applying never pushes
+         *  it past this cap. Defaults to 10 (the {@code BuffType()} no-arg ctor);
+         *  the handful of types above override it (RL-43). A caller may still
+         *  raise it per-apply, as the Invulnerability scroll does. */
+        public final int stackCap;
+
+        BuffType()             { this(10); }
+        BuffType(int stackCap) { this.stackCap = stackCap; }
     }
 
     public BuffType type;

@@ -17,10 +17,32 @@ import com.bjsp123.rl2.model.Mob;
 public final class ActionBar {
 
     /** Maximum number of HUD action buttons. Matches the largest quickslot
-     *  count choice (10) and the size of {@link com.bjsp123.rl2.model.Mob#actionSlotTypes};
+     *  count choice (12) and the size of {@link com.bjsp123.rl2.model.Mob#actionSlotTypes};
      *  the visible count is controlled by
      *  {@link com.bjsp123.rl2.ui.skin.Settings#quickslotCount}. */
-    public static final int SLOTS = 10;
+    public static final int SLOTS = 12;
+
+    /** Hotkey/display label for a 0-based quickslot index: 1-9 for the first
+     *  nine, then {@code 0} for the tenth, {@code A} for the eleventh, {@code B}
+     *  for the twelfth (matching the keyboard bindings in {@code GameInput}). */
+    public static String slotLabel(int i) {
+        if (i < 0)  return "";
+        if (i < 9)  return Integer.toString(i + 1);
+        if (i == 9) return "0";
+        if (i == 10) return "A";
+        if (i == 11) return "B";
+        return "";
+    }
+
+    /** The slot index currently bound to {@code it} (by object identity), or
+     *  {@code -1} if it isn't bound to any quickslot. */
+    public int indexOf(Item it) {
+        if (it == null) return -1;
+        for (int i = 0; i < SLOTS; i++) {
+            if (slots[i] == it) return i;
+        }
+        return -1;
+    }
 
     private final Item[] slots = new Item[SLOTS];
     /** Player Mob this action bar persists into. Set by {@link #bindToPlayer}

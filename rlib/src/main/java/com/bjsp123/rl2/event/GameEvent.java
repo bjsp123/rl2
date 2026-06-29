@@ -254,10 +254,12 @@ public sealed interface GameEvent permits
      *  need to know which - the sprite animation is the same. */
     record MobFellThroughChasm(Mob mob, Point fromTile) implements GameEvent {}
 
-    /** Mob jumped from {@code from} to {@code to} via a JUMP-behavior item.
-     *  The animator slides the sprite across the intervening tiles as a
-     *  non-blocking hop and emits departure/landing dust clouds. */
-    record MobJumped(Mob mob, Point from, Point to) implements GameEvent {}
+    /** Mob jumped/dashed from {@code from} to {@code to} via a JUMP-behavior
+     *  (frog) or CHARGE-behavior (jade bull) item. The animator slides the
+     *  sprite across the intervening tiles as a non-blocking hop, emits
+     *  departure/landing dust clouds, and derives the move's sound from
+     *  {@code item} so a charge and a frog-hop sound different. */
+    record MobJumped(Mob mob, Point from, Point to, Item item) implements GameEvent {}
 
     /** Mob phase-dodged an incoming attack: it slid from {@code from} to {@code to}
      *  (an adjacent free square), negating the hit. The animator plays a quick smooth

@@ -4,6 +4,7 @@ import com.badlogic.gdx.utils.Json;
 import com.badlogic.gdx.utils.JsonReader;
 import com.badlogic.gdx.utils.JsonValue;
 import com.bjsp123.rl2.persistence.Persistence;
+import com.bjsp123.rl2.save.ArenaHallOfFame.ArenaHallOfFameEntry;
 
 import java.util.ArrayList;
 

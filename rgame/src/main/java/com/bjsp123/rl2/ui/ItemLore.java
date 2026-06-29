@@ -172,7 +172,8 @@ public final class ItemLore {
             com.bjsp123.rl2.logic.BrandDefinition b = it.brand;
             String brandName = b.name != null && !b.name.isEmpty()
                     ? b.name : b.brand;
-            flag(bnd, "Brand: " + brandName);
+            flag(bnd, TextCatalog.format("item.header.brand",
+                    TextCatalog.vars("brand", brandName)));
             int bDmg = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.damage,    effLvl);
             int bArm = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.armor,     effLvl);
             int bAM  = com.bjsp123.rl2.logic.ItemStats.scaleAmount(b.antimagic, effLvl);
@@ -184,28 +185,28 @@ public final class ItemLore {
             // Brand stats scale via the same {@link ItemStats#scaleIncrement}
             // rule as the host item's intrinsic stats, so we surface the
             // per-level deltas dynamically too.
-            if (bDmg > 0) line(bnd, "+dmg",     "+" + bDmg,
+            if (bDmg > 0) line(bnd, TextCatalog.get("lore.brand.damage"), "+" + bDmg,
                     perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.damage)));
-            if (bArm > 0) line(bnd, "+armor",   "+" + bArm,
+            if (bArm > 0) line(bnd, TextCatalog.get("lore.brand.armor"), "+" + bArm,
                     perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.armor)));
-            if (bAM  > 0) line(bnd, "+resist",  "+" + bAM,
+            if (bAM  > 0) line(bnd, TextCatalog.get("lore.brand.magicResist"), "+" + bAM,
                     perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.antimagic)));
-            if (bAcc != 0) line(bnd, "+acc",    (bAcc > 0 ? "+" : "") + bAcc,
+            if (bAcc != 0) line(bnd, TextCatalog.get("lore.brand.accuracy"), (bAcc > 0 ? "+" : "") + bAcc,
                     perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(Math.abs(b.accuracy))));
-            if (bEva != 0) line(bnd, "+eva",    (bEva > 0 ? "+" : "") + bEva,
+            if (bEva != 0) line(bnd, TextCatalog.get("lore.brand.evasion"), (bEva > 0 ? "+" : "") + bEva,
                     perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(Math.abs(b.evasion))));
-            if (bKb  > 0) line(bnd, "+kb",      "+" + bKb,
+            if (bKb  > 0) line(bnd, TextCatalog.get("lore.brand.knockback"), "+" + bKb,
                     perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.knockback,
                             com.bjsp123.rl2.logic.GameBalance.KNOCKBACK_LEVEL_SCALE_FACTOR)));
-            if (b.attackSpeed != 1.0) line(bnd, "atkSpd", speedLabel(b.attackSpeed), "");
-            if (b.moveSpeed   != 1.0) line(bnd, "movSpd", speedLabel(b.moveSpeed),   "");
+            if (b.attackSpeed != 1.0) line(bnd, TextCatalog.get("lore.brand.attackSpeed"), speedLabel(b.attackSpeed), "");
+            if (b.moveSpeed   != 1.0) line(bnd, TextCatalog.get("lore.brand.moveSpeed"), speedLabel(b.moveSpeed),   "");
             if (b.element != null) {
-                line(bnd, "on hit", readableBrandEffect(b.element) + (bEpw > 0 ? " (" + bEpw + ")" : ""),
+                line(bnd, TextCatalog.get("lore.brand.onHit"), readableBrandEffect(b.element) + (bEpw > 0 ? " (" + bEpw + ")" : ""),
                         perLevel(com.bjsp123.rl2.logic.ItemStats.scaleIncrement(b.elementpower)));
             }
-            if (b.sorcery)      flag(bnd, "+sorcery");
-            if (b.resistFire)   flag(bnd, "+fire resist");
-            if (b.resistPoison) flag(bnd, "+poison resist");
+            if (b.sorcery)      flag(bnd, TextCatalog.get("lore.brand.sorcery"));
+            if (b.resistFire)   flag(bnd, TextCatalog.get("lore.brand.fireResist"));
+            if (b.resistPoison) flag(bnd, TextCatalog.get("lore.brand.poisonResist"));
             if (bnd.length() > 0) sb.append('\n').append(bnd);
         }
 
@@ -462,10 +463,10 @@ public final class ItemLore {
     private static String readableBrandEffect(Item.ItemEffect element) {
         if (element == null) return "";
         return switch (element) {
-            case FIRE        -> "burns the target";
-            case LIGHTNING   -> "shocks the target";
-            case FREEZE      -> "chills the target";
-            case POISONCLOUD -> "poisons the target";
+            case FIRE        -> TextCatalog.get("lore.brand.effect.fire");
+            case LIGHTNING   -> TextCatalog.get("lore.brand.effect.lightning");
+            case FREEZE      -> TextCatalog.get("lore.brand.effect.freeze");
+            case POISONCLOUD -> TextCatalog.get("lore.brand.effect.poison");
             default          -> element.name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
         };
     }

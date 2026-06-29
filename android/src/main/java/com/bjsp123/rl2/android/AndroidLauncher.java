@@ -9,6 +9,10 @@ public class AndroidLauncher extends AndroidApplication {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Register the SMART mob brain + AutoExplore driver before Rl2Game loads,
+        // exactly as DesktopLauncher does - otherwise the auto-explore button is
+        // inert on Android (the driver is null, so a toggle stops immediately).
+        com.bjsp123.rl2.ai.RaiBootstrap.init();
         AndroidApplicationConfiguration config = new AndroidApplicationConfiguration();
         config.useImmersiveMode = true;
         initialize(new Rl2Game(new AndroidPersistence(this)), config);

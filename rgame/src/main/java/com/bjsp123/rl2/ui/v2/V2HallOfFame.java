@@ -6,7 +6,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.HallOfFameEntry;
-import com.bjsp123.rl2.save.Achievement;
+import com.bjsp123.rl2.save.Achievements.Achievement;
 import com.bjsp123.rl2.world.render.IconSprites;
 import com.bjsp123.rl2.world.render.PortraitSprites;
 

@@ -228,9 +228,18 @@ public final class ItemGenerator {
         }
         if (it == null) return null;
         ItemDefinition d = Registries.item(type);
-        // Food-category items (edible food AND walk-over powerups) are always
-        // level 0 - their effect is flat, and effectiveLevel forces POWERUP to
-        // 0 anyway, so a stamped level would just be a misleading ghost value.
+        applyFinishingTouches(it, d, powerLevel, rng);
+        return it;
+    }
+
+    /** Stamp the power-scaled plusses, top up charges, and roll a random brand
+     *  on a freshly built item. Shared by {@link #buildItem} (named item) and
+     *  {@link #finishItem} (randomly rolled item).
+     *  Food-category items (edible food AND walk-over powerups) stay at level 0
+     *  - their effect is flat, and effectiveLevel forces POWERUP to 0 anyway, so
+     *  a stamped level would just be a misleading ghost value. */
+    private static void applyFinishingTouches(Item it, ItemDefinition d,
+                                              double powerLevel, Random rng) {
         if (d != null && it.inventoryCategory != Item.InventoryCategory.FOOD) {
             it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
         }
@@ -238,7 +247,6 @@ public final class ItemGenerator {
             it.charge = it.maxCharge();
         }
         if (rng != null) BrandSystem.applyRandomBrand(it, rng);
-        return it;
     }
 
     // -- Plusses --------------------------------------------------------------
@@ -432,13 +440,7 @@ public final class ItemGenerator {
         Item it = ItemFactory.build(pick);
         if (it == null) return null;
         ItemDefinition d = Registries.item(pick);
-        if (d != null && it.inventoryCategory != Item.InventoryCategory.FOOD) {
-            it.level = plussesForPower(d.powerMin, d.powerMax, powerLevel);
-        }
-        if (it.baseChargeMax > 0) {
-            it.charge = it.maxCharge();
-        }
-        if (rng != null) BrandSystem.applyRandomBrand(it, rng);
+        applyFinishingTouches(it, d, powerLevel, rng);
         return it;
     }
 

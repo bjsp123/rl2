@@ -18,32 +18,32 @@ public enum Perk {
      *  buff. Stacks-per-kill = {@code ceil(perkLvl/2)}; duration refresh =
      *  {@code 8 + 2 * ceil(perkLvl/2)} turns; each stack multiplies attack and
      *  move cost by 0.9 (compounding), floored at {@code BuffSystem.KILLER_MIN_COST}. */
-    KILLER,
+    KILLER("killer"),
     /** Open. Multiplies every other mob's wake / vision radius vs this player
      *  by {@code 1 / (perkLvl + 1)}. At L10 only adjacent mobs can see them. */
-    STEALTH,
+    STEALTH("stealth"),
     /** Mage signature. Wands gain {@code +perkLvl} effective level. */
-    WANDMASTER,
+    WANDMASTER("wandmaster"),
     /** Open. Adds {@code +perkLvl} effective level to any
      *  {@link Item.UseBehavior#JUMP} item the holder carries (FROG and future
      *  jump-tools). Repurposed from the original "always-on perk-driven jump"
      *  design which had no trigger affordance. */
-    JUMP,
+    JUMP("jump"),
     /** Warrior signature. Melee knockback contributes
      *  {@code min(5, perkLvl)} tiles. Levels 6-10 instead add
      *  {@code perkLvl - 5} bonus damage when the knocked target is blocked
      *  from completing its flight (slammed into a wall / chasm / mob). */
-    KNOCKBACK,
+    KNOCKBACK("knockback"),
     /** Rogue signature. Bombs gain {@code +perkLvl} effective level. */
-    BOMB_JACK,
+    BOMB_JACK("bombJack"),
     /** Open. Each level adds {@link com.bjsp123.rl2.logic.GameBalance#HURLER_RANGE_PER_LEVEL}
      *  tiles of throw range and multiplies the throw action cost by 0.85
      *  (compounding). At L10: +20 tiles of range, cost mult ≈ 0.20. */
-    HURLER,
+    HURLER("hurler"),
     /** Mage signature. Each food or potion the holder consumes restores
      *  {@code perkLvl} charges to every wand they carry (bag + equipped),
      *  clamped to each wand's max charge. */
-    MANA_FOUNT,
+    MANA_FOUNT("manaFount"),
     /** Rogue signature. Multi-axis bomb protection:
      *  <ul>
      *    <li>Bomb damage taken multiplied by {@code 0.5^perkLvl} (asymptotic).</li>
@@ -55,45 +55,37 @@ public enum Perk {
      *  </ul>
      *  Also gates the surface-step buffs (WET, OILY) the holder would get
      *  from stepping on her own water / oil bombs. */
-    BOMB_DODGER,
+    BOMB_DODGER("bombDodger"),
     /** Open. Each level lets the holder see through one square of cloud
      *  (smoke) or {@link Item.ItemEffect#GRASS}-grown tree canopy. Applied
      *  inside {@link com.bjsp123.rl2.logic.LevelSystem#updateVisibility}
      *  by treating the first {@code perkLvl} cloud / tree tiles within
      *  Chebyshev range of the holder as transparent. Beyond that range,
      *  those tiles still block sight normally. */
-    KEEN_SIGHT,
+    KEEN_SIGHT("keenSight"),
     /** Open. Grants the reactive WRAITH_DODGE: when about to take damage, the holder
      *  slides to a free adjacent square and negates the whole hit, then goes on cooldown.
      *  Cooldown length = {@code 11 - perkLvl} turns (L1 = 10, L10 = 1). */
-    DODGE;
+    DODGE("dodge"),
+    /** Open. Raises maximum HP by 10% per perk level (L10 = +100%). Applied in
+     *  {@link com.bjsp123.rl2.logic.MobStats#writeEffectiveStats} before the
+     *  proportional healRate scaling, so regeneration tracks the larger pool. */
+    DURABLE_BODY("durableBody");
 
     public String displayName() {
-        return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".name");
+        return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key + ".name");
     }
 
     public String description() {
-        return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key() + ".description");
+        return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key + ".description");
     }
 
     /** Lowercase / camelCase string key for this perk, matching the
      *  {@code perk.<key>.name} / {@code .description} / {@code .tip}
-     *  convention in {@code assets/data/strings.csv}. Public so tip
-     *  triggers in the UI layer compose the right key without
-     *  duplicating the enum-to-key switch. */
-    public String key() {
-        return switch (this) {
-            case KILLER      -> "killer";
-            case STEALTH     -> "stealth";
-            case WANDMASTER  -> "wandmaster";
-            case JUMP        -> "jump";
-            case KNOCKBACK   -> "knockback";
-            case BOMB_JACK   -> "bombJack";
-            case HURLER      -> "hurler";
-            case MANA_FOUNT  -> "manaFount";
-            case BOMB_DODGER -> "bombDodger";
-            case KEEN_SIGHT  -> "keenSight";
-            case DODGE       -> "dodge";
-        };
-    }
+     *  convention in {@code assets/data/strings.csv}. Baked in at
+     *  construction so UI tip triggers compose the right key without a
+     *  duplicated enum-to-key switch. */
+    public final String key;
+
+    Perk(String key) { this.key = key; }
 }

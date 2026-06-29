@@ -798,6 +798,8 @@ public class PlayScreen implements Screen {
             }
         });
         gameInput.setActionSlotHandler(controller::triggerActionSlot);
+        gameInput.setAutoExploreActive(controller::isAutoExploring);
+        gameInput.setOnCancelAuto(controller::cancelAutoActions);
 
         camera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         // Fresh runs (no preloaded world) open on the intro cinematic: start far
@@ -818,7 +820,7 @@ public class PlayScreen implements Screen {
      *  so each first-time unlock both flashes the toast banner and pushes
      *  a HIGH-priority log line. Fired synchronously from inside the
      *  unlock path. */
-    private void onAchievementUnlocked(com.bjsp123.rl2.save.Achievement a) {
+    private void onAchievementUnlocked(com.bjsp123.rl2.save.Achievements.Achievement a) {
         if (a == null) return;
         if (achievementToast != null) {
             achievementToast.show(com.bjsp123.rl2.logic.TextCatalog.format(

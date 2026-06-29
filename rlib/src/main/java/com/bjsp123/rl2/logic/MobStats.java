@@ -3,6 +3,7 @@ package com.bjsp123.rl2.logic;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob;
+import com.bjsp123.rl2.model.Perk;
 import com.bjsp123.rl2.model.StatBlock;
 
 import java.util.Random;
@@ -96,6 +97,12 @@ public final class MobStats {
                 ? GameBalance.PLAYER_HP_MULTIPLIER
                 : GameBalance.ENEMY_HP_MULTIPLIER;
         dst.maxHp          = Math.max(1, Math.round(levelMaxHp * hpMult));
+        // Durable Body perk: +10% max HP per level. Folded in here (before the
+        // proportional healRate scaling below) so regen tracks the larger pool.
+        int durableBody = mob.perks != null ? mob.perks.getOrDefault(Perk.DURABLE_BODY, 0) : 0;
+        if (durableBody > 0) {
+            dst.maxHp = Math.max(1, Math.round(dst.maxHp * (1.0 + 0.10 * durableBody)));
+        }
         dst.accuracy       = ItemStats.scaleAmount(mob.intrinsic.accuracy, L);
         dst.evasion        = ItemStats.scaleAmount(mob.intrinsic.evasion,  L);
         dst.rangedDistance = ItemStats.scaleAmount(mob.intrinsic.rangedDistance, L);

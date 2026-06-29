@@ -19,7 +19,7 @@ import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.model.World;
-import com.bjsp123.rl2.save.ArenaHallOfFameEntry;
+import com.bjsp123.rl2.save.ArenaHallOfFame.ArenaHallOfFameEntry;
 import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.world.anim.Animator;
 import com.bjsp123.rl2.world.render.DefaultLevelRenderer;

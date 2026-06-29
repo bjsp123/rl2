@@ -27,6 +27,10 @@ public class GameInput extends InputAdapter {
     /** Invoked with a 0-based action-bar slot index when the user presses a number key
      *  (1 -> slot 0, 2 -> slot 1, ..., up to the live {@code Settings.quickslotCount()}). */
     private java.util.function.IntConsumer onActionSlot;
+    /** True while auto-explore is running (wired to PlayController). */
+    private java.util.function.BooleanSupplier autoExploreActive;
+    /** Cancels auto-explore + any auto-travel (wired to PlayController). */
+    private Runnable onCancelAuto;
 
     public GameInput(World world, OrthographicCamera camera, CameraController cameraController) {
         this.world            = world;
@@ -71,10 +75,41 @@ public class GameInput extends InputAdapter {
         this.onActionSlot = onActionSlot;
     }
 
+    /** Wired by PlayScreen to {@link com.bjsp123.rl2.screen.PlayController#isAutoExploring}. */
+    public void setAutoExploreActive(java.util.function.BooleanSupplier autoExploreActive) {
+        this.autoExploreActive = autoExploreActive;
+    }
+
+    /** Wired by PlayScreen to {@link com.bjsp123.rl2.screen.PlayController#cancelAutoActions}. */
+    public void setOnCancelAuto(Runnable onCancelAuto) {
+        this.onCancelAuto = onCancelAuto;
+    }
+
+    /** True when an interruptible auto-action is running: auto-explore, or an
+     *  auto-travel to a NON-adjacent destination. A single manual step (an
+     *  adjacent {@code targetPosition} from an arrow key or adjacent tap) is not
+     *  counted, so ordinary movement keeps working. */
+    private boolean autoActionRunning() {
+        if (autoExploreActive != null && autoExploreActive.getAsBoolean()) return true;
+        com.bjsp123.rl2.model.Level lvl = world.currentLevel();
+        if (lvl == null) return false;
+        Mob p = TurnSystem.findPlayer(lvl);
+        if (p == null || p.targetPosition == null || p.position == null) return false;
+        int d = Math.max(Math.abs(p.targetPosition.tileX() - p.position.tileX()),
+                         Math.abs(p.targetPosition.tileY() - p.position.tileY()));
+        return d > 1;
+    }
+
     // -- Keyboard -------------------------------------------------------------
 
     @Override
     public boolean keyDown(int keycode) {
+        // Any key first cancels an in-progress auto-explore / auto-travel and
+        // does nothing else - press once to stop, again to issue a command.
+        if (autoActionRunning()) {
+            if (onCancelAuto != null) onCancelAuto.run();
+            return true;
+        }
         // Hotkeys that must respond regardless of whose turn it is - checked before the
         // active-player guard so they fire during AI ticks too.
         if (keycode == Input.Keys.I) {
@@ -149,8 +184,8 @@ public class GameInput extends InputAdapter {
                 || t == com.bjsp123.rl2.model.Tile.GEM_HEARTH_R;
     }
 
-    /** Maps the number-row keys to action-slot indices: 1..9 -> 0..8 and
-     *  0 -> 9 (the tenth slot). Returns -1 for anything else. */
+    /** Maps the hotbar keys to action-slot indices: 1..9 -> 0..8, 0 -> 9 (tenth),
+     *  A -> 10 (eleventh), B -> 11 (twelfth). Returns -1 for anything else. */
     private static int numberKeyToSlot(int keycode) {
         return switch (keycode) {
             case Input.Keys.NUM_1 -> 0;
@@ -163,6 +198,8 @@ public class GameInput extends InputAdapter {
             case Input.Keys.NUM_8 -> 7;
             case Input.Keys.NUM_9 -> 8;
             case Input.Keys.NUM_0 -> 9;
+            case Input.Keys.A     -> 10;
+            case Input.Keys.B     -> 11;
             default               -> -1;
         };
     }
@@ -181,6 +218,13 @@ public class GameInput extends InputAdapter {
         // Ignore if this was a drag (handled by CameraController as pan)
         float dx = x - touchStartX, dy = y - touchStartY;
         if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) return false;
+
+        // A tap first cancels an in-progress auto-explore / auto-travel and does
+        // nothing else - tap once to stop, again to issue a new move.
+        if (autoActionRunning()) {
+            if (onCancelAuto != null) onCancelAuto.run();
+            return true;
+        }
 
         Mob player = TurnSystem.getActivePlayer(world.currentLevel());
         if (player == null) return false;

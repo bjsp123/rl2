@@ -81,6 +81,16 @@ final class PlayController {
 
     public boolean isAutoExploring() { return autoExplore; }
 
+    /** Cancel both auto-explore and any in-progress auto-travel. Wired to
+     *  GameInput so any key press or screen tap interrupts them. */
+    public void cancelAutoActions() {
+        stopAutoExplore();
+        Mob player = TurnSystem.findPlayer(world.currentLevel());
+        if (player != null) player.targetPosition = null;
+        autoMoveSnapshotHostiles = null;
+        autoMoveLastHp = -1;
+    }
+
     private void stopAutoExplore() {
         autoExplore = false;
         autoMoveLastHp = -1;
@@ -871,6 +881,11 @@ final class PlayController {
             String type = e.substring(colon + 1).trim();
             actionBar.set(slot, firstByType(player, type));
         }
+        // Fill any remaining empty slots with the rest of the starting inventory's
+        // usable / throwable items (e.g. the rogue's cherry bombs), using the same
+        // first-empty-slot rule as pickups - the explicit class defaults above keep
+        // priority since they're already bound.
+        autoAssignNewPickups(player, 0);
     }
 
     private static Item firstByType(Mob player, String type) {
@@ -910,6 +925,7 @@ final class PlayController {
         // while adjacent opens the forge crafting screen (no turn cost - it's a
         // menu, same as the stairs transitions above).
         if (openForgeScreen != null && adjacentToGemHearth(cur, player.position)) {
+            if (sounds != null) sounds.play("sfx.world.forge.open");
             openForgeScreen.run();
             return;
         }

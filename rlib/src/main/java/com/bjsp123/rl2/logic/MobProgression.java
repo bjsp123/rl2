@@ -38,9 +38,6 @@ public final class MobProgression {
 
     private MobProgression() {}
 
-    /** Hard cap on per-perk level used by {@link #autoLevelUpPerks}. */
-    private static final int PERK_LEVEL_CAP = 8;
-
     /** XP cost to advance from {@code fromLevel} to {@code fromLevel + 1}. */
     public static int xpToAdvanceFrom(int fromLevel) {
         return Math.max(1, GameBalance.XP_PER_LEVEL_STEP * fromLevel);
@@ -154,7 +151,7 @@ public final class MobProgression {
      *  {@code perkPoints = (charLvl - 1) * PERK_POINTS_PER_LEVEL}, then spends
      *  them: first across the mob's signature perks (those already at level
      *  >= 1 from {@code MobDefinition.apply}) until each hits the
-     *  {@link #PERK_LEVEL_CAP}, then across any remaining perks at random.
+     *  {@link GameBalance#PERK_LEVEL_CAP}, then across any remaining perks at random.
      *  No-op on null mobs or those with a null {@code perks} map. */
     public static void autoLevelUpPerks(Mob mob, Random rng) {
         if (mob == null || mob.perks == null) return;
@@ -175,12 +172,12 @@ public final class MobProgression {
             candidates.clear();
             // Phase 1: signature perks below cap.
             for (Perk p : signatures) {
-                if (mob.perks.getOrDefault(p, 0) < PERK_LEVEL_CAP) candidates.add(p);
+                if (mob.perks.getOrDefault(p, 0) < GameBalance.PERK_LEVEL_CAP) candidates.add(p);
             }
             // Phase 2: any perk below cap.
             if (candidates.isEmpty()) {
                 for (Perk p : all) {
-                    if (mob.perks.getOrDefault(p, 0) < PERK_LEVEL_CAP) candidates.add(p);
+                    if (mob.perks.getOrDefault(p, 0) < GameBalance.PERK_LEVEL_CAP) candidates.add(p);
                 }
             }
             if (candidates.isEmpty()) break;

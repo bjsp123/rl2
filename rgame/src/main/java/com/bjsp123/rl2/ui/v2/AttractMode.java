@@ -88,7 +88,7 @@ final class AttractMode {
 
         ensurePlayerAlive();
         tick(delta);
-        revealAll(level);
+        revealRooms(level);
         fitCamera();
         renderer.render(level, camera);
         drawFadeOverlay();
@@ -114,9 +114,9 @@ final class AttractMode {
         renderer.setWorld(world);
         renderer.setAnimator(animator);
         spawnPlayer();
-        revealAll(level);
+        revealRooms(level);
         LevelSystem.computeLighting(level);
-        revealAll(level);
+        revealRooms(level);
         renderer.markDirty();
         fitCamera();
     }
@@ -224,18 +224,57 @@ final class AttractMode {
         return Math.max(lo, Math.min(hi, v));
     }
 
-    private static void revealAll(Level level) {
+    /**
+     * Reveal the dungeon's rooms + corridors for the title backdrop, but NOT
+     * the solid bedrock that fills the space around them. A blanket reveal
+     * draws every filler WALL tile - which tiles up into a regular grid behind
+     * the menu and a wall band along the level's perimeter. Instead we reveal
+     * every open (non-sight-blocking) tile plus the one-tile-thick wall shell
+     * bordering it, exactly mirroring the FOV wall-propagation in
+     * {@code LevelSystem.updateVisibility}. Bedrock with no open neighbour
+     * stays hidden, so the renderer leaves it as black void.
+     */
+    private static void revealRooms(Level level) {
         if (level == null) return;
         if (level.visible == null || level.explored == null || level.lit == null) {
             level.initTransients();
         }
-        for (int x = 0; x < level.width; x++) {
-            for (int y = 0; y < level.height; y++) {
-                level.visible[x][y] = true;
-                level.explored[x][y] = true;
-                level.lit[x][y] = true;
+        int w = level.width, h = level.height;
+        // Pass 1: every open tile (floor, chasm, open door, ...).
+        for (int x = 0; x < w; x++) {
+            for (int y = 0; y < h; y++) {
+                boolean open = !level.tiles[x][y].blocksSight();
+                level.visible[x][y]  = open;
+                level.explored[x][y] = open;
+                level.lit[x][y]      = open;
             }
         }
+        // Pass 2: sight-blocking tiles (walls / closed doors) that border an
+        // open tile - the visible shell of each room. Tested against tile type,
+        // not the freshly-set flags, so the result is order-independent.
+        for (int x = 0; x < w; x++) {
+            for (int y = 0; y < h; y++) {
+                if (!level.tiles[x][y].blocksSight()) continue;
+                if (!bordersOpenTile(level, x, y)) continue;
+                level.visible[x][y]  = true;
+                level.explored[x][y] = true;
+                level.lit[x][y]      = true;
+            }
+        }
+    }
+
+    /** True when any of the 8 neighbours of (x, y) is an open (non-sight-blocking)
+     *  tile - i.e. this wall sits on the border of a room or corridor. */
+    private static boolean bordersOpenTile(Level level, int x, int y) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                if (!level.tiles[nx][ny].blocksSight()) return true;
+            }
+        }
+        return false;
     }
 
     private void drawFadeOverlay() {

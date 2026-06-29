@@ -538,12 +538,12 @@ public final class V2CharacterStats extends BasePopup {
                         player.perkPoints--;
                         // First-encounter tip: fires the first time the
                         // player adds a point in this perk. The
-                        // strings.csv convention uses Perk.key() (camelCase)
-                        // not the enum name, hence the call below.
+                        // strings.csv convention uses Perk.key (camelCase)
+                        // not the enum name, hence the field below.
                         TipSystem.maybeShow(
-                                "perk:" + perk.key(),
-                                "perk." + perk.key() + ".tip",
-                                "perk." + perk.key() + ".name", null);
+                                "perk:" + perk.key,
+                                "perk." + perk.key + ".tip",
+                                "perk." + perk.key + ".name", null);
                     }
                     return true;
                 }

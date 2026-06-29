@@ -8,7 +8,6 @@ import com.bjsp123.rl2.ui.v2.UIVars;
 public final class Settings {
     private static final String KEY_UI_SCALE = "rl2-ui-scale-v3";
     private static final String KEY_UI_PIXEL_SCALE = "rl2-ui-pixel-scale";
-    private static final String KEY_UI_FONT_SCALE = "rl2-ui-font-scale-v2";
     private static final String KEY_QUICKSLOTS = "rl2-quickslot-count";
     private static final String KEY_USE_BUFF_ICONS = "rl2-use-buff-icons";
     private static final String KEY_ANIMATION_SPEED = "rl2-animation-speed";
@@ -41,11 +40,8 @@ public final class Settings {
     public static final int UI_PIXEL_SCALE_DEFAULT = 1;
     public static final int[] UI_PIXEL_SCALE_CHOICES = { 1, 2, 3, 4 };
 
-    public static final float UI_FONT_SCALE_DEFAULT = 1.0f;
-    public static final float[] UI_FONT_SCALE_CHOICES = { 0.75f, 1.0f, 1.5f, 2.0f };
-
     public static final int QUICKSLOT_COUNT_DEFAULT = 8;
-    public static final int[] QUICKSLOT_COUNT_CHOICES = { 4, 6, 8, 10 };
+    public static final int[] QUICKSLOT_COUNT_CHOICES = { 4, 6, 8, 9, 10, 12 };
 
     public static final boolean USE_BUFF_ICONS_DEFAULT = true;
 
@@ -70,7 +66,6 @@ public final class Settings {
 
     private static float uiScale = UI_SCALE_DEFAULT;
     private static int uiPixelScale = UI_PIXEL_SCALE_DEFAULT;
-    private static float uiFontScale = UI_FONT_SCALE_DEFAULT;
     private static int quickslotCount = QUICKSLOT_COUNT_DEFAULT;
     private static boolean useBuffIcons = USE_BUFF_ICONS_DEFAULT;
     private static float framesPerRender = ANIMATION_SPEED_DEFAULT;
@@ -92,7 +87,7 @@ public final class Settings {
     private static boolean musicEnabled  = true;
     private static float   musicVolume   = MUSIC_VOLUME_DEFAULT;
     private static boolean tipsEnabled   = true;
-    private static boolean meleePreview  = true;
+    private static boolean meleePreview  = false;
     private static ColorblindPreset colorblindPreset = ColorblindPreset.NONE;
 
     private Settings() {}
@@ -101,7 +96,6 @@ public final class Settings {
         persistence = p;
         uiScale = loadChoiceFloat(KEY_UI_SCALE, detectUiScaleDefault(), UI_SCALE_CHOICES);
         uiPixelScale = loadChoiceInt(KEY_UI_PIXEL_SCALE, UI_PIXEL_SCALE_DEFAULT, UI_PIXEL_SCALE_CHOICES);
-        uiFontScale = loadChoiceFloat(KEY_UI_FONT_SCALE, UI_FONT_SCALE_DEFAULT, UI_FONT_SCALE_CHOICES);
         quickslotCount = loadChoiceInt(KEY_QUICKSLOTS, QUICKSLOT_COUNT_DEFAULT, QUICKSLOT_COUNT_CHOICES);
         useBuffIcons = loadBoolean(KEY_USE_BUFF_ICONS, USE_BUFF_ICONS_DEFAULT);
         framesPerRender = loadChoiceFloat(KEY_ANIMATION_SPEED, ANIMATION_SPEED_DEFAULT, ANIMATION_SPEED_CHOICES);
@@ -122,7 +116,7 @@ public final class Settings {
         musicEnabled  = loadBoolean(KEY_MUSIC_ENABLED, true);
         musicVolume   = loadChoiceFloat(KEY_MUSIC_VOLUME, MUSIC_VOLUME_DEFAULT, VOLUME_CHOICES);
         tipsEnabled   = loadBoolean(KEY_TIPS_ENABLED, true);
-        meleePreview  = loadBoolean(KEY_MELEE_PREVIEW, true);
+        meleePreview  = loadBoolean(KEY_MELEE_PREVIEW, false);
         colorblindPreset = loadColorblindPreset();
         UIVars.applyColorblindPalette(colorblindPreset);
     }
@@ -137,7 +131,8 @@ public final class Settings {
 
     public static float uiScale() { return uiScale; }
     public static int uiPixelScale() { return uiPixelScale; }
-    public static float uiFontScale() { return uiFontScale; }
+    /** UI font scale is frozen at 1.0 — the user-facing option was removed. */
+    public static float uiFontScale() { return 1.0f; }
     public static int quickslotCount() { return quickslotCount; }
     public static boolean useBuffIcons() { return useBuffIcons; }
     public static float framesPerRender() { return animationTransientOverride > 0 ? animationTransientOverride : framesPerRender; }
@@ -163,7 +158,6 @@ public final class Settings {
 
     public static void setUiScale(float v) { uiScale = v; save(KEY_UI_SCALE, v); }
     public static void setUiPixelScale(int v) { uiPixelScale = Math.max(1, v); save(KEY_UI_PIXEL_SCALE, uiPixelScale); }
-    public static void setUiFontScale(float v) { if (v > 0f) { uiFontScale = v; save(KEY_UI_FONT_SCALE, v); } }
     public static void setQuickslotCount(int v) { quickslotCount = v; save(KEY_QUICKSLOTS, v); }
     public static void setUseBuffIcons(boolean v) { useBuffIcons = v; save(KEY_USE_BUFF_ICONS, v); }
     public static void setFramesPerRender(float v) { framesPerRender = v; save(KEY_ANIMATION_SPEED, v); }

@@ -8,6 +8,7 @@ import com.bjsp123.rl2.model.Mob.CharacterClass;
 import com.bjsp123.rl2.model.Point;
 
 import java.util.Random;
+import java.util.function.Predicate;
 
 /**
  * Factory for spawning {@link Mob} instances. Both NPCs and players are data-
@@ -136,15 +137,11 @@ public class MobFactory {
                                   double powerLevel,
                                   Level.VisualTheme theme,
                                   Random rng) {
-        for (int tries = 0; tries < SLOT_ROLL_RETRIES; tries++) {
-            Item it = ItemGenerator.generateItem(powerLevel, theme, pool, rng);
-            if (it == null) return;
-            if (it.inventoryCategory == targetSlot) {
-                InventorySystem.addToBag(mob.inventory, it);
-                if (it.isEquippable()) InventorySystem.equip(mob.inventory, it);
-                return;
-            }
-        }
+        Item it = rollMatching(pool, x -> x.inventoryCategory == targetSlot,
+                powerLevel, theme, rng);
+        if (it == null) return;
+        InventorySystem.addToBag(mob.inventory, it);
+        if (it.isEquippable()) InventorySystem.equip(mob.inventory, it);
     }
 
     private static final int SLOT_ROLL_RETRIES = 8;
@@ -154,27 +151,32 @@ public class MobFactory {
      *  {@value #SLOT_ROLL_RETRIES}. Returns null when nothing eligible
      *  surfaces in time. */
     private static Item rollDamageWand(double powerLevel, Level.VisualTheme theme, Random rng) {
-        for (int tries = 0; tries < SLOT_ROLL_RETRIES; tries++) {
-            Item it = ItemGenerator.generateItem(powerLevel, theme,
-                    ItemGenerator.LootCategory.MAGIC_ITEMS, rng);
-            if (it == null) return null;
-            if (it.inventoryCategory == Item.InventoryCategory.WAND
-                    && it.damage > 0) {
-                return it;
-            }
-        }
-        return null;
+        return rollMatching(ItemGenerator.LootCategory.MAGIC_ITEMS,
+                it -> it.inventoryCategory == Item.InventoryCategory.WAND && it.damage > 0,
+                powerLevel, theme, rng);
     }
 
     /** Roll until we get a bomb that actually deals damage (some bomb types
      *  - oil bomb, water bomb - lay down a surface but do no direct damage).
      *  Bounded by {@value #SLOT_ROLL_RETRIES}. */
     private static Item rollDamageBomb(double powerLevel, Level.VisualTheme theme, Random rng) {
+        return rollMatching(ItemGenerator.LootCategory.BOMBS,
+                it -> it.damage > 0, powerLevel, theme, rng);
+    }
+
+    /** Roll an item out of {@code pool}, retrying up to {@value #SLOT_ROLL_RETRIES}
+     *  times until one satisfies {@code accept}. Returns the first match, or
+     *  {@code null} if the pool runs dry (generator returns null) or no match
+     *  surfaces in time. */
+    private static Item rollMatching(ItemGenerator.LootCategory pool,
+                                     Predicate<Item> accept,
+                                     double powerLevel,
+                                     Level.VisualTheme theme,
+                                     Random rng) {
         for (int tries = 0; tries < SLOT_ROLL_RETRIES; tries++) {
-            Item it = ItemGenerator.generateItem(powerLevel, theme,
-                    ItemGenerator.LootCategory.BOMBS, rng);
+            Item it = ItemGenerator.generateItem(powerLevel, theme, pool, rng);
             if (it == null) return null;
-            if (it.damage > 0) return it;
+            if (accept.test(it)) return it;
         }
         return null;
     }

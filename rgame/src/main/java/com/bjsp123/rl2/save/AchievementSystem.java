@@ -8,6 +8,7 @@ import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.persistence.Persistence;
+import com.bjsp123.rl2.save.Achievements.Achievement;
 
 import java.util.function.Consumer;
 

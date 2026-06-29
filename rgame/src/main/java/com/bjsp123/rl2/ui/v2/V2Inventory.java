@@ -288,16 +288,15 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             tabRects[i].set(contentX + i * (tabW + tabGap), tabRowY, tabW, tabH);
         }
 
-        // Bag grid - 6 cols x N rows, fills the rest of the window down to
+        // Bag grid - N cols x M rows, fills the rest of the window down to
         // the bottom padding. Scrolls vertically when the filtered bag has
         // more rows than fit in the visible band. Empty grid cells are
         // included alongside filled ones so the grid reads as a uniform
-        // 6-column lattice instead of a sparse list; cells with no item
-        // get a {@code null} {@link BagCell#item} and render the slot
-        // chrome only.
+        // lattice instead of a sparse list; cells with no item get a
+        // {@code null} {@link BagCell#item} and render the slot chrome only.
         bagCells.clear();
-        int cols = 6;
-        float gridCellSz = 36f * 1.43f * 1.1f;
+        int cols = 5;
+        float gridCellSz = 40f * 1.43f * 1.1f;
         float gridGap = 4f;
         float gridW = cols * gridCellSz + (cols - 1) * gridGap;
         float gridX = contentX + (contentW - gridW) * 0.5f;
@@ -357,13 +356,16 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             detailUseBtn  .set(btnX,                              btnY, btnW, btnH);
             detailEquipBtn.set(btnX + (btnW + btnGap),            btnY, btnW, btnH);
             detailThrowBtn.set(btnX + 2 * (btnW + btnGap),        btnY, btnW, btnH);
-            // Quickslot bind row - one 32x32 cell per quickslot (count is the
-            // player setting, 4/6/8/10), centred just above the action button
-            // row. Only laid out when an action bar has been wired; rendering +
-            // input both check {@link #actionBar} first.
+            // Quickslot bind row - one cell per quickslot (count is the player
+            // setting, 4..12), centred just above the action button row. Cells
+            // are 32 px but shrink to fit the window width when there are many
+            // (so 12 slots stay on one row). Only laid out when an action bar
+            // has been wired; rendering + input both check {@link #actionBar} first.
             int bindN = Settings.quickslotCount();
-            float bindSz = 32f;
             float bindGap = 4f;
+            float bindAvailW = detailWindow.w - 28f;
+            float bindSz = Math.min(32f, (bindAvailW - (bindN - 1) * bindGap) / bindN);
+            if (bindSz < 18f) bindSz = 18f;
             float bindRowW = bindN * bindSz + (bindN - 1) * bindGap;
             float bindX = detailWindow.cx() - bindRowW * 0.5f;
             float bindY = btnY + btnH + 14f;
@@ -631,37 +633,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                                           com.bjsp123.rl2.model.Mob player) {
         int max = com.bjsp123.rl2.logic.ItemStats.effectiveMaxCharge(it,
                 com.bjsp123.rl2.logic.ItemStats.effectiveLevel(it, player));
-        float pad = 4f, barH = 3f;
-        float barW = r.w - 2 * pad;
-        float bx = r.x + pad, by = r.y + 4f;
-        s.setColor(0f, 0f, 0f, 0.85f);
-        s.rect(bx - 1, by - 1, barW + 2, barH + 2);
-        if (max <= 1) {
-            s.setColor(0.25f, 0.25f, 0.25f, 1f);
-            s.rect(bx, by, barW, barH);
-            if (it.charge >= 1f) {
-                s.setColor(0.2f, 0.85f, 0.3f, 1f);
-                s.rect(bx, by, barW, barH);
-            } else if (it.charge > 0f) {
-                s.setColor(0.1f, 0.5f, 0.15f, 1f);
-                s.rect(bx, by, barW * it.charge, barH);
-            }
-        } else {
-            float slotW = (barW - (max - 1)) / max;
-            for (int i = 0; i < max; i++) {
-                float sx = bx + i * (slotW + 1f);
-                float filled = Math.min(1f, Math.max(0f, it.charge - i));
-                s.setColor(0.25f, 0.25f, 0.25f, 1f);
-                s.rect(sx, by, slotW, barH);
-                if (filled >= 1f) {
-                    s.setColor(0.2f, 0.85f, 0.3f, 1f);
-                    s.rect(sx, by, slotW, barH);
-                } else if (filled > 0f) {
-                    s.setColor(0.1f, 0.5f, 0.15f, 1f);
-                    s.rect(sx, by, slotW * filled, barH);
-                }
-            }
-        }
+        ChargeBar.draw(max, it.charge, r.x, r.y, r.w,
+                (c, x, y, w, h) -> { s.setColor(c); s.rect(x, y, w, h); });
     }
 
     private void drawTab(ShapeRenderer s, Rect r, boolean active, boolean pressed) {
@@ -850,9 +823,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 for (int i = 0; i < Settings.quickslotCount(); i++) {
                     Rect r = bindBtnRects[i];
                     boolean bound = actionBar.get(i) == selectedItem;
-                    // Hotkey label: 1-9 then 0 for the tenth slot (1-9-0 hotbar
-                    // convention), matching the HUD.
-                    String key = i < 9 ? Integer.toString(i + 1) : "0";
+                    // Hotkey label: 1-9, then 0 / A / B for slots 10-12, matching the HUD.
+                    String key = com.bjsp123.rl2.ui.hud.ActionBar.slotLabel(i);
                     TextDraw.centre(ctx, ctx.fontRegular,
                             bound ? UIVars.ACCENT : UIVars.TEXT_BODY,
                             key,
@@ -866,9 +838,27 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
 
     /** Draw {@code item}'s sprite icon centred inside {@code cell}. Caller
-     *  is in the SpriteBatch pass. */
+     *  is in the SpriteBatch pass. Items bound to a quickslot get a small
+     *  "slot: X" badge in the cell's top-left corner. */
     private void drawCellIcon(Rect cell, Item item) {
         ItemCell.draw(ctx, item, player, cell.x, cell.y, cell.w, cell.h, true);
+        if (actionBar != null && item != null) {
+            int si = actionBar.indexOf(item);
+            if (si >= 0 && si < Settings.quickslotCount()) drawSlotBadge(cell, si);
+        }
+    }
+
+    /** Top-left "slot: X" badge marking an item that's bound to quickslot
+     *  {@code slotIdx} (label per {@link ActionBar#slotLabel}). */
+    private void drawSlotBadge(Rect cell, int slotIdx) {
+        com.badlogic.gdx.graphics.g2d.BitmapFont f = ctx.fontRegular;
+        float prev = f.getScaleX();
+        f.getData().setScale(prev * 0.62f);
+        f.setColor(UIVars.ACCENT);
+        f.draw(ctx.batch, "slot: " + ActionBar.slotLabel(slotIdx),
+                cell.x + 3f, cell.y + cell.h - 2f);
+        f.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+        f.getData().setScale(prev);
     }
 
     // -- Input ---------------------------------------------------------------

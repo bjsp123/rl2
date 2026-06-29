@@ -18,7 +18,6 @@ import java.util.List;
 public final class V2GameOver extends V2Screen {
 
     private static final Color DIM_WARN  = new Color(0.9f, 0.3f, 0.3f, 1f);
-    private static final Color VICTORY_HL = new Color(1f, 0.85f, 0.4f, 1f);  // warm gold
 
     private final Rl2Game        game;
     private final HallOfFameEntry record;
@@ -200,7 +199,7 @@ public final class V2GameOver extends V2Screen {
         String titleKey = record.victory
                 ? (record.allBeaconsLit ? "ui.victory.titlePerfect" : "ui.victory.title")
                 : "ui.gameOver.title";
-        TextDraw.centre(ctx, ctx.fontHeader, record.victory ? VICTORY_HL : DIM_WARN,
+        TextDraw.centre(ctx, ctx.fontHeader, record.victory ? UIVars.GOLD : DIM_WARN,
                 TextCatalog.get(titleKey), cx,
                 window.top() - ctx.headerLineH());
 

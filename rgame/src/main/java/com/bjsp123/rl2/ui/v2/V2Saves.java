@@ -4,8 +4,8 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputMultiplexer;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.logic.TextCatalog;
-import com.bjsp123.rl2.save.SaveMetadata;
 import com.bjsp123.rl2.save.SaveSystem;
+import com.bjsp123.rl2.save.SaveSystem.SaveMetadata;
 import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
 
 import java.util.ArrayList;

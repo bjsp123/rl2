@@ -56,17 +56,7 @@ public final class BuffSystem {
     /** Maximum stacks a buff of {@code type} can hold. Default 10; per-type overrides
      *  per RL-43. Re-applying a buff never pushes it past this cap. */
     public static int stackCap(BuffType type) {
-        return switch (type) {
-            case FRIGHTENED, WET -> 2;
-            case OILY -> 3;
-            case FROZEN -> 5;
-            case ON_FIRE -> 8;
-            case INVISIBLE, GHOSTLY, LEVITATING, PHASE -> 20;
-            case KILLER -> 30;            // stacks cap 30; speed effect capped at 10
-            default -> 10;                // ESP, INSIGHT, HIDING, SHIELDED, REGENERATION,
-                                          // POISONED, HASTED, HOPE, CHILLED, PROTECTION,
-                                          // ANTI_MAGIC, SORCERY, BLEEDING, cooldowns
-        };
+        return type.stackCap;
     }
 
     /** --- Apply / remove ----------------------------------------------------- */

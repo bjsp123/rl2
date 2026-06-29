@@ -39,8 +39,6 @@ import java.util.Set;
  * can't currently afford render greyed-but-legible; tapping an affordable row
  * consumes the gems and builds the item into the bag.
  *
- * <p>This screen is reached via a stub burger entry for now; RL-51 will place
- * an actual hearth room the player steps into.
  */
 public final class V2Forge extends V2Screen {
 

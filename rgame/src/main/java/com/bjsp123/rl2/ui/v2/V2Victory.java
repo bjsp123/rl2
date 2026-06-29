@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.ui.v2;
 
-import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.logic.ItemFactory;
@@ -17,8 +16,6 @@ import com.bjsp123.rl2.world.render.PortraitSprites;
  * most-used items, run stats, and the score breakdown.
  */
 public final class V2Victory extends V2Screen {
-
-    private static final Color GOLD = new Color(1f, 0.85f, 0.4f, 1f);
 
     private final Rl2Game        game;
     private final HallOfFameEntry record;
@@ -147,7 +144,7 @@ public final class V2Victory extends V2Screen {
         float cx = window.cx();
         // Title - "Perfect Victory!" when every beacon was lit.
         String titleKey = record.allBeaconsLit ? "ui.victory.titlePerfect" : "ui.victory.title";
-        TextDraw.centre(ctx, ctx.fontHeader, GOLD,
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.GOLD,
                 TextCatalog.getOrDefault(titleKey, "Victory!"), cx, titleY);
         // Portrait.
         CharacterClass cls = parseClass(record.charClass);
@@ -157,7 +154,7 @@ public final class V2Victory extends V2Screen {
         }
         // Class + score.
         TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY, record.charClass, cx, classY);
-        TextDraw.centre(ctx, ctx.fontHeader, GOLD, "Score  " + record.score, cx, scoreY);
+        TextDraw.centre(ctx, ctx.fontHeader, UIVars.GOLD, "Score  " + record.score, cx, scoreY);
 
         // Equipped gear - a centred icon row.
         drawEquipment(ctx);

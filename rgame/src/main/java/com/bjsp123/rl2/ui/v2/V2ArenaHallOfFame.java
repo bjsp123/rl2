@@ -3,7 +3,7 @@ package com.bjsp123.rl2.ui.v2;
 import com.badlogic.gdx.graphics.Color;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.logic.TextCatalog;
-import com.bjsp123.rl2.save.ArenaHallOfFameEntry;
+import com.bjsp123.rl2.save.ArenaHallOfFame.ArenaHallOfFameEntry;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;

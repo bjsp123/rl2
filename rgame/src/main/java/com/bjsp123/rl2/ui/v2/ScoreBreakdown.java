@@ -1,6 +1,5 @@
 package com.bjsp123.rl2.ui.v2;
 
-import com.badlogic.gdx.graphics.Color;
 import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 
@@ -11,8 +10,6 @@ import com.bjsp123.rl2.model.HallOfFameEntry;
  * {@link GameBalance#runScore}.
  */
 final class ScoreBreakdown {
-
-    private static final Color GOLD = new Color(1f, 0.85f, 0.4f, 1f);
 
     private ScoreBreakdown() {}
 
@@ -41,8 +38,8 @@ final class ScoreBreakdown {
         TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 "x" + trim(mult), area.x + area.w - 12f, y);
         y -= ctx.lineH() + 10f;
-        TextDraw.left(ctx, ctx.fontHeader, GOLD, "TOTAL", area.x + 12f, y);
-        TextDraw.right(ctx, ctx.fontHeader, GOLD, Integer.toString(r.score),
+        TextDraw.left(ctx, ctx.fontHeader, UIVars.GOLD, "TOTAL", area.x + 12f, y);
+        TextDraw.right(ctx, ctx.fontHeader, UIVars.GOLD, Integer.toString(r.score),
                 area.x + area.w - 12f, y);
     }
 

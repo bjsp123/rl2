@@ -61,6 +61,9 @@ public final class UIVars {
     public static Color ACCENT_DIM      = hex(0xb09020);
     public static Color WARN_HL         = hex(0xff7878);
     public static Color WARN_SHADE      = hex(0x802020);
+    /** Warm gold used for victory / final-score highlights (distinct from the
+     *  brighter yellow {@link #ACCENT} used for in-play chrome). */
+    public static Color GOLD            = new Color(1f, 0.85f, 0.4f, 1f);
 
     // -- Special item-level badge color ----------------------------------------
     /** Bright green - level badge when a perk/buff/equipment boosts effective level. */

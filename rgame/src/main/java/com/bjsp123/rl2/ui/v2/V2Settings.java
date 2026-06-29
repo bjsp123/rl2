@@ -22,7 +22,7 @@ import java.util.List;
  */
 public final class V2Settings extends V2Screen {
 
-    private enum Tab { GAMEPLAY, GRAPHICS, LOG, AUDIO, ACCESS }
+    private enum Tab { GAMEPLAY, GRAPHICS, LOG, AUDIO }
     private static Tab currentTab = Tab.GRAPHICS;
 
     private final Rl2Game game;
@@ -101,7 +101,7 @@ public final class V2Settings extends V2Screen {
         // n*tabW + (n-1)*TAB_GAP = innerW; solve for tabW.
         float tabsY = winY + winH - WIN_PAD - TAB_H;
         float tabsX = winX + WIN_PAD;
-        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.AUDIO, Tab.ACCESS };
+        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.AUDIO };
         float innerW = winW - 2 * WIN_PAD;
         float tabW   = (innerW - (tabs.length - 1) * TAB_GAP) / tabs.length;
         for (int i = 0; i < tabs.length; i++) {
@@ -128,7 +128,6 @@ public final class V2Settings extends V2Screen {
         switch (currentTab) {
             case GRAPHICS -> {
                 yCursor = addUiScaleRow(rowX, yCursor);
-                yCursor = addUiFontScaleRow(rowX, yCursor);
                 yCursor = addOutlineWidthRow(rowX, yCursor);
                 yCursor = addOutlineDarknessRow(rowX, yCursor);
                 yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.outlineSmoothing"),
@@ -145,8 +144,6 @@ public final class V2Settings extends V2Screen {
                         Settings::instantActions, Settings::setInstantActions);
                 yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
                         Settings::queueAccelEnabled, Settings::setQueueAccelEnabled);
-                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.meleePreview"),
-                        Settings::meleePreview, Settings::setMeleePreview);
                 // Destructive actions live at the bottom of the tab so the
                 // settings flow always reads "set values, then take any
                 // one-shot action".
@@ -168,9 +165,6 @@ public final class V2Settings extends V2Screen {
             case AUDIO -> {
                 yCursor = addSfxVolumeRow(rowX, yCursor);
                 yCursor = addMusicVolumeRow(rowX, yCursor);
-            }
-            case ACCESS -> {
-                yCursor = addColorblindRow(rowX, yCursor);
             }
         }
 
@@ -222,13 +216,6 @@ public final class V2Settings extends V2Screen {
         return addSliderRow(x, yTop, TextCatalog.get("ui.settings.uiScale"),
                 Settings.UI_SCALE_CHOICES, Settings.uiScale(),
                 v -> { Settings.setUiScale(v); ctx.applyUiScale(); },
-                v -> formatNumber(v) + "x");
-    }
-
-    private float addUiFontScaleRow(float x, float yTop) {
-        return addSliderRow(x, yTop, TextCatalog.get("ui.settings.uiFontSize"),
-                Settings.UI_FONT_SCALE_CHOICES, Settings.uiFontScale(),
-                v -> { Settings.setUiFontScale(v); ctx.applyFontScale(); },
                 v -> formatNumber(v) + "x");
     }
 
@@ -446,7 +433,6 @@ public final class V2Settings extends V2Screen {
             case GRAPHICS -> TextCatalog.get("ui.settings.tab.graphics");
             case LOG      -> TextCatalog.get("ui.settings.tab.log");
             case AUDIO    -> TextCatalog.get("ui.settings.tab.audio");
-            case ACCESS   -> TextCatalog.get("ui.settings.tab.access");
         };
     }
 
@@ -457,28 +443,6 @@ public final class V2Settings extends V2Screen {
             case GRAPHICS -> IconSprites.Icon.VIDEO;
             case LOG      -> IconSprites.Icon.BOOK;
             case AUDIO    -> IconSprites.Icon.SOUND;
-            case ACCESS   -> IconSprites.Icon.GAME;
-        };
-    }
-
-    private float addColorblindRow(float x, float yTop) {
-        List<ChoiceSpec> choices = new ArrayList<>();
-        Settings.ColorblindPreset current = Settings.colorblindPreset();
-        for (Settings.ColorblindPreset p : Settings.ColorblindPreset.values()) {
-            final Settings.ColorblindPreset chosen = p;
-            choices.add(new ChoiceSpec(colorblindLabel(p), 80f,
-                    current == p,
-                    () -> { Settings.setColorblindPreset(chosen); show(); }));
-        }
-        return addRow(TextCatalog.get("ui.settings.colorblind"), x, yTop, choices);
-    }
-
-    private static String colorblindLabel(Settings.ColorblindPreset p) {
-        return switch (p) {
-            case NONE   -> TextCatalog.get("ui.settings.colorblind.none");
-            case DEUTER -> TextCatalog.get("ui.settings.colorblind.deuter");
-            case PROTAN -> TextCatalog.get("ui.settings.colorblind.protan");
-            case TRITAN -> TextCatalog.get("ui.settings.colorblind.tritan");
         };
     }
 

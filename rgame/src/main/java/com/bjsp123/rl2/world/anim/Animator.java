@@ -857,7 +857,7 @@ public final class Animator {
         boolean visible = MobSystem.isVisibleToPlayer(level, mob)
                 || visibleAt(level, from) || visibleAt(level, to);
         if (!visible) return;
-        if (sounds != null && mob.isPlayer) sounds.playAt("sfx.item.use.frog", level, from);
+        if (sounds != null && mob.isPlayer) sounds.playAt(itemUseKey(m.item()), level, from);
         int ddx = from.tileX() - to.tileX();
         int ddy = from.tileY() - to.tileY();
         int dist = Math.max(Math.abs(ddx), Math.abs(ddy));

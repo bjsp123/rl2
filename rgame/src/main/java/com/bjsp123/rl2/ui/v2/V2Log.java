@@ -153,6 +153,12 @@ public final class V2Log extends BasePopup {
     // -- Shape pass ------------------------------------------------------------
     @Override
     protected void renderShapesPass() {
+        // Apply the log font-size setting for the whole shapes pass: this pass
+        // draws no body text, but its layout (line wrapping, ctx.lineH()-based
+        // badge + scrollbar geometry) must be computed at the SAME scale the text
+        // pass draws the lines at, or the dots/scroll won't line up.
+        float logPrevScale = ctx.fontRegular.getScaleX();
+        ctx.fontRegular.getData().setScale(Settings.logFontScale());
         rebuildLines();
         updateScroll();
         ctx.applyProjection();
@@ -188,6 +194,7 @@ public final class V2Log extends BasePopup {
         bodyBand.drawScrollbar(s, totalPhysicalLines() * ctx.lineH());
 
         s.end();
+        ctx.fontRegular.getData().setScale(logPrevScale);
     }
 
     private void drawFilterBtnShape(ShapeRenderer s, Rect r, boolean active) {
@@ -260,6 +267,10 @@ public final class V2Log extends BasePopup {
 
     private void drawLogLines() {
         if (visibleLines.isEmpty()) return;
+        // Match the log font-size setting used to wrap + lay out the lines in
+        // renderShapesPass, so the drawn text aligns with the badge/scroll geometry.
+        float logPrevScale = ctx.fontRegular.getScaleX();
+        ctx.fontRegular.getData().setScale(Settings.logFontScale());
         float contentBottom = bodyRect.y - bodyBand.scroller.scrollY();
         float totalH        = totalPhysicalLines() * ctx.lineH();
         float textX = bodyRect.x + LINE_PAD_L + BADGE_COL_W;
@@ -280,6 +291,7 @@ public final class V2Log extends BasePopup {
                 TextDraw.left(ctx, ctx.fontRegular, col, le.lines.get(j), textX, lineTop);
             }
         }
+        ctx.fontRegular.getData().setScale(logPrevScale);
     }
 
     private Color lineColor(LogEvent e) {

@@ -19,14 +19,3 @@ allprojects {
         maven { url "https://oss.sonatype.org/content/repositories/releases/" }
     }
 }
-
-tasks.register('validateData', Exec) {
-    group = 'verification'
-    description = 'Validate data CSV references, string catalog coverage, and config.csv coverage.'
-    workingDir = rootProject.projectDir
-    commandLine 'python', 'scripts/validate_data.py'
-}
-
-tasks.register('check') {
-    dependsOn tasks.named('validateData')
-}

@@ -17,7 +17,9 @@ sfx.item.use.potion,sfx/t_magic_spell_potion_01.wav
 sfx.item.use.jade_fish,sfx/t_magic_spell_healing_06.wav
 sfx.item.use.jade_crab,sfx/t_magic_spell_healing_07.wav
 sfx.item.use.frog,sfx/t_magic_spell_healing_06.wav
+sfx.item.use.frog2,sfx/t_magic_spell_healing_06.wav
 sfx.item.use.grapple,sfx/t_arrow_whoosh.wav
+sfx.item.use.jade_bull,sfx/warriorwhoosh.wav
 sfx.item.use.gem,sfx/t_gems_pickup_shake_05.wav
 sfx.item.use.gem.elemental_inscription,sfx/t_magic_spell_fire_02.wav
 sfx.item.use.gem.fervent_aspiration,sfx/t_ui_confirm_levelup_04.wav
@@ -46,7 +48,7 @@ sfx.item.use.gem.pill_of_immortality,sfx/t_magic_spell_healing_04.wav
 sfx.item.use.ranged,
 sfx.item.use.ranged.physical,
 sfx.item.use.ranged.magic,
-sfx.item.impact.ranged,
+sfx.item.impact.ranged,sfx/whackimpact.wav
 sfx.item.impact.ranged.physical,
 sfx.item.impact.ranged.magic,
 sfx.effect,sfx/t_magic_spell_shot_03.wav
@@ -77,7 +79,7 @@ sfx.mob.action.pickup,sfx/t_loot_wood_pickup_01.wav
 sfx.mob.action.ability,sfx/t_magic_spell_air_04.wav
 sfx.mob.action.phasedodge,sfx/t_magic_spell_healing_06.wav
 sfx.mob.action.eat,
-sfx.mob.action.tame,
+sfx.mob.action.tame,sfx/ping.wav
 sfx.mob.spawn.generic,sfx/t_monster_swamp_mix_02.wav    
 sfx.player.attack.melee,sfx/t_blade_whoosh_light_01.wav
 sfx.mob.attack.melee,sfx/t_blade_whoosh_light_02.wav
@@ -137,10 +139,10 @@ sfx.world.action.enter_level,sfx/magic_spell_portal_04.wav
 # combat
 sfx.combat.surprise,
 sfx.combat.flinch,
-sfx.combat.knockback,
+sfx.combat.knockback,sfx/knockbackthud.wav
 # heal
-sfx.player.heal,
-sfx.mob.heal,
+sfx.player.heal,sfx/healingsound.wav
+sfx.mob.heal,sfx/healingsound.wav
 # buffs - generic fallback + a few per-type overrides (key = BuffType lowercased)
 sfx.buff.apply,
 sfx.buff.apply.on_fire,
@@ -155,11 +157,12 @@ sfx.buff.dot.poisoned,
 sfx.mob.action.teleport,
 sfx.player.teleport.out,
 sfx.player.teleport.in,
-sfx.player.revive,
+sfx.player.revive,sfx/resurrect.wav
 # world
-sfx.world.beacon.activate,
+sfx.world.beacon.activate,sfx/activatedevice2.wav
+sfx.world.forge.open,sfx/activatedevice.wav
 sfx.world.loot.drop,
-sfx.item.create,
+sfx.item.create,sfx/itemcreated.wav
 sfx.world.chasm.fall,
 sfx.world.chasm.itemfall,
 # surface spread - generic fallback + per-type (water/oil/blood/ice)

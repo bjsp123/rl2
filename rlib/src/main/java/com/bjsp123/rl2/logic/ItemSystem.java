@@ -1512,7 +1512,7 @@ public final class ItemSystem {
         Point from = user.position;
         user.position = arrival;
         if (level.events != null) {
-            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobJumped(user, from, arrival));
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobJumped(user, from, arrival, item));
         }
 
         // Free melee swing - mirrors {@code MobSystem.attack}'s damage roll
@@ -1611,7 +1611,7 @@ public final class ItemSystem {
         Point from = jumper.position;
         jumper.position = target;
         if (level.events != null) {
-            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobJumped(jumper, from, target));
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobJumped(jumper, from, target, item));
         }
         if (jumper.isPlayer) {
             EventLog.add(Messages.playerUses(actorName(jumper),

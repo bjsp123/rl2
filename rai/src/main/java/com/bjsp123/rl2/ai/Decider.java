@@ -4,13 +4,10 @@ import com.bjsp123.rl2.ai.action.Action;
 import com.bjsp123.rl2.ai.action.ActionDescendStairs;
 import com.bjsp123.rl2.ai.action.ActionLibrary;
 import com.bjsp123.rl2.ai.action.ActionMoveToward;
-import com.bjsp123.rl2.ai.action.ActionPickup;
 import com.bjsp123.rl2.ai.action.ActionWait;
 import com.bjsp123.rl2.ai.eval.CombatEval;
 import com.bjsp123.rl2.ai.eval.ExplorationEval;
 import com.bjsp123.rl2.ai.eval.ItemEval;
-import com.bjsp123.rl2.ai.goal.GoalDescend;
-import com.bjsp123.rl2.ai.goal.GoalPickupKnown;
 import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Mob;
@@ -248,7 +245,7 @@ public final class Decider {
 
     /** On the stairs → descend immediately. Otherwise step toward them. */
     static Action planDescend(WorldState s) {
-        if (GoalDescend.onStairs(s)) return new ActionDescendStairs();
+        if (s.onStairs()) return new ActionDescendStairs();
         Point dest = s.memory != null && s.memory.stairsDown != null
                 ? s.memory.stairsDown : s.level.stairsDown;
         if (dest == null) return new ActionWait();

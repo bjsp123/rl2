@@ -433,7 +433,7 @@ public final class ActionLibrary {
             if (it == null) continue;
             boolean want = ItemEval.isConsumable(it)
                     || (it.inventoryCategory != null && it.inventoryCategory.isEquipment()
-                        && com.bjsp123.rl2.ai.goal.GoalPickupKnown.isEquipmentUpgrade(me, it));
+                        && isEquipmentUpgrade(me, it));
             if (!want) continue;
             Point t = e.getKey();
             if (t.equals(me.position)) {
@@ -451,5 +451,23 @@ public final class ActionLibrary {
                     Math.max(0.2, 0.6 + value * 0.01 - 0.015 * d),
                     true));
         }
+    }
+
+    /** True if {@code it} beats the agent's current best equipped piece in the
+     *  same category, so floor-pickup and bag-equip decisions agree on what's
+     *  an upgrade. (Merged from the former {@code GoalPickupKnown} helper.) */
+    private static boolean isEquipmentUpgrade(Mob mob, Item it) {
+        if (mob == null || mob.inventory == null) return true;
+        var cat = it.inventoryCategory;
+        double candScore = ItemEval.equipmentScore(it, mob);
+        double best = 0.0;
+        int n = com.bjsp123.rl2.model.Inventory.positionCount(cat);
+        for (int i = 0; i < n; i++) {
+            Item slot = mob.inventory.equipped(cat, i);
+            if (slot != null) {
+                best = Math.max(best, ItemEval.equipmentScore(slot, mob));
+            }
+        }
+        return candScore > best;
     }
 }

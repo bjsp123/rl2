@@ -89,10 +89,9 @@ public final class UiCtx implements Disposable {
         v2Stage = new com.bjsp123.rl2.ui.v2.stage.V2Stage(this);
     }
 
-    /** Re-apply {@link UiFontScale#scale()} to both fonts. Mutates the
-     *  BitmapFont instances in place so every screen using the shared
-     *  context picks up the new size on the next frame. Call after
-     *  {@code Settings.setUiFontScale(...)}. */
+    /** Apply {@link Settings#uiFontScale()} to both fonts. The scale is
+     *  frozen at 1.0 (the user-facing option was removed), so this just
+     *  normalises the shared BitmapFont instances to their base size. */
     public void applyFontScale() {
         float s = Settings.uiFontScale();
         if (s <= 0f) s = 1f;

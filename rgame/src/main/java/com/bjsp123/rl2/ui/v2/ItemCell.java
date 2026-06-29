@@ -74,39 +74,10 @@ public final class ItemCell {
     private static void drawChargeBar(UiCtx ctx, Item item, Mob holder,
                                       float x, float y, float w) {
         int max = ItemStats.effectiveMaxCharge(item, ItemStats.effectiveLevel(item, holder));
-        float pad = 4f, barH = 3f;
-        float barW = w - 2 * pad;
-        float bx = x + pad, by = y + 4f;
-
-        ctx.batch.setColor(UIVars.BAR_CHARGE_BACKDROP);
-        ctx.batch.draw(ctx.whitePixel, bx - 1, by - 1, barW + 2, barH + 2);
-
-        if (max <= 1) {
-            ctx.batch.setColor(UIVars.BAR_CHARGE_EMPTY);
-            ctx.batch.draw(ctx.whitePixel, bx, by, barW, barH);
-            if (item.charge >= 1f) {
-                ctx.batch.setColor(UIVars.BAR_CHARGE_FULL);
-                ctx.batch.draw(ctx.whitePixel, bx, by, barW, barH);
-            } else if (item.charge > 0f) {
-                ctx.batch.setColor(UIVars.BAR_CHARGE_PARTIAL);
-                ctx.batch.draw(ctx.whitePixel, bx, by, barW * item.charge, barH);
-            }
-        } else {
-            float slotW = (barW - (max - 1)) / max;
-            for (int i = 0; i < max; i++) {
-                float sx = bx + i * (slotW + 1f);
-                float filled = Math.min(1f, Math.max(0f, item.charge - i));
-                ctx.batch.setColor(UIVars.BAR_CHARGE_EMPTY);
-                ctx.batch.draw(ctx.whitePixel, sx, by, slotW, barH);
-                if (filled >= 1f) {
-                    ctx.batch.setColor(UIVars.BAR_CHARGE_FULL);
-                    ctx.batch.draw(ctx.whitePixel, sx, by, slotW, barH);
-                } else if (filled > 0f) {
-                    ctx.batch.setColor(UIVars.BAR_CHARGE_PARTIAL);
-                    ctx.batch.draw(ctx.whitePixel, sx, by, slotW * filled, barH);
-                }
-            }
-        }
+        ChargeBar.draw(max, item.charge, x, y, w, (c, rx, ry, rw, rh) -> {
+            ctx.batch.setColor(c);
+            ctx.batch.draw(ctx.whitePixel, rx, ry, rw, rh);
+        });
         ctx.batch.setColor(Color.WHITE);
     }
 }

@@ -3,6 +3,7 @@ package com.bjsp123.rl2.save;
 import com.badlogic.gdx.utils.JsonReader;
 import com.badlogic.gdx.utils.JsonValue;
 import com.bjsp123.rl2.persistence.Persistence;
+import com.bjsp123.rl2.save.Achievements.Achievement;
 
 /**
  * Persistence I/O for {@link Achievements}. Stores a small JSON object with

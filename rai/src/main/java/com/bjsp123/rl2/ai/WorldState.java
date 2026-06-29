@@ -101,13 +101,29 @@ public final class WorldState {
     /** Window for treating a threat sighting as *recent* when ranking combat targets. */
     public static final int RECENT_THREAT_TURNS = 30;
 
-    /** Lazy-cached stairs-reachability for this tick - set by {@link com.bjsp123.rl2.ai.goal.GoalDescend}
-     *  on first query to avoid 1-9 Pathfinder calls per selection pass per tick. */
+    /** True if the agent is standing on the down-stairs tile. */
+    public boolean onStairs() {
+        return level.tiles[mob.position.tileX()][mob.position.tileY()]
+                == com.bjsp123.rl2.model.Tile.STAIRS_DOWN;
+    }
+
+    /** Lazy-cached stairs-reachability for this tick, computed on first query
+     *  to avoid 1-9 Pathfinder calls per selection pass per tick. */
     private Boolean cachedStairsReachable;
     public boolean stairsReachable() {
         if (cachedStairsReachable != null) return cachedStairsReachable;
-        cachedStairsReachable = com.bjsp123.rl2.ai.goal.GoalDescend.computeStairsReachable(this);
+        cachedStairsReachable = computeStairsReachable();
         return cachedStairsReachable;
+    }
+
+    /** Same BFS as the EXPLORE / DESCEND action's step source, so a "reachable"
+     *  verdict guarantees the move action will produce a step (no BFS mismatch). */
+    private boolean computeStairsReachable() {
+        Point stairs = memory.stairsDown != null ? memory.stairsDown : level.stairsDown;
+        if (stairs == null) return false;
+        if (mob.position.equals(stairs)) return true;
+        return com.bjsp123.rl2.ai.eval.ExplorationEval.nextStepToTarget(
+                mob, level, memory, stairs) != null;
     }
 
     /** Lazy-cached reachability of the {@link #lastKnownEnemyTile}. Lets the

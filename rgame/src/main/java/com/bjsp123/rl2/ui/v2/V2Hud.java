@@ -18,7 +18,6 @@ import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.world.render.BuffIcons;
 import com.bjsp123.rl2.world.render.IconSprites;
-import com.bjsp123.rl2.world.render.PortraitSprites;
 
 import java.util.List;
 
@@ -67,7 +66,7 @@ public final class V2Hud {
     /** Scale factor applied to all HUD interactive elements so they read
      *  comfortably at every UiScale setting. */
     private static final float HUD_SCALE    = 1.5f;
-    private static final float ACTION_BTN   = 48f * 0.8f * HUD_SCALE;
+    private static final float ACTION_BTN   = 48f * 0.9f * HUD_SCALE;
     private static final float ACTION_GAP   = 4f;
     private static final float ICON_PAD     = 6f  * HUD_SCALE;
     private static final float CLOCK_SIZE   = 18f;
@@ -541,13 +540,17 @@ public final class V2Hud {
     private void renderTextPass() {
         ctx.batch.begin();
 
-        // Portrait - character class sprite drawn in the top-left cell.
+        // Portrait - the dedicated portrait art is blank for now, so use the TOP
+        // HALF (head + torso) of the player's in-world sprite as a stand-in.
         Mob playerForPortrait = currentPlayer();
         if (playerForPortrait != null && playerForPortrait.characterClass != null) {
-            TextureRegion portrait = PortraitSprites.regionFor(
+            TextureRegion full = com.bjsp123.rl2.world.render.MobSprites.regionFor(
                     playerForPortrait.characterClass);
-            if (portrait != null) {
-                ctx.batch.draw(portrait,
+            if (full != null) {
+                TextureRegion head = new TextureRegion(full.getTexture(),
+                        full.getRegionX(), full.getRegionY(),
+                        full.getRegionWidth(), full.getRegionHeight() / 2);
+                ctx.batch.draw(head,
                         portraitRect.x + 4f, portraitRect.y + 4f,
                         portraitRect.w - 8f, portraitRect.h - 8f);
             }
@@ -591,9 +594,9 @@ public final class V2Hud {
             int n = com.bjsp123.rl2.ui.skin.Settings.quickslotCount();
             for (int i = 0; i < n; i++) {
                 Rect r = actionRects[i];
-                // Hotkey label: 1-9 then 0 for the tenth slot (1-9-0 hotbar
-                // convention, matching GameInput's key mapping).
-                String label = i < 9 ? Integer.toString(i + 1) : "0";
+                // Hotkey label: 1-9, then 0 / A / B for slots 10-12 (matching
+                // GameInput's key mapping).
+                String label = com.bjsp123.rl2.ui.hud.ActionBar.slotLabel(i);
                 ctx.layout.setText(f, label);
                 float lx = r.x + 3f;
                 float ly = r.y + r.h - 2f;
