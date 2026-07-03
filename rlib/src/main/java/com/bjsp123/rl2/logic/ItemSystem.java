@@ -1000,6 +1000,12 @@ public final class ItemSystem {
                 // Teleport orb (used, not thrown): self-teleport to a random tile
                 // on this level, avoiding landing within 10 Chebyshev tiles of a
                 // hostile unless 100 draws all fail. Consumes the orb on success.
+                // Suppressed in the sealed arenas (mirror match, final boss) so
+                // the player can't blink out of the fight - orb kept, no turn.
+                if (level.suppressTeleport) {
+                    if (user.isPlayer) EventLog.add(Messages.teleportSuppressed(item.name != null ? item.name : item.type));
+                    return false;
+                }
                 acted = MobSystem.teleportRandomlyOnLevel(level, user, 10, 100);
                 if (acted) MobSystem.removeFromInventory(user, item);
             }

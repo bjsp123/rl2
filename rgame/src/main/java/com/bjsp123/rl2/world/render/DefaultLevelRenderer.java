@@ -1430,6 +1430,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  The rear pass adds this and the front pass subtracts it, so the cap shears. */
     private float mushroomShimmyPx(Level level, int x, int y) {
         if (level.vegetation == null || level.vegetation[x][y] != Vegetation.MUSHROOMS) return 0f;
+        // The shimmy is a spore-puff tell - only meaningful for a mushroom the
+        // player can actually see. Remembered (explored-but-not-visible)
+        // mushrooms stay still rather than telegraphing through the fog.
+        if (level.visible == null || !level.visible[x][y]) return 0f;
         if (!level.sporesSeeded || level.sporeCountdown == null
                 || level.sporeCountdown[x][y] >= 2) return 0f;
         return (float) Math.sin(stairLabelTime * 38.0 + (x * 1.7f + y * 2.3f));
@@ -2341,7 +2345,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
             return;
         }
         int x = it.location.tileX(), y = it.location.tileY();
-        if (!inBounds(level, x, y) || !level.visible[x][y]) return;
+        // Ground items show on any EXPLORED tile, not just currently-visible
+        // ones, so loot you've walked past stays on the map in memory; the fog
+        // overlay dims the remembered tiles. (Mobs still require live sight.)
+        if (!inBounds(level, x, y) || !level.explored[x][y]) return;
         float dx = x * (float) CELL;
         float dy = y * (float) CELL + ENTITY_Y_OFFSET;
         if (it.useBehavior == Item.UseBehavior.POWERUP) {

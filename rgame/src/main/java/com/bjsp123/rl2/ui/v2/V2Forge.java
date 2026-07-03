@@ -5,6 +5,8 @@ import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.scenes.scene2d.utils.ScissorStack;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.ui.ItemLore;
 import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
@@ -20,6 +22,7 @@ import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.world.render.GemSprites;
+import com.bjsp123.rl2.world.render.IconSprites;
 import com.bjsp123.rl2.world.render.ItemSprites;
 
 import java.util.ArrayList;
@@ -32,13 +35,19 @@ import java.util.Set;
  * equation row <b>X + Y + Z &rarr; Q</b>: the inputs are either a specific gem's
  * picture (a {@code NAMED} keystone) or a tinted silhouette for the
  * {@code any} / {@code metal-or-exotic} / {@code exotic} constraints, and the
- * result Q is the crafted item's picture plus its name.
+ * result Q is the crafted item's picture plus its name. Each row carries a
+ * trailing <b>?</b> info button that jumps to the scroll's encyclopedia page.
  *
  * <p>Tapping a gem chip in the top strip filters the list to recipes that gem
  * can contribute to (RL-52 "placing a gem filters the list"). Rows the player
  * can't currently afford render greyed-but-legible; tapping an affordable row
- * consumes the gems and builds the item into the bag.
+ * confirms, then consumes the gems and drops the forged item at the hearth.
  *
+ * <p>The list scrolls inside a scissor-clipped band so partial rows render
+ * smoothly at the band edges rather than popping in/out a whole row at a time.
+ * A standalone "Recycle an item" button above the list breaks a chosen bag
+ * item down into gems (the inventory picker + gem-forecast confirmation live
+ * in {@code PlayController.openRecyclePicker}).
  */
 public final class V2Forge extends V2Screen {
 
@@ -51,6 +60,8 @@ public final class V2Forge extends V2Screen {
 
     private static final float ROW_H = 46f;
     private static final float ROW_GAP = 4f;
+    private static final float PAD = 14f;
+    private static final float CHIP_SZ = 34f;
 
     /** One built sample output per recipe (for icon + name), recipe order. */
     private final List<Row> allRows = new ArrayList<>();
@@ -64,17 +75,21 @@ public final class V2Forge extends V2Screen {
 
     private int pressedRow = -1;
     private int pressedChip = -1;
+    /** Index in {@link #visible} of the recipe whose "?" info button is held. */
+    private int pressedInfo = -1;
 
-    /** Pinned "any item -> gems" recipe at the top of the list. Tapping it opens
-     *  the inventory as a picker (wired via {@link #onRecycle}) to choose the
-     *  item to break down into gems. */
-    private final Rect recycleRow = new Rect();
-    private boolean recyclePressed;
+    /** "Recycle an item" action button - opens the inventory item-picker (wired
+     *  via {@link #onRecycle}) to choose an item to break down into gems. Built
+     *  in {@link #buildLayout()} and owned by {@link V2Screen#buttons}, so its
+     *  press / click plumbing is handled by the base class. */
+    private Btn recycleBtn;
     /** Opens the inventory item-picker for recycling; set by the caller. */
     private final Runnable onRecycle;
-    /** Representative gems drawn on the recycle row's output side. */
-    private static final GemSpecies[] RECYCLE_GEMS = {
-            GemSpecies.LETTUSTONE, GemSpecies.GOLD, GemSpecies.BLOODHIVE };
+
+    /** Scratch rectangles for the band scissor clip - converted to screen space
+     *  via the viewport each frame. */
+    private final Rectangle scissorIn = new Rectangle();
+    private final Rectangle scissorOut = new Rectangle();
 
     /** Preview/confirm popup shown before a recipe is actually forged, so the
      *  player can read what the scroll does first. */
@@ -130,6 +145,16 @@ public final class V2Forge extends V2Screen {
         float winH = Math.min(600f, vh - 96f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
+        // The "Recycle an item" button sits below the chip strip, full content
+        // width. Its position is bag-independent, so build it here; the base
+        // class draws + dispatches it as a normal screen button.
+        float contentX = window.x + PAD;
+        float contentW = window.w - 2 * PAD;
+        float btnH = 44f;
+        float btnY = chipStripY() - 12f - btnH;
+        recycleBtn = new Btn("Recycle an item", contentX, btnY, contentW, btnH, onRecycle).header();
+        buttons.add(recycleBtn);
+
         // Build one sample output Item per recipe (icon + name source). Skip
         // recipes whose output has no items.csv row yet.
         allRows.clear();
@@ -146,6 +171,13 @@ public final class V2Forge extends V2Screen {
         band.scroller.resetTop();
     }
 
+    /** Top-of-strip Y for the filter chips - just under the title header band.
+     *  Bag-independent, so both {@link #buildLayout()} (recycle button) and
+     *  {@link #layout(Mob)} (chip rects) can read it. */
+    private float chipStripY() {
+        return window.top() - headerBandH() - CHIP_SZ;
+    }
+
     /** Distinct raw-gem species currently in the bag, in encounter order. */
     private List<GemSpecies> bagGemSpecies(Mob p) {
         List<GemSpecies> out = new ArrayList<>();
@@ -160,22 +192,20 @@ public final class V2Forge extends V2Screen {
 
     /** Recompute the chip strip + visible row rects each frame. */
     private void layout(Mob p) {
-        float pad = 14f;
-        float contentX = window.x + pad;
-        float contentW = window.w - 2 * pad;
+        float contentX = window.x + PAD;
+        float contentW = window.w - 2 * PAD;
 
         // Chip strip just under the header band.
         chips.clear();
         List<GemSpecies> species = bagGemSpecies(p);
-        float chipSz = 34f;
         float chipGap = 6f;
-        float chipY = window.top() - headerBandH() - chipSz;
+        float chipY = chipStripY();
         for (int i = 0; i < species.size(); i++) {
-            float cx = contentX + i * (chipSz + chipGap);
-            if (cx + chipSz > contentX + contentW) break; // single row of chips
+            float cx = contentX + i * (CHIP_SZ + chipGap);
+            if (cx + CHIP_SZ > contentX + contentW) break; // single row of chips
             Chip c = new Chip();
             c.species = species.get(i);
-            c.rect.set(cx, chipY, chipSz, chipSz);
+            c.rect.set(cx, chipY, CHIP_SZ, CHIP_SZ);
             chips.add(c);
         }
 
@@ -189,32 +219,42 @@ public final class V2Forge extends V2Screen {
             if (candidates.contains(row.recipe)) visible.add(row);
         }
 
-        // List area below the chip strip, down to the bottom padding. The
-        // "any item -> gems" recipe is pinned at the very top; the scrollable
-        // band of normal recipes fills the rest.
-        float listTop = chipY - 10f;
-        float listBottom = window.y + pad;
-        recycleRow.set(contentX, listTop - ROW_H, contentW, ROW_H);
-        float bandTop = recycleRow.y - ROW_GAP;
-        band.set(contentX, listBottom, contentW, Math.max(0f, bandTop - listBottom));
-
+        // Scrollable list band: from just below the recycle button down to the
+        // window's bottom padding. The band scissor-clips its rows, so partial
+        // rows render at the edges instead of popping a whole row at a time.
+        float listTop = recycleBtn.rect.y - 10f;
+        float listBottom = window.y + PAD;
+        band.set(contentX, listBottom, contentW, Math.max(0f, listTop - listBottom));
         band.update(listContentH());
+
+        float infoSz = ROW_H - 14f;
         for (int i = 0; i < visible.size(); i++) {
             float cellTop = band.top() - i * (ROW_H + ROW_GAP) + band.scroller.scrollY();
             float cellY = cellTop - ROW_H;
             Row row = visible.get(i);
             row.rect.set(contentX, cellY, contentW, ROW_H);
+            // "?" info button at the right edge, clear of the scrollbar gutter.
+            row.infoRect.set(row.rect.right() - 8f - infoSz,
+                    row.rect.cy() - infoSz * 0.5f, infoSz, infoSz);
             row.affordable = (p != null)
                     && RecipeSystem.canAfford(row.recipe, p.inventory);
-            // Only fully-inside-the-band rows draw, so the list never spills past
-            // the window onto the HUD below; the scrollbar reveals the rest.
-            row.onScreen = cellTop <= band.top() && cellY >= band.bottom();
         }
     }
 
     /** Total height of all recipe rows stacked. */
     private float listContentH() {
         return visible.isEmpty() ? 0f : visible.size() * (ROW_H + ROW_GAP) - ROW_GAP;
+    }
+
+    /** Push a scissor matching the list band onto the GL stack. Returns
+     *  {@code true} when the clip was applied - caller must {@code popScissors}.
+     *  Flush the active renderer (shapes or batch) BEFORE calling so prior
+     *  draws aren't clipped, and again before the matching pop. */
+    private boolean pushBandScissor() {
+        scissorIn.set(band.rect.x, band.rect.y, band.rect.w, band.rect.h);
+        ctx.viewport.calculateScissors(
+                ctx.batch.getTransformMatrix(), scissorIn, scissorOut);
+        return ScissorStack.pushScissors(scissorOut);
     }
 
     @Override
@@ -244,31 +284,28 @@ public final class V2Forge extends V2Screen {
                     r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
         }
 
-        // Pinned "any item -> gems" recycle row (accent border to mark it
-        // special / always available).
-        {
-            Rect r = recycleRow;
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
-                    UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
-            s.setColor(recyclePressed ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
-        }
-
-        // Recipe rows.
-        for (int i = 0; i < visible.size(); i++) {
-            Row row = visible.get(i);
-            if (!row.onScreen) continue;
-            Rect r = row.rect;
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-            boolean pressed = i == pressedRow && row.affordable;
-            // Shared vocabulary: affordable = darker active fill (pressed lighter);
-            // unaffordable = flat grey so it clearly reads as disabled.
-            Color bg = pressed ? UIVars.BTN_PRESSED_BG
-                    : (row.affordable ? UIVars.BTN_BG : UIVars.BTN_DISABLED_BG);
-            s.setColor(bg);
-            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+        // Recipe rows, scissor-clipped to the list band.
+        s.flush();
+        if (pushBandScissor()) {
+            for (int i = 0; i < visible.size(); i++) {
+                Row row = visible.get(i);
+                Rect r = row.rect;
+                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+                boolean pressed = i == pressedRow && row.affordable;
+                // Shared vocabulary: affordable = darker active fill (pressed
+                // lighter); unaffordable = flat grey so it reads as disabled.
+                Color bg = pressed ? UIVars.BTN_PRESSED_BG
+                        : (row.affordable ? UIVars.BTN_BG : UIVars.BTN_DISABLED_BG);
+                s.setColor(bg);
+                s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                        r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+                // "?" info button chrome (always tappable, even when the recipe
+                // itself is unaffordable).
+                ButtonChrome.shape(ctx, row.infoRect, i == pressedInfo, false, false,
+                        UIVars.BTN_BG);
+            }
+            s.flush();
+            ScissorStack.popScissors();
         }
 
         // Shared scrollbar affordance on the right edge of the list.
@@ -280,8 +317,6 @@ public final class V2Forge extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                 "Gem Hearth", window.cx(), window.top() - ctx.headerLineH() * 0.5f);
 
-        drawRecycleRow(ctx);
-
         // Chip gem icons.
         for (Chip c : chips) {
             TextureRegion reg = GemSprites.regionFor(c.species);
@@ -291,41 +326,23 @@ public final class V2Forge extends V2Screen {
             ctx.batch.draw(reg, c.rect.cx() - sz * 0.5f, c.rect.cy() - sz * 0.5f, sz, sz);
         }
 
-        for (Row row : visible) {
-            if (!row.onScreen) continue;
-            drawRecipeRow(ctx, row);
+        // Recipe rows, scissor-clipped to the list band.
+        TextureRegion infoIcon = IconSprites.regionFor(IconSprites.Icon.INFO);
+        ctx.batch.flush();
+        if (pushBandScissor()) {
+            for (int i = 0; i < visible.size(); i++) {
+                Row row = visible.get(i);
+                drawRecipeRow(ctx, row);
+                ButtonChrome.icon(ctx, row.infoRect, infoIcon, i == pressedInfo, false);
+            }
+            ctx.batch.flush();
+            ScissorStack.popScissors();
         }
         ctx.batch.setColor(Color.WHITE);
     }
 
-    /** Draw the pinned recycle recipe: "any item -> [gem gem gem] ?  recycle item". */
-    private void drawRecycleRow(UiCtx ctx) {
-        Rect r = recycleRow;
-        float icon = r.h - 14f;
-        float x = r.x + 8f;
-        float cy = r.cy();
-        // Input: the literal text "any item".
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.TEXT_BODY, "any item", x + icon * 0.5f, cy + 6f);
-        x += icon;
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "->", x + 12f, cy + 6f);
-        x += 26f;
-        // Output: a small row of gems + a trailing "?".
-        for (GemSpecies g : RECYCLE_GEMS) {
-            TextureRegion reg = GemSprites.regionFor(g);
-            if (reg != null) {
-                ctx.batch.setColor(1f, 1f, 1f, 1f);
-                ctx.batch.draw(reg, x, cy - icon * 0.5f, icon, icon);
-            }
-            x += icon + 1f;
-        }
-        TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, "?", x + 8f, cy + 6f);
-        x += 22f;
-        TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                TextDraw.ellipsize(ctx.fontRegular, "recycle an item", r.right() - x - 8f),
-                x, cy + 6f);
-    }
-
-    /** Draw one X+Y+Z -> Q equation across the row. */
+    /** Draw one X+Y+Z -> Q equation across the row, ending before the "?" info
+     *  button at the right edge. */
     private void drawRecipeRow(UiCtx ctx, Row row) {
         Rect r = row.rect;
         float alpha = row.affordable ? 1f : 0.45f;
@@ -348,7 +365,8 @@ public final class V2Forge extends V2Screen {
                 "->", x + 12f, cy + 6f);
         x += 26f;
 
-        // Output icon + name.
+        // Output icon + name. The name is clipped to stop short of the info
+        // button so the two never collide.
         TextureRegion out = ItemSprites.regionFor(row.sample);
         if (out != null) {
             ctx.batch.setColor(1f, 1f, 1f, alpha);
@@ -357,8 +375,9 @@ public final class V2Forge extends V2Screen {
         x += icon + 8f;
         String name = ItemNames.displayName(row.sample, null);
         if (name == null || name.isEmpty()) name = row.recipe.output;
+        float nameMaxW = row.infoRect.x - x - 6f;
         TextDraw.left(ctx, ctx.fontRegular, tint(UIVars.TEXT_BODY, alpha),
-                TextDraw.ellipsize(ctx.fontRegular, name, r.right() - x - 8f),
+                TextDraw.ellipsize(ctx.fontRegular, name, nameMaxW),
                 x, cy + 6f);
     }
 
@@ -403,13 +422,17 @@ public final class V2Forge extends V2Screen {
     @Override
     protected boolean onTouchDownInBody(float vx, float vy) {
         band.touchDown(vx, vy);
-        if (recycleRow.contains(vx, vy)) { recyclePressed = true; return true; }
         for (int i = 0; i < chips.size(); i++) {
             if (chips.get(i).rect.contains(vx, vy)) { pressedChip = i; return true; }
         }
-        for (int i = 0; i < visible.size(); i++) {
-            Row row = visible.get(i);
-            if (row.onScreen && row.rect.contains(vx, vy)) { pressedRow = i; return true; }
+        // Rows + their info buttons - only inside the clipped band, so a tap on
+        // a row scrolled past the band edge doesn't fire.
+        if (band.rect.contains(vx, vy)) {
+            for (int i = 0; i < visible.size(); i++) {
+                Row row = visible.get(i);
+                if (row.infoRect.contains(vx, vy)) { pressedInfo = i; return true; }
+                if (row.rect.contains(vx, vy)) { pressedRow = i; return true; }
+            }
         }
         return window.contains(vx, vy); // claim taps inside the window
     }
@@ -419,6 +442,7 @@ public final class V2Forge extends V2Screen {
         if (band.touchDragged(vy)) {
             pressedRow = -1;
             pressedChip = -1;
+            pressedInfo = -1;
             return true;
         }
         return false;
@@ -432,11 +456,6 @@ public final class V2Forge extends V2Screen {
 
     @Override
     protected boolean onTouchUpInBody(float vx, float vy) {
-        if (recyclePressed) {
-            recyclePressed = false;
-            if (recycleRow.contains(vx, vy) && onRecycle != null) onRecycle.run();
-            return true;
-        }
         if (pressedChip >= 0) {
             int idx = pressedChip;
             pressedChip = -1;
@@ -447,18 +466,35 @@ public final class V2Forge extends V2Screen {
             }
             return true;
         }
+        if (pressedInfo >= 0) {
+            int idx = pressedInfo;
+            pressedInfo = -1;
+            if (idx < visible.size() && band.rect.contains(vx, vy)
+                    && visible.get(idx).infoRect.contains(vx, vy)) {
+                openRecipeInfo(visible.get(idx));
+            }
+            return true;
+        }
         if (pressedRow >= 0) {
             int idx = pressedRow;
             pressedRow = -1;
             if (idx < visible.size()) {
                 Row row = visible.get(idx);
-                if (row.onScreen && row.rect.contains(vx, vy) && row.affordable) {
+                if (band.rect.contains(vx, vy) && row.rect.contains(vx, vy)
+                        && row.affordable) {
                     openPreview(row);
                 }
             }
             return true;
         }
         return false;
+    }
+
+    /** Jump to the output scroll's encyclopedia page. Pushes the standalone
+     *  encyclopedia screen pre-selected to the entry, so Back returns here. */
+    private void openRecipeInfo(Row row) {
+        if (sounds != null) sounds.play("sfx.ui.click");
+        game.pushScreen(new V2EncyclopediaScreen(game, row.recipe.output));
     }
 
     /** Show the scroll's description with a Make / Cancel choice before forging,
@@ -494,8 +530,8 @@ public final class V2Forge extends V2Screen {
         final GemRecipe recipe;
         final Item sample;
         final Rect rect = new Rect();
+        final Rect infoRect = new Rect();
         boolean affordable;
-        boolean onScreen;
         Row(GemRecipe recipe, Item sample) { this.recipe = recipe; this.sample = sample; }
     }
 

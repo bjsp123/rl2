@@ -19,7 +19,7 @@ achievement.HALL_OF_FAMER.name,Memento Mori
 achievement.hidden,Hidden achievement - keep playing.
 achievement.KILLED_ONE_OF_EACH.description,Kill at least one of every mob species.
 achievement.KILLED_ONE_OF_EACH.name,Bestiary Complete
-achievement.PEST_CONTROLLER.description,Kill a rat, a spider, a soldier bug, and a loathesome bug.
+achievement.PEST_CONTROLLER.description,"Kill a rat, a spider, a soldier bug, and a loathesome bug."
 achievement.PEST_CONTROLLER.name,Pest Controller
 achievement.KOBOLD_KRUSHER.description,Kill at least one of every kobold caste.
 achievement.KOBOLD_KRUSHER.name,Kobold Krusher
@@ -122,7 +122,7 @@ buff.FRIGHTENED.details,"Frightened creatures can't approach danger.  Magical bl
 buff.FRIGHTENED.name,Frightened
 buff.FRIGHTENED.tip,You're *frightened* and can't attack terrifying enemies.  The best cure is to walk into *light*.
 buff.FROZEN.description,Frozen in place until incoming damage chips the ice away.
-buff.FROZEN.details,Prevents all motion and action until the buff ends. Taking damage removes 2 stacks, ending it sooner.
+buff.FROZEN.details,"Prevents all motion and action until the buff ends. Taking damage removes 2 stacks, ending it sooner."
 buff.FROZEN.name,Frozen
 buff.FROZEN.tip,You're *frozen solid* - you can't act until the ice melts or you're hit.
 buff.GHOSTLY.description,Fly and pass through solid objects like a ghost.
@@ -322,6 +322,7 @@ eventlog.item.noCharge,The {item} has no charge left.
 eventlog.item.powerupAbsorb,{actor} absorbs the {item}.
 eventlog.item.powerupFallback,powerup
 eventlog.item.thrown,{thrower} throws the {item}.
+eventlog.item.teleportSuppressed,The {item} fizzles; there is no teleporting within these walls.
 eventlog.item.unequipped,{player} unequips the {item}.
 eventlog.item.verb.drink,drink
 eventlog.item.verb.use,use
@@ -519,7 +520,7 @@ item.FIRE_BOMB.tip,Throw to ignite a tile and any mob on it. Fire burns over tim
 item.EYE_CHARM.description,An unblinking carved eye that lends you a sliver of second sight.
 item.EYE_CHARM.description2,"Lets you sense living enemies through up to two walls - only the creatures, not the rooms beyond."
 item.EYE_CHARM.name,eye charm
-item.EYE_OF_INSIGHT.description,A lidless eye set in a charm, lit by a faint inner glow.
+item.EYE_OF_INSIGHT.description,"A lidless eye set in a charm, lit by a faint inner glow."
 item.EYE_OF_INSIGHT.description2,Sheds a little light and lets you sense enemies one wall away.
 item.EYE_OF_INSIGHT.name,Eye of Insight
 item.FISH.description,A small fresh fish.
@@ -594,7 +595,7 @@ item.KITE_SHIELD.name,kite shield
 item.KITE_SHIELD.tip,Larger offhand shield with *more armor*.\nReplaces a weapon's off-hand slot.
 item.ICE_DAGGER.description,A frost-bound throwing blade that chills whatever it strikes.
 item.ICE_DAGGER.name,ice dagger
-item.ICE_DAGGER.tip,Throw for ranged damage that also *chills* the target - slowing it, and freezing it if it's wet.
+item.ICE_DAGGER.tip,"Throw for ranged damage that also *chills* the target - slowing it, and freezing it if it's wet."
 item.KUNAI.description,A heavy throwing blade that hits far harder than a knife.
 item.KUNAI.name,kunai
 item.KUNAI.tip,Throw for heavy ranged damage - the strongest thrown blade.
@@ -609,7 +610,7 @@ item.PEAR.description,A ripe green pear.
 item.PEAR.description2,Eating it grants a short burst of Regeneration.
 item.PEAR.name,pear
 item.PEAR.tip,*Eat to gain Regeneration* for a few turns.\nBasic healing food.
-item.BLUE_PEAR.description,A pear with an eerie blue sheen, humming with stored magic.
+item.BLUE_PEAR.description,"A pear with an eerie blue sheen, humming with stored magic."
 item.BLUE_PEAR.description2,Eating it recharges your charged items like two charge pills.
 item.BLUE_PEAR.name,blue pear
 item.BLUE_PEAR.tip,*Eat to recharge your charged items* - worth two charge pills.\nSave it for an item that has run dry.
@@ -621,7 +622,7 @@ item.PEAR_SCRUMPTIOUS.name,scrumptious pear
 item.PEAR_SCRUMPTIOUS.tip,*Eat to gain long-lasting Regeneration* - twice the usual duration.\nGreat healing food.
 item.PEAR_SILVERY.description,A pear with skin that shimmers like polished silver. Mysterious.
 item.PEAR_SILVERY.name,silvery pear
-item.PEAR_SILVERY.tip,*Eat to gain Regeneration and Hope* (resist fear).\nA rare, magical pear.
+item.PEAR_SILVERY.tip,"*Eat to gain Regeneration and Hope* (resist fear).\nA rare, magical pear."
 item.POTION_ESP.description,A glutinous potion that seems made of eyeballs.
 item.POTION_ESP.description2,Allows the drinker to perceive distant creatures.
 item.POTION_ESP.name,potion of perception
@@ -647,7 +648,7 @@ item.POTION_POISON.description2,"If thrown, creates a puff of poison vapor."
 item.POTION_POISON.name,potion of poison
 item.POTION_POISON.tip,Throw to *poison* a target.\nDon't drink - it'll hurt YOU.
 item.POTION_SORCERY.description,A glittering brew that infuses the drinker with magical energy.
-item.POTION_SORCERY.description2,Increases the power of wands, potions, and other item effects while active.
+item.POTION_SORCERY.description2,"Increases the power of wands, potions, and other item effects while active."
 item.POTION_SORCERY.name,potion of sorcery
 item.POTION_SORCERY.tip,Drink to *empower item effects* for a short time.\nSave for a big wand zap or potion.
 item.POWER_ORB.description,A sphere of power that makes you stronger.
@@ -753,7 +754,7 @@ item.useVerb.POWERUP,absorb
 item.useVerb.TELEPORT,teleport
 item.useVerb.WAND,zap
 item.VINE_HOOK.description,"This powerful magical vine wraps itself around a foe, allowing you to haul them nearer."
-item.VINE_HOOK.description2,Can pull enemies -- smaller ones, at least -- toward you.
+item.VINE_HOOK.description2,"Can pull enemies -- smaller ones, at least -- toward you."
 item.VINE_HOOK.name,grapplevine
 item.VINE_HOOK.tip,"Like a grappling hook, but *vines pull enemies to you* instead of pulling you to them."
 item.VOID_BOMB.description,"A powerful bomb that draws in matter, creating a void."
@@ -802,7 +803,7 @@ item.WAND_OIL.tip,Pours *oil on a tile + mobs*.\nIgnite for big fire damage.
 item.WAND_POLYMORPH.description,A wand that constantly shifts and changes.
 item.WAND_POLYMORPH.description2,Can turn a creature into something else.
 item.WAND_POLYMORPH.name,wand of polymorph
-item.WAND_POLYMORPH.tip,Reshapes nearby floor and transforms creatures into *random similarly sized forms*.\nUnpredictable, but potent.
+item.WAND_POLYMORPH.tip,"Reshapes nearby floor and transforms creatures into *random similarly sized forms*.\nUnpredictable, but potent."
 item.WAND_WATER.description,A pale blue wand that drips with water.
 item.WAND_WATER.description2,Creates a pool of water at the target location.
 item.WAND_WATER.name,wand of water
@@ -862,7 +863,7 @@ mob.ability.WRAITH_DODGE,Phases aside to avoid an incoming attack{cooldown}
 mob.AWFUL_WRAITH.description,These horrible phantoms seem to have something to do with the beacon system.  They are huge in size and malice.
 mob.AWFUL_WRAITH.name,awful wraith
 mob.AWFUL_WRAITH.tip,"High evasion, armor piercing, magic resistant -- good luck."
-mob.GREAT_WRAITH.description,The Great Wraith, lord of the beacons and warden of the tombs' deepest floor. Every beacon you lit fed its power -- and it raises your every fallen foe to its side.
+mob.GREAT_WRAITH.description,"The Great Wraith, lord of the beacons and warden of the tombs' deepest floor. Every beacon you lit fed its power -- and it raises your every fallen foe to its side."
 mob.GREAT_WRAITH.name,Great Wraith
 mob.GREAT_WRAITH.tip,"The final boss. Stronger for every beacon lit; surrounded by the revenants of all you have slain."
 mob.BARBARIAN_PRINCESS.description,"A fierce barbarian princess, pursuing her own unknowable goals"
@@ -1093,7 +1094,7 @@ perk.hurler.tip,"Powerful synergy with bombs and thrown weapons -- and perhaps w
 perk.jump.description,"Adds magical extra distance to abilities that move you -- such as the Frog, the Jade Bull, and the Blinkstone."
 perk.jump.name,Blink
 perk.jump.tip,Powerful synergy with movement items.
-perk.dodge.description,Grants a phase-dodge: when about to be hit, you blink to an adjacent square and avoid the whole attack. Cooldown shortens per level (11 - level turns).
+perk.dodge.description,"Grants a phase-dodge: when about to be hit, you blink to an adjacent square and avoid the whole attack. Cooldown shortens per level (11 - level turns)."
 perk.dodge.name,Dodge
 perk.dodge.tip,"Lifesaving against hard hitters - but it needs a free square to blink to, and it recharges between dodges."
 perk.durableBody.name,Durable Body
@@ -1108,9 +1109,9 @@ perk.killer.tip,Useful when fighting a lot of enemies -- if you can build up mom
 perk.knockback.description,Levels 1-5: +1 tile of melee knockback per level (max 5 extra tiles). Levels 6-10: each additional level adds extra damage when the knocked-back target strikes a solid object.
 perk.knockback.name,Knockback
 perk.knockback.tip,"Useful if enemies are in a line or have their backs to a wall, because knockback can do damage each time an enemy slams into something."
-perk.manaFount.description,Half the time you consume food or a potion, it restores level/2 charges to each wand you carry or have equipped.
+perk.manaFount.description,"Half the time you consume food or a potion, it restores level/2 charges to each wand you carry or have equipped."
 perk.manaFount.name,Mana Fount
-perk.manaFount.tip,Extremely useful for heavy wand users, especially when you rely on charged attacks.
+perk.manaFount.tip,"Extremely useful for heavy wand users, especially when you rely on charged attacks."
 perk.stealth.description,"Enemies are less likely to wake up, and can see you from less far away, for each level of Stealth."
 perk.stealth.name,Stealth
 perk.stealth.tip,Makes it harder for sleeping enemies to notice you -- good for surprise attacks and staying out of trouble.
@@ -1239,9 +1240,9 @@ ui.characterSelect.startingLevel,Starting level: {level}
 ui.characterSelect.startOnLanding,Start on Landing: {state}
 ui.characterSelect.difficulty,Difficulty: {name}
 difficulty.easy.name,Easy
-difficulty.easy.description,Player has double hit points, 8 lives, regenerates 1.5% of hit points per turn, and moves 20% faster. Fresh enemies arrive on levels less frequently. Good for a relaxing experience and exploring.
+difficulty.easy.description,"Player has double the hit points of Normal, 8 extra lives (revive charms), regenerates 1.5% of max hit points per turn, and moves 20% faster. Fresh enemies arrive on levels less frequently. Good for a relaxing experience and exploring."
 difficulty.gentle.name,Gentle
-difficulty.gentle.description,Player has 50% more hit points, 4 lives, slowly regenerates, and moves 10% faster. Fresh enemies arrive a little less often. Good for learning the game.
+difficulty.gentle.description,"Player has 50% more hit points than Normal, 4 extra lives (revive charms), slowly regenerates, and moves 10% faster. Fresh enemies arrive a little less often. Good for learning the game."
 difficulty.normal.name,Normal
 difficulty.normal.description,A balanced and tough roguelike experience. Most players won't get to the endgame.
 difficulty.hard.name,Hard
@@ -1403,11 +1404,11 @@ terrain.material.MUSHROOMS.desc,A patch of fungus. Flammable like grass and nour
 terrain.material.FIRE.desc,Open flame. Burns anything flammable and sears creatures standing in it.
 terrain.material.TREES.desc,Dense foliage. Blocks line of sight and burns for a long time once lit. A size-5 or larger creature crashing through flattens it to grass.
 terrain.surface.WATER.desc,Shallow water. Soaks creatures (doubling lightning damage) and snuffs out fire.
-terrain.surface.BLOOD.desc,Spilled blood. Conductive, helps suppress fire, good for mushrooms.
+terrain.surface.BLOOD.desc,"Spilled blood. Conductive, helps suppress fire, good for mushrooms."
 terrain.surface.OIL.desc,An oil slick. Doubles the cost to move across it and ignites instantly.
 terrain.surface.ICE.desc,Frozen ground.
-terrain.cloud.SMOKE.desc,Opaque smoke. Blocks sight and light, but not movement or projectiles.
-terrain.cloud.STEAM.desc,Hot vapour, thrown up where fire meets water or blood.
+terrain.cloud.SMOKE.desc,"Opaque smoke. Blocks sight and light, but not movement or projectiles."
+terrain.cloud.STEAM.desc,"Hot vapour, thrown up where fire meets water or blood."
 terrain.cloud.POISON.desc,A toxic cloud. Poisons anything standing in it each turn.
 terrain.cloud.SPORE.desc,A drifting haze of fungal spores puffed out by mushrooms. Poisons anything standing in it each turn.
 ui.look.row.terrain,Terrain
@@ -1522,77 +1523,77 @@ world.mobState.following,following
 world.mobState.hiding,hiding
 
 item.SC_BRAND_WEAPON.name,Scroll of Branding
-item.SC_BRAND_WEAPON.description,Add a random elemental brand to a weapon, offhand, armor, or amulet you choose.
+item.SC_BRAND_WEAPON.description,"Sear a living elemental rune into a weapon, offhand, armor, or amulet of your choosing, that it may smite your foes with primal fury."
 item.SC_BRAND_WEAPON.tip,*Read to brand a chosen weapon* with a random element.\nThe on-hit effect scales with the item\'s level.
 item.SC_UPGRADE_WEAPON.name,Scroll of Tempering
-item.SC_UPGRADE_WEAPON.description,Raise an equippable item (or jade companion) of your choice by one level.
+item.SC_UPGRADE_WEAPON.description,Pour raw potential into a chosen piece of gear or jade companion and raise its mastery by a full level.
 item.SC_UPGRADE_WEAPON.tip,*Read to add +1 level to a chosen item.*\nBest spent on your main weapon or armor.
 item.SC_SMOKE_LEVEL_AND_ESP.name,Scroll of Fogsight
-item.SC_SMOKE_LEVEL_AND_ESP.description,Gain ESP and Insight at maximum stacks and fill the whole level with smoke.
+item.SC_SMOKE_LEVEL_AND_ESP.description,"Drown the entire floor in roiling smoke while your mind flies wide open, granting ESP and Insight at their fullest measure."
 item.SC_SMOKE_LEVEL_AND_ESP.tip,*Read to gain ESP and Insight* while smoke blinds your foes.\nSee everything; let them see nothing.
 item.SC_RANDOM_TELEPORT.name,Scroll of Displacement
-item.SC_RANDOM_TELEPORT.description,Teleport to a random spot on the current level.
+item.SC_RANDOM_TELEPORT.description,"Unmoor yourself from space itself and reappear elsewhere upon this floor, wherever fate sees fit to fling you."
 item.SC_RANDOM_TELEPORT.tip,*Read to blink to a random spot on this floor.*\nAn escape when cornered - though where you land is luck.
 item.SC_GREAT_WARD.name,Scroll of Warding
-item.SC_GREAT_WARD.description,Gain 8 stacks each of Protection (heavy armor) and Anti-Magic (magic resistance).
+item.SC_GREAT_WARD.description,"Wreathe yourself in a great ward, eight-fold Protection and Anti-Magic turning blade and spell alike aside."
 item.SC_GREAT_WARD.tip,*Read for 8 turns of heavy armor and magic resistance.*\nRead just before a boss lands its big hit.
 item.SC_FULL_RESTORE.name,Scroll of the Healing Peach
-item.SC_FULL_RESTORE.description,Heal fully, recharge all items, and gain enough experience to reach the next level.
-item.SC_FULL_RESTORE.tip,*Read to fully heal, recharge every item, and reach your next level.*\nThe ultimate panic button - save it for a dire moment.
+item.SC_FULL_RESTORE.description,"Be made whole once more: every wound closes, every item brims with power anew, and wisdom enough to ascend a full level floods into you."
+item.SC_FULL_RESTORE.tip,"*Read to fully heal, recharge every item, and reach your next level.*\nThe ultimate panic button - save it for a dire moment."
 item.SC_CONJURE_BOMBS.name,Manifest Munitions
-item.SC_CONJURE_BOMBS.description,Manifest ten bombs, as if found four levels deeper.
+item.SC_CONJURE_BOMBS.description,"Call forth a cache of ten bombs out of the deeper dark, as though plundered four floors below."
 item.SC_CONJURE_BOMBS.tip,*Read to conjure a pile of bombs* from four floors deeper.\nAn instant arsenal for a thrower.
 item.SC_CONJURE_POTIONS.name,Manifest Elixirs
-item.SC_CONJURE_POTIONS.description,Manifest five random potions, as if found two levels deeper.
+item.SC_CONJURE_POTIONS.description,"Conjure five potions out of empty air, brewed as if drawn from two floors below."
 item.SC_CONJURE_POTIONS.tip,Read to *conjure five random potions*.\nForged from two gems at a hearth.
 item.SC_FREEZE_ALL_ENEMIES.name,Scroll of Glaciation
-item.SC_FREEZE_ALL_ENEMIES.description,Freeze every enemy on the level solid.
-item.SC_FREEZE_ALL_ENEMIES.tip,*Read to freeze every enemy on the floor solid.*\nClear a room, then strike before they thaw.
+item.SC_FREEZE_ALL_ENEMIES.description,Loose a deathly winter that seizes every foe upon the floor in unbreakable ice.
+item.SC_FREEZE_ALL_ENEMIES.tip,"*Read to freeze every enemy on the floor solid.*\nClear a room, then strike before they thaw."
 item.SC_HARVEST_PLANTS.name,Scroll of Reaping
-item.SC_HARVEST_PLANTS.description,Destroy visible grass and trees, leaving a healing or charge pill on each cleared square.
-item.SC_HARVEST_PLANTS.tip,*Read to reap visible grass and trees into healing or charge pills.*\nWorth most in a leafy, overgrown room.
+item.SC_HARVEST_PLANTS.description,"Reap all grass and trees in sight in a single sweep, leaving a healing or charge pill where each one stood."
+item.SC_HARVEST_PLANTS.tip,"*Read to reap visible grass and trees into healing or charge pills.*\nWorth most in a leafy, overgrown room."
 item.SC_SEAL_DOORS_ONETIME.name,Lesser Scroll of Sealing
-item.SC_SEAL_DOORS_ONETIME.description,Turn every regular door on the level into a one-time door.
+item.SC_SEAL_DOORS_ONETIME.description,"Bind every common door on the floor with a fragile seal, each fated to open but one last time."
 item.SC_SEAL_DOORS_ONETIME.tip,*Read to turn the floor\'s doors into one-time doors.*\nSlam a doorway shut on a chasing horde.
 item.SC_POLYMORPH_ENEMIES.name,Scroll of Transformation
-item.SC_POLYMORPH_ENEMIES.description,Polymorph every visible enemy into a random creature.
+item.SC_POLYMORPH_ENEMIES.description,"Unwrite the shape of every foe in sight, reforging each into some other creature at random."
 item.SC_POLYMORPH_ENEMIES.tip,*Read to polymorph every enemy you can see.*\nDefangs a deadly pack - but beware the rare upgrade.
 item.SC_CONJURE_WAND.name,Manifest Wand
-item.SC_CONJURE_WAND.description,Manifest a random wand, as if found four levels deeper.
+item.SC_CONJURE_WAND.description,"Summon a wand of unknown craft from the depths, as if unearthed four floors below."
 item.SC_CONJURE_WAND.tip,*Read to conjure a random wand* from four floors deeper.\nA gamble for a powerful spell.
 item.SC_CONJURE_TOOLS.name,Manifest Tools
-item.SC_CONJURE_TOOLS.description,Manifest two random tools (never jade items), as if found four levels deeper.
-item.SC_CONJURE_TOOLS.tip,*Read to conjure two random tools* (never jade charms).\nGrapples, jumps and blink-stones for the cunning.
+item.SC_CONJURE_TOOLS.description,"Conjure two cunning tools out of the deep dark (never jade), as if recovered four floors below."
+item.SC_CONJURE_TOOLS.tip,"*Read to conjure two random tools* (never jade charms).\nGrapples, jumps and blink-stones for the cunning."
 item.SC_BLOOD_NOVA.name,Scroll of Bloodflower
-item.SC_BLOOD_NOVA.description,Destroy all visible blood and deal heavy physical damage to every visible enemy, scaled by the blood consumed.
-item.SC_BLOOD_NOVA.tip,*Read to drink in visible blood and blast every visible foe.*\nThe more gore on the floor, the harder it hits.
+item.SC_BLOOD_NOVA.description,"Drink in every drop of spilled blood within sight and hurl it back as a crimson nova, each visible foe wracked the harder for the gore consumed."
+item.SC_BLOOD_NOVA.tip,"*Read to drink in visible blood and blast every visible foe.*\nThe more gore on the floor, the harder it hits."
 item.SC_BLAST_THROUGH_WALLS.name,Scroll of Probability Inversion
-item.SC_BLAST_THROUGH_WALLS.description,Choose any point on the level, seen or unseen, and detonate a great explosion there, straight through walls.
-item.SC_BLAST_THROUGH_WALLS.tip,*Read, then aim anywhere - even through walls* - for a great detonation.\nReach a foe no bolt could.
+item.SC_BLAST_THROUGH_WALLS.description,"Mark any point on the floor, seen or hidden, and rend reality with a great detonation that cares nothing for stone or wall."
+item.SC_BLAST_THROUGH_WALLS.tip,"*Read, then aim anywhere - even through walls* - for a great detonation.\nReach a foe no bolt could."
 item.SC_IGNITE_NEAR_STATUES.name,Scroll of Widespread Immolation
-item.SC_IGNITE_NEAR_STATUES.description,Set every square beside a statue or lamp ablaze, searing the enemies caught there.
+item.SC_IGNITE_NEAR_STATUES.description,"Call fire to every statue and lamp, the ground around each erupting in flame to sear whatever stands too close."
 item.SC_IGNITE_NEAR_STATUES.tip,*Read to set the ground beside every statue and lamp alight.*\nA trap for foes lurking among the decor.
 item.SC_SUMMON_CLONES.name,Scroll of Mirror Images
-item.SC_SUMMON_CLONES.description,Summon up to eight allied clones of yourself on adjacent tiles.
+item.SC_SUMMON_CLONES.description,"Splinter your own image into as many as eight loyal doubles, arrayed at your side to fight as one."
 item.SC_SUMMON_CLONES.tip,*Read to spawn eight allied clones of yourself.*\nOverwhelm a lone boss with a sudden mob.
 item.SC_SEAL_DOORS_CRYSTAL.name,Greater Scroll of Sealing
-item.SC_SEAL_DOORS_CRYSTAL.description,Turn every regular door on the level into a crystal door.
+item.SC_SEAL_DOORS_CRYSTAL.description,"Encase every common door on the floor in shimmering crystal, sealing the ways behind unyielding glass."
 item.SC_SEAL_DOORS_CRYSTAL.tip,*Read to seal the floor\'s doors as crystal doors.*\nSturdier barricades than the Lesser Seal.
 item.SC_MADDEN_ENEMIES.name,Scroll of Flailing
-item.SC_MADDEN_ENEMIES.description,Drive every visible enemy berserk, turning each against all other creatures.
+item.SC_MADDEN_ENEMIES.description,"Shatter the minds of every foe in sight, setting each upon all others in a frenzy of blind rage."
 item.SC_MADDEN_ENEMIES.tip,*Read to madden visible enemies* into attacking everything - each other included.\nLet a pack tear itself apart.
 item.SC_CONJURE_ITEMS.name,Manifest Sundries
-item.SC_CONJURE_ITEMS.description,Manifest three random objects around you, as if found four levels deeper.
+item.SC_CONJURE_ITEMS.description,"Pull three sundry treasures out of the aether around you, gathered as if from four floors below."
 item.SC_CONJURE_ITEMS.tip,*Read to conjure three random items* from four floors deeper.\nA grab-bag of fresh gear.
 item.SC_CONJURE_ARMOR.name,Manifest Armor
-item.SC_CONJURE_ARMOR.description,Manifest a piece of armor, as if found four levels deeper.
+item.SC_CONJURE_ARMOR.description,"Forge a piece of armor from raw possibility, wrought as if recovered four floors below."
 item.SC_CONJURE_ARMOR.tip,*Read to forge a piece of armor* from four floors deeper.\nShore up a weak defense.
 item.SC_CONJURE_BRANDED_SWORD.name,Manifest Runeblade
-item.SC_CONJURE_BRANDED_SWORD.description,Manifest a branded sword, as if found four levels deeper.
+item.SC_CONJURE_BRANDED_SWORD.description,"Call forth a sword already alive with an elemental brand, as if claimed four floors below."
 item.SC_CONJURE_BRANDED_SWORD.tip,*Read to forge a branded sword* from four floors deeper.\nA ready-made elemental blade.
 item.SC_VOID_NEARBY_FLOOR.name,Scroll of the Path through Oblivion
-item.SC_VOID_NEARBY_FLOOR.description,Levitate for eight turns, then collapse all floor within eight squares into chasm; non-flying enemies fall through.
+item.SC_VOID_NEARBY_FLOOR.description,"Rise weightless for eight turns as the world unmakes itself, all ground within eight squares yawning open into the void; the earthbound plummet into nothing."
 item.SC_VOID_NEARBY_FLOOR.tip,*Read to levitate eight turns as the floor around you falls away.*\nDrop your earthbound pursuers into the void.
 item.SC_SHIELD_SELF.name,Scroll of Invulnerability
-item.SC_SHIELD_SELF.description,Become invulnerable for 100 turns.
+item.SC_SHIELD_SELF.description,"Clad yourself in an absolute aegis, untouchable by any harm for one hundred turns."
 item.SC_SHIELD_SELF.tip,*Read to become invulnerable for 100 turns.*\nWalk through anything - briefly a god.

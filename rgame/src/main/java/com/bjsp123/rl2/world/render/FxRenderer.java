@@ -898,25 +898,45 @@ final class FxRenderer {
                 float age = (e.frame + e.sub) - e.particleSpawnFrame[i];
                 if (age < 0 || age >= AnimationVars.PARTICLE_LIFE) continue;
                 float lifeFrac = age / (float) AnimationVars.PARTICLE_LIFE;
-                // First half: tint -> white.  Second half: white, alpha fades.
-                float whiteFrac = Math.min(1f, lifeFrac * 2f);
-                float cr = base.r + (1f - base.r) * whiteFrac;
-                float cg = base.g + (1f - base.g) * whiteFrac;
-                float cb = base.b + (1f - base.b) * whiteFrac;
-                float alpha = lifeFrac < 0.5f ? 1f : 1f - (lifeFrac - 0.5f) * 2f;
+                float cr, cg, cb, alpha, drawSize;
+                if (e.particlePop) {
+                    // Rising bubble: holds its colour + size while it climbs,
+                    // then swells to ~2x and fades over the final quarter of
+                    // life so the disappearance reads as a pop.
+                    cr = base.r; cg = base.g; cb = base.b;
+                    float popStart = 0.72f;
+                    if (lifeFrac < popStart) {
+                        alpha = 0.85f;
+                        drawSize = size;
+                    } else {
+                        float pf = (lifeFrac - popStart) / (1f - popStart);
+                        alpha = 0.85f * (1f - pf);
+                        drawSize = size * (1f + pf);
+                    }
+                } else {
+                    // First half: tint -> white.  Second half: white, alpha fades.
+                    float whiteFrac = Math.min(1f, lifeFrac * 2f);
+                    cr = base.r + (1f - base.r) * whiteFrac;
+                    cg = base.g + (1f - base.g) * whiteFrac;
+                    cb = base.b + (1f - base.b) * whiteFrac;
+                    alpha = lifeFrac < 0.5f ? 1f : 1f - (lifeFrac - 0.5f) * 2f;
+                    drawSize = size;
+                }
                 float dx = e.particleVX[i] * age;
                 float dy = e.particleVY[i] * age;
                 float px = baseX + e.particleX0[i] + dx;
                 float py = baseY + e.particleY0[i] + dy;
+                // Swell from the particle's centre so the pop grows in place.
+                float off = (drawSize - size) * 0.5f;
                 if (e.particleBright) {
                     // Soft outer halo at 50% alpha, then crisp core on top.
                     batch.setColor(cr, cg, cb, alpha * 0.5f);
-                    batch.draw(sprite, px - size / 2f, py - size / 2f, size * 2f, size * 2f);
+                    batch.draw(sprite, px - drawSize / 2f, py - drawSize / 2f, drawSize * 2f, drawSize * 2f);
                     batch.setColor(cr, cg, cb, alpha);
-                    batch.draw(sprite, px, py, size, size);
+                    batch.draw(sprite, px - off, py - off, drawSize, drawSize);
                 } else {
                     batch.setColor(cr, cg, cb, alpha);
-                    batch.draw(sprite, px, py, size, size);
+                    batch.draw(sprite, px - off, py - off, drawSize, drawSize);
                 }
             }
             batch.setColor(Color.WHITE);

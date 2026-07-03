@@ -290,6 +290,12 @@ public class Level {
      *  {@link #lockedExit}. See {@code LevelSystem.openExitIfCleared}. */
     public boolean exitUnlocksOnClear;
 
+    /** When true, teleport orbs do nothing on this level - neither the thrown
+     *  scatter (banishing foes out of the arena) nor the self-teleport. Set on
+     *  the sealed duel/boss arenas (mirror match, final boss) so the encounter
+     *  can't be trivialised by teleporting the enemies away or escaping. */
+    public boolean suppressTeleport;
+
     /** Tile where {@code STAIRS_DOWN} is stamped once the level is cleared.
      *  Used only with {@link #exitUnlocksOnClear}; the factory owns the
      *  coordinate so no logic hard-codes it. */
@@ -361,6 +367,10 @@ public class Level {
         /** Spawn-level escalation: spawn level = {@code 1 + ramp * (turnsOnLevel/10)},
          *  capped at the progression max. Zero = no escalation. */
         public int levelRampPer10Turns;
+        /** Hard ceiling on a spawned mob's level (after depth + ramp). Zero =
+         *  no spawner-specific cap (falls back to the progression max). Lets a
+         *  level like the Horde keep its trickle from out-scaling the player. */
+        public int maxSpawnLevel;
         /** Cap on live mobs (counted across {@link #speciesPool}) before the
          *  spawner pauses. */
         public int maxAlive = 30;

@@ -2414,7 +2414,10 @@ public class MobSystem {
             int base = MobProgression.depthAdjustedSpawnLevel(
                     level, Registries.mob(species));
             int ramp = sp.levelRampPer10Turns * (level.turnsOnLevel / 10);
-            int lvl  = Math.min(GameBalance.MAX_CHARACTER_LEVEL, base + ramp);
+            int cap  = sp.maxSpawnLevel > 0
+                    ? Math.min(GameBalance.MAX_CHARACTER_LEVEL, sp.maxSpawnLevel)
+                    : GameBalance.MAX_CHARACTER_LEVEL;
+            int lvl  = Math.min(cap, base + ramp);
             MobProgression.setSpawnLevel(bud, lvl);
         }
         if (sp.spawnAwake) bud.stateOfMind = Mob.StateOfMind.AWAKE;
@@ -3959,6 +3962,15 @@ public class MobSystem {
         // wielded gear and generic items can't, even if their data still
         // carries a throwEffect.
         if (!it.isThrowable()) return;
+        // Teleport-suppressing arenas (mirror match, final boss): a thrown
+        // teleport orb would scatter the rival players / boss out of the
+        // sealed fight. Refuse the throw outright - orb kept, no turn spent -
+        // so the player isn't punished for the attempt.
+        if (level != null && level.suppressTeleport
+                && it.throwEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
+            if (thrower.isPlayer) EventLog.add(Messages.teleportSuppressed(it.name != null ? it.name : it.type));
+            return;
+        }
         if (it.inventoryCategory == Item.InventoryCategory.BOMB) {
             com.bjsp123.rl2.util.ActionTracker.bumpBomb(thrower);
             if (thrower.isPlayer) thrower.runStats.recordBombUse(it.type);

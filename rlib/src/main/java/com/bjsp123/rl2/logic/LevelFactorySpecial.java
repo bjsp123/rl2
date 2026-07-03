@@ -122,6 +122,7 @@ public final class LevelFactorySpecial {
         // get stamped once all foes are dead.
         level.sealOnEntry = true;
         level.exitUnlocksOnClear = true;
+        level.suppressTeleport = true;   // can't banish the rival players away
 
         // Central hub room - round, 11x11. Stairs-up here (visible until
         // the player enters; sealOnEntry clears it on arrival so there's no
@@ -196,6 +197,7 @@ public final class LevelFactorySpecial {
         Level level = blankFloor(depth, Level.VisualTheme.GOTHIC);
         level.kind = Level.LevelKind.FINAL_BOSS;
         level.sealOnEntry = true;   // the entry stairs vanish on arrival
+        level.suppressTeleport = true;   // no teleport-orb cheese in the boss arena
 
         int cx = W / 2, cy = H / 2;
         int r  = BOSS_ARENA_R;
@@ -279,10 +281,13 @@ public final class LevelFactorySpecial {
         // ("missing no-arg constructor: ImmutableCollections$ListN") - which made
         // any save with this spawner unloadable.
         spawner.speciesPool = new java.util.ArrayList<>(
-                java.util.List.of("SPIDER", "RED_ANT", "BLACK_ANT"));
+                java.util.List.of("SPIDER", "BLACK_ANT"));
         spawner.placement = Level.Spawner.Placement.MIDPOINT_TO_EXIT;
         spawner.spawnAwake = true;
         spawner.levelRampPer10Turns = 1;
+        // Keep the trickle survivable: the ramp never pushes a bug past level 8,
+        // no matter how long the player lingers in the corridor.
+        spawner.maxSpawnLevel = 8;
         level.spawner = spawner;
 
         // 7-tile-wide corridor running the full width. Vertical span: rows

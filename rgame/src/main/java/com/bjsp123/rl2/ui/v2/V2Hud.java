@@ -48,7 +48,7 @@ import java.util.function.Supplier;
  *       a ShapeRenderer pass for backgrounds + bars, then a SpriteBatch
  *       pass for icons, status line, and burger glyph (drawn via shapes again
  *       at the end since they're geometry, not textures)</li>
- *   <li>uiStage (popups) renders on top - popups still come from V1 for now</li>
+ *   <li>the shared {@code game.ui.v2Stage} (V2 popups) renders on top</li>
  * </ol>
  *
  * <p>Input: {@link #input()} returns an {@link InputProcessor} that the

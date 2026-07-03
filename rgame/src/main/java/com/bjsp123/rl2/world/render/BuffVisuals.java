@@ -32,7 +32,7 @@ public final class BuffVisuals {
     public enum Category { NONE, OUTLINE_PULSE, GLOW, DRIFT, OVERHEAD_ICON, DESATURATE, TREMBLE, ZOOM }
 
     /** Which particle factory a {@link Category#DRIFT} buff emits. */
-    public enum Drift { NONE, ARROW_UP, BURST, DROPS }
+    public enum Drift { NONE, ARROW_UP, BURST, DROPS, BUBBLES }
 
     /** One buff's visual descriptor. {@code r,g,b} are the outline/glow tint (0..1);
      *  {@code particleTint}/{@code drift} drive DRIFT emission; {@code grayAlpha} is the
@@ -86,7 +86,7 @@ public final class BuffVisuals {
         TABLE.put(BuffType.HOPE,       glow(1.00f, 0.85f, 0.35f));      // golden
         // Drifting particles.
         TABLE.put(BuffType.REGENERATION, drift(Effect.EffectTint.GREEN, Drift.ARROW_UP));
-        TABLE.put(BuffType.POISONED,     drift(Effect.EffectTint.GREEN, Drift.BURST));
+        TABLE.put(BuffType.POISONED,     drift(Effect.EffectTint.GREEN, Drift.BUBBLES));
         TABLE.put(BuffType.CHILLED,      drift(Effect.EffectTint.WHITE, Drift.DROPS));
         TABLE.put(BuffType.OILY,         drift(Effect.EffectTint.BROWN, Drift.DROPS));
         TABLE.put(BuffType.WET,          drift(Effect.EffectTint.BLUE,  Drift.DROPS));

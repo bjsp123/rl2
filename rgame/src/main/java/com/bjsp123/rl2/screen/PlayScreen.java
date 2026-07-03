@@ -443,11 +443,13 @@ public class PlayScreen implements Screen {
         // available regardless of UI focus state - opening the inventory or the
         // encyclopaedia must not lock the camera at the current zoom level. Wheel
         // events return true (consumed); touchDown / touchDragged return false so
-        // they continue to uiStage and the action handlers below.
-        // uiStage goes second so HUD buttons stay reachable even while Look or
-        // Targeting is active - the stage returns false for clicks that don't land
-        // on a widget, letting them fall through to the world cursors. This is what
-        // lets a re-tap of the same action-slot button confirm an open targeting
+        // they continue to the V2 popup / HUD input processors and the action
+        // handlers below.
+        // The V2 HUD input sits late in the multiplexer so HUD buttons stay
+        // reachable even while Look or Targeting is active - each popup / HUD
+        // processor returns false for clicks that don't land on a widget,
+        // letting them fall through to the world cursors. This is what lets a
+        // re-tap of the same action-slot button confirm an open targeting
         // session, or a tap on a different action swap the target picker to that
         // new action.
         // Block map drag/pinch/scroll while any modal is open - per the UI
@@ -648,9 +650,10 @@ public class PlayScreen implements Screen {
         actionBar = new ActionBar();
         actionBar.bindToPlayer(player);
 
-        // V2 inventory popup - primitive-drawn modal, drawn directly by this
-        // Screen (not in uiStage). Reads the shared V2 rendering context off
-        // the Game so the same fonts / palette as the HUD apply.
+        // V2 inventory popup - primitive-drawn modal, wrapped as a V2PopupActor
+        // on the shared game.ui.v2Stage (drawn by the stage's act/draw pair).
+        // Reads the shared V2 rendering context off the Game so the same
+        // fonts / palette as the HUD apply.
         v2Inventory = new V2Inventory(game.ui);
         v2Inventory.setPlayer(player);
         v2Inventory.setActionBar(actionBar);
@@ -740,10 +743,10 @@ public class PlayScreen implements Screen {
         // "?" info buttons; the V2 look popup doesn't have those yet, so
         // there's nothing to wire here.
 
-        // V2 popups are rendered DIRECTLY by this Screen (see render() below)
-        // and route input through their own InputProcessors slotted into the
-        // multiplexer. None of them are scene2d Actors, so uiStage stays
-        // empty for now (kept around in case a follow-up V1 popup needs it).
+        // V2 popups route input through their own InputProcessors slotted into
+        // the multiplexer above, and are rendered by wrapping each as a
+        // V2PopupActor on the shared game.ui.v2Stage (registered just below and
+        // drawn by the stage's act/draw pair in render()).
 
         targetingOverlay = new TargetingOverlay();
         targetingOverlay.create();

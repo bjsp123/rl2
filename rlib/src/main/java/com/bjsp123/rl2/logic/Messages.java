@@ -522,6 +522,14 @@ public final class Messages {
                             involvesPlayer);
     }
 
+    /** "The teleport orb fizzles; there is no teleporting within these walls." -
+     *  a teleport orb used or thrown in a teleport-suppressing arena. */
+    public static LogEvent teleportSuppressed(String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.item.teleportSuppressed",
+                                    TextCatalog.vars("item", itemName)),
+                            EventPriority.HIGH, true);
+    }
+
     /** "The fire bomb detonates!" - fires at impact for damage-dealing bombs. */
     public static LogEvent bombDetonates(String itemName) {
         return new LogEvent(TextCatalog.format("eventlog.bomb.detonates",

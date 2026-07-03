@@ -280,6 +280,11 @@ public class Effect {
      *  cell (particle y = 0). Set this and the standard gravity drives the
      *  damped-bounce trajectory in {@link FxRenderer#drawParticleBurst}. */
     public float particleBounceDamping;
+    /** PARTICLE_BURST per-particle path only: render each particle as a rising
+     *  bubble that holds its size + colour while it climbs, then swells and
+     *  fades over the final quarter of its life so it reads as a <i>pop</i>.
+     *  Set by {@link #poisonBubbles}. */
+    public boolean particlePop;
     /** BUFF_ICON only: which buff to render the icon for. */
     public Buff.BuffType buffType;
 
@@ -614,6 +619,24 @@ public class Effect {
                 /*spawnSpreadFrames*/ 14,
                 /*particleLifeFrames*/ 22,
                 ParticleShape.DROPS, rng);
+    }
+
+    /** Poison's continuous on-mob visual (RL-44): a few little bubbles rise off
+     *  the mob's body and pop near the top - emitted repeatedly by the
+     *  buff-particle tick so the simmer reads as constant. Rising stream comes
+     *  from the {@link EffectBuilder#fountain} primitive; the swell-and-burst
+     *  "pop" is the {@link #particlePop} render path. */
+    public static Effect poisonBubbles(Point location, EffectTint tint, Random rng) {
+        Effect e = EffectBuilder.fountain(location, tint,
+                /*count*/ 3,
+                /*spawnSpreadFrames*/ 16, /*particleLifeFrames*/ 24,
+                /*riseSpeedMin*/ 0.35f, /*riseSpeedMax*/ 0.6f,
+                /*horizontalJitter*/ 0.25f, /*fadeToWhite*/ false,
+                /*positionJitterX*/ 10f, /*positionJitterY*/ 8f,
+                ParticleShape.DROPS, rng);
+        e.particlePop  = true;
+        e.particleSize = 2f;
+        return e;
     }
 
     /** Liquid (or grass) splash at a character's feet. Tight upward cone with

@@ -1608,6 +1608,7 @@ public final class Animator {
                 case ARROW_UP -> stage.add(Effect.upArrow(at, v.particleTint, 0));
                 case BURST    -> stage.add(Effect.particleBurst(at, v.particleTint, 4, RNG));
                 case DROPS    -> stage.add(Effect.buffDrip(at, v.particleTint, RNG));
+                case BUBBLES  -> stage.add(Effect.poisonBubbles(at, v.particleTint, RNG));
                 default       -> { }
             }
         }
