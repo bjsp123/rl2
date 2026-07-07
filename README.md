@@ -1,10 +1,12 @@
 # rl2
 
-**rl2** (working title) is a chunky, tap-friendly roguelike about descending into a vast, failing tomb. Explore procedurally generated floors, light the ancient beacon network, craft strange magics at gem hearths, and — if you make it deep enough — face the Great Wraith at the bottom.
+**rl2** (working title) is a chunky, tap-friendly roguelike about descending into a vast, failing tomb. Explore procedurally generated floors, light the ancient beacon network, craft strange magics at gem hearths, and — if you make it deep enough — face the Great Wraith at the bottom of the tomb.
 
-It plays differently from most roguelikes in one important way: **you don't get XP for killing things.** Experience comes from exploring new ground, so every fight is a choice, not a chore. Sneak past, set the room on fire, shove something into a chasm, or just run.
+It plays differently from most roguelikes in one important way: **you don't get XP for killing things.** Experience comes from exploring new ground, so every fight is a choice, not a chore. You should be able to find numerous ways to avoid combat; the Beacon Guardians and uniques should all be optional fights (though defeating them does ahve rewards).
 
-Built in Java with [libGDX](https://libgdx.com/); runs on Windows desktop and Android, with a web build in progress.
+This is playable but it's very much alpha.
+
+Suggestions for names gratefully recieved.
 
 ## Download — playtest candidate
 
@@ -17,21 +19,15 @@ All releases live on the [Releases page](https://github.com/bjsp123/rl2/releases
 
 ## Thank you, playtesters!
 
-If you're reading this because you agreed to playtest: **thank you.** Every run you play, every death you grumble about, and every "this felt weird" you report makes the game better. Nothing is sacred — if something confused you, bored you, or killed you unfairly, we want to hear about it. Please file thoughts, bugs, and screenshots as [GitHub issues](https://github.com/bjsp123/rl2/issues).
+If you're reading this because you agreed to playtest: **thank you.**  If something confused you, bored you, or killed you unfairly(*), we want to hear about it. Please file thoughts, bugs, and screenshots as [GitHub issues](https://github.com/bjsp123/rl2/issues).  Or just, like, message me.
 
-### Three tips before you dive in
+(*) By the standards of a traditional roguelike.  Things like being one-shotted from off the screen **should** be avoidable, but there are definitely fights you need to avoid until you're stronger.
 
-1. **Don't fight everything.** Kills give no XP — you level up by exploring and grabbing XP balls. If a corridor full of kobolds isn't guarding anything you want, walk the other way.
-2. **Wands and jade items don't recharge on their own.** Charges come from charge pills found while exploring, so top up before a big fight — and don't hoard eight charges of "wand of fire" all the way to your death screen. Use the toys.
-3. **Beacons are a bargain with teeth.** Each one you light becomes a fast-travel point, is worth a lot of score, and brings you closer to a perfect run — but the deeper floors get nastier for every beacon lit. Decide what kind of run you're having.
+### Four tips before you dive in
 
-## Building from source
+1. **Don't fight everything.** Kills give no XP — you level up by exploring and finding stuff.  Except for some special rooms and uniques, there's no reward for combat.
+2. **Wands and  items don't recharge on their own.** Charges come from pickups on the ground.
+3. **Beacons.** Each one you light becomes a fast-travel point, is worth a lot of score, and brings you closer to a perfect run — but also makes the endgame harder and has nasty guardians.
+4. **Finite resources**.  There's no hunger mechanic, but the amount of healing, xp, and recharging in the game world is finite.
+4. **Branching dungeon**.  The tomb is a network of levels; if you come to a dangersou or impassable one you can try another route.
 
-```
-./gradlew :desktop:run          # run the game on desktop
-./gradlew :desktop:jar          # build a runnable fat jar (desktop/build/libs)
-./gradlew :android:assembleDebug # build an installable Android APK
-./gradlew :rlib:test            # run the logic test suite
-```
-
-Requires JDK 17+ (the Gradle build pins its own JVM; see `gradle.properties`). Module layout: `rlib` is the pure game model/logic, `rgame` is rendering and UI, `desktop`/`android`/`web` are launchers, and `rai` contains the autoplay/regression harness.

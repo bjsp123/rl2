@@ -340,6 +340,12 @@ public final class V2Settings extends V2Screen {
         }
         tabs.drawIcons(ctx, tabIcons);
 
+        // App version / build, bottom-right corner (bottom-left is the
+        // BackBtn) - matches the title screen's bottom-left stamp.
+        TextDraw.right(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                "v" + com.bjsp123.rl2.util.AppVersion.label(),
+                ctx.worldW() - 10f, 10f + ctx.lineH());
+
         band.clip(ctx, () -> {
             for (RowLabel rl : rowLabels) {
                 TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, rl.text, rl.x, rl.y);

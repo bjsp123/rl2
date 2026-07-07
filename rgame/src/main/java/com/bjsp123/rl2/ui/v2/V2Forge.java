@@ -77,6 +77,11 @@ public final class V2Forge extends V2Screen {
     /** Index in {@link #visible} of the recipe whose "?" info button is held. */
     private int pressedInfo = -1;
 
+    /** One-line pitch under the title ("ui.forge.subtitle"), wrapped to the
+     *  content width. Built in {@link #buildLayout()}; the chip strip and
+     *  everything below it shift down by its height. */
+    private TextDraw.TextBlock subtitle = TextDraw.block(null, "", 1f, 0, 0f);
+
     /** "Recycle an item" action button - opens the inventory item-picker (wired
      *  via {@link #onRecycle}) to choose an item to break down into gems. Built
      *  in {@link #buildLayout()} and owned by {@link V2Screen#buttons}, so its
@@ -139,6 +144,10 @@ public final class V2Forge extends V2Screen {
         float winH = Math.min(600f, vh - 96f);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
+        subtitle = TextDraw.block(ctx.fontRegular,
+                TextCatalog.get("ui.forge.subtitle"),
+                winW - 2 * PAD, 3, ctx.lineH());
+
         // The "Recycle an item" button sits below the chip strip, full content
         // width. Its position is bag-independent, so build it here; the base
         // class draws + dispatches it as a normal screen button.
@@ -170,7 +179,7 @@ public final class V2Forge extends V2Screen {
      *  Bag-independent, so both {@link #buildLayout()} (recycle button) and
      *  {@link #layout(Mob)} (chip rects) can read it. */
     private float chipStripY() {
-        return window.top() - headerBandH() - CHIP_SZ;
+        return window.top() - headerBandH() - subtitle.height() - 8f - CHIP_SZ;
     }
 
     /** Distinct raw-gem species currently in the bag, in encounter order. */
@@ -298,6 +307,8 @@ public final class V2Forge extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                 TextCatalog.get("ui.forge.title"),
                 window.cx(), window.top() - ctx.headerLineH() * 0.5f);
+        TextDraw.wrappedCentre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                subtitle, window.cx(), window.top() - headerBandH());
 
         // Chip gem icons.
         for (Chip c : chips) {

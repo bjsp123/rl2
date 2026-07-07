@@ -1,10 +1,12 @@
 package com.bjsp123.rl2.util;
 
 /**
- * App version + build number, stamped into every save file's metadata.
+ * App version + build number, stamped into every save file's metadata and
+ * shown at the bottom of the Settings screen.
  *
- * <p>Bump {@link #BUILD} on any release that changes save-serialised state so
- * older saves are flagged as incompatible; bump {@link #VERSION} for
+ * <p>{@link #BUILD} is generated at build time from the total git commit
+ * count (see {@code :rlib:generateBuildInfo} in rlib/build.gradle) - it
+ * changes on every commit, not just releases. Bump {@link #VERSION} for
  * user-facing milestones. A save whose stamp doesn't match the running app
  * (including unstamped legacy saves) is treated as incompatible: the loader
  * warns rather than failing silently / crashing on a doomed parse.
@@ -14,7 +16,7 @@ public final class AppVersion {
     private AppVersion() {}
 
     public static final String VERSION = "0.1";
-    public static final int    BUILD   = 0;
+    public static final int    BUILD   = BuildInfo.COMMIT_COUNT;
 
     /** Running app's stamp, e.g. {@code "0.1 (build 0)"}. */
     public static String label() {

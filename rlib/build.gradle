@@ -20,6 +20,56 @@ test {
 }
 
 // =============================================================================
+// BUILD NUMBER GENERATION
+//
+// AppVersion.BUILD is the total commit count on whatever's checked out,
+// baked into a generated source file at build time so it works identically
+// for desktop/android/web without any runtime git dependency (a packaged
+// jar/apk has no .git). Falls back to 0 when git is unavailable (e.g.
+// building from a source archive with no .git directory).
+// =============================================================================
+def buildInfoDir = layout.buildDirectory.dir('generated/sources/buildinfo/java').get().asFile
+
+def gitCommitCount() {
+    try {
+        def proc = new ProcessBuilder('git', 'rev-list', '--count', 'HEAD')
+                .directory(rootProject.projectDir)
+                .redirectErrorStream(true)
+                .start()
+        String output = proc.inputStream.text.trim()
+        proc.waitFor()
+        return output.isInteger() ? output.toInteger() : 0
+    } catch (Exception ignored) {
+        return 0
+    }
+}
+
+tasks.register('generateBuildInfo') {
+    outputs.dir(buildInfoDir)
+    // Commit count can change without any tracked input changing (a commit
+    // in another file entirely) - always recompute rather than caching.
+    outputs.upToDateWhen { false }
+    doLast {
+        int count = gitCommitCount()
+        File pkgDir = new File(buildInfoDir, 'com/bjsp123/rl2/util')
+        pkgDir.mkdirs()
+        new File(pkgDir, 'BuildInfo.java').text = """package com.bjsp123.rl2.util;
+
+/** Generated at build time by :rlib:generateBuildInfo - total git commit
+ *  count backing {@link AppVersion#BUILD}. Do not edit; not checked in
+ *  (lives under build/). */
+final class BuildInfo {
+    private BuildInfo() {}
+    static final int COMMIT_COUNT = ${count};
+}
+"""
+    }
+}
+
+sourceSets.main.java.srcDir(buildInfoDir)
+tasks.named('compileJava') { dependsOn 'generateBuildInfo' }
+
+// =============================================================================
 // DIAGNOSTIC / DEV-ONLY TASKS
 //
 // Everything below is for tuning and debugging the game balance, not for

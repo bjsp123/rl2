@@ -52,6 +52,9 @@ public final class V2GameStartTipPopup {
     private static final String ARROW_RIGHT      = "ARROWRIGHT";
     /** Special spritelist token: render the beacon ornament (terrain, not an item). */
     private static final String BEACON           = "BEACON";
+    /** Special spritelist token prefix: {@code PERK_<enum name>} (e.g.
+     *  {@code PERK_KILLER}) renders that perk's icon. */
+    private static final String PERK_PREFIX      = "PERK_";
     private static final Point  DUMMY_POS        = new Point(0, 0);
 
     private final UiCtx ctx;
@@ -294,9 +297,10 @@ public final class V2GameStartTipPopup {
 
     /** Resolve one spritelist token into a row cell, or {@code null} to skip it.
      *  A token may carry a caption override after a colon
-     *  ({@code XPPILL:free levels}); without one, items/mobs caption with
-     *  their display name. Token order: ARROWRIGHT connector, BEACON
-     *  ornament (terrain), item type, mob type. Powerups also glow. */
+     *  ({@code XPPILL:free levels}); without one, items/mobs/perks caption
+     *  with their display name. Token order: ARROWRIGHT connector, PERK_<name>
+     *  (e.g. PERK_KILLER), BEACON ornament (terrain), item type, mob type.
+     *  Powerups also glow. */
     private TipCell resolveCell(String ref) {
         String caption = null;
         int colon = ref.indexOf(':');
@@ -318,6 +322,20 @@ public final class V2GameStartTipPopup {
             TipCell c = new TipCell();
             c.arrow = true;
             c.width = ARROW_CELL_W;
+            return c;
+        }
+        if (ref.startsWith(PERK_PREFIX)) {
+            com.bjsp123.rl2.model.Perk p;
+            try {
+                p = com.bjsp123.rl2.model.Perk.valueOf(ref.substring(PERK_PREFIX.length()));
+            } catch (IllegalArgumentException ex) {
+                return null;
+            }
+            TextureRegion r = BuffIcons.perkRegion(p.ordinal());
+            if (r == null) return null;
+            TipCell c = new TipCell();
+            c.region = r;
+            c.caption = p.displayName();
             return c;
         }
         if (BEACON.equals(ref)) {

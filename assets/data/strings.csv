@@ -1303,6 +1303,7 @@ ui.forge.recycle,Recycle an item
 ui.forge.slot.any,any
 ui.forge.slot.exotic,exotic
 ui.forge.slot.metal,metal
+ui.forge.subtitle,"Sacrifice found gems for valuable single-use scrolls, and recycle gear into gems."
 ui.forge.title,Gem Hearth
 ui.gameOver.mainMenu,Main Menu
 ui.gameOver.stats,Score: {score}   Depth: {depth}

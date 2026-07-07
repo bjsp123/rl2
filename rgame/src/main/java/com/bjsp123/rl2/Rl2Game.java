@@ -149,7 +149,6 @@ public class Rl2Game extends Game {
         loadBrandConfig();
         loadThemedRoomConfig();
         loadRecipeConfig();
-        loadTipsConfig();
         loadGameStartTipsConfig();
         loadHelpConfig();
         Settings.init(persistence);
@@ -294,13 +293,6 @@ public class Rl2Game extends Game {
                 com.badlogic.gdx.Gdx.files.internal("data/recipes.csv");
         if (!fh.exists()) return;
         com.bjsp123.rl2.logic.Registries.loadRecipes(fh.readString());
-    }
-
-    private void loadTipsConfig() {
-        com.badlogic.gdx.files.FileHandle fh =
-                com.badlogic.gdx.Gdx.files.internal("data/tips.csv");
-        if (!fh.exists()) return;
-        TipsRegistry.load(fh.readString());
     }
 
     private void loadGameStartTipsConfig() {
