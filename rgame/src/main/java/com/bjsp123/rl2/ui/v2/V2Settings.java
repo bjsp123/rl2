@@ -141,8 +141,6 @@ public final class V2Settings extends V2Screen {
                         Settings::instantActions, Settings::setInstantActions);
                 yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
                         Settings::queueAccelEnabled, Settings::setQueueAccelEnabled);
-                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.meleePreview"),
-                        Settings::meleePreview, Settings::setMeleePreview);
                 // Destructive actions live at the bottom of the tab so the
                 // settings flow always reads "set values, then take any
                 // one-shot action".

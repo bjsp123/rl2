@@ -29,7 +29,6 @@ public final class Settings {
     private static final String KEY_MUSIC_ENABLED   = "rl2-music-enabled";
     private static final String KEY_MUSIC_VOLUME    = "rl2-music-volume";
     private static final String KEY_TIPS_ENABLED    = "rl2-tips-enabled";
-    private static final String KEY_MELEE_PREVIEW   = "rl2-melee-preview";
     private static final String KEY_COLORBLIND      = "rl2-colorblind-preset";
 
     /** Colorblind palette presets for the {@code UIVars.DAMAGE_*} colors. */
@@ -89,7 +88,6 @@ public final class Settings {
     private static boolean musicEnabled  = true;
     private static float   musicVolume   = MUSIC_VOLUME_DEFAULT;
     private static boolean tipsEnabled   = true;
-    private static boolean meleePreview  = true;
     private static ColorblindPreset colorblindPreset = ColorblindPreset.NONE;
 
     private Settings() {}
@@ -119,7 +117,6 @@ public final class Settings {
         musicEnabled  = loadBoolean(KEY_MUSIC_ENABLED, true);
         musicVolume   = loadChoiceFloat(KEY_MUSIC_VOLUME, MUSIC_VOLUME_DEFAULT, VOLUME_CHOICES);
         tipsEnabled   = loadBoolean(KEY_TIPS_ENABLED, true);
-        meleePreview  = loadBoolean(KEY_MELEE_PREVIEW, true);
         colorblindPreset = loadColorblindPreset();
         UIVars.applyColorblindPalette(colorblindPreset);
     }
@@ -162,7 +159,6 @@ public final class Settings {
     public static boolean musicEnabled()   { return musicEnabled; }
     public static float   musicVolume()    { return musicVolume; }
     public static boolean tipsEnabled()    { return tipsEnabled; }
-    public static boolean meleePreview()   { return meleePreview; }
     public static ColorblindPreset colorblindPreset() { return colorblindPreset; }
 
     public static void setUiScale(float v) { uiScale = v; save(KEY_UI_SCALE, v); }
@@ -189,7 +185,6 @@ public final class Settings {
     public static void setMusicEnabled(boolean v)  { musicEnabled = v;  save(KEY_MUSIC_ENABLED, v); }
     public static void setMusicVolume(float v)     { musicVolume = v;   save(KEY_MUSIC_VOLUME, v); }
     public static void setTipsEnabled(boolean v)   { tipsEnabled = v;   save(KEY_TIPS_ENABLED, v); }
-    public static void setMeleePreview(boolean v)  { meleePreview = v;  save(KEY_MELEE_PREVIEW, v); }
     public static void setColorblindPreset(ColorblindPreset v) {
         colorblindPreset = v == null ? ColorblindPreset.NONE : v;
         if (persistence != null) persistence.save(KEY_COLORBLIND, colorblindPreset.name());

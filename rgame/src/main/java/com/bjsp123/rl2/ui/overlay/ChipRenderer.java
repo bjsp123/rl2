@@ -23,8 +23,7 @@ import java.util.List;
  * Shared renderer for the small in-world "85% · ~6 dmg" annotation chips:
  * projects a world tile into V2 space and draws a dark pill backdrop plus
  * down-scaled accent text above the tile. Used by {@link TargetingOverlay}
- * (wand / bomb / throw aiming) and by PlayScreen's melee preview pass over
- * adjacent hostiles, so both read identically.
+ * for wand / bomb / throw aiming.
  *
  * <p>The compose helpers route through the SAME {@link MobStats} formulas the
  * combat resolution uses ({@code hitChance} / {@code netDamageRange}), so a
@@ -41,8 +40,8 @@ public final class ChipRenderer {
 
     /** Draw every chip: one shape pass for the pill backdrops, one batch pass
      *  for the text. {@code fontScale} multiplies the regular font (targeting
-     *  uses {@link UIVars#CHIP_SCALE}; the melee preview its own). Caller has
-     *  NO active batch/shape renderer. */
+     *  uses {@link UIVars#CHIP_SCALE}). Caller has NO active batch/shape
+     *  renderer. */
     public static void render(UiCtx uiCtx, OrthographicCamera worldCamera,
                               List<Chip> chips, float fontScale) {
         if (chips == null || chips.isEmpty() || uiCtx == null || worldCamera == null) return;
@@ -104,11 +103,6 @@ public final class ChipRenderer {
      *  single-target throws, wand MISSILE). */
     public static String hitAndDamage(Mob attacker, Mob victim) {
         return hitPct(attacker, victim) + " · " + damageString(attacker, victim, null);
-    }
-
-    /** Compact hit%-only chip text - the crowded-melee form. */
-    public static String hitOnly(Mob attacker, Mob victim) {
-        return hitPct(attacker, victim);
     }
 
     /** Damage-only chip text. Used for always-hit sources (bombs, AoE wands) -

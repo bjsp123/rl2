@@ -177,11 +177,6 @@ public final class UIVars {
     /** Font scale factor for the cursor-anchored hit-chance / damage chip,
      *  applied on top of the regular font. */
     public static float CHIP_SCALE              = 0.62f;
-    /** Font scale factor for the melee preview chip rendered over each
-     *  adjacent hostile (PlayScreen's ChipRenderer pass, V2 space like the
-     *  targeting chip). A notch below {@link #CHIP_SCALE} so the always-on
-     *  preview reads quieter than an aimed shot's chip. */
-    public static float MELEE_CHIP_SCALE        = 0.55f;
     /** Font scale factor for in-world damage / miss floaters (the rising
      *  "5" / "miss" / "blunt" text). Tuned to match the visual size the
      *  melee chip used to be at - a notch smaller than the default world

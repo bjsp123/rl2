@@ -1497,7 +1497,6 @@ ui.settings.fastGraphics,Fast graphics
 ui.settings.logFontSize,Log font size
 ui.settings.lowPriorityLines,Low-priority lines
 ui.settings.lowResRender,Low-res render
-ui.settings.meleePreview,Show melee hit-chance over enemies
 ui.settings.mobVsMobLines,Mob-vs-mob lines
 ui.settings.musicVolume,Music volume
 ui.settings.off,Off
