@@ -50,6 +50,14 @@ android {
         }
     }
 
+    // Working folders that live under assets/ but must not ship in the APK:
+    // sfx/wav/ holds the uncompressed source recordings (~350 MB) for the
+    // .ogg files the game actually plays; scratch/ is design refs. Names are
+    // matched per directory during asset merging, hence the bare "!name" form.
+    androidResources {
+        ignoreAssetsPattern '!wav:!scratch'
+    }
+
     sourceSets {
         main {
             assets.srcDirs += [rootProject.file('assets').absolutePath]

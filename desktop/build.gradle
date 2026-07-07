@@ -111,6 +111,7 @@ dependencies {
 }
 
 jar {
+    dependsOn configurations.runtimeClasspath
     manifest {
         attributes 'Main-Class': 'com.bjsp123.rl2.desktop.DesktopLauncher'
     }
@@ -120,6 +121,12 @@ jar {
     // above). When `gradle :desktop:jar` packages a release, the assets directory contents
     // are copied into the JAR root so libgdx's Gdx.files.internal("sprites/foo.png")
     // resolves via the classpath inside the packaged jar.
-    from(rootProject.file('assets'))
+    from(rootProject.file('assets')) {
+        // Working folders that live under assets/ but must not ship:
+        // sfx/wav/ holds the uncompressed source recordings (~350 MB) for
+        // the .ogg files the game actually plays; scratch/ is design refs.
+        exclude 'sfx/wav/**'
+        exclude 'scratch/**'
+    }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
