@@ -627,7 +627,12 @@ public final class AutoplayGame {
 
     private void observeEvents(Level cur) {
         if (cur.events == null) return;
-        int depthIdx = world.currentLevelIndex;
+        // Report axis = actual dungeon depth (Level.depth, 1-based), NOT the flat
+        // world-node index: the world is a layered DAG where shallow depths branch
+        // into parallel themed columns, so the node index smears the same floor
+        // across different buckets run-to-run (e.g. the single boss floor showing
+        // up at several node indices). Keying by Level.depth is consistent.
+        int depthIdx = cur.depth - 1;
         // Snapshot before iterating - downstream handlers may mutate level.events.
         GameEvent[] snap = cur.events.toArray(new GameEvent[0]);
         for (GameEvent ev : snap) {
@@ -668,21 +673,31 @@ public final class AutoplayGame {
             } else if (ev instanceof GameEvent.MobMeleeAttacked m) {
                 if (m.attacker() == agent) {
                     stats.meleeAttacks++;
-                    if (m.dealt() > 0) stats.meleeDamage += m.dealt();
+                    if (m.dealt() > 0) {
+                        stats.meleeDamage += m.dealt();
+                        // Attribute the swing to the weapon equipped right now.
+                        String weapon = (agent.inventory != null && agent.inventory.weapon != null)
+                                ? agent.inventory.weapon.type : "UNARMED";
+                        stats.addDamageDone("melee", weapon, m.dealt());
+                    }
                 }
             } else if (ev instanceof GameEvent.DamageDealt d) {
-                // Outgoing damage: classify wand / bomb by the cause's
-                // originating item. Melee damage is already captured from
-                // MobMeleeAttacked above; skipping it here avoids
-                // double-counting.
+                // Outgoing damage: classify wand / bomb / thrown by the cause's
+                // originating item category. Melee damage is already captured
+                // from MobMeleeAttacked above (category WEAPON falls through the
+                // switch's default here), so it is never double-counted.
                 if (d.source() == agent && d.cause() != null
                         && d.cause().originItem() != null) {
-                    com.bjsp123.rl2.model.Item.InventoryCategory cat =
-                            d.cause().originItem().inventoryCategory;
+                    com.bjsp123.rl2.model.Item origin = d.cause().originItem();
+                    com.bjsp123.rl2.model.Item.InventoryCategory cat = origin.inventoryCategory;
                     if (cat == com.bjsp123.rl2.model.Item.InventoryCategory.WAND) {
                         stats.wandDamage += d.amount();
+                        stats.addDamageDone("wand", origin.type, d.amount());
                     } else if (cat == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
                         stats.bombDamage += d.amount();
+                        stats.addDamageDone("bomb", origin.type, d.amount());
+                    } else if (cat == com.bjsp123.rl2.model.Item.InventoryCategory.THROWN) {
+                        stats.addDamageDone("thrown", origin.type, d.amount());
                     }
                 }
                 // Incoming damage: bucket by cause.medium (mechanism) and
@@ -690,6 +705,9 @@ public final class AutoplayGame {
                 // where HP is leaking.
                 if (d.target() == agent && d.amount() > 0) {
                     stats.damageTaken += d.amount();
+                    if (depthIdx >= 0 && depthIdx < stats.damageTakenPerDepth.length) {
+                        stats.damageTakenPerDepth[depthIdx] += d.amount();
+                    }
                     String medium = "unknown";
                     String src    = "ENV";
                     if (d.cause() != null) {
@@ -705,6 +723,7 @@ public final class AutoplayGame {
                     }
                     stats.damageTakenByMedium.merge(medium, d.amount(), Integer::sum);
                     stats.damageTakenBySource.merge(src,    d.amount(), Integer::sum);
+                    stats.bumpDamageTakenSource(depthIdx, src, d.amount());
                 }
             } else if (ev instanceof GameEvent.HealApplied h) {
                 // HealApplied fires when a potion's REGEN tick lands - imperfect
@@ -723,9 +742,15 @@ public final class AutoplayGame {
             if (now > lastLevelIndex) stats.stairsDescended++;
             else                      stats.stairsAscended++;
             if (now > stats.depthReached) stats.depthReached = now;
-            if (now >= 0 && now < stats.arrivalTickPerDepth.length
-                    && stats.arrivalTickPerDepth[now] < 0) {
-                stats.arrivalTickPerDepth[now] = turnsElapsed; // first arrival at this depth
+            // Pacing / per-visit axis = actual dungeon depth (Level.depth), so it
+            // stays consistent across runs; the flat node index (now) still drives
+            // descend/ascend direction above and win-detection elsewhere.
+            int dd = world.levels[now].depth;
+            if (dd > stats.maxDungeonDepth) stats.maxDungeonDepth = dd;
+            int ddx = dd - 1;
+            if (ddx >= 0 && ddx < stats.arrivalTickPerDepth.length
+                    && stats.arrivalTickPerDepth[ddx] < 0) {
+                stats.arrivalTickPerDepth[ddx] = turnsElapsed; // first arrival at this dungeon depth
             }
             lastLevelIndex = now;
         }

@@ -119,7 +119,7 @@ The popup's `input()` returns false when closed, so events fall through to the s
 ## UI principles
 
 ### Structure
-- **Burger menu is always present**, top-right corner, every screen. It always opens to the same three destinations: title screen, settings, encyclopedia.
+- **Burger menu is always present**, top-right corner, every screen, and every burger gets its items from the single canonical populator (`BurgerMenu.populateStandard`). It always offers Settings and Encyclopedia; in a run it adds Level Info, Map, and Log; it ends with Main Menu — except the title screen (which IS the main menu) shows Credits instead. Owners differ only in how a destination opens (screens push screens, the HUD opens popups), never in the item list.
 - **Non-game screens are vertical lists of large buttons.** No dense layouts, no side-by-side panels. One column, one button per row, big tap targets. Title, save list, hall of fame, settings, credits, arena setup all follow this shape.
 - **Every window is fully modal.** When a popup is open, only that popup receives input — the world, the HUD, and any windows behind it are inert. Stacked popups are forbidden; close-then-open or replace-in-place.
 - **Windows are either lists OR info, never both.** A list shows many items so the user can pick one; an info window shows the details of one thing. Tapping a list entry replaces the list with the info window for that entry; the info window's back button returns to the list.

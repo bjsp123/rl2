@@ -45,7 +45,8 @@ public final class IconSprites {
         FOOD,
         INV,
         CANCEL,
-        SETTINGS
+        SETTINGS,
+        COMPASS
     }
 
     private static Texture sheet;

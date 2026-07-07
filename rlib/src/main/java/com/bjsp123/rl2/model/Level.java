@@ -179,6 +179,11 @@ public class Level {
     public transient boolean[] visibilityAccumScratch;
     public transient boolean[] visibilityTempScratch;
     public transient boolean[] wallPropagationScratch;
+    /** Cached positions of mote-emitting tiles (LAMP / BEACON_ACTIVE / GEM_HEARTH_L).
+     *  Null = stale; rebuilt lazily by {@code LevelSystem.tickLightMotesRealTime} and
+     *  invalidated by {@code LevelSystem.computeLighting} (which runs after every
+     *  action that could change tiles). Saves a full-grid scan per render frame. */
+    public transient List<Point> lightEmitterCache;
     // Visual effects moved out - owned by rgame.render.EffectStage.
     /** Per-tile countdown to the next fire-particle emission. Ticked down by
      *  {@link com.bjsp123.rl2.logic.FireSystem}; on zero/negative, a particle Effect is

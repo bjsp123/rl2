@@ -116,6 +116,22 @@ public final class TextCatalog {
         return text.substring(0, first).toUpperCase(Locale.ROOT) + text.substring(first);
     }
 
+    /** Title Case for headings: capitalizes the first letter of every word
+     *  (whitespace- or hyphen-separated). Names are stored lowercase in the
+     *  catalog (house style) and Title-Cased only where they render as a
+     *  heading (buff info title, perk rows, encyclopedia detail pages). */
+    public static String titleCase(String text) {
+        if (text == null || text.isEmpty()) return "";
+        StringBuilder out = new StringBuilder(text.length());
+        boolean atWordStart = true;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            out.append(atWordStart ? Character.toUpperCase(c) : c);
+            atWordStart = Character.isWhitespace(c) || c == '-';
+        }
+        return out.toString();
+    }
+
     public static String plural(String singular, int count) {
         if (singular == null || singular.isEmpty() || count == 1) return singular == null ? "" : singular;
         if (singular.endsWith("s") || singular.endsWith("x") || singular.endsWith("ch") || singular.endsWith("sh")) {

@@ -16,6 +16,17 @@ public class SaveSystem {
 
     public static final int SLOTS = 4;
 
+    /** Enum key classes that may appear as an {@code EnumMap} keyType in a save
+     *  blob, keyed by class name. Explicit registry instead of {@code Class.forName}
+     *  so save loading works identically on the web (TeaVM) build, where dynamic
+     *  class lookup is unavailable. Add an entry when persisting a new
+     *  EnumMap-typed model field. */
+    @SuppressWarnings("rawtypes")
+    private static final java.util.Map<String, Class<? extends Enum>> ENUM_MAP_KEY_TYPES =
+            java.util.Map.of(
+                    com.bjsp123.rl2.model.Perk.class.getName(),
+                    com.bjsp123.rl2.model.Perk.class);
+
     private final Persistence persistence;
     private final Json json;
     /** Reason the most recent {@link #load} failed (exception summary), or null
@@ -52,12 +63,15 @@ public class SaveSystem {
         // default reflective instantiation throws on load. We persist the key class
         // name alongside the entries so the map round-trips for any enum-keyed field.
         // Currently only Mob.perks (EnumMap<Perk, Integer>) uses this.
+        //
+        // Deliberately reflection-free (web/TeaVM portability): the key class is
+        // derived from an entry via getDeclaringClass() on write, and looked up in
+        // ENUM_MAP_KEY_TYPES on read - never Class.forName or JDK-internal fields.
         Json.Serializer<EnumMap> enumMapSerializer = new Json.Serializer<EnumMap>() {
             @Override
             public void write(Json json, EnumMap m, Class knownType) {
-                Class<? extends Enum> keyClass = keyClassOf(m);
                 json.writeObjectStart();
-                json.writeValue("keyType", keyClass.getName());
+                json.writeValue("keyType", keyClassOf(m).getName());
                 json.writeObjectStart("values");
                 for (Object o : m.entrySet()) {
                     java.util.Map.Entry e = (java.util.Map.Entry) o;
@@ -68,13 +82,12 @@ public class SaveSystem {
             }
             @Override
             public EnumMap read(Json json, JsonValue value, Class type) {
-                Class<? extends Enum> keyClass;
-                try {
-                    keyClass = (Class<? extends Enum>)
-                            Class.forName(value.getString("keyType"));
-                } catch (ClassNotFoundException ex) {
+                String keyTypeName = value.getString("keyType");
+                Class<? extends Enum> keyClass = ENUM_MAP_KEY_TYPES.get(keyTypeName);
+                if (keyClass == null) {
                     throw new com.badlogic.gdx.utils.SerializationException(
-                            "Unknown EnumMap keyType", ex);
+                            "EnumMap keyType not registered in SaveSystem.ENUM_MAP_KEY_TYPES: "
+                                    + keyTypeName);
                 }
                 EnumMap result = new EnumMap(keyClass);
                 JsonValue values = value.get("values");
@@ -89,21 +102,18 @@ public class SaveSystem {
                 return result;
             }
             private Class<? extends Enum> keyClassOf(EnumMap m) {
-                // Empty maps still need to round-trip - get the class via reflection
-                // on EnumMap's private keyType field. Falls back to inspecting the
-                // first entry if the JVM blocks reflective access (unlikely on the
-                // default --add-opens-free runtime but defensive).
-                try {
-                    java.lang.reflect.Field f = EnumMap.class.getDeclaredField("keyType");
-                    f.setAccessible(true);
-                    return (Class<? extends Enum>) f.get(m);
-                } catch (Exception ignored) {
-                    for (Object o : m.keySet()) {
-                        return ((Enum) o).getDeclaringClass();
-                    }
-                    throw new com.badlogic.gdx.utils.SerializationException(
-                            "Cannot determine EnumMap key class for empty map");
+                for (Object o : m.keySet()) {
+                    return ((Enum) o).getDeclaringClass();
                 }
+                // Empty map: the key class is unrecoverable without reflection, and
+                // the sole persisted EnumMap (Mob.perks) is the sole registry entry
+                // whenever this holds. If a second EnumMap field is ever persisted,
+                // register it and revisit this fallback.
+                if (ENUM_MAP_KEY_TYPES.size() == 1) {
+                    return ENUM_MAP_KEY_TYPES.values().iterator().next();
+                }
+                throw new com.badlogic.gdx.utils.SerializationException(
+                        "Cannot determine EnumMap key class for empty map");
             }
         };
         json.setSerializer(EnumMap.class, enumMapSerializer);

@@ -29,7 +29,9 @@ import com.bjsp123.rl2.ui.v2.V2Look;
 import com.bjsp123.rl2.world.render.DefaultLevelRenderer;
 import com.bjsp123.rl2.ui.v2.V2Inventory;
 import com.bjsp123.rl2.world.render.LevelRenderer;
+import com.bjsp123.rl2.ui.overlay.ChipRenderer;
 import com.bjsp123.rl2.ui.overlay.TargetingOverlay;
+import com.bjsp123.rl2.ui.v2.UIVars;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -588,7 +590,7 @@ public class PlayScreen implements Screen {
             }
             if (tenPerkPointsRequested) player.perkPoints += 10;
             // Difficulty revive charms (Jade Peaches) - the only source of them.
-            grantReviveCharms(player, com.bjsp123.rl2.logic.GameBalance.STARTING_REVIVE_CHARMS);
+            grantReviveCharms(player, com.bjsp123.rl2.logic.GameBalance.tuning().startingReviveCharms());
             if (allItemsRequested) grantOneOfEachItem(player);
             if (allScrollsRequested) grantOneOfEachScroll(player);
             if (revealWholeWorldRequested) revealWholeWorld(player, levels);
@@ -1077,13 +1079,17 @@ public class PlayScreen implements Screen {
             if (controller != null) controller.afterMove(level);
             frameProfiler.add("impactAfterMove", span);
         }
-        // First-encounter tips: scan visible mobs each frame and queue a
-        // tip for any new species the player can see (or is adjacent to).
-        // Same dedupe applies via TipSystem - one tip per species per run.
-        scanForMobTips(level);
+        // First-encounter tips: queue a tip for any new species adjacent to the
+        // player. Adjacency only changes when something moved, so the scan (O(mobs)
+        // walk + tip-key string building) runs on ticks and impact resolutions,
+        // not every render frame. Same dedupe applies via TipSystem.
+        if (ticked || animator.impactFiredThisTick) scanForMobTips(level);
         span = frameProfiler.start();
         com.bjsp123.rl2.logic.FireSystem.tickRealTime(level, dtMs);
-        com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
+        // Lamp/beacon/hearth motes are pure ambience - skipped in fast graphics.
+        if (!com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) {
+            com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
+        }
         frameProfiler.add("realtimeFx", span);
 
         span = frameProfiler.start();
@@ -1260,6 +1266,8 @@ public class PlayScreen implements Screen {
         span = frameProfiler.start();
         lookMode.render();
         frameProfiler.add("lookRender", span);
+
+        renderMeleeChips();
 
         // V2 HUD chrome - drawn between the world and the popups so popups
         // (inventory, look, etc.) overlay the HUD correctly. Switches
@@ -1888,6 +1896,46 @@ public class PlayScreen implements Screen {
      *  Used both as the game-tick gate (don't tick the world while a window
      *  is up) and as the camera input blocker (don't pan the map under a
      *  finger that's interacting with a popup). */
+    /** Melee preview pass - a hit%/damage chip over every adjacent hostile,
+     *  so walking into an enemy gets the same pre-commit transparency as an
+     *  aimed wand/bomb shot. Full "85% · ~6 dmg" chips with 1-2 adjacent
+     *  hostiles; compact "85%" when surrounded (3+) so chips don't collide.
+     *  Only drawn in quiet decision moments: suppressed while any popup /
+     *  targeting / look is up, during auto-explore, and while animations or
+     *  impacts are in flight. */
+    private void renderMeleeChips() {
+        if (!com.bjsp123.rl2.ui.skin.Settings.meleePreview()) return;
+        if (isAnyPopupOpen()) return;
+        if (controller != null && controller.isAutoExploring()) return;
+        if (animator.queue.freezeFrames > 0 || animator.hasPendingImpacts()) return;
+
+        Level lvl = world.currentLevel();
+        if (lvl == null || lvl.mobs == null) return;
+        Mob player = TurnSystem.findPlayer(lvl);
+        if (player == null || player.position == null || player.hp <= 0) return;
+        java.util.List<Mob> adjacent = new java.util.ArrayList<>(4);
+        for (Mob m : lvl.mobs) {
+            if (m == null || m == player || m.hp <= 0 || m.position == null) continue;
+            int d = Math.max(Math.abs(m.position.tileX() - player.position.tileX()),
+                             Math.abs(m.position.tileY() - player.position.tileY()));
+            if (d != 1) continue;
+            if (MobSystem.getAttitudeToMob(player, m) != MobSystem.Attitude.ATTACK) continue;
+            // Never reveal a mob the renderer is hiding (invisibility etc.).
+            if (!com.bjsp123.rl2.logic.MobVisibility.isVisibleToPlayer(lvl, m)) continue;
+            adjacent.add(m);
+        }
+        if (adjacent.isEmpty()) return;
+
+        boolean compact = adjacent.size() >= 3;
+        java.util.List<ChipRenderer.Chip> chips = new java.util.ArrayList<>(adjacent.size());
+        for (Mob m : adjacent) {
+            chips.add(new ChipRenderer.Chip(m.position, compact
+                    ? ChipRenderer.hitOnly(player, m)
+                    : ChipRenderer.hitAndDamage(player, m)));
+        }
+        ChipRenderer.render(game.ui, camera, chips, UIVars.MELEE_CHIP_SCALE);
+    }
+
     private boolean isAnyPopupOpen() {
         if (v2Inventory != null && v2Inventory.isOpen()) return true;
         if (lookMode != null && lookMode.isActive()) return true;
@@ -1909,7 +1957,7 @@ public class PlayScreen implements Screen {
         float y = game.ui.worldH() - 6f;
         b.begin();
         f.setColor(1f, 1f, 0.2f, 1f);
-        f.draw(b, String.format(java.util.Locale.ROOT,
+        f.draw(b, com.bjsp123.rl2.util.Fmt.of(
                 "FPS:%.0f  CLR:%.1fms  REN:%.1fms  LGC:%.1fms",
                 frameProfiler.snapFps(), frameProfiler.snapClearMs(),
                 frameProfiler.snapRenderMs(), frameProfiler.snapLogicMs()), x, y);
@@ -1918,7 +1966,7 @@ public class PlayScreen implements Screen {
     }
 
     private static String fmtPass(long ns, int flushes) {
-        return String.format(java.util.Locale.ROOT, "%.1fms/%d", ns / 1_000_000.0, flushes);
+        return com.bjsp123.rl2.util.Fmt.of("%.1fms/%d", ns / 1_000_000.0, flushes);
     }
 
     private void recenterCameraOnPlayer() {

@@ -216,7 +216,9 @@ public final class V2Arena extends ScreenAdapter {
         animator.consume(level);
         animator.tick(level, dtMs);
         com.bjsp123.rl2.logic.FireSystem.tickRealTime(level, dtMs);
-        com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
+        if (!com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) {
+            com.bjsp123.rl2.logic.LevelSystem.tickLightMotesRealTime(level, dtMs);
+        }
 
         camera.update();
         levelRenderer.render(level, camera);

@@ -14,6 +14,8 @@ public final class MobQueries {
     public static boolean blocksMovement(Level level, Mob self, Point p) {
         int x = p.tileX(), y = p.tileY();
         if (TileQuery.blocksMovementAt(level, x, y, self)) return true;
+        // GHOSTLY: passes through other mobs as freely as through walls.
+        if (self != null && self.isGhostly()) return false;
         for (Mob m : level.mobs) {
             if (m == self) continue;
             if (m.position.tileX() == x && m.position.tileY() == y) return true;

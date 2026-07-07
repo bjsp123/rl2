@@ -472,24 +472,35 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 : MOB_IMG_H;
 
         float rowH = ctx.lineH();
-        boolean hasCarried = !carried.isEmpty();
-        float carriedFrameH = 0f, carriedBlockH = 0f;
-        if (hasCarried) {
-            int visRows = Math.min(carried.size(), MAX_CARRIED_ROWS);
-            carriedFrameH = visRows * rowH;
-            carriedBlockH = SECTION_GAP + rowH + carriedFrameH;
-        }
-
         float gap = 6f;
-        float contentH = mobNameBlock.height()
+        // Height of everything above the carried-items block.
+        float bodyH = mobNameBlock.height()
                 + gap + imgH
                 + (mobDescBlock.height()  > 0 ? gap + mobDescBlock.height()  : 0)
                 + (mobTipBlock.height()   > 0 ? gap + mobTipBlock.height()   : 0)
                 + SECTION_GAP + rowH
                 + gap + mobCombatBlock.height()
-                + (mobSpecialsBlock.height() > 0 ? SECTION_GAP + mobSpecialsBlock.height() : 0)
-                + carriedBlockH;
-        float winH = Math.min(vh - 40f, HEADER_H + PAD * 2f + contentH);
+                + (mobSpecialsBlock.height() > 0 ? SECTION_GAP + mobSpecialsBlock.height() : 0);
+
+        // Carried items sit in a scrollable frame. Clamp the frame to the room
+        // left under the rest of the panel (within the vh-40 window cap) so a mob
+        // with a full bag can't push the list off the bottom of the window - the
+        // overflow rows scroll instead. Without this the carried list rendered
+        // below the panel when body + 5 rows exceeded the height cap.
+        float maxWinH = vh - 40f;
+        boolean hasCarried = !carried.isEmpty();
+        float carriedFrameH = 0f, carriedBlockH = 0f;
+        if (hasCarried) {
+            float labelH = SECTION_GAP + rowH; // "Carried:" heading + gap
+            float roomForFrame = maxWinH - (HEADER_H + PAD * 2f) - bodyH - labelH;
+            int fitRows = Math.max(1, (int) Math.floor(roomForFrame / rowH));
+            int visRows = Math.max(1, Math.min(Math.min(carried.size(), MAX_CARRIED_ROWS), fitRows));
+            carriedFrameH = visRows * rowH;
+            carriedBlockH = labelH + carriedFrameH;
+        }
+
+        float contentH = bodyH + carriedBlockH;
+        float winH = Math.min(maxWinH, HEADER_H + PAD * 2f + contentH);
         window.set((vw - winW) * 0.5f, (vh - winH) * 0.5f, winW, winH);
 
         float ix = window.x + PAD;

@@ -20,6 +20,14 @@ public final class ActionLibrary {
 
     private ActionLibrary() {}
 
+    /** Chebyshev radius past which a floor CONSUMABLE (potion / food / bomb) is
+     *  not worth a dedicated detour: the agent grabs consumables it passes near
+     *  but no longer treks across the whole floor for a distant one. Equipment
+     *  upgrades are exempt - gear is worth crossing a floor for - so only the
+     *  marginal, renewable loot is gated. Keeps the agent from ping-ponging
+     *  toward far items instead of descending. */
+    public static final int MAX_CONSUMABLE_DETOUR = 10;
+
     /* ---------- helpers ---------- */
 
     public static void addMeleeAdjacent(WorldState s, List<Action> out) {
@@ -431,9 +439,10 @@ public final class ActionLibrary {
         for (java.util.Map.Entry<Point, Item> e : s.memory.knownItems.entrySet()) {
             Item it = e.getValue();
             if (it == null) continue;
-            boolean want = ItemEval.isConsumable(it)
-                    || (it.inventoryCategory != null && it.inventoryCategory.isEquipment()
-                        && isEquipmentUpgrade(me, it));
+            boolean isUpgrade = it.inventoryCategory != null
+                    && it.inventoryCategory.isEquipment()
+                    && isEquipmentUpgrade(me, it);
+            boolean want = ItemEval.isConsumable(it) || isUpgrade;
             if (!want) continue;
             Point t = e.getKey();
             if (t.equals(me.position)) {
@@ -445,11 +454,31 @@ public final class ActionLibrary {
                 continue;
             }
             int d = WorldState.chebyshev(me.position, t);
+            // A distant CONSUMABLE isn't worth trekking across the floor for -
+            // skip it so the agent descends instead of chasing marginal loot. An
+            // equipment upgrade is always worth the walk, so it's never gated.
+            if (!isUpgrade && d > MAX_CONSUMABLE_DETOUR) continue;
             double value = it.getValue();
             out.add(new ActionMoveToward(t,
                     "pickup item",
                     Math.max(0.2, 0.6 + value * 0.01 - 0.015 * d),
                     true));
+        }
+    }
+
+    /** Enumerate equipping any bagged equipment piece that beats what's worn in
+     *  its slot. Pairs with {@link #addPickupConsumableOrUpgrade}, which only
+     *  walks the agent to floor upgrades and drops them in the bag - without this
+     *  the agent hoards better weapons/armor unused and fights the whole dungeon
+     *  with its starting gear. Same {@link #isEquipmentUpgrade} test as pickup, so
+     *  the two agree on what counts as an upgrade. */
+    public static void addEquipUpgrades(WorldState s, List<Action> out) {
+        Mob me = s.mob;
+        if (me == null || me.inventory == null || me.inventory.bag == null) return;
+        for (Item it : me.inventory.bag) {
+            if (it == null || it.inventoryCategory == null
+                    || !it.inventoryCategory.isEquipment()) continue;
+            if (isEquipmentUpgrade(me, it)) out.add(new ActionEquip(it));
         }
     }
 

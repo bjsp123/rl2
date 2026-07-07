@@ -29,7 +29,11 @@ public class DesktopLauncher {
         config.setForegroundFPS(Math.max(60, refreshHz) + 1);
         config.setTitle("rl2");
         config.setWindowedMode(size[0], size[1]);
-        new Lwjgl3Application(new Rl2Game(persistence), config);
+        Rl2Game game = new Rl2Game(persistence);
+        // Hard-exit hook for the D3D-GL teardown crash: only the desktop JVM
+        // needs (or has) Runtime.halt; see Rl2Game.dispose().
+        game.hardExitHook = () -> Runtime.getRuntime().halt(0);
+        new Lwjgl3Application(game, config);
     }
 
     /** Parse the persisted "WxH" string, falling back to the default on missing / malformed. */

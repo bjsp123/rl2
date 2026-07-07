@@ -39,7 +39,11 @@ public class Buff {
         /** Mob is drawn semi-transparent, gains +40 evasion, can't be picked as a
          *  ranged-attack target. Effect ends if the mob attacks. */
         INVISIBLE(20),
-        /** Mob flies, can pass through walls, +20 evasion. */
+        /** Half out of the world: +100 evasion, flight, and free passage
+         *  through solid terrain and other mobs (rendered 40% transparent;
+         *  projectiles sail through it). When the buff ends over a chasm the
+         *  mob falls; inside something solid it snaps to the nearest free
+         *  tile - see {@code MobSystem.resolveGhostlyEnd}. */
         GHOSTLY(20),
         /** Mob flies but doesn't pass through walls. */
         LEVITATING(20),
@@ -63,11 +67,11 @@ public class Buff {
          *  turn while the buff is active. Applied by potion of insight;
          *  effect is idempotent (subsequent ticks re-stamp the same flag). */
         INSIGHT,
-        /** Cold-slowed. Adds {@code 50 + level * 10} to both moveCost and attackCost
-         *  while active - every action takes longer. Applied by freeze bombs. */
+        /** Cold-slowed. Adds {@code 80 + stacks * 15} to moveCost, attackCost, and
+         *  rangedCost while active - every action takes longer. Applied by freeze bombs. */
         CHILLED,
-        /** Slick with oil. Takes double damage from fire. If size > 2 and not flying,
-         *  has a 50% chance per step to leave an OIL surface in the cell it left.
+        /** Slick with oil. Takes double damage from fire. If size >= 3 and not flying,
+         *  has a 12.5% chance per step to leave an OIL surface in the cell it left.
          *  Applied by oil bombs / oil-wand impacts that splash directly onto the mob. */
         OILY(3),
         /** Soaked through. Takes double damage from lightning attacks. */
@@ -105,8 +109,9 @@ public class Buff {
          *  the max of incoming/existing stacks via the standard
          *  {@link com.bjsp123.rl2.logic.BuffSystem#apply} merge rule). */
         BLEEDING,
-        /** Mob moves at 30% of normal action cost (+20 evasion). Ends instantly when
-         *  the mob takes or deals any damage. */
+        /** Flickering half out of reality: +100 evasion, move and attack cost
+         *  halved. Persists through dealing and taking damage - runs its full
+         *  duration (see BuffSystem / MobSystem.processAttack). */
         PHASE(20),
         /** Complete immunity to all incoming damage. Duration counts down per
          *  standard turn. Does not block self-inflicted healing or stat effects. */

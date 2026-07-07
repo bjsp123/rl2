@@ -187,10 +187,18 @@ public final class Animator {
         // cloud puffs all read the raw dt so a 4x anim-speed run still
         // looks like a calm fire and a steady poison cloud.
         if (level != null && dtMs > 0) {
-            tickBurningParticles(level, dtMs);
+            // Pure-ambience cadences are skipped in fast graphics: fire embers
+            // (the burning tile/mob still draws), levitation puffs and DRIFT
+            // buff sparkles (both duplicated by buff icons). Sleep-Zs stay -
+            // they're the only at-a-glance ASLEEP tell - and cloud puffs stay
+            // because they ARE the rendering of gas clouds (poison etc.).
+            boolean fast = com.bjsp123.rl2.ui.skin.Settings.fastGraphics();
+            if (!fast) {
+                tickBurningParticles(level, dtMs);
+                tickLevitatePuffs(level, dtMs);
+                tickBuffParticles(level, dtMs);
+            }
             tickSleepZs(level, dtMs);
-            tickLevitatePuffs(level, dtMs);
-            tickBuffParticles(level, dtMs);
             // Cloud puffs are per-render-frame Poisson emission, not
             // wall-clock; emit them once per render regardless of speed.
             emitCloudPuffs(level);
@@ -205,8 +213,9 @@ public final class Animator {
         // Foot dust - spawn one cloud per render frame at the player's
         // current visual foot position, while the player is mid-step.
         // The per-frame cadence (rather than per-game-tick) gives a dense
-        // trail that hides the bottom of the sprite.
-        spawnFootDust(level);
+        // trail that hides the bottom of the sprite. Pure ambience - skipped
+        // in fast graphics (one particle spawn per frame while moving).
+        if (!com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) spawnFootDust(level);
     }
 
     /** Per-tile size for converting MobAnimState slide deltas into world
@@ -596,11 +605,25 @@ public final class Animator {
             queue.sequential(missile.totalFrames());
             if (sounds != null) sounds.playAt("sfx.item.use.ranged." + (physical ? "physical" : "magic"), level, m.from());
         }
-        Mob caster = m.caster();
-        int damage = m.damage();
         Point target = m.to();
+        // Point-blank first-encounter tip - renderer-side concern, so it stays
+        // here rather than in rlib's resolve. Fires only when the penalty
+        // actually applied: shooter adjacent to the impact tile AND a victim
+        // stood there when the missile landed.
+        boolean pointBlank = m.from() != null
+                && com.bjsp123.rl2.logic.LevelFactoryUtils.chebyshev(m.from(), target) == 1;
+        // ANIMATION-GATED LIFECYCLE: pop the deferred resolve that rlib's
+        // tryRangedShot queued (hit roll, resist, processAttack) and run it
+        // when the missile arc lands - same pattern as wand missiles.
+        Runnable resolve = com.bjsp123.rl2.logic.MobSystem.popNextPendingImpact(level);
         pendingImpacts.add(missile, () -> {
-            applyMissileImpact(level, caster, target, damage);
+            boolean victimPresent = MobQueries.mobAt(level, target) != null;
+            if (resolve != null) resolve.run();
+            if (pointBlank && victimPresent) {
+                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
+                        "concept:pointBlank", "concept.pointBlank.tip",
+                        "concept.pointBlank.name", null);
+            }
             if (sounds != null) sounds.playAt("sfx.item.impact.ranged." + (physical ? "physical" : "magic"), level, target);
             Effect burst = Effect.wandImpactBurst(target, null, RNG);
             stage.add(burst);
@@ -1301,6 +1324,41 @@ public final class Animator {
         if (queue.freezeFrames < frames) queue.freezeFrames = frames;
     }
 
+    /** Duration (frames) each level-up gain floater lingers, and the stagger
+     *  between successive lines so they rise as a readable sequence. */
+    private static final int LEVELUP_FLOATER_FRAMES  = 90;
+    private static final int LEVELUP_FLOATER_STAGGER = 14;
+
+    /** Staggered rising floaters spelling out a level-up's gains: "Level N",
+     *  then "+Xhp", then "+1 perk", each starting a beat after the last so
+     *  they read top-to-bottom like a rising column. Player-only, gated on
+     *  the player's own visibility (always true in practice). */
+    void onLevelUpGains(Level level, GameEvent.LevelUpGains m) {
+        Mob mob = m.mob();
+        if (mob == null || mob.position == null) return;
+        if (!MobSystem.isVisibleToPlayer(level, mob)) return;
+        Point p = mob.position;
+        int delay = 0;
+        stage.add(com.bjsp123.rl2.world.render.EffectBuilder.hoverText(
+                p, TextCatalog.format("effect.levelup.level",
+                        TextCatalog.vars("level", m.newLevel())),
+                Effect.EffectTint.WHITE, delay, LEVELUP_FLOATER_FRAMES));
+        delay += LEVELUP_FLOATER_STAGGER;
+        if (m.hpGain() > 0) {
+            stage.add(com.bjsp123.rl2.world.render.EffectBuilder.hoverText(
+                    p, TextCatalog.format("effect.levelup.hp",
+                            TextCatalog.vars("n", m.hpGain())),
+                    Effect.EffectTint.GREEN, delay, LEVELUP_FLOATER_FRAMES));
+            delay += LEVELUP_FLOATER_STAGGER;
+        }
+        if (m.perkGain() > 0) {
+            stage.add(com.bjsp123.rl2.world.render.EffectBuilder.hoverText(
+                    p, TextCatalog.format("effect.levelup.perk",
+                            TextCatalog.vars("n", m.perkGain())),
+                    Effect.EffectTint.YELLOW, delay, LEVELUP_FLOATER_FRAMES));
+        }
+    }
+
     void onXPGainBurst(Level level, GameEvent.XPGainBurst m) {
         if (m.pos() == null || !visibleAt(level, m.pos())) return;
         if (sounds != null) sounds.playAt("sfx.player.pickup.xppill", level, m.pos());
@@ -1367,79 +1425,6 @@ public final class Animator {
         if (pendingImpacts.fireCompleting(level, this)) {
             impactFiredThisTick = true;
         }
-    }
-
-    /** Damage application for plain magic missiles (PlayScreen's wand-of-magic-missile,
-     *  the staff legacy missile, AI ranged shooters). Mirrors the legacy
-     *  {@code PlayScreen.resolveCompletingMissiles} body. */
-    private static void applyMissileImpact(Level level, Mob caster, Point target, int damage) {
-        Mob victim = MobQueries.mobAt(level, target);
-        if (victim == null) return;
-        // Hit-roll for ranged attacks (crossbowmen, imps, etc.). Adjacent shots
-        // suffer a -50 accuracy penalty (point-blank); normal range uses the
-        // straight accuracy-vs-evasion roll, same denominator as melee.
-        if (caster != null && caster.position != null) {
-            int cheb = com.bjsp123.rl2.logic.LevelFactoryUtils.chebyshev(
-                    caster.position, target);
-            int accuracyMod = (cheb == 1) ? -50 : 0;
-            // First-encounter tip: only when the point-blank penalty actually
-            // kicks in (cheb == 1). Player learns about the penalty the first
-            // time it bites them (or they bite an enemy with it).
-            if (cheb == 1) {
-                com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
-                        "concept:pointBlank", "concept.pointBlank.tip",
-                        "concept.pointBlank.name", null);
-            }
-            if (!MobSystem.rollRangedHit(caster, victim, accuracyMod)) {
-                String cn = caster.name != null ? caster.name
-                        : TextCatalog.get("eventlog.fallback.adventurer");
-                String vn = MobSystem.nameForLog(level, victim);
-                boolean attackerIsPlayer = caster.isPlayer;
-                boolean victimIsPlayer   = victim.isPlayer;
-                com.bjsp123.rl2.logic.EventLog.add(attackerIsPlayer
-                        ? com.bjsp123.rl2.logic.Messages.playerMiss(cn, vn)
-                        : (victimIsPlayer
-                           ? com.bjsp123.rl2.logic.Messages.enemyMiss(cn, vn)
-                           : com.bjsp123.rl2.logic.Messages.mobMiss(cn, vn)));
-                // Yellow "miss" floater + miss sfx via the standard MISS path.
-                if (level.events != null) {
-                    boolean physical = caster.rangedDamageType == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL;
-                    MobSystem.DamageElement element = physical
-                            ? MobSystem.DamageElement.PHYSICAL : MobSystem.DamageElement.MAGIC;
-                    level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
-                            victim, 0,
-                            com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
-                            caster, element, null));
-                }
-                return;
-            }
-        }
-        boolean physical = caster != null
-                && caster.rangedDamageType == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL;
-        MobSystem.DamageElement element = physical
-                ? MobSystem.DamageElement.PHYSICAL : MobSystem.DamageElement.MAGIC;
-        MobSystem.AttackType attackType = physical
-                ? MobSystem.AttackType.RANGED : MobSystem.AttackType.MAGIC;
-        int resist = physical
-                ? MobSystem.rollRange(MobSystem.resistRange(victim))
-                : MobSystem.rollRange(MobSystem.magicResistRange(victim));
-        int afterResist = Math.max(0, damage - resist);
-        String resistKey = physical ? "armor" : "magicResist";
-        MobSystem.DamageBreakdown bk =
-                new MobSystem.DamageBreakdown(element, damage)
-                        .add(resistKey, Math.min(resist, damage));
-        Mob speaker = caster != null ? caster : com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
-        afterResist = MobSystem.applySurpriseIfNeeded(level, speaker, victim,
-                afterResist, attackType, element);
-        String casterName = speaker != null && speaker.name != null
-                ? speaker.name
-                : TextCatalog.get("eventlog.fallback.adventurer");
-        String victimName = MobSystem.nameForLog(level, victim);
-        double hpBefore = victim.hp;
-        MobSystem.processAttack(level, speaker, victim, afterResist, attackType, element, bk);
-        int dealt = Math.max(0, (int) Math.round(hpBefore - victim.hp));
-        com.bjsp123.rl2.logic.EventLog.add(
-                com.bjsp123.rl2.logic.Messages.playerHit(casterName, victimName, dealt));
     }
 
     // -- Real-time particle drains --------------------------------------------------

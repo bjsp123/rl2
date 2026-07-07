@@ -442,7 +442,7 @@ public final class V2CharacterSelect extends V2Screen {
                     top = statRow(left, top, TextCatalog.get("ui.characterSelect.eva"),
                             Integer.toString(st.evasion));
                     top = statRow(left, top, TextCatalog.get("ui.characterSelect.atk"),
-                            st.damage.min() + "-" + st.damage.max());
+                            com.bjsp123.rl2.ui.StatFormat.damage(st.damage, st.apDamage));
                     top = statRow(left, top, TextCatalog.get("ui.characterSelect.armor"),
                             st.armor.min() + "-" + st.armor.max());
                 }

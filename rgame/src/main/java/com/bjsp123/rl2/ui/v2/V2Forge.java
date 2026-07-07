@@ -5,8 +5,6 @@ import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.math.Rectangle;
-import com.badlogic.gdx.scenes.scene2d.utils.ScissorStack;
 import com.bjsp123.rl2.Rl2Game;
 import com.bjsp123.rl2.ui.ItemLore;
 import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
@@ -14,12 +12,13 @@ import com.bjsp123.rl2.logic.EventLog;
 import com.bjsp123.rl2.logic.GemRecipe;
 import com.bjsp123.rl2.logic.ItemFactory;
 import com.bjsp123.rl2.logic.ItemNames;
+import com.bjsp123.rl2.logic.Messages;
 import com.bjsp123.rl2.logic.RecipeSystem;
 import com.bjsp123.rl2.logic.Registries;
+import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.GemSpecies;
 import com.bjsp123.rl2.model.Item;
-import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.world.render.GemSprites;
 import com.bjsp123.rl2.world.render.IconSprites;
@@ -86,11 +85,6 @@ public final class V2Forge extends V2Screen {
     /** Opens the inventory item-picker for recycling; set by the caller. */
     private final Runnable onRecycle;
 
-    /** Scratch rectangles for the band scissor clip - converted to screen space
-     *  via the viewport each frame. */
-    private final Rectangle scissorIn = new Rectangle();
-    private final Rectangle scissorOut = new Rectangle();
-
     /** Preview/confirm popup shown before a recipe is actually forged, so the
      *  player can read what the scroll does first. */
     private final ConfirmPopup preview;
@@ -152,7 +146,8 @@ public final class V2Forge extends V2Screen {
         float contentW = window.w - 2 * PAD;
         float btnH = 44f;
         float btnY = chipStripY() - 12f - btnH;
-        recycleBtn = new Btn("Recycle an item", contentX, btnY, contentW, btnH, onRecycle).header();
+        recycleBtn = new Btn(TextCatalog.get("ui.forge.recycle"),
+                contentX, btnY, contentW, btnH, onRecycle).header();
         buttons.add(recycleBtn);
 
         // Build one sample output Item per recipe (icon + name source). Skip
@@ -246,17 +241,6 @@ public final class V2Forge extends V2Screen {
         return visible.isEmpty() ? 0f : visible.size() * (ROW_H + ROW_GAP) - ROW_GAP;
     }
 
-    /** Push a scissor matching the list band onto the GL stack. Returns
-     *  {@code true} when the clip was applied - caller must {@code popScissors}.
-     *  Flush the active renderer (shapes or batch) BEFORE calling so prior
-     *  draws aren't clipped, and again before the matching pop. */
-    private boolean pushBandScissor() {
-        scissorIn.set(band.rect.x, band.rect.y, band.rect.w, band.rect.h);
-        ctx.viewport.calculateScissors(
-                ctx.batch.getTransformMatrix(), scissorIn, scissorOut);
-        return ScissorStack.pushScissors(scissorOut);
-    }
-
     @Override
     protected void drawBodyShape(UiCtx ctx) {
         Mob p = player();
@@ -285,8 +269,7 @@ public final class V2Forge extends V2Screen {
         }
 
         // Recipe rows, scissor-clipped to the list band.
-        s.flush();
-        if (pushBandScissor()) {
+        band.clip(ctx, () -> {
             for (int i = 0; i < visible.size(); i++) {
                 Row row = visible.get(i);
                 Rect r = row.rect;
@@ -304,9 +287,7 @@ public final class V2Forge extends V2Screen {
                 ButtonChrome.shape(ctx, row.infoRect, i == pressedInfo, false, false,
                         UIVars.BTN_BG);
             }
-            s.flush();
-            ScissorStack.popScissors();
-        }
+        });
 
         // Shared scrollbar affordance on the right edge of the list.
         band.drawScrollbar(s, listContentH());
@@ -315,7 +296,8 @@ public final class V2Forge extends V2Screen {
     @Override
     protected void drawBodyText(UiCtx ctx) {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
-                "Gem Hearth", window.cx(), window.top() - ctx.headerLineH() * 0.5f);
+                TextCatalog.get("ui.forge.title"),
+                window.cx(), window.top() - ctx.headerLineH() * 0.5f);
 
         // Chip gem icons.
         for (Chip c : chips) {
@@ -328,16 +310,13 @@ public final class V2Forge extends V2Screen {
 
         // Recipe rows, scissor-clipped to the list band.
         TextureRegion infoIcon = IconSprites.regionFor(IconSprites.Icon.INFO);
-        ctx.batch.flush();
-        if (pushBandScissor()) {
+        band.clip(ctx, () -> {
             for (int i = 0; i < visible.size(); i++) {
                 Row row = visible.get(i);
                 drawRecipeRow(ctx, row);
                 ButtonChrome.icon(ctx, row.infoRect, infoIcon, i == pressedInfo, false);
             }
-            ctx.batch.flush();
-            ScissorStack.popScissors();
-        }
+        });
         ctx.batch.setColor(Color.WHITE);
     }
 
@@ -400,9 +379,9 @@ public final class V2Forge extends V2Screen {
         Color tintC;
         String label;
         switch (slot.kind) {
-            case EXOTIC          -> { rep = GemSpecies.BLOODHIVE; tintC = UIVars.ACCENT; label = "exotic"; }
-            case METAL_OR_EXOTIC -> { rep = GemSpecies.GOLD;      tintC = new Color(0.85f, 0.7f, 0.3f, 1f); label = "metal"; }
-            default              -> { rep = GemSpecies.LETTUSTONE; tintC = UIVars.TEXT_DIM; label = "any"; }
+            case EXOTIC          -> { rep = GemSpecies.BLOODHIVE;  tintC = UIVars.ACCENT;   label = TextCatalog.get("ui.forge.slot.exotic"); }
+            case METAL_OR_EXOTIC -> { rep = GemSpecies.GOLD;       tintC = UIVars.GOLD;     label = TextCatalog.get("ui.forge.slot.metal"); }
+            default              -> { rep = GemSpecies.LETTUSTONE; tintC = UIVars.TEXT_DIM; label = TextCatalog.get("ui.forge.slot.any"); }
         }
         TextureRegion reg = GemSprites.regionFor(rep);
         if (reg == null) return;
@@ -503,8 +482,9 @@ public final class V2Forge extends V2Screen {
         String name = ItemNames.displayName(row.sample, player());
         if (name == null || name.isEmpty()) name = row.recipe.output;
         String desc = ItemLore.describeFlavor(row.sample);
-        if (desc == null || desc.isEmpty()) desc = "Forge this item at the gem hearth?";
-        preview.configure(name, desc, "Make", null, () -> craft(row.recipe));
+        if (desc == null || desc.isEmpty()) desc = TextCatalog.get("ui.forge.confirmBody");
+        preview.configure(name, desc, TextCatalog.get("ui.forge.make"), null,
+                () -> craft(row.recipe));
         preview.open();
     }
 
@@ -520,9 +500,7 @@ public final class V2Forge extends V2Screen {
                 game.currentPlay.getWorld().currentLevel(), p, java.util.List.of(out));
         String name = ItemNames.displayName(out, p);
         if (name == null || name.isEmpty()) name = recipe.output;
-        EventLog.add(new LogEvent("You forge the " + name
-                + " at the gem hearth; it lands at your feet.",
-                LogEvent.EventPriority.HIGH, true));
+        EventLog.add(Messages.itemForged(name));
         if (sounds != null) sounds.play("sfx.ui.click");
     }
 

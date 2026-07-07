@@ -35,7 +35,10 @@ public final class V2Title extends V2Screen {
         float maxBtnW = Math.max(120f, ctx.worldW() - 32f);
         float btnW    = Math.min(220f, maxBtnW);
 
-        int n = 6;
+        // Account entry only on platforms with identity (web with Supabase
+        // configured); desktop/android show the classic six buttons.
+        boolean hasAccount = game.services.auth.isAvailable();
+        int n = hasAccount ? 7 : 6;
         float colH = n * TITLE_BTN_H + (n - 1) * BTN_GAP;
         float headerH = ctx.fontHeader.getCapHeight() + 24f;
         float winH = WINDOW_PAD * 2 + headerH + TITLE_GAP + colH;
@@ -63,6 +66,11 @@ public final class V2Title extends V2Screen {
         // Bottom → top (libGDX y-up): Quit is lowest, Continue/New Game highest.
         addBtn(TextCatalog.get("ui.title.quit"), btnX, y, btnW, Gdx.app::exit);
         y += TITLE_BTN_H + BTN_GAP;
+        if (hasAccount) {
+            addBtn(TextCatalog.get("ui.title.account"), btnX, y, btnW,
+                    () -> game.pushScreen(new V2Account(game, ctx)));
+            y += TITLE_BTN_H + BTN_GAP;
+        }
         addBtn(TextCatalog.get("ui.title.settings"), btnX, y, btnW,
                 () -> game.pushScreen(new V2Settings(game, ctx)));
         y += TITLE_BTN_H + BTN_GAP;
@@ -87,10 +95,10 @@ public final class V2Title extends V2Screen {
         addBtn(topLabel, btnX, y, btnW, topAction);
 
         if (game.music != null) game.music.play(com.bjsp123.rl2.audio.MusicPlayer.Track.TITLE);
-        // Burger at top-right; no back button (root screen).
+        // Burger at top-right; no back button (root screen). Standard items,
+        // title variant: Settings / Encyclopedia / Credits, no Main Menu.
         burger = makeBurger();
-        addBurgerItem(TextCatalog.get("ui.menu.settings"), () -> game.pushScreen(new V2Settings(game, ctx)));
-        addBurgerItem(TextCatalog.get("ui.menu.credits"),  () -> game.pushScreen(new V2Credits(game)));
+        addStandardBurgerItems(game, true);
     }
 
     private void addBtn(String label, float x, float y, float w, Runnable onClick) {

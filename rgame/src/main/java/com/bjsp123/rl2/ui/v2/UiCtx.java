@@ -38,7 +38,7 @@ public final class UiCtx implements Disposable {
     private final Texture      whiteTex;
     public final OrthographicCamera camera = new OrthographicCamera();
     /** ScreenViewport - 1 world unit ~ 1 screen pixel, so UI controls
-     *  drawn at fixed world dimensions (UIVars.BTN_W, UIVars.BTN_H, etc.) keep
+     *  drawn at fixed world dimensions (UIVars.BURGER_SIZE, UIVars.BACK_SIZE, etc.) keep
      *  their on-screen size as the window grows or shrinks. The world
      *  width / height is whatever the screen currently is, so layouts use
      *  {@link #worldW()} / {@link #worldH()} to anchor and centre against

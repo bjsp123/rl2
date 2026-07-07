@@ -104,34 +104,17 @@ public final class ItemEval {
         return false;
     }
 
-    /** True if the powerup would have a real effect for {@code mob} right now:
-     *  HP_UP at less than max HP, MANA_UP if at least one charged item isn't
-     *  full, LEVEL_UP always useful. */
+    /** True if the powerup would have a real effect for {@code mob} right now.
+     *  Delegates to the engine's {@link ItemSystem#powerupWouldApply} - the same
+     *  predicate {@code applyPowerup} gates on - so the planner's "worth walking
+     *  to" and the engine's "will actually consume" can never disagree. (An
+     *  earlier local approximation drifted: it counted an HP pill as useful at
+     *  hp fractionally below max, but the engine rounds the heal to 0 and leaves
+     *  the pill, so auto-explore re-targeted it forever.) */
     public static boolean isUsefulPowerup(Item it, Mob mob) {
         if (it == null || mob == null) return false;
         if (it.useBehavior != UseBehavior.POWERUP) return false;
-        if (it.wandEffect == Item.ItemEffect.HP_UP) {
-            return mob.hp < mob.effectiveStats().maxHp;
-        }
-        if (it.wandEffect == Item.ItemEffect.MANA_UP) {
-            return anyChargedItemBelowMax(mob);
-        }
-        if (it.wandEffect == Item.ItemEffect.LEVEL_UP) {
-            return true;
-        }
-        return true;
-    }
-
-    /** Helper for {@link #isUsefulPowerup}: true iff the mob carries at least one
-     *  rechargeable item whose current charge is below its effective max. */
-    private static boolean anyChargedItemBelowMax(Mob mob) {
-        if (mob.inventory == null) return false;
-        if (mob.inventory.bag != null) {
-            for (Item it : mob.inventory.bag) {
-                if (it != null && it.baseChargeMax > 0 && it.charge < it.baseChargeMax) return true;
-            }
-        }
-        return false;
+        return com.bjsp123.rl2.logic.ItemSystem.powerupWouldApply(mob, it);
     }
 
     /** True if {@code it} is a thrown smoke source - one input to the canEscapeFrom

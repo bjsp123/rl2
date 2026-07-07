@@ -199,15 +199,10 @@ public final class LevelFactory {
 
         // Depth-1 spawn room: onetime doors so mobs can't cross into the room
         // from outside until the player has stepped through (the crossed tile
-        // turns to FLOOR at that point). Runs before the all-crystal sweep so
-        // the ONETIME_DOOR tiles stick (the sweep only swaps DOOR -> CRYSTAL_DOOR).
+        // turns to FLOOR at that point). All other rooms keep their wooden
+        // DOORs, so hostile mobs can pursue the player through doorways.
         if (depth == 1 && !rooms.isEmpty()) {
             changeRoomDoors(level, rooms.get(0), Tile.DOOR, Tile.ONETIME_DOOR);
-        }
-
-        //bp make all doors crystal
-        for (int i = 0; i<rooms.size(); i++) {
-            changeRoomDoors(level, rooms.get(i), Tile.DOOR, Tile.CRYSTAL_DOOR);
         }
 
         LevelFactoryPopulate.placeWaterPools(level, rng);

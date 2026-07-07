@@ -21,6 +21,11 @@ public final class MobVisibility {
             if (!(x == x0 && y == y0)) {
                 for (Mob m : level.mobs) {
                     if (m == shooter || m.position == null) continue;
+                    // GHOSTLY bystanders don't clip a shot passing over their
+                    // tile - projectiles sail through a ghost. A ghost that IS
+                    // the aimed-at destination still resolves there (the
+                    // x==x1 return below), where its evasion applies.
+                    if (m.isGhostly()) continue;
                     if (m.position.tileX() == x && m.position.tileY() == y) {
                         return m.position;
                     }

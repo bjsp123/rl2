@@ -28,25 +28,34 @@ public final class GameBalance {
      *  matching {@code public static} field on this class. Each {@code key} must be the
      *  exact field name (canonical {@code UPPER_SNAKE}); unknown keys are ignored and
      *  missing keys keep their Java-side baseline. Handles {@code int}, {@code double},
-     *  {@code long}, and {@code boolean} fields. Call once at startup, before gameplay
-     *  code reads any of these fields. */
+     *  {@code long}, and {@code boolean} fields. Rows with kind=difficulty instead
+     *  override one per-tier tuning value (see {@link #loadDifficultyRow}). Call once
+     *  at startup, before gameplay code reads any of these fields. */
     public static void load(String text) {
         if (text == null || text.isEmpty()) return;
         CsvTable table = CsvTable.parse(text);
         for (java.util.Map<String, String> row : table.rows) {
-            if (!"gamebalance".equals(CsvTable.str(row, "kind", ""))) continue;
+            String kind = CsvTable.str(row, "kind", "");
             String key = CsvTable.str(row, "key", "");
             String value = CsvTable.str(row, "value", "").trim();
             if (key.isEmpty() || value.isEmpty()) continue;
+            if ("difficulty".equals(kind)) {
+                loadDifficultyRow(key, value);
+                continue;
+            }
+            if (!"gamebalance".equals(kind)) continue;
             try {
                 Field f = GameBalance.class.getDeclaredField(key);
                 int mods = f.getModifiers();
                 if (!Modifier.isStatic(mods) || Modifier.isFinal(mods)) continue;
                 Class<?> t = f.getType();
-                if (t == int.class)         f.setInt(null, Integer.parseInt(value));
-                else if (t == double.class) f.setDouble(null, Double.parseDouble(value));
-                else if (t == long.class)   f.setLong(null, Long.parseLong(value));
-                else if (t == boolean.class) f.setBoolean(null, Boolean.parseBoolean(value));
+                // Boxed Field.set (not setInt/setDouble/...): the primitive
+                // setters are missing from TeaVM's reflection emulation, and
+                // Field.set auto-unboxes onto primitive fields on every runtime.
+                if (t == int.class)         f.set(null, Integer.parseInt(value));
+                else if (t == double.class) f.set(null, Double.parseDouble(value));
+                else if (t == long.class)   f.set(null, Long.parseLong(value));
+                else if (t == boolean.class) f.set(null, Boolean.parseBoolean(value));
             } catch (NoSuchFieldException | IllegalAccessException | NumberFormatException ignored) {
                 // Unknown key, non-overridable field, or malformed value - keep the baseline.
             }
@@ -131,6 +140,13 @@ public final class GameBalance {
         return Math.max(0, raw - res);
     }
 
+    // ------------------------- To-hit ---------------------------------------
+    /** Minimum to-hit probability, applied AFTER the accuracy/evasion ratio.
+     *  Guarantees even a heavily out-evaded attacker lands ~1 in 10, so a
+     *  high-evasion foe can never be a total wall that decides a fight by pure
+     *  whiff-streak. Surprise auto-hits are unaffected (already 100%). */
+    public static double RULES_HIT_CHANCE_FLOOR = 0.10;
+
     // ------------------------- Surprise attacks -----------------------------
     /** Damage multiplier applied after normal armour/resist rolls for a surprise hit. */
     public static double RULES_SURPRISE_DAMAGE_MULT = 1.5;
@@ -140,7 +156,9 @@ public final class GameBalance {
     public static boolean RULES_SURPRISE_SURPRISE_IF_NO_LOS_LAST_TURN = true;
     /** If true, physical single-target throws are eligible for surprise. */
     public static boolean RULES_SURPRISE_ALLOW_THROW = true;
-    /** If true, every targeted attack type can surprise; otherwise only physical attacks can. */
+    /** If true, every targeted attack type can surprise; otherwise only PHYSICAL-element
+     *  melee / ranged / thrown attacks can. OFF by design: magic never surprises, so an
+     *  unseen caster can't land a guaranteed, amplified, un-dodgeable opening hit. */
     public static boolean RULES_SURPRISE_ALLOW_ALL_TARGETED_ATTACK_TYPES = false;
     /** If true, a mob standing in a smoke cloud is concealed from a viewer who
      *  can't peer into that tile with KEEN_SIGHT - so a smoke plume both blocks
@@ -151,81 +169,18 @@ public final class GameBalance {
     // ------------------------- Difficulty -----------------------------------
     /** Selected difficulty for the active run. Set via {@link #applyDifficulty}
      *  at run start (and reset to NORMAL when leaving a game). Game logic reads
-     *  the "active" multiplier fields below, not this enum directly. */
+     *  the active run's numbers via {@link #tuning()}. */
     public static Difficulty difficulty = Difficulty.NORMAL;
 
-    // Active multipliers the game logic reads (populated by applyDifficulty);
-    // baked defaults equal NORMAL so non-game contexts (autoplay, menus) are unaffected.
-    /** Player max-HP multiplier (applied in MobStats for the player mob). */
-    public static double PLAYER_HP_MULTIPLIER = 1.0;
-    /** Enemy max-HP multiplier (applied in MobStats for non-player mobs). */
-    public static double ENEMY_HP_MULTIPLIER = 1.0;
-    /** Fraction of the player's max HP regenerated per standard turn (MobStats). */
-    public static double PLAYER_REGEN_FRAC_PER_TURN = 0.0;
-    /** Renewing-spawn cadence multiplier; >1 = fresh enemies arrive less often (TurnSystem). */
-    public static double SPAWN_CADENCE_MULTIPLIER = 1.0;
-    /** Player movement-speed multiplier; >1 = faster (lower move cost) (MobStats). */
-    public static double PLAYER_SPEED_MULTIPLIER = 1.0;
-    /** When true, jade items (fish/crab/bull) don't consume charges on use
-     *  (ItemSystem). Set only by the SUPEREASY tier. */
-    public static boolean JADE_ITEMS_FREE_CHARGES = false;
-    /** Jade Peach revive charms granted to the player at run start. */
-    public static int STARTING_REVIVE_CHARMS = 0;
     /** Fraction of max HP the player is restored to when a revive charm fires. */
     public static double REVIVE_HP_RESTORE_FRAC = 1.0;
     /** Fraction of each hostile's max HP dealt by the revive shockwave. */
     public static double REVIVE_AOE_MAXHP_FRAC = 0.20;
 
-    // Per-difficulty presets (config.csv-tunable). applyDifficulty copies the
-    // chosen level's values into the active fields above.
-    public static double DIFFICULTY_EASY_PLAYER_HP_MULT      = 1.6;
-    public static double DIFFICULTY_EASY_ENEMY_HP_MULT       = 1.0;
-    public static double DIFFICULTY_EASY_REGEN_FRAC          = 0.015;
-    public static double DIFFICULTY_EASY_SPAWN_CADENCE_MULT  = 2.0;
-    public static double DIFFICULTY_EASY_SPEED_MULT          = 1.2;
-    public static int    DIFFICULTY_EASY_REVIVE_CHARMS       = 8;
-
-    // Gentle sits midway between Easy and Normal on every axis.
-    public static double DIFFICULTY_GENTLE_PLAYER_HP_MULT     = 1.2;
-    public static double DIFFICULTY_GENTLE_ENEMY_HP_MULT      = 1.0;
-    public static double DIFFICULTY_GENTLE_REGEN_FRAC         = 0.005;
-    public static double DIFFICULTY_GENTLE_SPAWN_CADENCE_MULT = 1.5;
-    public static double DIFFICULTY_GENTLE_SPEED_MULT         = 1.1;
-    public static int    DIFFICULTY_GENTLE_REVIVE_CHARMS      = 4;
-
-    public static double DIFFICULTY_NORMAL_PLAYER_HP_MULT     = 0.8;
-    public static double DIFFICULTY_NORMAL_ENEMY_HP_MULT      = 1.0;
-    public static double DIFFICULTY_NORMAL_REGEN_FRAC         = 0.0;
-    public static double DIFFICULTY_NORMAL_SPAWN_CADENCE_MULT = 1.0;
-    public static double DIFFICULTY_NORMAL_SPEED_MULT         = 1.0;
-    public static int    DIFFICULTY_NORMAL_REVIVE_CHARMS      = 0;
-
-    public static double DIFFICULTY_HARD_PLAYER_HP_MULT       = 0.8;
-    public static double DIFFICULTY_HARD_ENEMY_HP_MULT        = 1.3;
-    public static double DIFFICULTY_HARD_REGEN_FRAC           = 0.0;
-    public static double DIFFICULTY_HARD_SPAWN_CADENCE_MULT   = 1.0;
-    public static double DIFFICULTY_HARD_SPEED_MULT           = 1.0;
-    public static int    DIFFICULTY_HARD_REVIVE_CHARMS        = 0;
-
-    public static double DIFFICULTY_VERY_HARD_PLAYER_HP_MULT     = 0.8;
-    public static double DIFFICULTY_VERY_HARD_ENEMY_HP_MULT      = 1.5;
-    public static double DIFFICULTY_VERY_HARD_REGEN_FRAC         = 0.0;
-    public static double DIFFICULTY_VERY_HARD_SPAWN_CADENCE_MULT = 0.5;
-    public static double DIFFICULTY_VERY_HARD_SPEED_MULT         = 1.0;
-    public static int    DIFFICULTY_VERY_HARD_REVIVE_CHARMS      = 0;
-
-    // SuperEasy (debug): like Easy but triple HP and free jade charges.
-    public static double DIFFICULTY_SUPEREASY_PLAYER_HP_MULT      = 2.4;
-    public static double DIFFICULTY_SUPEREASY_ENEMY_HP_MULT       = 1.0;
-    public static double DIFFICULTY_SUPEREASY_REGEN_FRAC          = 0.015;
-    public static double DIFFICULTY_SUPEREASY_SPAWN_CADENCE_MULT  = 2.0;
-    public static double DIFFICULTY_SUPEREASY_SPEED_MULT          = 1.2;
-    public static int    DIFFICULTY_SUPEREASY_REVIVE_CHARMS       = 8;
-
     /** The five selectable difficulty levels. Display text comes from
      *  {@link TextCatalog} (keys {@code difficulty.<lower>.name} /
-     *  {@code .description}); the numbers live in the {@code DIFFICULTY_*}
-     *  fields above so they stay config-tunable. */
+     *  {@code .description}); the numbers live in the {@code TUNING} table
+     *  below, config.csv-tunable via {@code difficulty}-kind rows. */
     public enum Difficulty {
         EASY, GENTLE, NORMAL, HARD, VERY_HARD,
         /** Debug / playtesting tier - NOT shown in the character-select cycle.
@@ -247,80 +202,116 @@ public final class GameBalance {
     /**
      * Every per-difficulty knob bundled into one immutable value. Accessor
      * names spell out exactly what each number is - {@code ...Mult} for a
-     * multiplier, {@code ...FracPerTurn} for a per-turn fraction,
-     * {@code ...Charges} for a count/flag - so a caller can never mistake a
-     * multiplier for a raw stat (the trap the old positional
-     * {@code setActive(double playerHp, ...)} signature invited).
-     *
-     * <p>Built on demand from the {@code DIFFICULTY_*} constants, which remain
-     * the config.csv-tunable source of truth; see {@link #tuningFor}.
+     * multiplier, {@code ...FracPerTurn} for a per-turn fraction - so a caller
+     * can never mistake a multiplier for a raw stat.
      */
     public record DifficultyTuning(
+            /** Player max-HP multiplier (applied in MobStats for the player mob). */
             double  playerHpMult,
+            /** Enemy max-HP multiplier (applied in MobStats for non-player mobs). */
             double  enemyHpMult,
+            /** Fraction of the player's max HP regenerated per standard turn (MobStats). */
             double  regenFracPerTurn,
+            /** Renewing-spawn cadence multiplier; >1 = fresh enemies arrive less often (TurnSystem). */
             double  spawnCadenceMult,
+            /** Player movement-speed multiplier; >1 = faster (lower move cost) (MobStats). */
             double  playerSpeedMult,
+            /** Jade Peach revive charms granted to the player at run start. */
             int     startingReviveCharms,
+            /** When true, jade items (fish/crab/bull) don't consume charges on use (ItemSystem). */
             boolean jadeItemsFreeCharges,
+            /** Run-score coefficient for this tier. */
             double  scoreMult) {}
 
-    /** Assemble the full {@link DifficultyTuning} for {@code d} (null -&gt;
-     *  NORMAL) from the current {@code DIFFICULTY_*} constants. Single source
-     *  for both {@link #applyDifficulty}'s active-field copy and the
-     *  {@link #scoreMultiplier} lookup, so a new difficulty axis is added in
-     *  one place. */
-    public static DifficultyTuning tuningFor(Difficulty d) {
-        if (d == null) d = Difficulty.NORMAL;
-        return switch (d) {
-            case EASY -> new DifficultyTuning(
-                    DIFFICULTY_EASY_PLAYER_HP_MULT, DIFFICULTY_EASY_ENEMY_HP_MULT,
-                    DIFFICULTY_EASY_REGEN_FRAC, DIFFICULTY_EASY_SPAWN_CADENCE_MULT,
-                    DIFFICULTY_EASY_SPEED_MULT, DIFFICULTY_EASY_REVIVE_CHARMS,
-                    false, DIFFICULTY_EASY_SCORE_MULT);
-            case GENTLE -> new DifficultyTuning(
-                    DIFFICULTY_GENTLE_PLAYER_HP_MULT, DIFFICULTY_GENTLE_ENEMY_HP_MULT,
-                    DIFFICULTY_GENTLE_REGEN_FRAC, DIFFICULTY_GENTLE_SPAWN_CADENCE_MULT,
-                    DIFFICULTY_GENTLE_SPEED_MULT, DIFFICULTY_GENTLE_REVIVE_CHARMS,
-                    false, DIFFICULTY_GENTLE_SCORE_MULT);
-            case NORMAL -> new DifficultyTuning(
-                    DIFFICULTY_NORMAL_PLAYER_HP_MULT, DIFFICULTY_NORMAL_ENEMY_HP_MULT,
-                    DIFFICULTY_NORMAL_REGEN_FRAC, DIFFICULTY_NORMAL_SPAWN_CADENCE_MULT,
-                    DIFFICULTY_NORMAL_SPEED_MULT, DIFFICULTY_NORMAL_REVIVE_CHARMS,
-                    false, DIFFICULTY_NORMAL_SCORE_MULT);
-            case HARD -> new DifficultyTuning(
-                    DIFFICULTY_HARD_PLAYER_HP_MULT, DIFFICULTY_HARD_ENEMY_HP_MULT,
-                    DIFFICULTY_HARD_REGEN_FRAC, DIFFICULTY_HARD_SPAWN_CADENCE_MULT,
-                    DIFFICULTY_HARD_SPEED_MULT, DIFFICULTY_HARD_REVIVE_CHARMS,
-                    false, DIFFICULTY_HARD_SCORE_MULT);
-            case VERY_HARD -> new DifficultyTuning(
-                    DIFFICULTY_VERY_HARD_PLAYER_HP_MULT, DIFFICULTY_VERY_HARD_ENEMY_HP_MULT,
-                    DIFFICULTY_VERY_HARD_REGEN_FRAC, DIFFICULTY_VERY_HARD_SPAWN_CADENCE_MULT,
-                    DIFFICULTY_VERY_HARD_SPEED_MULT, DIFFICULTY_VERY_HARD_REVIVE_CHARMS,
-                    false, DIFFICULTY_VERY_HARD_SCORE_MULT);
-            case SUPEREASY -> new DifficultyTuning(
-                    DIFFICULTY_SUPEREASY_PLAYER_HP_MULT, DIFFICULTY_SUPEREASY_ENEMY_HP_MULT,
-                    DIFFICULTY_SUPEREASY_REGEN_FRAC, DIFFICULTY_SUPEREASY_SPAWN_CADENCE_MULT,
-                    DIFFICULTY_SUPEREASY_SPEED_MULT, DIFFICULTY_SUPEREASY_REVIVE_CHARMS,
-                    true, DIFFICULTY_SUPEREASY_SCORE_MULT);
-        };
+    /** The single source of truth for every difficulty number: one row per tier,
+     *  seeded with the baked defaults below and overridable from config.csv rows
+     *  of kind {@code difficulty} with key {@code <TIER>.<FIELD>} - e.g.
+     *  {@code difficulty,EASY.PLAYER_HP_MULT,2.0} (see {@link #load}). */
+    private static final java.util.EnumMap<Difficulty, DifficultyTuning> TUNING =
+            new java.util.EnumMap<>(Difficulty.class);
+    static {
+        //                                              playerHp enemyHp regen/turn spawn speed charms jadeFree score
+        TUNING.put(Difficulty.EASY,      new DifficultyTuning(2.0, 1.0, 0.015, 2.0, 1.2, 8, false, 0.5));
+        // Gentle sits midway between Easy and Normal on every axis.
+        TUNING.put(Difficulty.GENTLE,    new DifficultyTuning(1.5, 1.0, 0.005, 1.5, 1.1, 4, false, 0.75));
+        TUNING.put(Difficulty.NORMAL,    new DifficultyTuning(1.0, 1.0, 0.0,   1.0, 1.0, 0, false, 1.0));
+        TUNING.put(Difficulty.HARD,      new DifficultyTuning(1.0, 1.3, 0.0,   1.0, 1.0, 0, false, 1.5));
+        TUNING.put(Difficulty.VERY_HARD, new DifficultyTuning(1.0, 1.5, 0.0,   0.5, 1.0, 0, false, 2.0));
+        // SuperEasy (debug): like Easy but triple HP and free jade charges.
+        TUNING.put(Difficulty.SUPEREASY, new DifficultyTuning(3.0, 1.0, 0.015, 2.0, 1.2, 8, true,  0.25));
     }
 
-    /** Copy {@code d}'s preset numbers into the active multiplier fields and set
-     *  {@link #difficulty}. Call at run start (new and loaded games); call with
-     *  {@link Difficulty#NORMAL} to reset when returning to menus so preview mobs
-     *  aren't scaled by the last run's difficulty. */
+    /** The {@link DifficultyTuning} row for {@code d} (null -&gt; NORMAL). */
+    public static DifficultyTuning tuningFor(Difficulty d) {
+        return TUNING.get(d == null ? Difficulty.NORMAL : d);
+    }
+
+    /** Tuning for the active run's {@link #difficulty} - the single read point
+     *  for game logic (MobStats, TurnSystem, ItemSystem, run start). Baked
+     *  default is NORMAL so non-game contexts (autoplay, menus) are unaffected. */
+    public static DifficultyTuning tuning() {
+        return tuningFor(difficulty);
+    }
+
+    /** Set the active {@link #difficulty}. Call at run start (new and loaded
+     *  games); call with {@link Difficulty#NORMAL} to reset when returning to
+     *  menus so preview mobs aren't scaled by the last run's difficulty. */
     public static void applyDifficulty(Difficulty d) {
-        if (d == null) d = Difficulty.NORMAL;
-        difficulty = d;
-        DifficultyTuning t = tuningFor(d);
-        PLAYER_HP_MULTIPLIER       = t.playerHpMult();
-        ENEMY_HP_MULTIPLIER        = t.enemyHpMult();
-        PLAYER_REGEN_FRAC_PER_TURN = t.regenFracPerTurn();
-        SPAWN_CADENCE_MULTIPLIER   = t.spawnCadenceMult();
-        PLAYER_SPEED_MULTIPLIER    = t.playerSpeedMult();
-        STARTING_REVIVE_CHARMS     = t.startingReviveCharms();
-        JADE_ITEMS_FREE_CHARGES    = t.jadeItemsFreeCharges();
+        difficulty = (d == null) ? Difficulty.NORMAL : d;
+    }
+
+    /** Apply one config.csv {@code difficulty}-kind row: key is
+     *  {@code <TIER>.<FIELD>}, value the replacement number/flag. Hand-edited
+     *  CSV rule: an unknown tier or field, or a malformed value, logs a warning
+     *  and keeps the baseline - never throws. */
+    private static void loadDifficultyRow(String key, String value) {
+        int dot = key.indexOf('.');
+        String tierName = dot > 0 ? key.substring(0, dot) : key;
+        String field    = dot > 0 ? key.substring(dot + 1) : "";
+        Difficulty tier;
+        try {
+            tier = Difficulty.valueOf(tierName);
+        } catch (IllegalArgumentException e) {
+            System.err.println("[csv] difficulty row: unknown tier '" + tierName + "' - row skipped");
+            return;
+        }
+        DifficultyTuning t = TUNING.get(tier);
+        try {
+            DifficultyTuning nt = switch (field) {
+                case "PLAYER_HP_MULT" -> new DifficultyTuning(Double.parseDouble(value),
+                        t.enemyHpMult(), t.regenFracPerTurn(), t.spawnCadenceMult(), t.playerSpeedMult(),
+                        t.startingReviveCharms(), t.jadeItemsFreeCharges(), t.scoreMult());
+                case "ENEMY_HP_MULT" -> new DifficultyTuning(t.playerHpMult(), Double.parseDouble(value),
+                        t.regenFracPerTurn(), t.spawnCadenceMult(), t.playerSpeedMult(),
+                        t.startingReviveCharms(), t.jadeItemsFreeCharges(), t.scoreMult());
+                case "REGEN_FRAC" -> new DifficultyTuning(t.playerHpMult(), t.enemyHpMult(),
+                        Double.parseDouble(value), t.spawnCadenceMult(), t.playerSpeedMult(),
+                        t.startingReviveCharms(), t.jadeItemsFreeCharges(), t.scoreMult());
+                case "SPAWN_CADENCE_MULT" -> new DifficultyTuning(t.playerHpMult(), t.enemyHpMult(),
+                        t.regenFracPerTurn(), Double.parseDouble(value), t.playerSpeedMult(),
+                        t.startingReviveCharms(), t.jadeItemsFreeCharges(), t.scoreMult());
+                case "SPEED_MULT" -> new DifficultyTuning(t.playerHpMult(), t.enemyHpMult(),
+                        t.regenFracPerTurn(), t.spawnCadenceMult(), Double.parseDouble(value),
+                        t.startingReviveCharms(), t.jadeItemsFreeCharges(), t.scoreMult());
+                case "REVIVE_CHARMS" -> new DifficultyTuning(t.playerHpMult(), t.enemyHpMult(),
+                        t.regenFracPerTurn(), t.spawnCadenceMult(), t.playerSpeedMult(),
+                        Integer.parseInt(value), t.jadeItemsFreeCharges(), t.scoreMult());
+                case "JADE_FREE_CHARGES" -> new DifficultyTuning(t.playerHpMult(), t.enemyHpMult(),
+                        t.regenFracPerTurn(), t.spawnCadenceMult(), t.playerSpeedMult(),
+                        t.startingReviveCharms(), Boolean.parseBoolean(value), t.scoreMult());
+                case "SCORE_MULT" -> new DifficultyTuning(t.playerHpMult(), t.enemyHpMult(),
+                        t.regenFracPerTurn(), t.spawnCadenceMult(), t.playerSpeedMult(),
+                        t.startingReviveCharms(), t.jadeItemsFreeCharges(), Double.parseDouble(value));
+                default -> null;
+            };
+            if (nt == null) {
+                System.err.println("[csv] difficulty row: unknown field '" + field + "' - row skipped");
+            } else {
+                TUNING.put(tier, nt);
+            }
+        } catch (NumberFormatException e) {
+            System.err.println("[csv] difficulty row " + key + ": bad value '" + value + "' - row skipped");
+        }
     }
 
     // ------------------------- Low-HP warning thresholds --------------------
@@ -537,8 +528,10 @@ public final class GameBalance {
     public static int RENEWING_ENEMY_CAP = 8;
     /** Maximum hazard level a floor can reach. */
     public static int HAZARD_MAX = 5;
-    /** Standard turns spent on a floor per +1 hazard. */
-    public static int HAZARD_TURNS_PER_POINT = 2000;
+    /** Standard turns spent on a floor per +1 hazard. 400 is fast enough that
+     *  lingering to strip a floor bare is a real risk/reward decision, without
+     *  making environmental/renewing-spawn pressure a top-tier killer. */
+    public static int HAZARD_TURNS_PER_POINT = 400;
 
     // ------------------------- Final boss (RL-19) ----------------------------
     /** Great Wraith spawn level with zero beacons lit. */
@@ -585,15 +578,8 @@ public final class GameBalance {
     /** Bonus for a perfect victory (every beacon in the world lit). */
     public static int PERFECT_VICTORY_BONUS = 500;
 
-    // Per-difficulty score coefficient (config.csv-tunable).
-    public static double DIFFICULTY_SUPEREASY_SCORE_MULT = 0.25;
-    public static double DIFFICULTY_EASY_SCORE_MULT      = 0.5;
-    public static double DIFFICULTY_GENTLE_SCORE_MULT    = 0.75;
-    public static double DIFFICULTY_NORMAL_SCORE_MULT    = 1.0;
-    public static double DIFFICULTY_HARD_SCORE_MULT      = 1.5;
-    public static double DIFFICULTY_VERY_HARD_SCORE_MULT = 2.0;
-
-    /** Score coefficient for difficulty {@code d}. */
+    /** Score coefficient for difficulty {@code d} (from the per-tier
+     *  {@code TUNING} table; config-tunable via {@code difficulty,<TIER>.SCORE_MULT}). */
     public static double scoreMultiplier(Difficulty d) {
         return tuningFor(d).scoreMult();
     }
@@ -648,6 +634,12 @@ public final class GameBalance {
     public static int DEFAULT_THROW_RANGE = 6;
     /** Throw range bonus granted per level of the HURLER perk. */
     public static int HURLER_RANGE_PER_LEVEL = 2;
+
+    // ------------------------- Ranged shots ----------------------------------
+    /** Accuracy modifier applied to an innate ranged shot resolved at
+     *  point-blank range (target adjacent, Chebyshev 1). Negative = penalty;
+     *  shooting an adjacent target is hard. */
+    public static int POINT_BLANK_ACCURACY_MOD = -50;
 
     // ------------------------- Buff / perk tunables --------------------------
     // These knobs used to live as hardcoded constants inside MobSystem and

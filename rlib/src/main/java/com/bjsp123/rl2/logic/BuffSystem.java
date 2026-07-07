@@ -113,6 +113,15 @@ public final class BuffSystem {
             removeBuff(target, BuffType.FROZEN);
             removeBuff(target, BuffType.CHILLED);
         }
+        if (type == BuffType.WET) {
+            // Water puts out fire - getting soaked extinguishes an active burn.
+            // Emit BuffRemoved so the "fire out" floater + extinguish sfx play.
+            if (removeBuff(target, BuffType.ON_FIRE)
+                    && level != null && level.events != null) {
+                level.events.add(new com.bjsp123.rl2.event.GameEvent.BuffRemoved(
+                        target, BuffType.ON_FIRE, displayName(BuffType.ON_FIRE)));
+            }
+        }
 
         int cap = Math.max(stackCap(type), capOverride);
         int newStacks = Math.max(1, Math.min(cap, stacks));
@@ -283,6 +292,7 @@ public final class BuffSystem {
         if (m == null || m.buffs == null || m.buffs.isEmpty()) return;
         Iterator<Buff> it = m.buffs.iterator();
         boolean changed = false;
+        boolean ghostlyEnded = false;
         while (it.hasNext()) {
             Buff b = it.next();
             // WET / OILY don't decay while the mob is still standing in the water / oil that
@@ -292,6 +302,7 @@ public final class BuffSystem {
             if (b.stacks <= 0) {
                 it.remove();
                 changed = true;
+                if (b.type == BuffType.GHOSTLY) ghostlyEnded = true;
                 // Natural expiry log - same gate as apply (cooldown buffs are silent so
                 // the rolling log doesn't fill up with "no longer on teleport cooldown").
                 if (!isCooldownBuff(b.type)) {
@@ -308,6 +319,9 @@ public final class BuffSystem {
             }
         }
         if (changed) m.statsDirty = true;
+        // A ghost that re-solidified may now be over a chasm (falls) or inside
+        // a wall / statue / another mob (repositioned to the nearest free tile).
+        if (ghostlyEnded) MobSystem.resolveGhostlyEnd(level, m);
     }
 
     /** True when {@code type} is a buff whose source surface the mob is currently standing
@@ -373,8 +387,18 @@ public final class BuffSystem {
                 emitPeriodicDamage(level, m, BuffType.BLEEDING, dmg);
                 MobSystem.DamageCause cause = new MobSystem.DamageCause(
                         b.source, b.sourceItem, "bleed");
+                // Suppress the generic "takes N damage" roll line and emit a named
+                // bleed line instead, so the player can tell HP is draining to a
+                // bleed (and not an unseen attacker). Bleed stays PHYSICAL-typed so
+                // PROTECTION still blunts it; dealt is read back from the HP delta.
+                double hpBefore = m.hp;
                 boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
-                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL, null, cause);
+                        MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL,
+                        null, cause, /*suppressLog=*/true);
+                int dealt = (int) Math.round(hpBefore - m.hp);
+                if (dealt > 0) {
+                    EventLog.add(Messages.bleedTick(MobSystem.nameForLog(level, m), m.isPlayer, dealt));
+                }
                 if (killed) logDotDeath(m, TextCatalog.get("buff.dotdeath.BLEEDING"));
             }
             case REGENERATION -> {
@@ -452,7 +476,14 @@ public final class BuffSystem {
                     dst.evasion  += b.stacks * 5;
                 }
                 case INVISIBLE -> dst.evasion += 40;
-                case GHOSTLY   -> dst.evasion += 20;
+                // GHOSTLY: half out of the world - very hard to hit, hovers
+                // (flight covers chasms), and the movement/occupancy queries
+                // let it pass through solid terrain and other mobs (see
+                // Mob.isGhostly / TileQuery.blocksMovementAt).
+                case GHOSTLY -> {
+                    dst.evasion += 100;
+                    dst.flying = true;
+                }
                 // Levitation grants flight: the mob floats over chasms (and
                 // other ground hazards gated on flying) for the buff's duration.
                 case LEVITATING -> dst.flying = true;

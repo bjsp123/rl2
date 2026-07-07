@@ -11,8 +11,12 @@ import java.util.Map;
 public final class AutoplayStats {
 
     public int    turnsSurvived;
+    /** Deepest flat world-node index reached (drives win-detection). */
     public int    depthReached;
     public int    maxDepth;
+    /** Deepest ACTUAL dungeon depth reached ({@code Level.depth}, 1-based). The
+     *  reporting axis - consistent across runs, unlike {@link #depthReached}. */
+    public int    maxDungeonDepth = 1;
     public int    stairsDescended;
     public int    stairsAscended;
 
@@ -24,6 +28,10 @@ public final class AutoplayStats {
     public int    mobsKilledByEnv;
     public final Map<String, Integer> killsByMobType = new LinkedHashMap<>();
     public int[]  killsPerDepth = new int[0];
+
+    /** HP the agent lost on each depth index, summed over the run. Lets the
+     *  report show where in the dungeon the agent bleeds the most HP. */
+    public int[]  damageTakenPerDepth = new int[0];
 
     /** First tick ({@code turnsElapsed}) the agent ARRIVED at each depth index;
      *  {@code -1} = never reached, index 0 = 0 (the run starts on depth 0).
@@ -49,6 +57,25 @@ public final class AutoplayStats {
      *  where source is the agent and the originating item is a BOMB. */
     public int    bombDamage;
 
+    /** Damage the agent DEALT, split into the four attack modes
+     *  ({@code "melee"} / {@code "thrown"} / {@code "bomb"} / {@code "wand"}).
+     *  Melee is attributed from {@code MobMeleeAttacked}; the ranged modes from
+     *  {@code DamageDealt} by the originating item's category. */
+    public final Map<String, Integer> damageDoneByCategory = new LinkedHashMap<>();
+    /** Damage the agent DEALT, keyed {@code "<mode>:<ITEM_TYPE>"} (e.g.
+     *  {@code "melee:KATANA"}, {@code "wand:WAND_FIRE"}), so the report can break
+     *  each mode down by the specific weapon / wand / bomb / thrown type. */
+    public final Map<String, Integer> damageDoneByType = new LinkedHashMap<>();
+
+    /** Accumulate one outgoing-damage hit into both the by-mode and the
+     *  by-mode-and-type maps. No-op for non-positive amounts (misses). */
+    void addDamageDone(String mode, String itemType, int amount) {
+        if (amount <= 0 || mode == null) return;
+        damageDoneByCategory.merge(mode, amount, Integer::sum);
+        damageDoneByType.merge(mode + ":" + (itemType == null ? "?" : itemType),
+                amount, Integer::sum);
+    }
+
     /** Total HP the agent lost across the run, summed from every
      *  {@link com.bjsp123.rl2.event.GameEvent.DamageDealt} that landed on
      *  the agent. Includes misses-rounded-up? No — only positive amounts;
@@ -64,6 +91,18 @@ public final class AutoplayStats {
     /** Damage taken, bucketed by source-mob type (e.g. {@code "KOBOLD"}).
      *  {@code "ENV"} catches environmental damage (no attacker mob). */
     public final Map<String, Integer> damageTakenBySource = new LinkedHashMap<>();
+    /** Damage taken keyed by depth index then by source-mob type, so the report
+     *  can name the top damage dealers on each individual floor. */
+    public final Map<Integer, Map<String, Integer>> damageTakenBySourceByDepth =
+            new LinkedHashMap<>();
+
+    /** Add one incoming hit to the per-depth, per-source damage tally. */
+    void bumpDamageTakenSource(int depthIdx, String source, int amount) {
+        if (amount <= 0 || source == null) return;
+        damageTakenBySourceByDepth
+                .computeIfAbsent(depthIdx, k -> new LinkedHashMap<>())
+                .merge(source, amount, Integer::sum);
+    }
 
     public double finalHp;
     public double finalMaxHp;
@@ -91,6 +130,7 @@ public final class AutoplayStats {
     void ensureSizedFor(int levels) {
         if (itemsPerDepth.length < levels) itemsPerDepth = new int[levels];
         if (killsPerDepth.length < levels) killsPerDepth = new int[levels];
+        if (damageTakenPerDepth.length < levels) damageTakenPerDepth = new int[levels];
         if (arrivalTickPerDepth.length < levels) {
             arrivalTickPerDepth = new int[levels];
             java.util.Arrays.fill(arrivalTickPerDepth, -1);

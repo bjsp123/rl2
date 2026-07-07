@@ -233,6 +233,7 @@ final class PlayController {
             if (delta > 0) world.tick += delta; // delta == -1 means AI ran, no clock advance
             // Drain events into the animator after every event so the sequential flag
             // reflects animations queued by THIS advance — not just pre-existing state.
+            boolean advanceEmittedEvents = !level.events.isEmpty();
             animator.consume(level);
             // Refresh the player's visibility map immediately so any mob that just
             // moved / teleported into LoS becomes visible before the next iteration
@@ -241,7 +242,10 @@ final class PlayController {
             // tick, which is what produced the "killed by an enemy I never saw"
             // phantom-damage bug: a mob could step into LoS and fire a projectile
             // mid-tick and its sprite wouldn't appear until the NEXT render frame.
-            LevelSystem.updateVisibility(level);
+            // Gated on this advance actually emitting events: a pure clock advance
+            // moved nothing, so the O(grid) shadowcast would recompute an identical
+            // map. afterMove below still runs the authoritative pass every tick.
+            if (advanceEmittedEvents) LevelSystem.updateVisibility(level);
             // Only a SEQUENTIAL animation (lunge, knockback slide, chained death-fade)
             // breaks the loop — concurrent mob slides play together on one render frame.
             if (animator.queue.consumeSequentialFlag()) break;

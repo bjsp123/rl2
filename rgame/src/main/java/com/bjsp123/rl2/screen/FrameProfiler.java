@@ -128,6 +128,6 @@ final class FrameProfiler {
     }
 
     private static String fmt(double value) {
-        return String.format(java.util.Locale.ROOT, "%.1f", value);
+        return com.bjsp123.rl2.util.Fmt.of("%.1f", value);
     }
 }

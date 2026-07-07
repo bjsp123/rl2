@@ -75,7 +75,8 @@ public record DoorBehavior(
             /* brokenVariant             */ null);
 
     /** Crystal door. Lights pass through; mobs and projectiles do not.
-     *  Only the player can step through. Auto-closes per doorClosing. */
+     *  The player and player-loyal allies (pets, tamed beasts, charmed/converted
+     *  mobs) can step through; hostiles are blocked. Auto-closes per doorClosing. */
     public static final DoorBehavior CRYSTAL = new DoorBehavior(
             /* blocksSightWhenClosed     */ false,
             /* blocksProjectileWhenClosed*/ true,

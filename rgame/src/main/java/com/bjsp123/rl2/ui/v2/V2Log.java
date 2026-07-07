@@ -36,7 +36,6 @@ public final class V2Log extends BasePopup {
     private static final float HEADER_H     = 36f;
     private static final float FILTER_H     = 28f;
     private static final float FILTER_GAP   =  4f;
-    private static final Color LOW_COLOR    = new Color(0.4f, 0.4f, 0.4f, 1f);
 
     // -- State -----------------------------------------------------------------
     // Layout rects - recomputed each frame while open.
@@ -165,9 +164,8 @@ public final class V2Log extends BasePopup {
         ShapeRenderer s = ctx.shapes;
         s.begin(ShapeRenderer.ShapeType.Filled);
 
-        // Dim overlay.
-        s.setColor(0f, 0f, 0f, 0.5f);
-        s.rect(0, 0, ctx.worldW(), ctx.worldH());
+        // Dim overlay - standard modal scrim.
+        drawScrim();
 
         // Window chrome - info-style (read-only scrollable log).
         Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
@@ -198,17 +196,8 @@ public final class V2Log extends BasePopup {
     }
 
     private void drawFilterBtnShape(ShapeRenderer s, Rect r, boolean active) {
-        // Fill.
-        Color fill = active ? UIVars.BTN_PRESSED_BG : UIVars.HUD_BG;
-        s.setColor(fill);
-        s.rect(r.x, r.y, r.w, r.h);
-
-        // Border (tri-line via Edges using HUD_LINE_W).
-        float lw = UIVars.HUD_LINE_W;
-        Color outer = active ? UIVars.ACCENT   : UIVars.BORDER_OUTER;
-        Color mid   = active ? UIVars.ACCENT   : UIVars.BORDER_MID;
-        Color inner = active ? UIVars.ACCENT   : UIVars.BORDER_INNER;
-        Edges.drawTriLine(s, r.x, r.y, r.w, r.h, lw, outer, mid, inner);
+        // Standard V2 tab / toggle chrome - identical to every tab strip.
+        TabStrip.drawTabShape(s, r, active, false);
     }
 
     private void drawLineBadges(ShapeRenderer s) {
@@ -227,7 +216,7 @@ public final class V2Log extends BasePopup {
             if (entryMid + BADGE_R < bodyRect.y)     continue;
             if (entryMid - BADGE_R > bodyRect.top()) continue;
             s.setColor(le.event.priority == LogEvent.EventPriority.HIGH
-                    ? UIVars.ACCENT : LOW_COLOR);
+                    ? UIVars.ACCENT : UIVars.TEXT_FAINT);
             s.circle(dotX, entryMid, BADGE_R, 8);
         }
     }
@@ -298,7 +287,7 @@ public final class V2Log extends BasePopup {
         if (e.priority == LogEvent.EventPriority.HIGH) {
             return e.involvesPlayer ? UIVars.TEXT_BODY : UIVars.TEXT_DIM;
         }
-        return LOW_COLOR;
+        return UIVars.TEXT_FAINT;
     }
 
     // -- Input processor -------------------------------------------------------

@@ -10,11 +10,9 @@ import com.badlogic.gdx.math.Vector3;
 import com.bjsp123.rl2.logic.ItemStats;
 import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.MobQueries;
-import com.bjsp123.rl2.logic.MobStats;
 import com.bjsp123.rl2.logic.TargetHistory;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
-import com.bjsp123.rl2.model.MinMax;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
 import com.bjsp123.rl2.ui.v2.UiCtx;
@@ -270,7 +268,7 @@ public class TargetingOverlay extends InputAdapter {
                 || it.useBehavior != Item.UseBehavior.CHARGE) return;
         int radius = Math.max(1, ItemStats.effectiveRange(it, ItemStats.effectiveLevel(it, player)));
         int px = player.position.tileX(), py = player.position.tileY();
-        List<ChipPlacement> labels = new ArrayList<>();
+        List<ChipRenderer.Chip> labels = new ArrayList<>();
         for (Mob m : level.mobs) {
             if (m == null || m == player || m.position == null || m.hp <= 0) continue;
             int mx = m.position.tileX(), my = m.position.tileY();
@@ -280,7 +278,7 @@ public class TargetingOverlay extends InputAdapter {
                     != com.bjsp123.rl2.logic.MobSystem.Attitude.ATTACK) continue;
             int d = Math.max(Math.abs(mx - px), Math.abs(my - py));
             String label = d < 2 ? "too near" : (d > radius ? "too far" : null);
-            if (label != null) labels.add(new ChipPlacement(m.position, label));
+            if (label != null) labels.add(new ChipRenderer.Chip(m.position, label));
         }
         if (labels.isEmpty()) return;
 
@@ -290,16 +288,16 @@ public class TargetingOverlay extends InputAdapter {
         font.getData().setScale(prevScale * UIVars.CHIP_SCALE);
         uiCtx.batch.begin();
         font.setColor(UIVars.ACCENT);   // small yellow letters
-        for (ChipPlacement cp : labels) {
-            projectBuf.set(cp.tile.tileX() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE * 0.5f,
-                    cp.tile.tileY() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE, 0f);
+        for (ChipRenderer.Chip cp : labels) {
+            projectBuf.set(cp.tile().tileX() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE * 0.5f,
+                    cp.tile().tileY() * LevelRenderer.TILE_SIZE + LevelRenderer.TILE_SIZE, 0f);
             worldCamera.project(projectBuf);
             int sx = Math.round(projectBuf.x);
             int sy = Gdx.graphics.getHeight() - Math.round(projectBuf.y);
             float vx = uiCtx.unprojectX(sx, sy);
             float vy = uiCtx.unprojectY(sx, sy);
-            uiCtx.layout.setText(font, cp.text);
-            font.draw(uiCtx.batch, cp.text, vx - uiCtx.layout.width * 0.5f,
+            uiCtx.layout.setText(font, cp.text());
+            font.draw(uiCtx.batch, cp.text(), vx - uiCtx.layout.width * 0.5f,
                     vy + UIVars.CHIP_LIFT + uiCtx.layout.height);
         }
         font.setColor(Color.WHITE);
@@ -498,7 +496,7 @@ public class TargetingOverlay extends InputAdapter {
         // actual blast); single-target chips stay on the aimed tile.
         Point chipCentre = aoeSize >= 2 ? resolveImpact() : target;
 
-        List<ChipPlacement> chips = new ArrayList<>();
+        List<ChipRenderer.Chip> chips = new ArrayList<>();
         if (aoeSize >= 2) {
             // AoE: chip per affected mob in the disc.
             long discSeed = ((long) chipCentre.tileX() * 73856093L)
@@ -508,117 +506,19 @@ public class TargetingOverlay extends InputAdapter {
                 Mob m = MobQueries.mobAt(level, p);
                 if (m == null || m == player) continue;
                 if (com.bjsp123.rl2.logic.MobSystem.isAlly(player, m)) continue;
-                String chip = composeDamageOnly(player, m, sourceItem);
-                if (chip == null) continue;
-                chips.add(new ChipPlacement(p, chip));
+                chips.add(new ChipRenderer.Chip(p,
+                        ChipRenderer.damageOnly(player, m, sourceItem)));
             }
         } else {
             Mob victim = MobQueries.mobAt(level, target);
             if (victim == null || victim == player) return;
             if (com.bjsp123.rl2.logic.MobSystem.isAlly(player, victim)) return;
             String chip = alwaysHits
-                    ? composeDamageOnly(player, victim, sourceItem)
-                    : composeHitAndDamage(player, victim);
-            if (chip == null) return;
-            chips.add(new ChipPlacement(target, chip));
+                    ? ChipRenderer.damageOnly(player, victim, sourceItem)
+                    : ChipRenderer.hitAndDamage(player, victim);
+            chips.add(new ChipRenderer.Chip(target, chip));
         }
-        if (chips.isEmpty()) return;
-
-        // Two passes - one shape pass for every chip's pill backdrop, one
-        // batch pass for every chip's text. Font temporarily down-scaled so
-        // the chip reads as an annotation, not a billboard.
-        uiCtx.applyProjection();
-        BitmapFont font = uiCtx.fontRegular;
-        float prevScale = font.getScaleX();
-        font.getData().setScale(prevScale * UIVars.CHIP_SCALE);
-
-        // Compute positions and per-chip rects from the world tile centres.
-        float[][] geom = new float[chips.size()][];
-        for (int i = 0; i < chips.size(); i++) {
-            ChipPlacement cp = chips.get(i);
-            projectBuf.set(cp.tile.tileX() * LevelRenderer.TILE_SIZE
-                            + LevelRenderer.TILE_SIZE * 0.5f,
-                    cp.tile.tileY() * LevelRenderer.TILE_SIZE
-                            + LevelRenderer.TILE_SIZE,
-                    0f);
-            worldCamera.project(projectBuf);
-            int sx = Math.round(projectBuf.x);
-            int sy = Gdx.graphics.getHeight() - Math.round(projectBuf.y);
-            float vx = uiCtx.unprojectX(sx, sy);
-            float vy = uiCtx.unprojectY(sx, sy);
-            uiCtx.layout.setText(font, cp.text);
-            float w = uiCtx.layout.width;
-            float h = uiCtx.layout.height;
-            // baseline sits at vy + lift; the visible glyph rises ABOVE that
-            // baseline by `h` (cap-height in libGDX), so the background rect
-            // ranges [baseline-1, baseline+h+1] vertically.
-            float baselineY = vy + UIVars.CHIP_LIFT;
-            float bgX = vx - w * 0.5f - UIVars.CHIP_PAD;
-            float bgY = baselineY - 2f;
-            float bgW = w + 2 * UIVars.CHIP_PAD;
-            float bgH = h + 2 * UIVars.CHIP_PAD;
-            geom[i] = new float[] { vx - w * 0.5f, baselineY, bgX, bgY, bgW, bgH };
-        }
-
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        uiCtx.shapes.begin(ShapeRenderer.ShapeType.Filled);
-        uiCtx.shapes.setColor(0f, 0f, 0f, UIVars.CHIP_BG_ALPHA);
-        for (float[] g : geom) uiCtx.shapes.rect(g[2], g[3], g[4], g[5]);
-        uiCtx.shapes.end();
-        Gdx.gl.glDisable(GL20.GL_BLEND);
-
-        uiCtx.batch.begin();
-        font.setColor(UIVars.ACCENT);
-        for (int i = 0; i < chips.size(); i++) {
-            float[] g = geom[i];
-            font.draw(uiCtx.batch, chips.get(i).text, g[0], g[1] + uiCtx.layout.height);
-        }
-        font.setColor(Color.WHITE);
-        uiCtx.batch.end();
-
-        font.getData().setScale(prevScale);
-    }
-
-    /** One chip ready to render - tile in world space, text already formatted. */
-    private record ChipPlacement(Point tile, String text) {}
-
-/** Hit% + damage chip. Used for ranged single-target attacks (wand
-     *  MISSILE, melee) where the hit-roll matters. */
-    private static String composeHitAndDamage(Mob player, Mob victim) {
-        int hitPct = (int) Math.round(MobStats.hitChance(player, victim) * 100.0);
-        return hitPct + "% · " + damageString(player, victim, null);
-    }
-
-    /** Damage-only chip. Used for always-hit sources (bombs, AoE wands) -
-     *  the hit-roll is meaningless because the action lands at the target
-     *  tile regardless. For bomb-class sources we use the bomb's own
-     *  effectiveDamageRange (so a cherry-bomb damage chip is the bomb's
-     *  damage, not the equipped weapon's). */
-    private static String composeDamageOnly(Mob player, Mob victim, Item source) {
-        return damageString(player, victim, source);
-    }
-
-    /** Build the "~6-3=~3 dmg" / "~6 dmg" half of a chip. When {@code source}
-     *  is non-null, uses the source item's damage range; otherwise falls
-     *  back to the attacker's equipped raw range (melee / generic). Routes
-     *  through {@link MobStats#netDamageRange(MinMax, MinMax, MinMax)} so
-     *  the chip and the actual combat resolution use the identical formula. */
-    private static String damageString(Mob player, Mob victim, Item source) {
-        MinMax raw = source != null
-                ? ItemStats.effectiveDamageRange(source,
-                        ItemStats.effectiveLevel(source, player))
-                : MobStats.rawDamageRange(player);
-        MinMax armor = MobStats.resistRange(victim);
-        MinMax ap = MobStats.apDamageRange(player);
-        MinMax net = MobStats.netDamageRange(raw, armor, ap);
-        int netMid = (net.min() + net.max()) / 2;
-        int rawMid = (raw.min() + raw.max()) / 2;
-        int armorMid = (armor.min() + armor.max()) / 2;
-        if (armorMid > 0 && rawMid > 0) {
-            return "~" + rawMid + "-" + armorMid + "=~" + netMid + " dmg";
-        }
-        return "~" + netMid + " dmg";
+        ChipRenderer.render(uiCtx, worldCamera, chips, UIVars.CHIP_SCALE);
     }
 
     public void dispose() {

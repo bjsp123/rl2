@@ -110,8 +110,24 @@ public class Rl2Game extends Game {
     }
 
     public Rl2Game(Persistence persistence) {
-        this.persistence = persistence;
+        this(com.bjsp123.rl2.platform.PlatformServices.of(persistence));
     }
+
+    /** Full platform-capability constructor (web launcher). The persistence-only
+     *  ctor above delegates here so desktop/android launchers are unchanged. */
+    public Rl2Game(com.bjsp123.rl2.platform.PlatformServices services) {
+        this.services = services;
+        this.persistence = services.persistence;
+    }
+
+    /** Per-platform capabilities (identity, entitlements) injected by the
+     *  launcher. Never null; defaults to no-op services. */
+    public final com.bjsp123.rl2.platform.PlatformServices services;
+
+    /** Hard-exit escape hatch for the D3D-GL teardown crash (see dispose()).
+     *  Set ONLY by DesktopLauncher; null everywhere else, so web/android never
+     *  reference Runtime.halt. */
+    public Runnable hardExitHook;
 
     /** True when the GL stack is a D3D-backed translation layer whose
      *  {@code glfwDestroyWindow} crashes on teardown; set in
@@ -356,10 +372,10 @@ public class Rl2Game extends Game {
         // the buggy native call. The OS reclaims GL + window + memory on exit.
         // Native-GL machines (NVIDIA/AMD/Intel/Apple) skip this and tear down
         // normally - see detectGlTeardownHazard().
-        if (glNeedsHardHalt) {
+        if (glNeedsHardHalt && hardExitHook != null) {
             System.out.flush();
             System.err.flush();
-            Runtime.getRuntime().halt(0);
+            hardExitHook.run();
         }
     }
 }

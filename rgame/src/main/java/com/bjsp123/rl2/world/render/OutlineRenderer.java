@@ -52,8 +52,18 @@ public final class OutlineRenderer {
         atlas.dispose();
     }
 
+    /** Single gate for every world outline draw. Outlines are pure legibility
+     *  polish, and each one interleaves the outline atlas with the sprite's own
+     *  atlas - i.e. up to two extra texture-switch flushes PER SPRITE. Profiling
+     *  showed 100-170 batch flushes/frame with outlines the largest contributor;
+     *  on WebGL each flush is an expensive JS-boundary GL call, so Fast graphics
+     *  drops them wholesale. */
+    private static boolean outlinesOff() {
+        return !DRAW_OUTLINES || Settings.fastGraphics();
+    }
+
     void drawRegion(SpriteBatch batch, TextureRegion region, float x, float y, float w, float h) {
-        if (!DRAW_OUTLINES) return;
+        if (outlinesOff()) return;
         float width = Settings.mobOutlineWidth();
         float alpha = Settings.mobOutlineDarkness();
         if (width <= 0f || alpha <= 0f || region == null) return;
@@ -63,7 +73,7 @@ public final class OutlineRenderer {
 
     void drawRegionTinted(SpriteBatch batch, TextureRegion region, float x, float y, float w, float h,
                           float r, float g, float b, float strength) {
-        if (!DRAW_OUTLINES) return;
+        if (outlinesOff()) return;
         float width = Settings.mobOutlineWidth();
         float alpha = Settings.mobOutlineDarkness();
         if (width <= 0f || alpha <= 0f || region == null) return;
@@ -76,7 +86,7 @@ public final class OutlineRenderer {
 
     void drawRegionSrc(SpriteBatch batch, TextureRegion region, float x, float y, float w, float h,
                        int srcX, int srcY, int srcW, int srcH) {
-        if (!DRAW_OUTLINES) return;
+        if (outlinesOff()) return;
         float width = Settings.mobOutlineWidth();
         float alpha = Settings.mobOutlineDarkness();
         if (width <= 0f || alpha <= 0f || region == null) return;
@@ -89,7 +99,7 @@ public final class OutlineRenderer {
 
     void drawMob(SpriteBatch batch, TextureRegion region, float x, float y, float w, float h,
                  float r, float g, float b, float alpha) {
-        if (!DRAW_OUTLINES) return;
+        if (outlinesOff()) return;
         float width = Settings.mobOutlineWidth();
         if (width <= 0f || alpha <= 0f || region == null) return;
         if (drawAtlas(batch, region, x, y, w, h, r, g, b, alpha)) return;

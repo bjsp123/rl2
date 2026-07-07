@@ -36,6 +36,18 @@ public final class EventLog {
         return Collections.unmodifiableList(events);
     }
 
+    /** Number of buffered events. With {@link #get} this allows index-walking
+     *  the log on per-frame paths (HUD readout) without the sublist/wrapper
+     *  allocations of {@link #tail}. */
+    public static int size() {
+        return events.size();
+    }
+
+    /** The {@code i}-th event, oldest first. */
+    public static LogEvent get(int i) {
+        return events.get(i);
+    }
+
     /** Most recent {@code n} events, oldest first. */
     public static List<LogEvent> tail(int n) {
         int from = Math.max(0, events.size() - n);

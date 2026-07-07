@@ -247,7 +247,7 @@ public class TurnSystem {
         // (Easy), <1 = more frequent (Very Hard).
         int cadence = Math.max(1, (int) Math.round(
                 (GameBalance.RENEWING_SPAWN_CADENCE - 2 * level.hazardLevel)
-                        * GameBalance.SPAWN_CADENCE_MULTIPLIER));
+                        * GameBalance.tuning().spawnCadenceMult()));
         if (level.turnsOnLevel % cadence != 0) return;
         if (MobQueries.countLivingHostiles(level)
                 >= GameBalance.RENEWING_ENEMY_CAP + level.hazardLevel) return;

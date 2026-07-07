@@ -161,6 +161,11 @@ public final class LevelFactoryPopulate {
             MobDefinition def = Registries.mob(type);
             if (def == null || !def.unique) continue;
             if (def.behavior == Mob.Behavior.PLAYER) continue;
+            // The beacon-lord boss (the sole unique BEACON-faction mob) belongs
+            // only on its own FINAL_BOSS floor, spawned by the boss builder - it
+            // must never appear as a random unique encounter in the regular
+            // dungeon, even though its power band covers the deepest floors.
+            if ("BEACON".equals(def.faction)) continue;
             if (unique.mobs.contains(type)) continue;
             if (def.powerMin == 0 && def.powerMax == 0) continue;
             if (powerWeight(def.powerMin, def.powerMax, f) <= 0) continue;

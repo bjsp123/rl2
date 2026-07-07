@@ -17,7 +17,9 @@ import java.util.Map;
  *   <li>{@code title} - displayed prefixed with "Tip:".</li>
  *   <li>{@code spritelist} - pipe-separated item types (e.g.
  *       {@code XPPILL|POWER_ORB}). Resolved via {@code ItemSprites.regionFor}.
- *       Empty cell = no sprite row.</li>
+ *       A token may carry a caption override after a colon
+ *       ({@code XPPILL:free levels}); otherwise the item/mob display name
+ *       is used. Empty cell = no sprite row.</li>
  *   <li>{@code text} - body. Supports literal {@code \n} for line breaks and
  *       {@code *emphasis*} markup. Quote the cell if it contains commas.</li>
  * </ul>

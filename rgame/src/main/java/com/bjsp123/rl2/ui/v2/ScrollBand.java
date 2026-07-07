@@ -12,6 +12,13 @@ public final class ScrollBand {
     public final Rect rect = new Rect();
     public final Scroller scroller = new Scroller();
 
+    /** Scratch rectangles for {@link #clip} - reused every frame so the
+     *  render loop doesn't allocate. */
+    private final com.badlogic.gdx.math.Rectangle clipWorld =
+            new com.badlogic.gdx.math.Rectangle();
+    private final com.badlogic.gdx.math.Rectangle clipScissor =
+            new com.badlogic.gdx.math.Rectangle();
+
     public void set(float x, float yBottom, float w, float h) {
         rect.set(x, yBottom, w, h);
     }
@@ -53,24 +60,33 @@ public final class ScrollBand {
         scroller.onScrolled(amountY);
     }
 
+    /** Run {@code body} with GL scissor clipped to the band. Works inside a
+     *  batch (text/icon) pass OR a ShapeRenderer Filled pass - whichever
+     *  renderer is mid-draw is flushed before the scissor is pushed and
+     *  again before it pops, so prior draws aren't clipped and clipped
+     *  draws aren't deferred past the pop. This is the single clip helper
+     *  for every scrolling V2 panel. */
     public void clip(UiCtx ctx, Runnable body) {
-        ctx.batch.flush();
-        com.badlogic.gdx.math.Rectangle worldRect =
-                new com.badlogic.gdx.math.Rectangle(rect.x, rect.y, rect.w, rect.h);
-        com.badlogic.gdx.math.Rectangle scissor = new com.badlogic.gdx.math.Rectangle();
+        flushActive(ctx);
+        clipWorld.set(rect.x, rect.y, rect.w, rect.h);
         com.badlogic.gdx.utils.viewport.Viewport vp = ctx.viewport;
         com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.calculateScissors(
                 vp.getCamera(), vp.getScreenX(), vp.getScreenY(),
                 vp.getScreenWidth(), vp.getScreenHeight(),
-                ctx.batch.getTransformMatrix(), worldRect, scissor);
-        if (com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.pushScissors(scissor)) {
+                ctx.batch.getTransformMatrix(), clipWorld, clipScissor);
+        if (com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.pushScissors(clipScissor)) {
             try {
                 body.run();
-                ctx.batch.flush();
+                flushActive(ctx);
             } finally {
                 com.badlogic.gdx.scenes.scene2d.utils.ScissorStack.popScissors();
             }
         }
+    }
+
+    private static void flushActive(UiCtx ctx) {
+        if (ctx.batch.isDrawing())  ctx.batch.flush();
+        if (ctx.shapes.isDrawing()) ctx.shapes.flush();
     }
 
     /** The shared V2 scrollbar - a thin track + accent thumb down the right

@@ -6,19 +6,15 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /**
  * Top-right burger icon - present on every V2 screen per CLAUDE.md ("burger
- * menu always present"). Draws a {@code SIZE}x{@code SIZE} (36px) button
- * containing three short horizontal bars stacked vertically. Tap behaviour is owned by the screen
- * (typically: open a small overlay with Title / Settings / Encyclopaedia).
- *
- * <p>For now the click target is wired but the overlay isn't implemented - it
- * dispatches to a screen-supplied {@link Runnable} that may be a no-op while
- * the V2 chain is being built up.
+ * menu always present"). Draws a square button ({@link UIVars#BURGER_SIZE}
+ * per side) containing three short horizontal bars stacked vertically.
+ * The tap dispatches to a screen-supplied {@link Runnable} - normally
+ * {@code V2Screen.makeBurger()}'s toggle, which opens the shared
+ * {@link BurgerMenu} drop-down (Title / Settings / Encyclopedia + in-run
+ * destinations).
  */
 public final class Burger {
 
-    /** Burger button size. Shared by the HUD (V2Hud) so the burger is
-     *  identical in-play and on menu screens. Kept small per RL-27. */
-    public static final float SIZE  = 36f;
     public static final float INSET = 8f;
 
     public final Rect rect = new Rect();
@@ -30,7 +26,9 @@ public final class Burger {
         // Anchor at top-right of the current virtual viewport - reads
         // ctx.worldW()/H() so the burger re-positions on layout rebuild
         // after a UiScale change.
-        rect.set(ctx.worldW() - SIZE - INSET, ctx.worldH() - SIZE - INSET, SIZE, SIZE);
+        rect.set(ctx.worldW() - UIVars.BURGER_SIZE - INSET,
+                ctx.worldH() - UIVars.BURGER_SIZE - INSET,
+                UIVars.BURGER_SIZE, UIVars.BURGER_SIZE);
     }
 
     public void drawShape(UiCtx ctx) {

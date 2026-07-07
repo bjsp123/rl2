@@ -6,7 +6,6 @@ import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.bjsp123.rl2.logic.TextCatalog;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,16 +41,10 @@ public abstract class V2Screen extends ScreenAdapter {
     protected float layoutCursor;
 
     // -- Burger menu state (auto-driven by V2Screen) -------------------------
-    /** {@code true} when the burger drop-down panel is up - gates input so
-     *  taps on menu items fire instead of falling through to the body. */
-    protected boolean burgerOpen;
-    /** Items added by subclasses via {@link #addBurgerItem}. The action runs
-     *  when the corresponding label is tapped; the menu closes first. */
-    private final List<String>   burgerLabels  = new ArrayList<>();
-    private final List<Runnable> burgerActions = new ArrayList<>();
-    private final List<Rect>     burgerItemRects = new ArrayList<>();
-    private final Rect           burgerPanel    = new Rect();
-    private int burgerItemPressed = -1;
+    /** Shared drop-down geometry + chrome; items (label + action) added by
+     *  subclasses via {@link #addBurgerItem} / {@link #addStandardBurgerItems}.
+     *  {@link BurgerMenu#release} fires the bound action itself. */
+    private final BurgerMenu burgerMenu = new BurgerMenu();
     /** Popup actor that renders the burger overlay (scrim + panel + items)
      *  on the V2 stage's burger layer. Owned by every V2Screen so the
      *  drop-down sits on top of everything below - including any
@@ -76,19 +69,9 @@ public abstract class V2Screen extends ScreenAdapter {
             // Burger drop-down - when open, intercepts everything. Tap on
             // an item captures it; tap outside the panel + outside the
             // burger button closes the menu.
-            if (burgerOpen) {
-                for (int i = 0; i < burgerItemRects.size(); i++) {
-                    if (burgerItemRects.get(i).contains(vx, vy)) {
-                        burgerItemPressed = i;
-                        return true;
-                    }
-                }
-                if (!burgerPanel.contains(vx, vy)
-                        && !(burger != null && burger.hit(vx, vy))) {
-                    burgerOpen = false;
-                    return true;
-                }
-                return true;
+            if (burgerMenu.open) {
+                return burgerMenu.touchDown(vx, vy,
+                        burger != null ? burger.rect : null);
             }
 
             // Burger and back take priority - they sit ON TOP of body buttons
@@ -118,18 +101,11 @@ public abstract class V2Screen extends ScreenAdapter {
             float vx = ctx.unprojectX(sx, sy);
             float vy = ctx.unprojectY(sx, sy);
 
-            // Burger menu item release - fire the bound action and close
-            // the menu. The action runs AFTER closing so a navigation
-            // target rebuilds layout cleanly.
-            if (burgerItemPressed >= 0) {
-                int idx = burgerItemPressed;
-                burgerItemPressed = -1;
-                if (idx < burgerItemRects.size()
-                        && burgerItemRects.get(idx).contains(vx, vy)) {
-                    burgerOpen = false;
-                    Runnable a = burgerActions.get(idx);
-                    if (a != null) a.run();
-                }
+            // Burger menu item release - BurgerMenu closes itself and fires
+            // the bound action (menu closes first so a navigation target
+            // rebuilds layout cleanly).
+            if (burgerMenu.hasPress()) {
+                burgerMenu.release(vx, vy);
                 return true;
             }
 
@@ -168,7 +144,7 @@ public abstract class V2Screen extends ScreenAdapter {
         @Override
         public boolean keyDown(int keycode) {
             if (keycode == Input.Keys.ESCAPE || keycode == Input.Keys.BACK) {
-                if (burgerOpen) { burgerOpen = false; return true; }
+                if (burgerMenu.open) { burgerMenu.open = false; return true; }
                 onEscape();
                 return true;
             }
@@ -177,14 +153,14 @@ public abstract class V2Screen extends ScreenAdapter {
 
         @Override
         public boolean touchDragged(int sx, int sy, int pointer) {
-            if (burgerOpen) return false;
+            if (burgerMenu.open) return false;
             return onTouchDragged(ctx.unprojectX(sx, sy),
                     ctx.unprojectY(sx, sy));
         }
 
         @Override
         public boolean scrolled(float amountX, float amountY) {
-            if (burgerOpen) return false;
+            if (burgerMenu.open) return false;
             return onScrolled(amountY);
         }
     };
@@ -301,79 +277,59 @@ public abstract class V2Screen extends ScreenAdapter {
         buttons.clear();
         burger = null;
         back   = null;
-        burgerOpen = false;
-        burgerItemPressed = -1;
-        burgerLabels.clear();
-        burgerActions.clear();
-        burgerItemRects.clear();
+        burgerMenu.clearItems();
         buildLayout();
     }
 
-    /** Construct a burger button whose tap toggles {@link #burgerOpen}.
+    /** Construct a burger button whose tap toggles the drop-down menu.
      *  Subclasses should use this in preference to {@code new Burger(ctx, ...)}
      *  if they want the auto-driven drop-down menu. */
     protected Burger makeBurger() {
-        return new Burger(ctx, () -> burgerOpen = !burgerOpen);
+        return new Burger(ctx, () -> burgerMenu.open = !burgerMenu.open);
     }
 
     /** Append a labelled item to the burger drop-down. Items render in
      *  insertion order from top to bottom. The action fires AFTER the
      *  menu closes - typical use is a navigation target. */
     protected void addBurgerItem(String label, Runnable action) {
-        burgerLabels.add(label);
-        burgerActions.add(action);
-        burgerItemRects.add(new Rect());
+        burgerMenu.add(label, action);
     }
 
-    /** Add the standard set of burger destinations every screen offers:
-     *  Main Menu / Settings, plus Level Info / Map / Log when a run is in
-     *  progress. Call once in {@link #buildLayout()} after {@link #makeBurger()}. */
+    /** Add the standard burger destinations via the single canonical
+     *  populator ({@link BurgerMenu#populateStandard}). Call once in
+     *  {@link #buildLayout()} after {@link #makeBurger()}. */
     protected final void addStandardBurgerItems(com.bjsp123.rl2.Rl2Game game) {
-        addBurgerItem(TextCatalog.get("ui.menu.main"), () -> game.setRootScreen(new V2Title(game, ctx)));
-        addBurgerItem(TextCatalog.get("ui.menu.settings"),  () -> game.pushScreen(new V2Settings(game, ctx)));
-        // Encyclopedia is always reachable from the burger - the standalone
-        // "How to Play" / reference, in or out of a run.
-        addBurgerItem(TextCatalog.get("ui.menu.encyclopedia"),
-                () -> game.pushScreen(new V2EncyclopediaScreen(game)));
-        if (game.currentPlay == null) {
-            addBurgerItem(TextCatalog.get("ui.menu.credits"), () -> game.pushScreen(new V2Credits(game)));
-        }
-        if (game.currentPlay != null) {
-            addBurgerItem(TextCatalog.get("ui.menu.levelInfo"), () -> game.pushScreen(new V2LevelInfo(game, ctx,
-                    game::popScreen,
-                    game.currentPlay.getWorld().currentLevel())));
-            addBurgerItem(TextCatalog.get("ui.menu.map"), () -> game.pushScreen(new V2Map(game, ctx,
-                    game::popScreen,
-                    game.currentPlay.getWorld())));
-            addBurgerItem(TextCatalog.get("ui.menu.log"), () -> game.setRootScreen(game.currentPlay));
-        }
+        addStandardBurgerItems(game, false);
     }
 
-    /** Position the burger panel + per-item rects centred on the viewport
-     *  as a chunky column-of-buttons window - same shape as every other V2
-     *  modal so the user reads it as "a window with a list of choices",
-     *  not a corner dropdown. Called from render(); cheap to recompute
-     *  every frame. */
+    /** Title-screen variant: {@code titleScreen} suppresses the Main Menu
+     *  item (the title IS the main menu). */
+    protected final void addStandardBurgerItems(com.bjsp123.rl2.Rl2Game game,
+                                                boolean titleScreen) {
+        boolean inRun = game.currentPlay != null && !titleScreen;
+        burgerMenu.populateStandard(titleScreen, inRun, new BurgerMenu.Destinations() {
+            @Override public void openSettings() { game.pushScreen(new V2Settings(game, ctx)); }
+            @Override public void openEncyclopedia() { game.pushScreen(new V2EncyclopediaScreen(game)); }
+            @Override public void openCredits() { game.pushScreen(new V2Credits(game)); }
+            @Override public void goMainMenu() { game.setRootScreen(new V2Title(game, ctx)); }
+            @Override public void openLevelInfo() {
+                game.pushScreen(new V2LevelInfo(game, ctx, game::popScreen,
+                        game.currentPlay.getWorld().currentLevel()));
+            }
+            @Override public void openMap() {
+                game.pushScreen(new V2Map(game, ctx, game::popScreen,
+                        game.currentPlay.getWorld()));
+            }
+            @Override public void openLog() { game.setRootScreen(game.currentPlay); }
+        });
+    }
+
+    /** Position the burger panel + per-item rects via the shared
+     *  {@link BurgerMenu} geometry. Called from render(); cheap to
+     *  recompute every frame. */
     private void layoutBurgerOverlay() {
-        if (!burgerOpen || burger == null || burgerLabels.isEmpty()) return;
-        int   n        = burgerLabels.size();
-        float itemH    = 56f;
-        float itemGap  = 8f;
-        float padX     = 18f;
-        float padTop   = 18f;
-        float padBot   = 18f;
-        float panelW   = Math.min(320f, ctx.worldW() - 24f);
-        float panelH   = padTop + padBot + n * itemH + (n - 1) * itemGap;
-        float panelX   = (ctx.worldW() - panelW) * 0.5f;
-        float panelY   = (ctx.worldH() - panelH) * 0.5f;
-        burgerPanel.set(panelX, panelY, panelW, panelH);
-        // Top item gets the highest y; libGDX is y-up, so first label is
-        // the highest one on screen - matches reading order top-down.
-        for (int i = 0; i < n; i++) {
-            float iy = panelY + panelH - padTop - (i + 1) * itemH - i * itemGap;
-            burgerItemRects.get(i).set(panelX + padX, iy,
-                    panelW - 2 * padX, itemH);
-        }
+        if (!burgerMenu.open || burger == null || burgerMenu.isEmpty()) return;
+        burgerMenu.layout(ctx);
     }
 
     @Override
@@ -415,16 +371,14 @@ public abstract class V2Screen extends ScreenAdapter {
 
     /** Burger drop-down overlay rendered on the V2 stage's top
      *  ({@code burgerLayer}) so it cleanly hides every screen body and
-     *  any sub-popups underneath. Reads V2Screen state directly -
-     *  inner class so {@code burgerOpen}, {@code burgerLabels},
-     *  {@code burgerItemRects}, and {@code burgerItemPressed} are
-     *  accessible without copying. */
+     *  any sub-popups underneath. Chrome + labels come from the shared
+     *  {@link BurgerMenu}; only the scrim + renderer lifecycle live here. */
     private final class BurgerOverlayPopup
             implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         @Override
         public boolean isOpen() {
-            return burgerOpen && !burgerLabels.isEmpty();
+            return burgerMenu.open && !burgerMenu.isEmpty();
         }
 
         @Override
@@ -437,30 +391,13 @@ public abstract class V2Screen extends ScreenAdapter {
             ctx.applyProjection();
             Gdx.gl.glEnable(GL20.GL_BLEND);
             Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-            ShapeRenderer s = ctx.shapes;
-            s.begin(ShapeRenderer.ShapeType.Filled);
-            Window.drawShape(ctx,
-                    burgerPanel.x, burgerPanel.y, burgerPanel.w, burgerPanel.h);
-            for (int i = 0; i < burgerItemRects.size(); i++) {
-                Rect r = burgerItemRects.get(i);
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-                s.setColor(i == burgerItemPressed
-                        ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-                s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                        r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
-            }
-            s.end();
+            ctx.shapes.begin(ShapeRenderer.ShapeType.Filled);
+            burgerMenu.drawShapes(ctx);
+            ctx.shapes.end();
             Gdx.gl.glDisable(GL20.GL_BLEND);
 
             ctx.batch.begin();
-            for (int i = 0; i < burgerLabels.size(); i++) {
-                Rect r = burgerItemRects.get(i);
-                TextDraw.centre(ctx, ctx.fontHeader,
-                        i == burgerItemPressed
-                                ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                        burgerLabels.get(i),
-                        r.cx(), r.cy() + 8f);
-            }
+            burgerMenu.drawLabels(ctx);
             ctx.batch.end();
         }
     }

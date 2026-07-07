@@ -250,6 +250,12 @@ public class MobSystem {
         int stepDx = nx - cx, stepDy = ny - cy;
         if (stepDx != 0) mob.facingEast = stepDx > 0;
         Mob occupant = MobQueries.mobAt(level, next);
+        if (occupant != null && mob.isGhostly()
+                && getAttitudeToMob(mob, occupant) != Attitude.ATTACK) {
+            // GHOSTLY: drift straight through a non-hostile occupant - ghosts
+            // share the tile. Hostiles still get the bump-attack below.
+            occupant = null;
+        }
         if (occupant != null) {
             if (getAttitudeToMob(mob, occupant) == Attitude.ATTACK) {
                 attack(level, mob, occupant);
@@ -464,7 +470,7 @@ public class MobSystem {
                     WATER_STEP_BUFF_TURNS, null);
         }
         // Oil drip: an oily medium-or-larger mob drags its slick onto the new tile a
-        // fraction of the time (50% per the OILY-buff spec). Tiny mobs (size <
+        // fraction of the time (12.5% per step). Tiny mobs (size <
         // BIG_ENOUGH_TO_DRIP_OIL) are too light to leave a residue, and flying mobs
         // hover over the floor. SurfaceSystem.addSurface handles the "tile is already
         // oily" case (it spreads to a neighbour instead).
@@ -516,8 +522,12 @@ public class MobSystem {
             if (item.useBehavior != com.bjsp123.rl2.model.Item.UseBehavior.POWERUP) continue;
             if ((int) Math.floor(item.location.x()) != nx
                     || (int) Math.floor(item.location.y()) != ny) continue;
-            ItemSystem.applyPowerup(level, picker, item);
-            it.remove();
+            // Only consume the pill if it actually did something. A HP pill
+            // stepped on at full health, or a charge pill with no wand to
+            // refill, is left on the floor to be collected when it's useful.
+            if (ItemSystem.applyPowerup(level, picker, item)) {
+                it.remove();
+            }
         }
     }
 
@@ -1055,8 +1065,22 @@ public class MobSystem {
     public static boolean rollRangedHit(Mob caster, Mob target, int accuracyMod) {
         int atkAcc = Math.max(0, caster.effectiveStats().accuracy + accuracyMod);
         int tgtEva = target.effectiveStats().evasion;
-        int hitDenom = atkAcc + tgtEva;
-        return hitDenom > 0 && RANDOM.nextInt(hitDenom) < atkAcc;
+        return rollToHit(atkAcc, tgtEva);
+    }
+
+    /** Roll a to-hit against an accuracy/evasion pair, applying the global
+     *  {@link GameBalance#RULES_HIT_CHANCE_FLOOR} so a high-evasion target can
+     *  never drop the chance below the floor. Shared by melee, ranged, and
+     *  thrown so the 10% floor holds everywhere. */
+    public static boolean rollToHit(int acc, int eva) {
+        return RANDOM.nextDouble() < hitChanceFloored(acc, eva);
+    }
+
+    /** The floored to-hit probability: {@code max(FLOOR, acc/(acc+eva))}. */
+    public static double hitChanceFloored(int acc, int eva) {
+        int denom = acc + eva;
+        double base = denom <= 0 ? 0.0 : (double) acc / denom;
+        return Math.max(GameBalance.RULES_HIT_CHANCE_FLOOR, base);
     }
 
     /** Min and max damage the attacker outputs before resistance - pulled directly from
@@ -1122,8 +1146,7 @@ public class MobSystem {
         // so a swing that misses leaves attitudes intact.
         int atkAcc = attacker.effectiveStats().accuracy;
         int tgtEva = target.effectiveStats().evasion;
-        int hitDenom = atkAcc + tgtEva;
-        boolean hit  = surprise || (hitDenom > 0 && RANDOM.nextInt(hitDenom) < atkAcc);
+        boolean hit  = surprise || rollToHit(atkAcc, tgtEva);
 
         if (!hit) {
             if (level.events != null) {
@@ -2005,6 +2028,61 @@ public class MobSystem {
      *  event so the renderer plays the same spinning-fade as a falling
      *  item. The PLAYER falling carries through to
      *  {@link com.bjsp123.rl2.model.World#currentLevelIndex}. */
+    /**
+     * GHOSTLY just ended: a mob that was drifting through the world may now be
+     * somewhere solid. Over a chasm (and not otherwise flying) it falls; inside
+     * a wall / statue / closed door / another mob it is repositioned to the
+     * nearest tile it can legally occupy. Called by BuffSystem when the buff
+     * expires, AFTER the buff has been removed from {@code mob.buffs}.
+     */
+    public static void resolveGhostlyEnd(Level level, Mob mob) {
+        if (level == null || mob == null || mob.position == null || mob.hp <= 0) return;
+        mob.statsDirty = true;   // drop ghostly's flying/evasion contribution first
+        int x = mob.position.tileX(), y = mob.position.tileY();
+        if (x < 0 || y < 0 || x >= level.width || y >= level.height) return;
+        if (level.tiles[x][y] == Tile.CHASM && !mob.effectiveStats().flying) {
+            fallToNextLevel(level, mob);
+            return;
+        }
+        boolean tileBlocked = com.bjsp123.rl2.model.TileQuery
+                .blocksMovementAt(level, x, y, mob);
+        boolean occupied = false;
+        for (Mob m : level.mobs) {
+            if (m == mob || m == null || m.hp <= 0 || m.position == null) continue;
+            if (m.position.tileX() == x && m.position.tileY() == y) { occupied = true; break; }
+        }
+        if (!tileBlocked && !occupied) return;   // re-solidified somewhere legal
+        Point dest = nearestFreeTile(level, mob, x, y);
+        if (dest == null) return;                // pathological: no free tile anywhere
+        Point from = mob.position;
+        mob.position = dest;
+        mob.targetPosition = null;
+        if (level.events != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.MobTeleported(
+                    mob, from.tileX(), from.tileY(), dest.tileX(), dest.tileY()));
+        }
+    }
+
+    /** Nearest tile (expanding Chebyshev rings) that {@code mob} can legally
+     *  occupy: in bounds, doesn't block its movement, and holds no live mob.
+     *  Returns {@code null} when the whole level is somehow full. */
+    private static Point nearestFreeTile(Level level, Mob mob, int cx, int cy) {
+        int maxR = Math.max(level.width, level.height);
+        for (int r = 1; r <= maxR; r++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != r) continue;  // ring only
+                    int nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+                    Point cand = new Point(nx, ny);
+                    if (MobQueries.blocksMovement(level, mob, cand)) continue;
+                    return cand;
+                }
+            }
+        }
+        return null;
+    }
+
     public static void fallToNextLevel(Level level, Mob mob) {
         if (level == null || mob == null) return;
         com.bjsp123.rl2.model.World world = level.world;
@@ -2526,7 +2604,8 @@ public class MobSystem {
 
         // Sleep gate - applied uniformly to every behaviour so mice / dogs / cats /
         // blobs / anthills are dormant until a relevant target wanders into their
-        // wake radius. INANIMATE mobs use the inverse perspective (wake when a
+        // wake radius AND line of sight (loud events still wake through walls via
+        // wakeMobsNear). INANIMATE mobs use the inverse perspective (wake when a
         // hostile is incoming) since their own attackTypes is empty.
         if (mob.stateOfMind == StateOfMind.ASLEEP) {
             boolean wakeUp = inanimate
@@ -3379,15 +3458,12 @@ public class MobSystem {
         // Prefer melee when adjacent — only ranged-only mobs fire point-blank.
         if (cheb == 1 && ss.damage.max() > 0) return false;
         int dmg = rollRange(ss.rangedDamage);
-        com.bjsp123.rl2.model.Mob.RangedDamageType rdt = shooter.rangedDamageType != null
-                ? shooter.rangedDamageType
-                : com.bjsp123.rl2.model.Mob.RangedDamageType.MAGIC;
-        DamageElement rangedElement = rdt == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL
-                ? DamageElement.PHYSICAL : DamageElement.MAGIC;
+        // Clip to the first mob in the way so the missile resolves on whoever
+        // it actually hits visually rather than passing through them. The
+        // impact tile is locked here, at fire time - the pending-impact
+        // freeze means nobody can move out of (or into) it before resolve.
+        Point impact = firstMobBlocking(level, shooter.position, target.position, shooter);
         if (level.events != null) {
-            // Clip to the first mob in the way so the missile resolves on whoever
-            // it actually hits visually rather than passing through them.
-            Point impact = firstMobBlocking(level, shooter.position, target.position, shooter);
             boolean trajectoryVisible = trajectoryTouchesVisible(level, shooter.position, impact);
             level.events.add(new com.bjsp123.rl2.event.GameEvent.MagicMissileFired(
                     shooter, shooter.position, impact, dmg, trajectoryVisible));
@@ -3399,9 +3475,87 @@ public class MobSystem {
                     cooldownTurns, shooter);
         }
         TurnSystem.applyActionCost(shooter, ss.rangedCost > 0 ? ss.rangedCost : ss.attackCost);
-        // Combat memory is recorded on impact (in processAttack) when the missile actually
-        // damages the target, not at the moment of firing.
+        // ANIMATION-GATED LIFECYCLE: defer the hit/resist/damage resolution to
+        // step 4 - fired by the rgame Animator when the missile arc lands, or
+        // drained between mob brains headless. Combat memory is recorded on
+        // impact (in processAttack), not at the moment of firing.
+        final Mob shooterFinal = shooter;
+        final Point impactFinal = impact;
+        final int dmgFinal = dmg;
+        queuePendingImpact(level,
+                () -> applyRangedShotImpact(level, shooterFinal, impactFinal, dmgFinal));
         return true;
+    }
+
+    /**
+     * Resolve an innate ranged shot (crossbow bolt, imp spark) at its impact
+     * tile - step 4 of the animation-gated lifecycle. Rolls accuracy vs
+     * evasion (with {@link GameBalance#POINT_BLANK_ACCURACY_MOD} when the
+     * shooter is adjacent to the impact tile), then armor / magic-resist and
+     * surprise, then {@link #processAttack} for the actual damage. Queued by
+     * {@link #tryRangedShot} via {@link #queuePendingImpact}; the rgame
+     * Animator runs it at arc completion, headless drains run it between mob
+     * brains.
+     */
+    public static void applyRangedShotImpact(Level level, Mob caster, Point target, int damage) {
+        // Step 4 complete once this resolve runs - clear the pending-impact gate.
+        if (level.pendingImpactCount > 0) level.pendingImpactCount--;
+        Mob victim = MobQueries.mobAt(level, target);
+        if (victim == null) return;
+        boolean shotPhysical = caster != null
+                && caster.rangedDamageType == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL;
+        DamageElement shotElement = shotPhysical ? DamageElement.PHYSICAL : DamageElement.MAGIC;
+        AttackType shotType = shotPhysical ? AttackType.RANGED : AttackType.MAGIC;
+        // Surprised targets are always hit - same rule as melee - so the hit
+        // roll only runs on an aware defender.
+        boolean shotSurprise = isSurpriseAttack(level, caster, victim, shotType, shotElement);
+        // Hit-roll for ranged attacks. Adjacent shots suffer the point-blank
+        // accuracy penalty; normal range uses the straight accuracy-vs-evasion
+        // roll, same denominator as melee.
+        if (!shotSurprise && caster != null && caster.position != null) {
+            int cheb = LevelFactoryUtils.chebyshev(caster.position, target);
+            int accuracyMod = (cheb == 1) ? GameBalance.POINT_BLANK_ACCURACY_MOD : 0;
+            if (!rollRangedHit(caster, victim, accuracyMod)) {
+                String cn = caster.name != null ? caster.name
+                        : TextCatalog.get("eventlog.fallback.adventurer");
+                String vn = nameForLog(level, victim);
+                EventLog.add(caster.isPlayer
+                        ? Messages.playerMiss(cn, vn)
+                        : (victim.isPlayer
+                           ? Messages.enemyMiss(cn, vn)
+                           : Messages.mobMiss(cn, vn)));
+                // Yellow "miss" floater + miss sfx via the standard MISS path.
+                if (level.events != null) {
+                    boolean missPhysical = caster.rangedDamageType
+                            == com.bjsp123.rl2.model.Mob.RangedDamageType.PHYSICAL;
+                    level.events.add(new com.bjsp123.rl2.event.GameEvent.DamageDealt(
+                            victim, 0,
+                            com.bjsp123.rl2.event.GameEvent.DamageMessage.MISS,
+                            caster,
+                            missPhysical ? DamageElement.PHYSICAL : DamageElement.MAGIC,
+                            null));
+                }
+                return;
+            }
+        }
+        int resist = shotPhysical
+                ? rollRange(resistRange(victim))
+                : rollRange(magicResistRange(victim));
+        int afterResist = Math.max(0, damage - resist);
+        String resistKey = shotPhysical ? "armor" : "magicResist";
+        DamageBreakdown bk = new DamageBreakdown(shotElement, damage)
+                .add(resistKey, Math.min(resist, damage));
+        Mob speaker = caster != null ? caster : TurnSystem.findPlayer(level);
+        afterResist = applySurpriseIfNeeded(level, speaker, victim,
+                afterResist, shotType, shotElement);
+        String casterName = speaker != null && speaker.name != null
+                ? speaker.name
+                : TextCatalog.get("eventlog.fallback.adventurer");
+        String victimName = nameForLog(level, victim);
+        double hpBefore = victim.hp;
+        processAttack(level, speaker, victim, afterResist, shotType, shotElement, bk);
+        int dealt = Math.max(0, (int) Math.round(hpBefore - victim.hp));
+        EventLog.add(Messages.playerHit(casterName, victimName, dealt));
     }
 
     /** Pick a free floor tile in the 8-neighbourhood of {@code mob} that maximises
@@ -3662,7 +3816,9 @@ public class MobSystem {
 
     /**
      * True when any mob this one has an attitude toward (attack or flee) sits within
-     * {@code radius} (Chebyshev). Used as the wake-up gate for ASLEEP mobs.
+     * {@code radius} (Chebyshev) AND in line of sight. Used as the wake-up gate for
+     * ASLEEP mobs - a sleeper can't sense a target through solid walls; waking to
+     * unseen threats is the job of loud-event wakes ({@link #wakeMobsNear}).
      */
     private static boolean hasAttitudeTargetWithin(Mob mob, Level level, double radius) {
         int mx = mob.position.tileX(), my = mob.position.tileY();
@@ -3673,7 +3829,8 @@ public class MobSystem {
                     || BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.PHASE)) continue;
             int d = Math.max(Math.abs(m.position.tileX() - mx),
                              Math.abs(m.position.tileY() - my));
-            if (d <= stealthScaledRadius(m, radius)) {
+            if (d <= stealthScaledRadius(m, radius)
+                    && LevelUtilities.getLineOfSight(level, mob, m.position)) {
                 // RL-33: a STEALTHy target a SLEEPING observer can see may slip
                 // notice this turn; awake mobs have already noticed and track
                 // normally, so the dodge only gates the initial wake.
@@ -3711,11 +3868,11 @@ public class MobSystem {
         return radius / (lvl + 1.0);
     }
 
-    /** True iff any other mob within {@code radius} (Chebyshev) has ATTACK
-     *  attitude toward {@code target}. Used as the wake gate for INANIMATE mobs
-     *  (anthills) - their own attackTypes is empty, so the regular wake gate
-     *  never fires; this checks "is something coming for me" instead. STEALTH
-     *  perk applies the same halved-radius rule as the regular wake gate. */
+    /** True iff any other mob within {@code radius} (Chebyshev) and in line of
+     *  sight has ATTACK attitude toward {@code target}. Used as the wake gate for
+     *  INANIMATE mobs (anthills) - their own attackTypes is empty, so the regular
+     *  wake gate never fires; this checks "is something coming for me" instead.
+     *  STEALTH perk applies the same halved-radius rule as the regular wake gate. */
     private static boolean hasIncomingAttackerWithin(Mob target, Level level, double radius) {
         int tx = target.position.tileX(), ty = target.position.tileY();
         for (Mob m : level.mobs) {
@@ -3725,7 +3882,8 @@ public class MobSystem {
                     || BuffSystem.hasBuff(m, com.bjsp123.rl2.model.Buff.BuffType.PHASE)) continue;
             int d = Math.max(Math.abs(m.position.tileX() - tx),
                              Math.abs(m.position.tileY() - ty));
-            if (d <= stealthScaledRadius(m, radius)) return true;
+            if (d <= stealthScaledRadius(m, radius)
+                    && LevelUtilities.getLineOfSight(level, target, m.position)) return true;
         }
         return false;
     }
@@ -3899,37 +4057,6 @@ public class MobSystem {
         return x >= 0 && y >= 0 && x < level.width && y < level.height;
     }
 
-    /**
-     * Thrower hurls {@code it} toward {@code dst}. Removes the item from the thrower's
-     * inventory, applies damage if the item has {@link ItemEffect#DAMAGE} and a hostile
-     * mob occupies the target tile, drops the item on the target tile (unless it's chasm),
-     * spawns the flying-item visual, and charges the thrower an attack's worth of time.
-     */
-    /** Player / AI throw entry point. Removes the item from inventory,
-     *  emits the {@link com.bjsp123.rl2.event.GameEvent.ItemThrown}
-     *  projectile event, AND applies the impact synchronously.
-     *
-     *  <p><b>DO NOT DEFER THE IMPACT.</b> This function MUST call
-     *  {@link #applyThrowImpact} before returning. If you let the Animator's
-     *  PendingImpact / arc-completion callback drive impact instead, the
-     *  defender gets one or more game ticks to step out of the AoE before
-     *  damage lands, and the throw silently misses. This regression has been
-     *  introduced and re-fixed multiple times; if you find this function
-     *  fires {@code ItemThrown} but does NOT call {@code applyThrowImpact},
-     *  you are looking at the regression - re-apply the synchronous call.
-     *
-     *  <p>The core invariant for ALL ranged attacks in this game:
-     *  <b>the attacker must complete the attack and deal damage before the
-     *  defender gets to move.</b> Throws, wand projectiles, charges, and
-     *  every other ranged effect must obey this. The on-screen visual arc
-     *  is cosmetic ONLY; it never drives world-state mutation.
-     *
-     *  <p>Visual presentation: the rgame Animator may schedule a delay on
-     *  damage popups / death fades / knockback frames / ignition flashes so
-     *  they read as "the bomb arc lands, then the target reacts" - but
-     *  that's a renderer-side concern and does NOT change the fact that the
-     *  rlib world state is fully mutated here, synchronously, at throw
-     *  time. */
     /** Max Chebyshev tiles a mob can throw: the base range plus its Hurler perk
      *  bonus. Single source of truth shared by the targeting overlay (which
      *  tiles to highlight) and {@link #throwItem} (clamping the actual flight). */
@@ -3955,6 +4082,33 @@ public class MobSystem {
                          origin.tileY() + dy * range / dist);
     }
 
+    /**
+     * Player / AI throw entry point. Synchronously: validates eligibility,
+     * removes the item from the thrower's inventory, clips the trajectory to
+     * the first blocker (locking the impact tile at fire time), emits the
+     * {@link com.bjsp123.rl2.event.GameEvent.ItemThrown} projectile event,
+     * and charges the throw's action cost. The world-state mutation (damage,
+     * knockback, ignition, item fate) is packaged as a deferred call to
+     * {@link #applyThrowImpact} via {@link #queuePendingImpact} - the
+     * ANIMATION-GATED LIFECYCLE.
+     *
+     * <p><b>The core invariant for ALL ranged attacks:</b> the defender must
+     * not get a chance to act between fire and impact. That is enforced NOT
+     * by mutating synchronously, but by the pending-impact freeze: while the
+     * queue is non-empty, no game tick runs on-screen (PlayScreen gates on
+     * {@code Animator.hasPendingImpacts()}) and headless drains the queue
+     * before the next mob brain ({@code MobAi.processAllAiTurns}). Combined
+     * with the fire-time-locked impact tile, deferred resolution is
+     * gameplay-equivalent to synchronous - while letting the on-screen
+     * mutation land exactly when the visual arc does, so a killed mob dies
+     * when the bomb arrives, not before.
+     *
+     * <p><b>Regression guard:</b> if the impact ever resolves WITHOUT the
+     * freeze holding (e.g. a new caller emits {@code ItemThrown} without
+     * queueing, or a tick path ignores the pending-impact gate), defenders
+     * get free ticks to step out of the AoE and throws silently miss - the
+     * historical warrior-bomb-dud bug. Queue and gate must move together.
+     */
     public static void throwItem(Level level, Mob thrower, Item it, Point dst) {
         if (thrower == null || it == null || dst == null) return;
         // Single authoritative throw-eligibility gate: only THROWN weapons and
@@ -4026,24 +4180,6 @@ public class MobSystem {
         queuePendingImpact(level, () -> applyThrowImpact(level, throwerFinal, itFinal, impactFinal));
     }
 
-    /**
-     * Apply the world-state mutations of a throw - door open, damage, bomb /
-     * potion / cloud effects, tame-on-throw, knockback, and the
-     * {@link Item.ThrowResult} fate (consume / return / drop).
-     *
-     * <p><b>Must run synchronously from {@link #throwItem}, not from an
-     * Animator PendingImpact / arc-completion callback.</b> If you wire
-     * this through the Animator instead, every defender gets free ticks to
-     * step out of the AoE before damage lands — the warrior-bomb-dud
-     * regression. See the throwItem javadoc for the invariant: ranged
-     * attackers must complete the attack and deal damage before the
-     * defender can move.
-     *
-     * <p>The on-screen visual sequence (arc flies → impact flash → damage
-     * popup) is preserved by the rgame Animator scheduling visual-FX
-     * playback against the arc duration. World-state mutation is decoupled
-     * from that visual delay and happens here.
-     */
     /** BOMB_DODGER damage multiplier - when {@code victim} carries the perk
      *  AND {@code thrown} is a BOMB, incoming bomb damage is scaled by
      *  {@code GameBalance.BOMB_DODGER_DAMAGE_BASE^perkLvl} (asymptotic -
@@ -4078,6 +4214,16 @@ public class MobSystem {
         return Math.max(scaled, 1);
     }
 
+    /**
+     * Apply the world-state mutations of a throw - door open, damage, bomb /
+     * potion / cloud effects, tame-on-throw, knockback, and the
+     * {@link Item.ThrowResult} fate (consume / return / drop). Step 4 of the
+     * animation-gated lifecycle: queued by {@link #throwItem}, run by the
+     * rgame Animator at arc completion (on-screen) or by the headless drain
+     * between mob brains. The pending-impact freeze guarantees no mob acted
+     * since the throw fired, so resolving here is gameplay-equivalent to
+     * resolving at throw time - see the {@link #throwItem} javadoc.
+     */
     public static void applyThrowImpact(Level level, Mob thrower, Item it, Point dst) {
         if (thrower == null || it == null || dst == null) return;
 
@@ -4182,11 +4328,14 @@ public class MobSystem {
             if (target != null && !isAlly(target, thrower)) {
                 // Single-target throws (throwing knives, javelins) roll-to-hit using
                 // the same accuracy-vs-evasion math as melee. AOE bombs and wands
-                // never roll - they always land at the target tile. A miss emits a
-                // log line + yellow "miss" floater via the standard DamageDealt(MISS)
-                // animator path; the item still lands on the tile (handled outside
-                // this branch).
-                if (!rollRangedHit(thrower, target, 0)) {
+                // never roll - they always land at the target tile. A surprise
+                // throw skips the roll entirely - surprised targets are always
+                // hit, matching melee. A miss emits a log line + yellow "miss"
+                // floater via the standard DamageDealt(MISS) animator path; the
+                // item still lands on the tile (handled outside this branch).
+                boolean throwSurprise = isSurpriseAttack(level, thrower, target,
+                        AttackType.THROWN, DamageElement.PHYSICAL);
+                if (!throwSurprise && !rollRangedHit(thrower, target, 0)) {
                     String cn = thrower != null && thrower.name != null
                             ? thrower.name
                             : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");

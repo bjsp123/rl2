@@ -1,0 +1,42 @@
+// Web (browser) build target. Compiles the game to JavaScript with TeaVM via
+// gdx-teavm (classic GWT can't do Java 17 records/switch-expressions, TeaVM can).
+//
+//   ./gradlew :web:buildWeb   - compile to build/dist/web/webapp (static site)
+//   ./gradlew :web:run        - compile then serve on http://localhost:8080
+//
+// The module has two kinds of code:
+//  - runtime classes (TeaVMLauncher, WebPersistence, ...) - compiled BY TeaVM
+//    into the shipped JS; must stay inside the TeaVM-supported JDK subset.
+//  - BuildTeaVMWeb - a plain JVM main that RUNS the TeaVM compiler; may use
+//    any JDK API.
+apply plugin: 'java'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    implementation project(':rgame')
+    implementation project(':rai')
+    implementation "com.github.xpenatan.gdx-teavm:backend-web:$gdxTeavmVersion"
+    // FreeType compiled to wasm/js - lets StoneUi's FreeTypeFontGenerator work
+    // unchanged in the browser (the launcher preloads freetype.js).
+    implementation "com.github.xpenatan.gdx-teavm:gdx-freetype-teavm:$gdxTeavmVersion"
+}
+
+tasks.register('buildWeb', JavaExec) {
+    group = 'web'
+    description = 'Compile the game to JavaScript into web/build/dist/web/webapp.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.bjsp123.rl2.web.BuildTeaVMWeb'
+    args 'build'
+}
+
+tasks.register('run', JavaExec) {
+    group = 'web'
+    description = 'Compile the game to JavaScript and serve it on localhost.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.bjsp123.rl2.web.BuildTeaVMWeb'
+    args 'serve'
+}

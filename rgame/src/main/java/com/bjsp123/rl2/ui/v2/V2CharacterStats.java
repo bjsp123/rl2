@@ -8,7 +8,9 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.BuffSystem;
+import com.bjsp123.rl2.logic.GameBalance;
 import com.bjsp123.rl2.logic.TextCatalog;
+import com.bjsp123.rl2.ui.StatFormat;
 import com.bjsp123.rl2.model.Buff;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Perk;
@@ -40,8 +42,8 @@ public final class V2CharacterStats extends BasePopup {
     /** Buff-detail popup opened when a buff icon is tapped. */
     private V2BuffInfo buffInfo;
 
-    private final Rect[] tabRects = new Rect[Tab.values().length];
-    private final boolean[] tabPressed = new boolean[Tab.values().length];
+    /** Shared tab-strip widget - layout, chrome, and press state. */
+    private final TabStrip tabs = new TabStrip(Tab.values().length);
 
     /** Sprite frame for the Character tab - light-warm-grey backdrop +
      *  tri-line border, computed from the player's mob sprite size so the
@@ -71,7 +73,6 @@ public final class V2CharacterStats extends BasePopup {
 
     public V2CharacterStats(UiCtx ctx) {
         super(ctx);
-        for (int i = 0; i < tabRects.length; i++) tabRects[i] = new Rect();
     }
 
     public void setPlayer(Mob p) { this.player = p; }
@@ -105,14 +106,10 @@ public final class V2CharacterStats extends BasePopup {
         float pad = 12f;
         float tabH = 32f;
         float tabGap = 4f;
-        float innerW = winW - 2 * pad;
-        float tabW = (innerW - (tabRects.length - 1) * tabGap) / tabRects.length;
         float headerBand = ctx.headerLineH() + ctx.lineH();
         float tabsY = window.top() - pad - tabH - headerBand;
-        for (int i = 0; i < tabRects.length; i++) {
-            tabRects[i].set(window.x + pad + i * (tabW + tabGap),
-                    tabsY, tabW, tabH);
-        }
+        tabs.layout(window, pad, tabsY, tabH, tabGap);
+        tabs.setActive(currentTab.ordinal());
 
         // Character-tab sprite frame - same shape the encyclopaedia uses
         // for its mob detail page. Frame size = 2x source max with a
@@ -170,20 +167,7 @@ public final class V2CharacterStats extends BasePopup {
         Window.drawInfoShape(ctx, window.x, window.y, window.w, window.h);
 
         // Tabs.
-        for (int i = 0; i < tabRects.length; i++) {
-            Rect r = tabRects[i];
-            boolean active  = Tab.values()[i] == currentTab;
-            boolean pressed = tabPressed[i];
-            if (active || pressed) {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
-                        UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
-            } else {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-            }
-            s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
-        }
+        tabs.drawShapes(s);
 
         // Character-tab sprite frame chrome - light-warm-grey backdrop
         // + tri-line border. Sprite paints aspect-fit in the text pass.
@@ -213,7 +197,7 @@ public final class V2CharacterStats extends BasePopup {
             Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
             int cur = (player != null && player.perks != null && p != null)
                     ? player.perks.getOrDefault(p, 0) : 0;
-            boolean canSpend = hasPoints && cur < 8;
+            boolean canSpend = hasPoints && cur < GameBalance.PERK_LEVEL_CAP;
             Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             if (!canSpend) {
                 s.setColor(UIVars.WIN_BG);
@@ -239,16 +223,10 @@ public final class V2CharacterStats extends BasePopup {
                 window.cx(), window.top() - ctx.headerLineH());
 
         // Tab labels.
-        String[] labels = {
+        tabs.drawLabels(ctx, new String[] {
                 TextCatalog.get("ui.characterStats.tab.stats"),
                 TextCatalog.get("ui.characterStats.tab.perks")
-        };
-        for (int i = 0; i < tabRects.length; i++) {
-            boolean active = Tab.values()[i] == currentTab;
-            TextDraw.centre(ctx, ctx.fontRegular,
-                    active ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                    labels[i], tabRects[i].cx(), tabRects[i].cy() + 6f);
-        }
+        });
 
         if (player != null) {
             switch (currentTab) {
@@ -273,14 +251,14 @@ public final class V2CharacterStats extends BasePopup {
         }
 
         // Perk-tab plus-button glyphs - a centred "+" character. Dimmed
-        // when the player has no perk points or the perk is already at level 8.
+        // when the player has no perk points or the perk is already at the cap.
         boolean hasPoints = player != null && player.perkPoints > 0;
         for (int i = 0; i < perkPlusRects.size(); i++) {
             Rect r = perkPlusRects.get(i);
             Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
             int cur = (player != null && player.perks != null && p != null)
                     ? player.perks.getOrDefault(p, 0) : 0;
-            boolean canSpend = hasPoints && cur < 8;
+            boolean canSpend = hasPoints && cur < GameBalance.PERK_LEVEL_CAP;
             com.badlogic.gdx.graphics.Color c = !canSpend
                     ? UIVars.TEXT_DIM
                     : (i == perkPlusPressed ? UIVars.ACCENT : UIVars.TEXT_BODY);
@@ -316,10 +294,11 @@ public final class V2CharacterStats extends BasePopup {
                 + " / " + ((int) Math.round(st.maxHp)));
         top = row(left, top, TextCatalog.get("ui.characterStats.accuracy"),  Integer.toString(st.accuracy));
         top = row(left, top, TextCatalog.get("ui.characterStats.evasion"),   Integer.toString(st.evasion));
-        top = row(left, top, TextCatalog.get("ui.characterStats.attack"),    st.damage.min() + "-" + st.damage.max());
+        top = row(left, top, TextCatalog.get("ui.characterStats.attack"),    StatFormat.damage(st.damage, st.apDamage));
         top = row(left, top, TextCatalog.get("ui.characterStats.armor"),     st.armor.min() + "-" + st.armor.max());
-        top = row(left, top, TextCatalog.get("ui.characterStats.moveCost"), Integer.toString(st.moveCost));
-        top = row(left, top, TextCatalog.get("ui.characterStats.attackCost"),  Integer.toString(st.attackCost));
+        top = row(left, top, TextCatalog.get("ui.characterStats.magicResist"), st.magicResist.min() + "-" + st.magicResist.max());
+        top = row(left, top, TextCatalog.get("ui.characterStats.moveCost"),   StatFormat.speed(st.moveCost));
+        top = row(left, top, TextCatalog.get("ui.characterStats.attackCost"), StatFormat.speed(st.attackCost));
         top = row(left, top, TextCatalog.get("ui.characterStats.light"),     Integer.toString((int) st.lightRadius));
 
         // Buff list - section heading + per-buff icon + name + duration.
@@ -363,7 +342,7 @@ public final class V2CharacterStats extends BasePopup {
 
     private void drawPerksTab() {
         float left = window.x + UIVars.PAD_CONTENT;
-        float top  = tabRects[0].y - 24f;
+        float top  = tabs.rects[0].y - 24f;
 
         // Header: "Available: N" - remaining perk points the player can
         // spend. Drawn even when the perk map is empty so the count is
@@ -387,7 +366,8 @@ public final class V2CharacterStats extends BasePopup {
                     ? perkPlusRects.get(i).x - 8f
                     : window.right() - UIVars.PAD_CONTENT;
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                    p.displayName(), left, top, Math.max(24f, lvlRight - 8f - left));
+                    TextCatalog.titleCase(p.displayName()),
+                    left, top, Math.max(24f, lvlRight - 8f - left));
             String lvlText = lvl > 0 ? Integer.toString(lvl) : "--";
             TextDraw.right(ctx, ctx.fontRegular,
                     lvl > 0 ? UIVars.ACCENT : UIVars.TEXT_DIM,
@@ -466,12 +446,7 @@ public final class V2CharacterStats extends BasePopup {
                 if (!isOpen()) return false;
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
-                for (int i = 0; i < tabRects.length; i++) {
-                    if (tabRects[i].contains(vx, vy)) {
-                        tabPressed[i] = true;
-                        return true;
-                    }
-                }
+                if (tabs.touchDown(vx, vy) >= 0) return true;
                 for (int i = 0; i < perkInfoRects.size(); i++) {
                     if (perkInfoRects.get(i).contains(vx, vy)) {
                         perkInfoPressed = i;
@@ -533,7 +508,7 @@ public final class V2CharacterStats extends BasePopup {
                             player.perks = new java.util.EnumMap<>(Perk.class);
                         }
                         int cur = player.perks.getOrDefault(perk, 0);
-                        if (cur >= 8) return true;
+                        if (cur >= GameBalance.PERK_LEVEL_CAP) return true;
                         player.perks.put(perk, cur + 1);
                         player.perkPoints--;
                         // First-encounter tip: fires the first time the
@@ -554,18 +529,20 @@ public final class V2CharacterStats extends BasePopup {
                             && idx < buffIconList.size()
                             && buffIconRects.get(idx).contains(vx, vy)) {
                         Buff tapped = buffIconList.get(idx);
-                        if (buffInfo != null && tapped != null) buffInfo.open(tapped);
+                        // Close ourselves first so the V2 single-popup-at-a-time
+                        // rule holds (same as the perk-info path above); the
+                        // callback re-opens this window when the buff info closes.
+                        if (buffInfo != null && tapped != null) {
+                            close();
+                            buffInfo.open(tapped, V2CharacterStats.this::open);
+                        }
                     }
                     return true;
                 }
-                for (int i = 0; i < tabRects.length; i++) {
-                    if (tabPressed[i]) {
-                        tabPressed[i] = false;
-                        if (tabRects[i].contains(vx, vy)) {
-                            currentTab = Tab.values()[i];
-                        }
-                        return true;
-                    }
+                if (tabs.hasPressed()) {
+                    int i = tabs.touchUp(vx, vy);
+                    if (i >= 0) currentTab = Tab.values()[i];
+                    return true;
                 }
                 return true;
             }

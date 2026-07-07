@@ -135,6 +135,7 @@ public final class MobProgression {
         mob.perkPoints++;
         mob.statsDirty = true;
         double newMaxHp = mob.effectiveStats().maxHp;
+        int hpGain = (int) Math.round(Math.max(0, newMaxHp - oldMaxHp));
         mob.hp = Math.min(newMaxHp, mob.hp + Math.max(0, newMaxHp - oldMaxHp));
 
         if (level != null && mob.history != null) {
@@ -143,6 +144,13 @@ public final class MobProgression {
         }
         if (emitRainbow && level != null && level.events != null && mob.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.RainbowBurst(mob.position));
+        }
+        // Staggered "what you gained" floaters, player only (enemies level up
+        // silently). Fires regardless of the rainbow gate so a powerup-driven
+        // level-up still spells out its gains. perkPoints rose by exactly 1.
+        if (mob.isPlayer && level != null && level.events != null && mob.position != null) {
+            level.events.add(new com.bjsp123.rl2.event.GameEvent.LevelUpGains(
+                    mob, mob.characterLevel, hpGain, 1));
         }
     }
 

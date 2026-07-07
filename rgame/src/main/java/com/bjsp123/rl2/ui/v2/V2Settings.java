@@ -13,12 +13,13 @@ import java.util.List;
 
 /**
  * V2 settings screen - tab strip across the top of a window, content panel
- * below. Each tab shows a vertical stack of "labelled rows", each row a
- * setting name plus a horizontal mini-button choice grid.
+ * below. Each tab shows a vertical stack of rows: snap-to-tick {@link Slider}
+ * rows for scalar settings, {@link Toggle} pill rows for booleans, and
+ * full-width action buttons (e.g. clear hall of fame) at the bottom.
  *
- * <p>The tab strip itself is a row of {@link Btn}s with sticky-checked state.
- * Switching tabs rebuilds the body buttons (settings are tab-specific and
- * each tab's chooser button rects depend on the tab content's height).
+ * <p>The tab strip is the shared {@link TabStrip} widget. Switching tabs
+ * rebuilds the body rows (settings are tab-specific and each tab's row
+ * rects depend on the tab content's height).
  */
 public final class V2Settings extends V2Screen {
 
@@ -37,7 +38,6 @@ public final class V2Settings extends V2Screen {
     private static final float ROW_GAP     = 12f;
     private static final float ROW_LABEL_H = 18f;
     private static final float CHOOSER_H   = 40f;
-    private static final float CHOOSER_GAP = 4f;
     /** Side margin from the viewport edge to the window. Window stretches to
      *  fill the rest of the available virtual width so tab strips and chooser
      *  rows sit within the panel even on the narrowest viewport. */
@@ -48,9 +48,8 @@ public final class V2Settings extends V2Screen {
      *  re-computing the layout. */
     private final List<RowLabel> rowLabels = new ArrayList<>();
 
-    /** Tab buttons, kept separately from {@link #buttons} so we can
-     *  highlight the active tab without iterating. */
-    private final List<Btn> tabBtns = new ArrayList<>();
+    /** Shared tab-strip widget - layout, chrome, and press state. */
+    private final TabStrip tabs = new TabStrip(Tab.values().length);
 
     /** Toggle widgets for boolean settings. Iterated alongside {@link #buttons}
      *  in the input handlers so a tap on a pill flips the value. */
@@ -62,6 +61,15 @@ public final class V2Settings extends V2Screen {
     /** Slider currently capturing pointer drag, or {@code null}. Set on
      *  touchDown-in-track, cleared on touchUp. */
     private Slider activeSlider;
+
+    /** Scrollable band for the tab body. Tab content can exceed the window on
+     *  short / heavily-scaled viewports (the window clamps to the viewport
+     *  height), which used to silently hide the bottom rows - now they scroll.
+     *  The scroller persists across {@link #buildLayout()} rebuilds; rows are
+     *  laid out shifted by its offset and clipped to the band. */
+    private final ScrollBand band = new ScrollBand();
+    /** Total height of the current tab's rows, for max-scroll + scrollbar. */
+    private float tabContentH;
 
     public V2Settings(Rl2Game game, UiCtx ctx) {
         super(ctx);
@@ -76,7 +84,6 @@ public final class V2Settings extends V2Screen {
     @Override
     protected void buildLayout() {
         rowLabels.clear();
-        tabBtns.clear();
         toggles.clear();
         sliders.clear();
         activeSlider = null;
@@ -90,43 +97,33 @@ public final class V2Settings extends V2Screen {
                 UIVars.VIRTUAL_W - 2 * SCREEN_MARGIN,
                 UIVars.VIRTUAL_H - 110f,
                 SCREEN_MARGIN, 55f);
-        float winW = window.w;
         float winX = window.x;
         float winY = window.y;
         float winH = window.h;
 
-        // Tab strip - anchored at the TOP of the window's interior. Tab
-        // widths are computed so all tabs FIT within the inner width - no
-        // tab strip ever overflows the panel. Total tab strip width =
-        // n*tabW + (n-1)*TAB_GAP = innerW; solve for tabW.
+        // Tab strip - anchored at the TOP of the window's interior. The
+        // shared TabStrip computes tab widths so all tabs FIT within the
+        // inner width - no tab strip ever overflows the panel.
         float tabsY = winY + winH - WIN_PAD - TAB_H;
-        float tabsX = winX + WIN_PAD;
-        Tab[] tabs = { Tab.GAMEPLAY, Tab.GRAPHICS, Tab.LOG, Tab.AUDIO };
-        float innerW = winW - 2 * WIN_PAD;
-        float tabW   = (innerW - (tabs.length - 1) * TAB_GAP) / tabs.length;
-        for (int i = 0; i < tabs.length; i++) {
-            final Tab t = tabs[i];
-            Btn b = new Btn(label(t),
-                    tabsX + i * (tabW + TAB_GAP), tabsY, tabW, TAB_H,
-                    () -> { currentTab = t; show(); });
-            b.checked = (t == currentTab);
-            // Icon sourced from the shared UI sheet - text label fallback
-            // kicks in if the sheet failed to load.
-            b.icon = IconSprites.regionFor(iconFor(t));
-            tabBtns.add(b);
-            buttons.add(b);
-        }
+        tabs.layout(window, WIN_PAD, tabsY, TAB_H, TAB_GAP);
+        tabs.setActive(currentTab.ordinal());
 
         // Tab content - vertical stack of "labelled rows" beneath the tab
         // strip. Each row is a section label (drawn by drawBodyText) plus a
         // horizontal chooser of mini-buttons (drawn by the parent button
         // pass). We lay out from the top of the content area downward; since
         // libGDX is y-up, "top" is high y and we decrement.
-        float contentTop = tabsY - ROW_GAP;
+        band.set(winX + WIN_PAD, winY + WIN_PAD,
+                window.w - 2 * WIN_PAD, (tabsY - ROW_GAP) - (winY + WIN_PAD));
+        float contentTop = band.top() + band.scroller.scrollY();
         float yCursor    = contentTop;
         float rowX = winX + WIN_PAD;
         switch (currentTab) {
             case GRAPHICS -> {
+                // Fast graphics leads the tab - it's the one most users come
+                // here for on the web build, so it must be visible pre-scroll.
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.fastGraphics"),
+                        Settings::fastGraphics, Settings::setFastGraphics);
                 yCursor = addUiScaleRow(rowX, yCursor);
                 yCursor = addOutlineWidthRow(rowX, yCursor);
                 yCursor = addOutlineDarknessRow(rowX, yCursor);
@@ -144,6 +141,8 @@ public final class V2Settings extends V2Screen {
                         Settings::instantActions, Settings::setInstantActions);
                 yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.queueAcceleration"),
                         Settings::queueAccelEnabled, Settings::setQueueAccelEnabled);
+                yCursor = addToggleRow(rowX, yCursor, TextCatalog.get("ui.settings.meleePreview"),
+                        Settings::meleePreview, Settings::setMeleePreview);
                 // Destructive actions live at the bottom of the tab so the
                 // settings flow always reads "set values, then take any
                 // one-shot action".
@@ -168,6 +167,11 @@ public final class V2Settings extends V2Screen {
             }
         }
 
+        // Rows consumed (contentTop - yCursor) includes the trailing ROW_GAP;
+        // close enough for max-scroll + scrollbar proportions.
+        tabContentH = contentTop - yCursor;
+        band.update(tabContentH);
+
         // Back button at bottom-right - pops the navigation stack so the
         // user returns to wherever Settings was opened from.
         back = new BackBtn(ctx, game::popScreen);
@@ -178,24 +182,6 @@ public final class V2Settings extends V2Screen {
 
     @Override
     protected void onEscape() { game.popScreen(); }
-
-    /** Add one labelled row of choice buttons. Returns the new y-cursor
-     *  (one row below the current one). */
-    private float addRow(String labelText, float x, float yTop, List<ChoiceSpec> choices) {
-        // Section label text - drawn by drawBodyText. yTop is the top of the
-        // label (libGDX baseline conventions handled in TextDraw).
-        rowLabels.add(new RowLabel(labelText, x, yTop));
-        // Chooser buttons sit just below the label.
-        float by = yTop - ROW_LABEL_H - CHOOSER_H;
-        float bx = x;
-        for (ChoiceSpec c : choices) {
-            Btn b = new Btn(c.label, bx, by, c.width, CHOOSER_H, c.onClick);
-            b.checked = c.checked;
-            buttons.add(b);
-            bx += c.width + CHOOSER_GAP;
-        }
-        return by - ROW_GAP;
-    }
 
     private float addButtonRow(float x, float yTop, String label) {
         return addButtonRow(x, yTop, label, this::openClearHallPopup, /*warn=*/true);
@@ -331,8 +317,12 @@ public final class V2Settings extends V2Screen {
     @Override
     protected void drawBodyShape(UiCtx ctx) {
         Window.drawShape(ctx, window.x, window.y, window.w, window.h);
-        for (Toggle t : toggles) t.drawShape(ctx);
-        for (Slider s : sliders) s.drawShape(ctx);
+        tabs.drawShapes(ctx.shapes);
+        band.clip(ctx, () -> {
+            for (Toggle t : toggles) t.drawShape(ctx);
+            for (Slider s : sliders) s.drawShape(ctx);
+        });
+        band.drawScrollbar(ctx.shapes, tabContentH);
     }
 
     @Override
@@ -342,15 +332,27 @@ public final class V2Settings extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT, TextCatalog.get("ui.settings.title"),
                 ctx.worldW() * 0.5f, ctx.worldH() - 24f);
 
-        for (RowLabel rl : rowLabels) {
-            TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, rl.text, rl.x, rl.y);
+        // Tab icons from the shared UI sheet.
+        Tab[] tabVals = Tab.values();
+        var tabIcons = new com.badlogic.gdx.graphics.g2d.TextureRegion[tabVals.length];
+        for (int i = 0; i < tabVals.length; i++) {
+            tabIcons[i] = IconSprites.regionFor(iconFor(tabVals[i]));
         }
-        for (Toggle t : toggles) t.drawText(ctx);
-        for (Slider s : sliders) s.drawText(ctx);
+        tabs.drawIcons(ctx, tabIcons);
+
+        band.clip(ctx, () -> {
+            for (RowLabel rl : rowLabels) {
+                TextDraw.left(ctx, ctx.fontRegular, UIVars.TEXT_DIM, rl.text, rl.x, rl.y);
+            }
+            for (Toggle t : toggles) t.drawText(ctx);
+            for (Slider s : sliders) s.drawText(ctx);
+        });
     }
 
     @Override
     protected boolean onTouchDownInBody(float vx, float vy) {
+        // Tab strip.
+        if (tabs.touchDown(vx, vy) >= 0) return true;
         // Toggles fire on tap-down release; we mark pressed here so the
         // pill highlights while held.
         for (Toggle t : toggles) {
@@ -367,8 +369,16 @@ public final class V2Settings extends V2Screen {
                 return true;
             }
         }
-        return false;
+        // Empty band area: seed a potential scroll drag.
+        bandTouchActive = band.touchDown(vx, vy);
+        return bandTouchActive;
     }
+
+    /** True while the current touch started on empty band space - gates the
+     *  drag-to-scroll path so a drag that began on a widget (whose touchDown
+     *  consumed the event before the band was seeded) can't reuse a stale
+     *  drag anchor and jump the scroll. */
+    private boolean bandTouchActive;
 
     @Override
     protected boolean onTouchDragged(float vx, float vy) {
@@ -376,11 +386,34 @@ public final class V2Settings extends V2Screen {
             activeSlider.updateFromPointer(vx);
             return true;
         }
+        if (bandTouchActive && band.touchDragged(vy)) {
+            buildLayout();   // re-place rows at the new scroll offset
+            return true;
+        }
         return false;
     }
 
     @Override
+    protected boolean onScrolled(float amountY) {
+        if (band.scroller.maxScroll() <= 0f) return false;
+        band.scrolled(amountY);
+        buildLayout();   // re-place rows at the new scroll offset
+        return true;
+    }
+
+    @Override
     protected boolean onTouchUpInBody(float vx, float vy) {
+        bandTouchActive = false;
+        band.scroller.onTouchUp();
+        if (tabs.hasPressed()) {
+            int i = tabs.touchUp(vx, vy);
+            if (i >= 0 && currentTab != Tab.values()[i]) {
+                currentTab = Tab.values()[i];
+                band.scroller.resetTop();   // new tab starts at its first row
+                show();   // rebuild the tab-specific body rows
+            }
+            return true;
+        }
         boolean consumed = false;
         if (activeSlider != null) {
             activeSlider.dragging = false;
@@ -427,15 +460,6 @@ public final class V2Settings extends V2Screen {
         super.hide();
     }
 
-    private static String label(Tab t) {
-        return switch (t) {
-            case GAMEPLAY -> TextCatalog.get("ui.settings.tab.play");
-            case GRAPHICS -> TextCatalog.get("ui.settings.tab.graphics");
-            case LOG      -> TextCatalog.get("ui.settings.tab.log");
-            case AUDIO    -> TextCatalog.get("ui.settings.tab.audio");
-        };
-    }
-
     /** Map each tab to a glyph in the shared UI icon sheet. */
     private static IconSprites.Icon iconFor(Tab t) {
         return switch (t) {
@@ -449,14 +473,11 @@ public final class V2Settings extends V2Screen {
     /** Drop trailing zeros on a float so 1.0 reads as "1" and 0.55 stays as "0.55". */
     private static String formatNumber(float v) {
         if (v == (int) v) return Integer.toString((int) v);
-        String s = String.format(java.util.Locale.ROOT, "%.2f", v);
+        String s = com.bjsp123.rl2.util.Fmt.of("%.2f", v);
         while (s.endsWith("0")) s = s.substring(0, s.length() - 1);
         if (s.endsWith(".")) s = s.substring(0, s.length() - 1);
         return s;
     }
-
-    /** Captured chooser button spec: label / width / checked state / onClick. */
-    private record ChoiceSpec(String label, float width, boolean checked, Runnable onClick) {}
 
     /** Section-label position (drawn between row choosers). */
     private record RowLabel(String text, float x, float y) {}

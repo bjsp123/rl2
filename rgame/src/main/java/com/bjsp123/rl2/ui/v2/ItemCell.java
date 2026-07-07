@@ -71,13 +71,21 @@ public final class ItemCell {
         draw(ctx, item, holder, x, y, w, h, false);
     }
 
+    /** Reusable Filler bound via {@link #fillerCtx} - a capturing lambda here
+     *  would allocate a fresh closure per slot per frame on the HUD hot path.
+     *  Safe as a single static: rendering is single-threaded. */
+    private static UiCtx fillerCtx;
+    private static final ChargeBar.Filler BATCH_FILLER = (c, rx, ry, rw, rh) -> {
+        fillerCtx.batch.setColor(c);
+        fillerCtx.batch.draw(fillerCtx.whitePixel, rx, ry, rw, rh);
+    };
+
     private static void drawChargeBar(UiCtx ctx, Item item, Mob holder,
                                       float x, float y, float w) {
         int max = ItemStats.effectiveMaxCharge(item, ItemStats.effectiveLevel(item, holder));
-        ChargeBar.draw(max, item.charge, x, y, w, (c, rx, ry, rw, rh) -> {
-            ctx.batch.setColor(c);
-            ctx.batch.draw(ctx.whitePixel, rx, ry, rw, rh);
-        });
+        fillerCtx = ctx;
+        ChargeBar.draw(max, item.charge, x, y, w, BATCH_FILLER);
+        fillerCtx = null;
         ctx.batch.setColor(Color.WHITE);
     }
 }

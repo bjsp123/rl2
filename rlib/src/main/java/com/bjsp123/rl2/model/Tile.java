@@ -6,9 +6,10 @@ public enum Tile {
      *  special-floor sprite. Adjacent regular-FLOOR cells receive an edge or
      *  corner overlay so the special-floor patch reads as a distinct surface. */
     FLOOR_SPECIAL,
-    /** Small decorative statue, drawn over a floor base. Blocks movement but not sight or
-     *  light - you can see and shoot past it. {@code _L}/{@code _R} encode the carved
-     *  facing of the statue. */
+    /** Small decorative statue, drawn over a floor base. Blocks movement and projectiles
+     *  (blocksProjectile falls back to blocksMovement for non-doors) but not sight or
+     *  light - you can see past it but not shoot past it. {@code _L}/{@code _R} encode
+     *  the carved facing of the statue. */
     STATUE_SMALL_L, STATUE_SMALL_R,
     /** Large decorative statue, drawn over a floor base. Blocks movement, sight and light -
      *  reads as a wall-equivalent obstacle. {@code _L}/{@code _R} encode facing. */

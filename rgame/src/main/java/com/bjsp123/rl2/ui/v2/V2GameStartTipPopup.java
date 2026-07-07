@@ -293,9 +293,27 @@ public final class V2GameStartTipPopup {
     }
 
     /** Resolve one spritelist token into a row cell, or {@code null} to skip it.
-     *  Order: ARROWRIGHT connector, BEACON ornament (terrain), item type, mob
-     *  type. Items/mobs caption with their display name; powerups also glow. */
+     *  A token may carry a caption override after a colon
+     *  ({@code XPPILL:free levels}); without one, items/mobs caption with
+     *  their display name. Token order: ARROWRIGHT connector, BEACON
+     *  ornament (terrain), item type, mob type. Powerups also glow. */
     private TipCell resolveCell(String ref) {
+        String caption = null;
+        int colon = ref.indexOf(':');
+        if (colon >= 0) {
+            caption = ref.substring(colon + 1).trim();
+            ref = ref.substring(0, colon).trim();
+        }
+        TipCell c = resolveToken(ref);
+        if (c != null && caption != null && !caption.isEmpty() && !c.arrow) {
+            c.caption = caption;
+        }
+        return c;
+    }
+
+    /** Resolve the bare (caption-stripped) token into a cell with its
+     *  default caption, or {@code null} to skip it. */
+    private TipCell resolveToken(String ref) {
         if (ARROW_RIGHT.equals(ref)) {
             TipCell c = new TipCell();
             c.arrow = true;

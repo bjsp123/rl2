@@ -37,6 +37,10 @@ public final class Scroller {
     private float dragLastY;
 
     public float scrollY()    { return scrollY; }
+    /** The clamp cap last supplied via {@link #setMaxScroll} - exposed so
+     *  callers can test "is there more content below/above" (scroll-arrow
+     *  affordances) without recomputing content metrics. */
+    public float maxScroll()  { return maxScrollY; }
     public boolean isDragging() { return dragging; }
 
     /** Caller computes total content height and visible window height each

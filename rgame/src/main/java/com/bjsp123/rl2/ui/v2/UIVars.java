@@ -56,6 +56,9 @@ public final class UIVars {
     // -- Text + accent ---------------------------------------------------------
     public static Color TEXT_BODY       = hex(0xffffff);
     public static Color TEXT_DIM        = hex(0xc8c4b8);
+    /** Faintest text tier - low-priority log lines and other de-emphasised
+     *  copy that should recede further than {@link #TEXT_DIM}. */
+    public static Color TEXT_FAINT      = hex(0x666666);
     public static Color TEXT_WARN       = hex(0xe05050);
     public static Color ACCENT          = hex(0xffe848);
     public static Color ACCENT_DIM      = hex(0xb09020);
@@ -68,11 +71,6 @@ public final class UIVars {
     // -- Special item-level badge color ----------------------------------------
     /** Bright green - level badge when a perk/buff/equipment boosts effective level. */
     public static Color BOOST           = hex(0x33d94d);
-
-    // -- Bar fills -------------------------------------------------------------
-    public static Color BAR_HP          = hex(0xc04040);
-    public static Color BAR_XP          = hex(0xffe848);
-    public static Color BAR_SATIETY     = hex(0xa08858);
 
     // -- Damage floater tints (per DamageElement) -----------------------------
     public static Color DAMAGE_PHYSICAL = hex(0xc04040);  // red
@@ -131,6 +129,13 @@ public final class UIVars {
     // -- Alpha scalars ---------------------------------------------------------
     /** Alpha of the dim overlay drawn behind modal popups (0..1). */
     public static float DIM_ALPHA       = 0.55f;
+    /** Alpha of the EXTRA dim layer a sub-popup paints over its parent popup
+     *  (e.g. the item-detail panel over the inventory) so it reads as a true
+     *  overlay, not a sibling. Stacks on top of {@link #DIM_ALPHA}. */
+    public static float SUBPOPUP_DIM_ALPHA = 0.35f;
+    /** Alpha of the per-cell dim painted over items a picker rejects
+     *  (inventory chooser mode). */
+    public static float PICKER_DIM_ALPHA = 0.62f;
     /** Alpha of a window's interior fill rectangle (0..1). */
     public static float PANEL_FILL_ALPHA = 0.85f;
 
@@ -140,14 +145,12 @@ public final class UIVars {
     public static float WIN_LINE_W      = 3f;
     /** Per-line thickness of HUD elements and button borders. */
     public static float HUD_LINE_W      = 1f;
-    /** Standard large navigation button width. */
-    public static float BTN_W           = 320f;
-    /** Standard large navigation button height. */
-    public static float BTN_H           = 64f;
     /** Square size of the back-button affordance. */
     public static float BACK_SIZE       = 40f;
-    /** Square size of the burger-menu button. */
-    public static float BURGER_SIZE     = 48f;
+    /** Square size of the burger-menu button ({@link Burger}). Shared by the
+     *  in-play HUD so the burger is identical in-play and on menu screens.
+     *  Kept small per RL-27. */
+    public static float BURGER_SIZE     = 36f;
     /** Virtual canvas width - all layout calcs use this. */
     public static float VIRTUAL_W       = 400f;
     /** Virtual canvas height - all layout calcs use this. */
@@ -161,16 +164,24 @@ public final class UIVars {
     public static int FONT_REGULAR_PX   = 16;
     public static int FONT_HEADER_PX    = 32;
 
+    // -- Buff duration drain bar (HUD buff row) --------------------------------
+    /** Width of the vertical drain bar hugging each buff icon's right edge. */
+    public static float BUFF_BAR_W          = 3f;
+    /** Remaining turns that read as a FULL bar; longer durations clamp. */
+    public static int   BUFF_BAR_FULL_TURNS = 10;
+    /** At or below this many remaining turns the bar turns warn-red and
+     *  blinks at ~2Hz. */
+    public static int   BUFF_BAR_WARN_TURNS = 2;
+
     // -- Targeting / hit-chance chip styling ----------------------------------
     /** Font scale factor for the cursor-anchored hit-chance / damage chip,
      *  applied on top of the regular font. */
     public static float CHIP_SCALE              = 0.62f;
-    /** Font scale factor for the world-space melee preview chip rendered
-     *  over each adjacent enemy. The world-camera font is much larger per
-     *  unit than the V2 font, so this multiplier is independent of {@link
-     *  #CHIP_SCALE} - tune it to match the ranged chip's visual size, not
-     *  its numeric scale value. */
-    public static float MELEE_CHIP_SCALE        = 0.4f;
+    /** Font scale factor for the melee preview chip rendered over each
+     *  adjacent hostile (PlayScreen's ChipRenderer pass, V2 space like the
+     *  targeting chip). A notch below {@link #CHIP_SCALE} so the always-on
+     *  preview reads quieter than an aimed shot's chip. */
+    public static float MELEE_CHIP_SCALE        = 0.55f;
     /** Font scale factor for in-world damage / miss floaters (the rising
      *  "5" / "miss" / "blunt" text). Tuned to match the visual size the
      *  melee chip used to be at - a notch smaller than the default world
@@ -230,9 +241,11 @@ public final class UIVars {
                 int mods = f.getModifiers();
                 if (!Modifier.isStatic(mods) || Modifier.isFinal(mods)) continue;
                 Class<?> t = f.getType();
-                if      (t == int.class)   f.setInt(null,   Integer.parseInt(value));
-                else if (t == float.class) f.setFloat(null, Float.parseFloat(value));
-                else if (t == double.class) f.setDouble(null, Double.parseDouble(value));
+                // Boxed Field.set: TeaVM's reflection emulation lacks the
+                // primitive setters; set() auto-unboxes on every runtime.
+                if      (t == int.class)   f.set(null, Integer.parseInt(value));
+                else if (t == float.class) f.set(null, Float.parseFloat(value));
+                else if (t == double.class) f.set(null, Double.parseDouble(value));
                 else if (t == Color.class) applyHex((Color) f.get(null), value);
             } catch (NoSuchFieldException | IllegalAccessException | NumberFormatException ignored) {}
         }

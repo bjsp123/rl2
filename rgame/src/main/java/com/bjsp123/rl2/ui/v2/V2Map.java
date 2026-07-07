@@ -1,9 +1,11 @@
 package com.bjsp123.rl2.ui.v2;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.bjsp123.rl2.logic.TextCatalog;
+import com.bjsp123.rl2.ui.v2.stage.V2PopupActor;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
 import com.bjsp123.rl2.model.Point;
@@ -49,22 +51,16 @@ public final class V2Map extends V2Screen {
      *  independent of the plus-sign pulse. */
     private float bgSwirlT;
 
-    /** Open / closed flag for the teleport-confirmation modal. While
-     *  {@code true} the rest of the map screen ignores input - the only
-     *  active controls are the Yes / No buttons inside the popup. */
-    private boolean confirmOpen;
+    /** Teleport-confirmation modal - the standard {@link ConfirmPopup} on
+     *  the V2 stage's sub-popup layer, chained ahead of {@link #baseInput()}
+     *  in {@link #show()} so it owns all input while open. */
+    private final ConfirmPopup confirm;
+    private final V2PopupActor confirmActor;
     /** Destination level index + beacon position that the player is about
      *  to teleport to once they confirm. Set when an active beacon is
-     *  clicked; consumed (or discarded) by the Yes / No handler. */
+     *  clicked; consumed (or discarded) by the confirm / cancel handler. */
     private int   pendingDestLevel = -1;
     private Point pendingBeaconPos;
-    /** Hit rects for the confirmation Yes / No buttons. Populated each
-     *  frame in {@link #drawBodyShape} when {@link #confirmOpen} is set. */
-    private final Rect confirmYes = new Rect();
-    private final Rect confirmNo  = new Rect();
-    /** Confirmation popup geometry. Recomputed each frame from the map
-     *  window so it tracks resizes. */
-    private final Rect confirmPanel = new Rect();
 
     /** Pan offset applied to the level graph (post-zoom). Drag-in-body
      *  shifts these. Zero by default - graph centred on the window. */
@@ -104,10 +100,27 @@ public final class V2Map extends V2Screen {
         this.onBack = onBack;
         this.world  = world;
         this.teleportEnabled = teleportEnabled;
+        this.confirm = new ConfirmPopup(ctx);
+        this.confirmActor = new V2PopupActor(confirm);
     }
 
     @Override
-    protected Rect modalWindow() { return window; }
+    public void show() {
+        super.show();
+        ctx.v2Stage.remove(confirmActor);
+        ctx.v2Stage.addToSubPopup(confirmActor);
+        Gdx.input.setInputProcessor(new InputMultiplexer(
+                confirm.input(), baseInput()));
+    }
+
+    @Override
+    public void hide() {
+        ctx.v2Stage.remove(confirmActor);
+        super.hide();
+    }
+
+    @Override
+    protected Rect modalWindow() { return confirm.isOpen() ? confirm.window() : window; }
 
     @Override protected String screenId() { return "map"; }
 
@@ -134,18 +147,6 @@ public final class V2Map extends V2Screen {
         dragLastX = vx;
         dragLastY = vy;
         dragging  = false;
-        // While the confirmation popup is open, ALL input goes through its
-        // Yes / No buttons - no panning, no beacon clicks, no level
-        // selection. Touch outside the popup is swallowed so the player
-        // can't accidentally close it by tapping the map.
-        if (confirmOpen) {
-            if (confirmYes.contains(vx, vy)) {
-                confirmTeleport();
-            } else if (confirmNo.contains(vx, vy)) {
-                cancelTeleportConfirm();
-            }
-            return true;
-        }
         // Beacon plus-signs take priority over the level box behind them -
         // a tap on an active beacon opens the teleport confirmation, on
         // an inactive one does nothing (eaten so it doesn't fall through
@@ -163,7 +164,7 @@ public final class V2Map extends V2Screen {
             if (teleportOrbCount() <= 0) return true;
             pendingDestLevel = ref[0];
             pendingBeaconPos = new Point(ref[1], ref[2]);
-            confirmOpen      = true;
+            openTeleportConfirm();
             return true;
         }
         for (int i = 0; i < graph.boxRects.size(); i++) {
@@ -286,10 +287,6 @@ public final class V2Map extends V2Screen {
             }
         }
 
-        // Teleport confirmation popup chrome - drawn last so it sits on
-        // top of every other shape in this pass.
-        drawConfirmShape(s);
-
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
@@ -376,95 +373,49 @@ public final class V2Map extends V2Screen {
         }
     }
 
-    /** Confirmation popup "Yes" handler - consume one orb and teleport,
-     *  then close the map back to the play screen. */
-    private void confirmTeleport() {
-        if (pendingBeaconPos == null || pendingDestLevel < 0) {
-            cancelTeleportConfirm();
-            return;
-        }
-        if (teleportOrbCount() <= 0) {
-            cancelTeleportConfirm();
-            return;
-        }
-        consumeOneTeleportOrb();
-        boolean ok = game.currentPlay != null
-                && game.currentPlay.teleportToBeacon(pendingDestLevel, pendingBeaconPos);
-        confirmOpen      = false;
-        pendingDestLevel = -1;
-        pendingBeaconPos = null;
-        if (ok) onBack.run();
-    }
-
-    /** Confirmation popup "No" handler - dismiss without consuming an orb. */
-    private void cancelTeleportConfirm() {
-        confirmOpen      = false;
-        pendingDestLevel = -1;
-        pendingBeaconPos = null;
-    }
-
-    /** Position + draw the confirmation popup chrome (panel + Yes / No
-     *  button bodies). Sized as a small modal centred on the map window.
-     *  Hit rects are written into {@link #confirmYes} / {@link #confirmNo}
-     *  so {@link #onTouchDownInBody} can dispatch the tap. Text labels
-     *  are painted later in {@link #drawConfirmText}. */
-    private void drawConfirmShape(ShapeRenderer s) {
-        if (!confirmOpen) return;
-        float panelW = 240f;
-        float panelH = 90f;
-        float panelX = window.cx() - panelW * 0.5f;
-        float panelY = window.cy() - panelH * 0.5f;
-        confirmPanel.set(panelX, panelY, panelW, panelH);
-        // Panel background - fully opaque so the swirling backdrop and any
-        // label text behind the modal can't bleed through. Single solid
-        // fill + a clear 2-px border so the dialog reads as a proper
-        // modal, not a translucent overlay.
-        s.setColor(0.06f, 0.06f, 0.09f, 1f);
-        s.rect(panelX, panelY, panelW, panelH);
-        s.setColor(UIVars.ACCENT);
-        // 2-px border by drawing 4 thin rects.
-        s.rect(panelX,            panelY,            panelW, 2f);
-        s.rect(panelX,            panelY + panelH-2, panelW, 2f);
-        s.rect(panelX,            panelY,            2f,     panelH);
-        s.rect(panelX + panelW-2, panelY,            2f,     panelH);
-
-        // Two big buttons centred along the bottom half of the popup.
-        float btnW = 80f;
-        float btnH = 26f;
-        float btnY = panelY + 10f;
-        float gap  = 16f;
-        float yesX = window.cx() - btnW - gap * 0.5f;
-        float noX  = window.cx() + gap * 0.5f;
-        confirmYes.set(yesX, btnY, btnW, btnH);
-        confirmNo .set(noX,  btnY, btnW, btnH);
-        s.setColor(UIVars.BORDER_MID);
-        s.rect(yesX, btnY, btnW, btnH);
-        s.rect(noX,  btnY, btnW, btnH);
-        s.setColor(0f, 0f, 0f, 1f);
-        s.rect(yesX + 1f, btnY + 1f, btnW - 2f, btnH - 2f);
-        s.rect(noX  + 1f, btnY + 1f, btnW - 2f, btnH - 2f);
-    }
-
-    /** Paint the confirmation popup's text labels: prompt at the top,
-     *  "Yes" / "No" on the two buttons. */
-    private void drawConfirmText(UiCtx ctx) {
-        if (!confirmOpen) return;
+    /** Configure + open the standard confirmation popup for the pending
+     *  beacon destination. Confirm consumes one orb and teleports, then
+     *  closes the map back to the play screen; cancel just discards the
+     *  pending destination. */
+    private void openTeleportConfirm() {
         int depth = -1;
         if (pendingDestLevel >= 0 && pendingDestLevel < world.levels.length
                 && world.levels[pendingDestLevel] != null) {
             depth = world.levels[pendingDestLevel].depth;
         }
-        String prompt = TextCatalog.format("ui.map.teleportConfirm",
-                TextCatalog.vars("depth", depth,
-                        "orbs", teleportOrbCount()));
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                prompt, window.cx(), confirmPanel.y + confirmPanel.h - 14f);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.ACCENT,
+        confirm.configure(
+                TextCatalog.get("ui.map.teleportTitle"),
+                TextCatalog.format("ui.map.teleportConfirm",
+                        TextCatalog.vars("depth", depth,
+                                "orbs", teleportOrbCount())),
                 TextCatalog.get("ui.map.teleportYes"),
-                confirmYes.cx(), confirmYes.cy() - 4f);
-        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 TextCatalog.get("ui.map.teleportNo"),
-                confirmNo.cx(), confirmNo.cy() - 4f);
+                this::confirmTeleport,
+                this::clearPendingTeleport);
+        confirm.open();
+    }
+
+    /** Confirm handler - consume one orb and teleport, then close the map
+     *  back to the play screen. */
+    private void confirmTeleport() {
+        boolean valid = pendingBeaconPos != null && pendingDestLevel >= 0
+                && teleportOrbCount() > 0;
+        if (!valid) {
+            clearPendingTeleport();
+            return;
+        }
+        consumeOneTeleportOrb();
+        boolean ok = game.currentPlay != null
+                && game.currentPlay.teleportToBeacon(pendingDestLevel, pendingBeaconPos);
+        clearPendingTeleport();
+        if (ok) onBack.run();
+    }
+
+    /** Cancel / cleanup handler - discard the pending destination without
+     *  consuming an orb. */
+    private void clearPendingTeleport() {
+        pendingDestLevel = -1;
+        pendingBeaconPos = null;
     }
 
     @Override
@@ -472,6 +423,12 @@ public final class V2Map extends V2Screen {
         TextDraw.centre(ctx, ctx.fontHeader, UIVars.ACCENT,
                 TextCatalog.get("ui.map.title"),
                 window.cx(), window.top() - ctx.headerLineH());
+        // Run totals under the title: cumulative kills + beacons lit this run.
+        int[] totals = runTotals();
+        TextDraw.centre(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
+                TextCatalog.format("ui.map.runTotals",
+                        TextCatalog.vars("kills", totals[0], "beacons", totals[1])),
+                window.cx(), window.top() - ctx.headerLineH() - ctx.lineH() * 0.85f);
         // "?" glyphs on every unvisited level box - reads as "you haven't
         // been here yet" so the player doesn't mistake an empty fog tile
         // for an explored-but-empty one. Centres come from the shape pass.
@@ -496,9 +453,6 @@ public final class V2Map extends V2Screen {
                 drawInfoPaneText(ctx, lvl);
             }
         }
-        // Confirmation popup text - drawn last so it sits on top of every
-        // other label in this pass.
-        drawConfirmText(ctx);
     }
 
     private Rect infoPaneRect() {
@@ -548,6 +502,16 @@ public final class V2Map extends V2Screen {
                 left, top, textW);
     }
 
+    /** Player's cumulative run totals for the map header: {kills, beaconsLit}.
+     *  Returns {0, 0} when the play session isn't wired (e.g. attract mode). */
+    private int[] runTotals() {
+        if (game.currentPlay == null || world == null) return new int[]{0, 0};
+        Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(world.currentLevel());
+        if (player == null) return new int[]{0, 0};
+        int kills = player.runStats != null ? player.runStats.mobsKilled : 0;
+        return new int[]{kills, player.beaconsLit};
+    }
+
     /** "CRYSTAL" -> "Crystal", "MIRRORMATCH" -> "Mirrormatch". */
     private static String prettify(String enumName) {
         if (enumName == null || enumName.isEmpty()) return "";
@@ -594,5 +558,8 @@ public final class V2Map extends V2Screen {
     }
 
     @Override
-    protected void onEscape() { onBack.run(); }
+    protected void onEscape() {
+        if (confirm.isOpen()) { confirm.cancel(); return; }
+        onBack.run();
+    }
 }

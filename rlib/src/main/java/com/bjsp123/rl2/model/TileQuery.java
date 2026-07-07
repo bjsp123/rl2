@@ -37,6 +37,9 @@ public final class TileQuery {
      *  light-hating mobs (can't enter lit tiles). */
     public static boolean blocksMovementAt(Level level, int x, int y, Mob mob) {
         if (oob(level, x, y)) return true;
+        // GHOSTLY: passes through all solid terrain (walls, statues, closed
+        // doors) and hovers over chasms. Only the map border stops a ghost.
+        if (mob != null && mob.isGhostly()) return false;
         Tile t = level.tiles[x][y];
         if (t == Tile.CHASM) return mob == null || !mob.effectiveStats().flying;
         if (t.isClosedDoor()) {

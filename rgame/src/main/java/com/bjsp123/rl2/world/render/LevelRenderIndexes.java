@@ -15,6 +15,10 @@ final class LevelRenderIndexes {
         private final int width;
         private final int height;
         private final List<T>[] cells;
+        /** Indexes of occupied cells - lets {@link #reset()} clear only what was
+         *  filled instead of reallocating the full-grid backing array. */
+        private int[] used = new int[32];
+        private int usedCount;
 
         @SuppressWarnings("unchecked")
         CellBuckets(int width, int height) {
@@ -23,11 +27,23 @@ final class LevelRenderIndexes {
             this.cells = (List<T>[]) new List[width * height];
         }
 
+        boolean sized(int w, int h) { return width == w && height == h; }
+
+        /** Empty the buckets in place for reuse next frame. O(occupied cells). */
+        void reset() {
+            for (int i = 0; i < usedCount; i++) cells[used[i]] = null;
+            usedCount = 0;
+        }
+
         void add(int x, int y, T value) {
             if (x < 0 || y < 0 || x >= width || y >= height) return;
             int idx = y * width + x;
             List<T> list = cells[idx];
-            if (list == null) cells[idx] = list = new ArrayList<>(1);
+            if (list == null) {
+                cells[idx] = list = new ArrayList<>(1);
+                if (usedCount == used.length) used = java.util.Arrays.copyOf(used, used.length * 2);
+                used[usedCount++] = idx;
+            }
             list.add(value);
         }
 
@@ -55,9 +71,14 @@ final class LevelRenderIndexes {
         return out;
     }
 
-    static CellBuckets<Effect> effectsByCell(Level level, EffectStage stage) {
-        CellBuckets<Effect> out = new CellBuckets<>(level.width, level.height);
-        for (Effect e : stage.active) {
+    /** Rebuilds {@code out} in place from the stage's active effects. The fx index
+     *  is refilled every frame (effects are volatile), so the caller passes a
+     *  persistent instance instead of allocating a full-grid bucket array per frame. */
+    static void effectsByCellInto(CellBuckets<Effect> out, EffectStage stage) {
+        out.reset();
+        List<Effect> active = stage.active;
+        for (int i = 0; i < active.size(); i++) {
+            Effect e = active.get(i);
             if (e.location == null) continue;
             if (e.type == Effect.EffectType.DUST_CLOUD) continue;
             int ax = e.location.tileX();
@@ -68,6 +89,5 @@ final class LevelRenderIndexes {
             }
             out.add(ax, ay, e);
         }
-        return out;
     }
 }

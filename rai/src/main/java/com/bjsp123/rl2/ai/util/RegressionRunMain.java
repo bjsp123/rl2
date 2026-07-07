@@ -54,6 +54,13 @@ public final class RegressionRunMain {
      *  printed by {@link #printDepthPacing} as the average pace-to-depth. */
     private static final long[] DEPTH_TURN_SUM = new long[64];
     private static final int[]  DEPTH_TURN_N   = new int[64];
+    /** HP the agent lost at each depth index, summed across all runs. Printed as
+     *  a share of all damage taken so you can see where the run bleeds HP. */
+    private static final long[] DMG_TAKEN_BY_DEPTH = new long[64];
+    /** Damage taken per depth index, split by source-mob type, across all runs.
+     *  Feeds the "top 3 dealers" column of the by-depth report. */
+    private static final java.util.Map<Integer, java.util.Map<String, Long>>
+            DMG_SRC_BY_DEPTH = new java.util.LinkedHashMap<>();
     /** Cross-run aggregator for incoming-damage breakdowns. Lets the final
      *  summary tell the user where the agent's HP is leaking globally. */
     private static final java.util.Map<String, Long> DMG_TAKEN_BY_MEDIUM =
@@ -63,6 +70,14 @@ public final class RegressionRunMain {
     /** Count of agent deaths by killer mob type ({@code "ENV"} for
      *  environmental), aggregated across all runs. */
     private static final java.util.Map<String, Integer> DEATHS_BY_KILLER =
+            new java.util.LinkedHashMap<>();
+    /** Cross-run aggregators for outgoing damage (by attack mode, and by
+     *  mode+specific item type) and for items the agent picked up (by type). */
+    private static final java.util.Map<String, Long> DMG_DONE_BY_MODE =
+            new java.util.LinkedHashMap<>();
+    private static final java.util.Map<String, Long> DMG_DONE_BY_TYPE =
+            new java.util.LinkedHashMap<>();
+    private static final java.util.Map<String, Long> ITEMS_BY_TYPE =
             new java.util.LinkedHashMap<>();
 
     private RegressionRunMain() {}
@@ -117,9 +132,9 @@ public final class RegressionRunMain {
                         GameBalance.applyDifficulty(diff);
                         AutoplayGame g = AutoplayGame.newRun(seed, cls,
                                 AutoplayGame.worldWidth(), AutoplayGame.worldHeight());
-                        grantReviveCharms(g.agent, GameBalance.STARTING_REVIVE_CHARMS);
+                        grantReviveCharms(g.agent, GameBalance.tuning().startingReviveCharms());
                         AutoplayStats s = g.runUntil(TICK_BUDGET);
-                        RunResult r = new RunResult(s.depthReached + 1,
+                        RunResult r = new RunResult(s.maxDungeonDepth,
                                 s.finalCharLevel, s.turnsSurvived, s.outcome,
                                 s.meleeAttacks, s.meleeDamage,
                                 s.wandsFired,   s.wandDamage,
@@ -151,6 +166,20 @@ public final class RegressionRunMain {
                         if (s.deathCause != null) {
                             DEATHS_BY_KILLER.merge(s.deathCause, 1, Integer::sum);
                         }
+                        s.damageDoneByCategory.forEach((k, v) ->
+                                DMG_DONE_BY_MODE.merge(k, v.longValue(), Long::sum));
+                        s.damageDoneByType.forEach((k, v) ->
+                                DMG_DONE_BY_TYPE.merge(k, v.longValue(), Long::sum));
+                        s.itemsByType.forEach((k, v) ->
+                                ITEMS_BY_TYPE.merge(k, v.longValue(), Long::sum));
+                        for (int d = 0; d < s.damageTakenPerDepth.length
+                                && d < DMG_TAKEN_BY_DEPTH.length; d++) {
+                            DMG_TAKEN_BY_DEPTH[d] += s.damageTakenPerDepth[d];
+                        }
+                        s.damageTakenBySourceByDepth.forEach((depth, m) ->
+                                m.forEach((src, v) -> DMG_SRC_BY_DEPTH
+                                        .computeIfAbsent(depth, k -> new java.util.LinkedHashMap<>())
+                                        .merge(src, v.longValue(), Long::sum)));
                     }
                     printCell(cls, diff, cell);
                 }
@@ -160,9 +189,51 @@ public final class RegressionRunMain {
         }
         System.out.println("\n[regression] per-run CSV: " + csvOut);
         printDepthPacing();
+        printDamageTakenByDepth();
+        printNonMirrorDealersByDepth();
+        printOutgoingDamage();
         printIncomingDamage();
+        printItemsFound();
         printDecisions();
         printWinKills();
+    }
+
+    /** Where the agent's damage OUTPUT goes across the whole sweep: first by
+     *  attack mode (melee / thrown / bomb / wand), then, indented under each
+     *  mode, by the specific weapon / wand / bomb / thrown type. Tells you which
+     *  modes and which item types actually carry the agent's offence. */
+    private static void printOutgoingDamage() {
+        long total = DMG_DONE_BY_MODE.values().stream().mapToLong(Long::longValue).sum();
+        if (total == 0) return;
+        System.out.println("[regression] agent damage DONE "
+                + "(total " + total + " across all runs):");
+        for (String mode : new String[] {"melee", "thrown", "bomb", "wand"}) {
+            Long modeTotal = DMG_DONE_BY_MODE.get(mode);
+            if (modeTotal == null || modeTotal == 0) continue;
+            System.out.printf("    %-8s %6.1f%%  (%d)%n",
+                    mode, 100.0 * modeTotal / total, modeTotal);
+            String prefix = mode + ":";
+            DMG_DONE_BY_TYPE.entrySet().stream()
+                    .filter(e -> e.getKey().startsWith(prefix))
+                    .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                    .forEach(e -> System.out.printf("        %-24s %6.1f%%  (%d)%n",
+                            e.getKey().substring(prefix.length()),
+                            100.0 * e.getValue() / modeTotal, e.getValue()));
+        }
+    }
+
+    /** Every item type the agent picked up across the sweep, most-found first.
+     *  Shows what the loot stream actually delivers to the player. */
+    private static void printItemsFound() {
+        long total = ITEMS_BY_TYPE.values().stream().mapToLong(Long::longValue).sum();
+        if (total == 0) return;
+        System.out.println("[regression] items found by type "
+                + "(total " + total + " across all runs):");
+        ITEMS_BY_TYPE.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .limit(50)
+                .forEach(e -> System.out.printf("    %-26s %6.1f%%  (%d)%n",
+                        e.getKey(), 100.0 * e.getValue() / total, e.getValue()));
     }
 
     /** Total mob kills per winning run, listed inline. Empty when the sweep
@@ -220,6 +291,74 @@ public final class RegressionRunMain {
                         e.getKey(), 100.0 * e.getValue() / totalDeaths, e.getValue()));
     }
 
+    /** HP the agent lost at each depth: as a share of ALL damage taken across
+     *  the sweep (rows sum to ~100%), and as HP-lost-per-visit ({@code
+     *  DEPTH_TURN_N} runs reached each depth). The share is confounded by how
+     *  many runs visit a depth; per-visit removes that so it reads as the true
+     *  per-floor lethality. */
+    private static void printDamageTakenByDepth() {
+        long total = 0;
+        for (long v : DMG_TAKEN_BY_DEPTH) total += v;
+        if (total == 0) return;
+        System.out.println("[regression] damage TAKEN by depth "
+                + "(share of " + total + " total; HP lost per visit):");
+        for (int d = 0; d < DMG_TAKEN_BY_DEPTH.length; d++) {
+            if (DMG_TAKEN_BY_DEPTH[d] == 0) continue;
+            int visits = d < DEPTH_TURN_N.length ? DEPTH_TURN_N[d] : 0;
+            double perVisit = visits > 0 ? (double) DMG_TAKEN_BY_DEPTH[d] / visits : 0.0;
+            System.out.printf("    depth %2d   %5.1f%%  (%d)   %7.1f/visit  (n=%d)   %s%n",
+                    d + 1, 100.0 * DMG_TAKEN_BY_DEPTH[d] / total,
+                    DMG_TAKEN_BY_DEPTH[d], perVisit, visits, top3DealersAt(d));
+        }
+    }
+
+    /** Per-depth incoming damage by ENEMY mob, with the two non-enemy buckets
+     *  factored out: mirror matches ({@code ENEMY_PLAYER_*}) and environmental
+     *  damage ({@code ENV}). Answers "which real enemies hurt us at each
+     *  depth" - the by-depth top-3 above is dominated by mirrors/ENV on many
+     *  floors, hiding the actual species doing the work. Shares are of the
+     *  depth's ENEMY damage; the header shows how much was mirror/ENV. */
+    private static void printNonMirrorDealersByDepth() {
+        if (DMG_SRC_BY_DEPTH.isEmpty()) return;
+        System.out.println("[regression] HP lost per depth by enemy "
+                + "(mirror ENEMY_PLAYER_* and ENV split out):");
+        for (int d = 0; d < DMG_TAKEN_BY_DEPTH.length; d++) {
+            java.util.Map<String, Long> m = DMG_SRC_BY_DEPTH.get(d);
+            if (m == null || m.isEmpty()) continue;
+            long mirror = 0, env = 0, enemy = 0;
+            for (java.util.Map.Entry<String, Long> e : m.entrySet()) {
+                if (e.getKey().startsWith("ENEMY_PLAYER_")) mirror += e.getValue();
+                else if (e.getKey().equals("ENV"))          env    += e.getValue();
+                else                                        enemy  += e.getValue();
+            }
+            System.out.printf("    depth %2d   enemies %6d HP   (mirror %d, env %d)%n",
+                    d + 1, enemy, mirror, env);
+            if (enemy == 0) continue;
+            final long enemyTotal = enemy;
+            m.entrySet().stream()
+                    .filter(e -> !e.getKey().startsWith("ENEMY_PLAYER_")
+                            && !e.getKey().equals("ENV"))
+                    .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                    .limit(6)
+                    .forEach(e -> System.out.printf("        %-26s %6.1f%%  (%d)%n",
+                            e.getKey(), 100.0 * e.getValue() / enemyTotal, e.getValue()));
+        }
+    }
+
+    /** The three source-mob types that dealt the most damage at depth index
+     *  {@code d}, each with its share of that depth's incoming damage. */
+    private static String top3DealersAt(int d) {
+        java.util.Map<String, Long> m = DMG_SRC_BY_DEPTH.get(d);
+        if (m == null || m.isEmpty()) return "";
+        long depthTotal = m.values().stream().mapToLong(Long::longValue).sum();
+        return m.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .limit(3)
+                .map(e -> String.format("%s %.0f%%", e.getKey(),
+                        100.0 * e.getValue() / depthTotal))
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
     /** Average cumulative turns to FIRST reach each depth, across all runs that
      *  reached it. Shows the agent's pace and where the run's time is spent. */
     private static void printDepthPacing() {
@@ -257,7 +396,7 @@ public final class RegressionRunMain {
         GameBalance.applyDifficulty(diff);
         AutoplayGame g = AutoplayGame.newRun(seed, cls,
                 AutoplayGame.worldWidth(), AutoplayGame.worldHeight());
-        grantReviveCharms(g.agent, GameBalance.STARTING_REVIVE_CHARMS);
+        grantReviveCharms(g.agent, GameBalance.tuning().startingReviveCharms());
         g.enableStuckLog();
         AutoplayStats s = g.runUntil(TICK_BUDGET);
         System.out.printf("[stuck-diag] %s %s seed=%s outcome=%s depth=%d turns=%d%n",

@@ -19,14 +19,30 @@ import java.util.List;
 public final class V2BuffInfo extends BasePopup {
 
     private Buff buff;
+    private Runnable onClose;
 
     private final List<String> descLines = new ArrayList<>();
 
     public V2BuffInfo(UiCtx ctx) { super(ctx); }
 
     public void open(Buff b) {
+        open(b, null);
+    }
+
+    /** Open for {@code b}, running {@code onClose} when dismissed. Modal callers
+     *  (V2CharacterStats, V2Look) close themselves first - single-popup-at-a-time
+     *  rule - and pass a callback here to re-open themselves afterwards. */
+    public void open(Buff b, Runnable onClose) {
         this.buff = b;
+        this.onClose = onClose;
         open();
+    }
+
+    @Override
+    protected void onClosed() {
+        Runnable r = onClose;
+        onClose = null;
+        if (r != null) r.run();
     }
 
     @Override
@@ -86,9 +102,11 @@ public final class V2BuffInfo extends BasePopup {
         }
 
         top = iconY - ctx.lineH();
+        // Names are stored lowercase; headings render Title Case (house style).
         TextDraw.centreFit(ctx, ctx.fontHeader, UIVars.ACCENT,
-                BuffSystem.displayName(buff.type), window.cx(), top,
-                window.w - 28f);
+                com.bjsp123.rl2.logic.TextCatalog.titleCase(
+                        BuffSystem.displayName(buff.type)),
+                window.cx(), top, window.w - 28f);
 
         // Stacks-resolved "Effect: ..." line - shows what the buff is doing
         // numerically at its current stack count (e.g. HASTED 3 -> "moves 49%

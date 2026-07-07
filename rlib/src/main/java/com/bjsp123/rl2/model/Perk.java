@@ -15,19 +15,23 @@ package com.bjsp123.rl2.model;
  */
 public enum Perk {
     /** Warrior signature. Killing a foe stacks the {@link Buff.BuffType#KILLER}
-     *  buff. Stacks-per-kill = {@code ceil(perkLvl/2)}; duration refresh =
-     *  {@code 8 + 2 * ceil(perkLvl/2)} turns; each stack multiplies attack and
-     *  move cost by 0.9 (compounding), floored at {@code BuffSystem.KILLER_MIN_COST}. */
+     *  buff. Stacks-per-kill = {@code 2 + perkLvl} (stack count doubles as the
+     *  lifetime, capped at 30; speed effect saturates at 10 stacks); each stack
+     *  multiplies attack and move cost by 0.9 (compounding), floored at
+     *  {@code BuffSystem.KILLER_MIN_COST}. */
     KILLER("killer"),
     /** Open. Multiplies every other mob's wake / vision radius vs this player
-     *  by {@code 1 / (perkLvl + 1)}. At L10 only adjacent mobs can see them. */
+     *  by {@code 1 / (perkLvl + 1)} - at L10 only adjacent mobs can see them.
+     *  Additionally, each turn a mob that could notice the player fails to do
+     *  so with chance {@code 0.05 * perkLvl}, even in plain sight. */
     STEALTH("stealth"),
     /** Mage signature. Wands gain {@code +perkLvl} effective level. */
     WANDMASTER("wandmaster"),
     /** Open. Adds {@code +perkLvl} effective level to any
      *  {@link Item.UseBehavior#JUMP} item the holder carries (FROG and future
-     *  jump-tools). Repurposed from the original "always-on perk-driven jump"
-     *  design which had no trigger affordance. */
+     *  jump-tools). At any level > 0 the player can also leap directly to a
+     *  free tile at Chebyshev distance 2, ignoring intervening obstacles
+     *  (see MobSystem's move handling). */
     JUMP("jump"),
     /** Warrior signature. Melee knockback contributes
      *  {@code min(5, perkLvl)} tiles. Levels 6-10 instead add
@@ -40,18 +44,18 @@ public enum Perk {
      *  tiles of throw range and multiplies the throw action cost by 0.85
      *  (compounding). At L10: +20 tiles of range, cost mult ≈ 0.20. */
     HURLER("hurler"),
-    /** Mage signature. Each food or potion the holder consumes restores
-     *  {@code perkLvl} charges to every wand they carry (bag + equipped),
-     *  clamped to each wand's max charge. */
+    /** Mage signature. Each food or potion the holder consumes has a 50%
+     *  chance to restore {@code perkLvl / 2} charges (odd levels coinflip a
+     *  +1) to every wand they carry (bag + equipped), clamped to each wand's
+     *  max charge. */
     MANA_FOUNT("manaFount"),
     /** Rogue signature. Multi-axis bomb protection:
      *  <ul>
      *    <li>Bomb damage taken multiplied by {@code 0.5^perkLvl} (asymptotic).</li>
      *    <li>Bomb-applied buffs and bomb knockback fully ignored at any L >= 1.</li>
-     *    <li>Each thrown bomb has a chance to be preserved in inventory:
-     *        {@code min(saveCap, 0.30 + (perkLvl - 1) * 0.12)}, where
-     *        {@code saveCap = 0.75} at L<=5 and grows by +0.05 per level
-     *        beyond that (capping at 1.00 at L10).</li>
+     *    <li>Catch (RL-34): an ENEMY bomb landing within 3 tiles has a
+     *        {@code 0.25 + 0.05 * perkLvl} chance to be snatched into the
+     *        holder's bag instead of detonating.</li>
      *  </ul>
      *  Also gates the surface-step buffs (WET, OILY) the holder would get
      *  from stepping on her own water / oil bombs. */

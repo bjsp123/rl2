@@ -19,22 +19,22 @@ import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.world.render.BuffIcons;
 import com.bjsp123.rl2.world.render.IconSprites;
 
-import java.util.List;
-
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
  * V2 in-game HUD - built from primitive ShapeRenderer rects + SpriteBatch
- * texture draws. Replaces the scene2d-based {@link com.bjsp123.rl2.ui.hud.HudRenderer}
+ * texture draws. Replaces the retired scene2d-based HUD renderer
  * for active gameplay; instantiated and driven directly by {@code PlayScreen}
  * (no scene2d Stage involvement).
  *
  * <p>Layout, in viewport-relative virtual coords:
  * <ul>
  *   <li><b>Top-left</b> - stacked status bars (HP / XP).</li>
- *   <li><b>Top-right</b> - burger button (opens settings / map / encyclopaedia /
- *       return-to-title via dropdown - dropdown not yet wired in this slice).</li>
+ *   <li><b>Top-right</b> - burger button; tap opens the shared
+ *       {@link BurgerMenu} dropdown with the standard in-run items
+ *       ({@link BurgerMenu#populateStandard}: Settings / Encyclopedia /
+ *       Level Info / Map / Log / Main Menu).</li>
  *   <li><b>Bottom-left</b> - Look button.</li>
  *   <li><b>Bottom-right</b> - action quickslots ({@code Settings.quickslotCount()} of them) + an inventory button at the
  *       far right, all flush to the bottom-right corner.</li>
@@ -94,8 +94,7 @@ public final class V2Hud {
     /** RL-54 hazard level of the current floor, shown at the top of the HUD. */
     private int hazard;
 
-    // Callbacks - same shape as the V1 HudRenderer.setOn* setters, so
-    // PlayScreen's existing wiring carries over with minimal changes.
+    // Callbacks - PlayScreen wires each HUD affordance to a game action.
     private IntConsumer onActionUse;
     private Runnable    onOpenInventory;
     private Runnable    onLook;
@@ -123,13 +122,28 @@ public final class V2Hud {
     private final Rect lookRect     = new Rect();
     private final Rect autoRect     = new Rect();
     private final Rect burgerRect   = new Rect();
-    private final Rect menuPanelRect = new Rect();
-    /** Per-menu-item rects, populated when the burger menu is open. */
-    private final Rect[] menuItemRects = new Rect[5];
+    /** Shared burger drop-down (geometry + chrome). Item labels are fixed;
+     *  releases dispatch through the switch in {@link #input()}. */
+    private final BurgerMenu menu = new BurgerMenu();
     /** Per-buff-icon hit rects, rebuilt every frame from the live buff
      *  list. Aligned in index with {@link #buffIconTypes}. */
     private final java.util.List<Rect> buffIconRects = new java.util.ArrayList<>();
     private final java.util.List<Buff> buffIconList = new java.util.ArrayList<>();
+    /** Fixed pool backing {@link #buffIconRects} - at most 8 buff icons show, so
+     *  reuse the same Rects instead of allocating fresh ones every frame. */
+    private final Rect[] buffRectPool = new Rect[8];
+
+    // ---- Per-frame string caches. The HUD renders every frame but these
+    // strings only change on discrete game events; TextCatalog.format allocates
+    // a map + varargs + several intermediate strings per call, which is real GC
+    // pressure on TeaVM. Each cache re-formats only when its key changes.
+    private String statusTextCache;   private int statusDepthKey = Integer.MIN_VALUE;
+    private String revivesTextCache;  private int revivesKey = Integer.MIN_VALUE;
+    private String hazardTextCache;   private int hazardKey = Integer.MIN_VALUE;
+    private String portraitLabelCache; private int portraitLabelLevelKey = Integer.MIN_VALUE;
+    private boolean portraitLabelStarKey; private Mob.CharacterClass portraitLabelClassKey;
+    private com.badlogic.gdx.graphics.g2d.TextureRegion portraitHeadCache;
+    private Mob.CharacterClass portraitHeadClassKey;
 
     // -- Pressed state for visual feedback -----------------------------------
     private final boolean[] actionPressed = new boolean[ActionBar.SLOTS];
@@ -146,7 +160,6 @@ public final class V2Hud {
     private static final float BAR_FLASH_FRAMES = 45f;
     private double prevHp = -1, prevXp = -1;
     private float hpFlash, xpFlash;
-    private boolean menuOpen;
     /** True when the action slots are folded into a grid because the viewport
      *  is too narrow for a single row. Set each frame by {@link #layoutRects()};
      *  read by the render and input passes. */
@@ -154,17 +167,32 @@ public final class V2Hud {
     /** Number of rows used in the grid layout (2 or 3). Only meaningful when
      *  {@link #gridLayout} is true; used to place the log readout above the grid. */
     private int actionGridRows = 2;
-    private int menuItemPressed = -1;
     /** Index of the buff icon currently being held; -1 when none. */
     private int buffIconPressed = -1;
+    /** Horizontal gap between buff icons (pre-HUD_SCALE) - wide enough for
+     *  each icon's duration drain bar ({@link UIVars#BUFF_BAR_W} + breathing
+     *  room) to sit in the gap without touching the next icon. */
+    private static final float BUFF_ICON_GAP = 6f;
 
     public V2Hud(UiCtx ctx) {
         this.ctx = ctx;
         for (int i = 0; i < actionRects.length;  i++) actionRects[i]  = new Rect();
-        for (int i = 0; i < menuItemRects.length; i++) menuItemRects[i] = new Rect();
+        // Standard in-run burger items - actions read the setOn* callback
+        // fields at fire time, so PlayScreen can wire them after construction.
+        menu.populateStandard(false, true, new BurgerMenu.Destinations() {
+            @Override public void openSettings()     { run(onOpenSettings); }
+            @Override public void openEncyclopedia() { run(onOpenEncyclopedia); }
+            @Override public void openLevelInfo()    { run(onOpenLevelInfo); }
+            @Override public void openMap()          { if (onOpenMap != null) onOpenMap.run();
+                                                       else run(onOpenLevelInfo); }
+            @Override public void openLog()          { run(onOpenLog); }
+            @Override public void goMainMenu()       { run(onReturnToTitle); }
+        });
     }
 
-    // -- Public API (mirrors HudRenderer.setOn* surface) ---------------------
+    private static void run(Runnable r) { if (r != null) r.run(); }
+
+    // -- Public API (setOn* callback setters) ---------------------------------
     public void setPlayerSupplier(Supplier<Mob> s)  { this.playerSupplier = s; }
     public void setActionBar(ActionBar a) {
         this.actionBar = a;
@@ -198,10 +226,14 @@ public final class V2Hud {
     /** True when the burger dropdown is showing - PlayScreen folds this
      *  into its {@code isAnyPopupOpen()} gate so the world doesn't tick
      *  while the player is reading the menu. */
-    public boolean isMenuOpen() { return menuOpen; }
+    public boolean isMenuOpen() { return menu.open; }
+
+    /** Wall-clock accumulator driving the portrait's unspent-perk-point pulse. */
+    private float perkFlashT;
 
     public void render() {
         layoutRects();
+        perkFlashT += Gdx.graphics.getDeltaTime();
         ctx.applyProjection();
         // Compute low-HP factor once per frame so the chrome tint + the hit
         // flash overlay both read from the same value. 0 above 25% HP, 1 at
@@ -218,7 +250,6 @@ public final class V2Hud {
         try {
             renderShapesPass();
             renderTextPass();
-            renderBurgerGlyph();   // tiny shapes pass at the end for the menu lines
         } finally {
             popLowHpChromeTint();
         }
@@ -310,8 +341,8 @@ public final class V2Hud {
         // Burger at top-right.
         // Identical to the menu-screen burger (same size, inset, chrome, and
         // glyph) so it reads the same in-play and out (RL-27).
-        burgerRect.set(w - MARGIN - Burger.SIZE, h - MARGIN - Burger.SIZE,
-                Burger.SIZE, Burger.SIZE);
+        burgerRect.set(w - MARGIN - UIVars.BURGER_SIZE, h - MARGIN - UIVars.BURGER_SIZE,
+                UIVars.BURGER_SIZE, UIVars.BURGER_SIZE);
 
         // Look at bottom-left; auto-explore stacked directly above it.
         lookRect.set(MARGIN, MARGIN, ACTION_BTN, ACTION_BTN);
@@ -351,29 +382,9 @@ public final class V2Hud {
             }
         }
 
-        // Burger menu - centred on the viewport as a chunky column-of-
-        // buttons window. Same shape as the V2Screen menu-screen burger so
-        // the in-game pause menu reads identically.
-        if (menuOpen) {
-            int   nItems  = menuItemRects.length;
-            float itemH   = 56f;
-            float itemGap = 8f;
-            float padX    = 18f;
-            float padTop  = 18f;
-            float padBot  = 18f;
-            float panelW  = Math.min(320f, ctx.worldW() - 24f);
-            float panelH  = padTop + padBot + nItems * itemH
-                    + (nItems - 1) * itemGap;
-            float panelX  = (ctx.worldW() - panelW) * 0.5f;
-            float panelY  = (ctx.worldH() - panelH) * 0.5f;
-            menuPanelRect.set(panelX, panelY, panelW, panelH);
-            for (int i = 0; i < nItems; i++) {
-                float iy = panelY + panelH - padTop
-                        - (i + 1) * itemH - i * itemGap;
-                menuItemRects[i].set(panelX + padX, iy,
-                        panelW - 2 * padX, itemH);
-            }
-        }
+        // Burger menu - shared BurgerMenu geometry, so the in-game pause
+        // menu reads identically to the V2Screen menu-screen dropdown.
+        if (menu.open) menu.layout(ctx);
     }
 
     // -- Render passes -------------------------------------------------------
@@ -394,12 +405,27 @@ public final class V2Hud {
             int xpBase = com.bjsp123.rl2.logic.MobProgression.xpToReach(player.characterLevel);
             int xpStep = com.bjsp123.rl2.logic.MobProgression.xpToAdvanceFrom(player.characterLevel);
             float xpFrac = xpStep > 0 ? (float)(player.xp - xpBase) / xpStep : 1f;
-            drawBar(s, xpBarRect, Math.max(0f, Math.min(1f, xpFrac)), UIVars.BAR_XP);
+            drawBar(s, xpBarRect, Math.max(0f, Math.min(1f, xpFrac)), UIVars.ACCENT);
         } else {
             drawBar(s, hpBarRect, 0f, UIVars.TEXT_WARN);
             drawBar(s, xpBarRect, 0f, UIVars.ACCENT);
         }
         drawTurnClock(s);
+
+        // Unspent perk points: a pulsing accent frame around the portrait so
+        // the player notices there's a point to spend. Drawn in the shapes
+        // pass so the portrait sprite (text pass) sits inside the frame.
+        if (player != null && player.perkPoints > 0) {
+            float pulse = 0.35f + 0.65f * (0.5f + 0.5f * (float) Math.sin(perkFlashT * 6f));
+            Color a = UIVars.ACCENT;
+            s.setColor(a.r, a.g, a.b, pulse);
+            Rect r = portraitRect;
+            float t = 3f;   // frame thickness
+            s.rect(r.x - t,      r.y - t,      r.w + 2 * t, t);           // bottom
+            s.rect(r.x - t,      r.top(),      r.w + 2 * t, t);           // top
+            s.rect(r.x - t,      r.y - t,      t,           r.h + 2 * t); // left
+            s.rect(r.right(),    r.y - t,      t,           r.h + 2 * t); // right
+        }
 
         // Buttons - chrome only; icons land in the SpriteBatch pass.
         // Action quickslots + inventory button carry item / chest icons,
@@ -412,45 +438,45 @@ public final class V2Hud {
         drawBtn(s, burgerRect, burgerPressed);
 
         // Burger menu - modal column-of-buttons window centred on the
-        // viewport. Dim everything behind it first, then paint the window
-        // and each item as a chunky button (tri-line border + warm fill).
-        if (menuOpen) {
+        // viewport. Dim everything behind it first, then the shared
+        // BurgerMenu paints the window + item chrome.
+        if (menu.open) {
             s.setColor(0f, 0f, 0f, UIVars.DIM_ALPHA);
             s.rect(0, 0, ctx.worldW(), ctx.worldH());
-            Window.drawShape(ctx,
-                    menuPanelRect.x, menuPanelRect.y,
-                    menuPanelRect.w, menuPanelRect.h);
-            for (int i = 0; i < menuItemRects.length; i++) {
-                Rect r = menuItemRects[i];
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-                s.setColor(i == menuItemPressed
-                        ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-                s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                        r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+            menu.drawShapes(ctx);
+        }
+
+        // Buff duration drain bars - a vertical bar hugging each icon's right
+        // edge, full height at BUFF_BAR_FULL_TURNS remaining, draining toward
+        // the bottom (stacks double as remaining turns). At warn level the
+        // bar turns red and blinks at ~2Hz so imminent expiry is glanceable.
+        Mob barPlayer = currentPlayer();
+        if (barPlayer != null && barPlayer.buffs != null && !barPlayer.buffs.isEmpty()) {
+            float iconSz  = 16f * HUD_SCALE;
+            float iconGap = BUFF_ICON_GAP * HUD_SCALE;
+            float barW    = UIVars.BUFF_BAR_W * HUD_SCALE;
+            float bx = MARGIN;
+            float by = xpBarRect.y - 30f * HUD_SCALE;
+            boolean blinkOn = (com.badlogic.gdx.utils.TimeUtils.millis() / 250L & 1L) == 0L;
+            int max = Math.min(barPlayer.buffs.size(), 8);
+            for (int i = 0; i < max; i++) {
+                Buff b = barPlayer.buffs.get(i);
+                if (b == null || b.type == null || b.stacks <= 0) continue;
+                if (BuffIcons.regionFor(b.type) == null) continue;
+                boolean warn = b.stacks <= UIVars.BUFF_BAR_WARN_TURNS;
+                if (warn && !blinkOn) continue;
+                float frac = Math.min(b.stacks, UIVars.BUFF_BAR_FULL_TURNS)
+                        / (float) UIVars.BUFF_BAR_FULL_TURNS;
+                float barX = bx + i * (iconSz + iconGap) + iconSz + 1f;
+                s.setColor(warn ? UIVars.TEXT_WARN : UIVars.TEXT_DIM);
+                s.rect(barX, by, barW, iconSz * frac);
             }
         }
 
-        // Buff duration dot timers - one 1x1 dot per remaining turn (max 8),
-        // stacked bottom-to-top to the right of each buff icon.
-        Mob dotPlayer = currentPlayer();
-        if (dotPlayer != null && dotPlayer.buffs != null && !dotPlayer.buffs.isEmpty()) {
-            float iconSz = 16f * HUD_SCALE;
-            float iconGap = 2f * HUD_SCALE;
-            float bx = MARGIN;
-            float by = xpBarRect.y - 30f * HUD_SCALE;
-            int max = Math.min(dotPlayer.buffs.size(), 8);
-            s.setColor(UIVars.TEXT_DIM);
-            for (int i = 0; i < max; i++) {
-                Buff b = dotPlayer.buffs.get(i);
-                if (b == null || b.type == null || b.stacks <= 0) continue;
-                if (BuffIcons.regionFor(b.type) == null) continue;
-                float dotX = bx + i * (iconSz + iconGap) + iconSz + 1f;
-                int dots = Math.min(8, b.stacks);
-                for (int d = 0; d < dots; d++) {
-                    s.rect(dotX, by + d * 2f, 1f, 1f);
-                }
-            }
-        }
+        // Burger glyph last so it stays bright above the menu dim - folded into
+        // this pass instead of a third begin/end cycle (each ShapeRenderer
+        // begin/end forces a GL flush; one fewer per frame).
+        ButtonChrome.burgerGlyph(ctx, burgerRect, burgerPressed || menu.open);
 
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
@@ -544,13 +570,19 @@ public final class V2Hud {
         // HALF (head + torso) of the player's in-world sprite as a stand-in.
         Mob playerForPortrait = currentPlayer();
         if (playerForPortrait != null && playerForPortrait.characterClass != null) {
-            TextureRegion full = com.bjsp123.rl2.world.render.MobSprites.regionFor(
-                    playerForPortrait.characterClass);
-            if (full != null) {
-                TextureRegion head = new TextureRegion(full.getTexture(),
+            // Head crop is cached per class - a fresh TextureRegion per frame is
+            // pointless allocation.
+            if (portraitHeadCache == null
+                    || portraitHeadClassKey != playerForPortrait.characterClass) {
+                TextureRegion full = com.bjsp123.rl2.world.render.MobSprites.regionFor(
+                        playerForPortrait.characterClass);
+                portraitHeadCache = full == null ? null : new TextureRegion(full.getTexture(),
                         full.getRegionX(), full.getRegionY(),
                         full.getRegionWidth(), full.getRegionHeight() / 2);
-                ctx.batch.draw(head,
+                portraitHeadClassKey = playerForPortrait.characterClass;
+            }
+            if (portraitHeadCache != null) {
+                ctx.batch.draw(portraitHeadCache,
                         portraitRect.x + 4f, portraitRect.y + 4f,
                         portraitRect.w - 8f, portraitRect.h - 8f);
             }
@@ -560,9 +592,19 @@ public final class V2Hud {
         // bar, RL-28). A perk-point star trails it (accent) when points are
         // unspent.
         if (playerForPortrait != null && playerForPortrait.characterClass != null) {
-            String lbl = "lv" + playerForPortrait.characterLevel + " "
-                    + playerForPortrait.characterClass.displayName();
-            if (playerForPortrait.perkPoints > 0) lbl += " *";
+            boolean star = playerForPortrait.perkPoints > 0;
+            if (portraitLabelCache == null
+                    || portraitLabelLevelKey != playerForPortrait.characterLevel
+                    || portraitLabelStarKey != star
+                    || portraitLabelClassKey != playerForPortrait.characterClass) {
+                String s = "lv" + playerForPortrait.characterLevel + " "
+                        + playerForPortrait.characterClass.displayName();
+                portraitLabelCache = star ? s + " *" : s;
+                portraitLabelLevelKey = playerForPortrait.characterLevel;
+                portraitLabelStarKey = star;
+                portraitLabelClassKey = playerForPortrait.characterClass;
+            }
+            String lbl = portraitLabelCache;
             com.badlogic.gdx.graphics.Color c = playerForPortrait.perkPoints > 0
                     ? UIVars.ACCENT : UIVars.TEXT_DIM;
             com.badlogic.gdx.graphics.g2d.BitmapFont f = ctx.fontRegular;
@@ -597,7 +639,6 @@ public final class V2Hud {
                 // Hotkey label: 1-9, then 0 / A / B for slots 10-12 (matching
                 // GameInput's key mapping).
                 String label = com.bjsp123.rl2.ui.hud.ActionBar.slotLabel(i);
-                ctx.layout.setText(f, label);
                 float lx = r.x + 3f;
                 float ly = r.y + r.h - 2f;
                 f.draw(ctx.batch, label, lx, ly);
@@ -660,8 +701,9 @@ public final class V2Hud {
                     lookRect.w - 2 * ICON_PAD, lookRect.h - 2 * ICON_PAD);
         }
 
-        // Auto-explore button - map icon; tinted accent while active.
-        TextureRegion auto = IconSprites.regionFor(IconSprites.Icon.MAP);
+        // Auto-explore button - compass icon (the MAP icon belongs to the
+        // actual map in the burger); tinted accent while active.
+        TextureRegion auto = IconSprites.regionFor(IconSprites.Icon.COMPASS);
         if (auto != null) {
             if (autoActive) ctx.batch.setColor(UIVars.ACCENT);
             ctx.batch.draw(auto,
@@ -670,25 +712,39 @@ public final class V2Hud {
             if (autoActive) ctx.batch.setColor(1f, 1f, 1f, 1f);
         }
 
-        // Status line + turn clock - under the XP bar.
+        // Status line + turn clock - under the XP bar. Formatted strings are
+        // cached against their inputs (see field block) - TextCatalog.format
+        // per frame is measurable GC pressure on the web build.
+        if (statusDepthKey != depth) {
+            statusTextCache = TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth));
+            statusDepthKey = depth;
+        }
         TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth)),
+                statusTextCache,
                 clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f + 5f,
                 Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
 
         // Revive charms (Jade Peaches) - shown only when the player carries some.
         int charms = reviveCharmCount(currentPlayer());
         if (charms > 0) {
+            if (revivesKey != charms) {
+                revivesTextCache = TextCatalog.format("ui.hud.revives", TextCatalog.vars("n", charms));
+                revivesKey = charms;
+            }
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.ACCENT,
-                    TextCatalog.format("ui.hud.revives", TextCatalog.vars("n", charms)),
+                    revivesTextCache,
                     clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f - 10f,
                     Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
         }
 
         // Hazard level - top-centre of the HUD (RL-54). Brighter as it climbs.
+        if (hazardKey != hazard) {
+            hazardTextCache = TextCatalog.format("ui.hud.hazard", TextCatalog.vars("n", hazard));
+            hazardKey = hazard;
+        }
         TextDraw.centre(ctx, ctx.fontRegular,
                 hazard >= 3 ? UIVars.ACCENT : UIVars.TEXT_DIM,
-                TextCatalog.format("ui.hud.hazard", TextCatalog.vars("n", hazard)),
+                hazardTextCache,
                 ctx.worldW() * 0.5f, ctx.worldH() - 8f);
 
         // Player buff icons row - under the status line, anchored at the
@@ -700,7 +756,7 @@ public final class V2Hud {
         buffIconList.clear();
         if (p != null && p.buffs != null && !p.buffs.isEmpty()) {
             float iconSz = 16f * HUD_SCALE;
-            float iconGap = 2f * HUD_SCALE;
+            float iconGap = BUFF_ICON_GAP * HUD_SCALE;
             float bx = MARGIN;
             float by = xpBarRect.y - 30f * HUD_SCALE;
             int max = Math.min(p.buffs.size(), 8);
@@ -711,7 +767,10 @@ public final class V2Hud {
                 if (region == null) continue;
                 float ix = bx + i * (iconSz + iconGap);
                 ctx.batch.draw(region, ix, by, iconSz, iconSz);
-                Rect r = new Rect();
+                // Pooled Rect - the hit-test list is rebuilt every frame, the
+                // Rect objects themselves are not.
+                Rect r = buffRectPool[i];
+                if (r == null) r = buffRectPool[i] = new Rect();
                 r.set(ix, by, iconSz, iconSz);
                 buffIconRects.add(r);
                 buffIconList.add(b);
@@ -732,12 +791,13 @@ public final class V2Hud {
             float lineH = ctx.lineH();
             int maxLines = Settings.logExpanded() ? 6 : 3;
             // Walk recent entries newest-first; render newest at logBottom
-            // and stack older ones upward. tail() returns oldest-first, so
-            // iterate in reverse.
-            List<LogEvent> recent = EventLog.tail(maxLines * 4);
+            // and stack older ones upward. Index-walk the log directly -
+            // tail() would allocate a sublist wrapper every frame.
+            int size = EventLog.size();
+            int floor = Math.max(0, size - maxLines * 4);
             int lines = 0;
-            for (int i = recent.size() - 1; i >= 0 && lines < maxLines; i--) {
-                LogEvent e = recent.get(i);
+            for (int i = size - 1; i >= floor && lines < maxLines; i--) {
+                LogEvent e = EventLog.get(i);
                 if (e == null || e.text == null) continue;
                 if (!Settings.showLowPriority()
                         && e.priority == LogEvent.EventPriority.LOW) continue;
@@ -758,34 +818,11 @@ public final class V2Hud {
             }
         }
 
-        // Burger menu items - centred header-weight labels, matching the
+        // Burger menu items - shared BurgerMenu labels, matching the
         // V2Screen menu-screen burger style.
-        if (menuOpen) {
-            String[] labels = {
-                    TextCatalog.get("ui.hud.menu.settings"),
-                    TextCatalog.get("ui.hud.menu.map"),
-                    TextCatalog.get("ui.hud.menu.encyclopedia"),
-                    TextCatalog.get("ui.hud.menu.log"),
-                    TextCatalog.get("ui.hud.menu.main") };
-            for (int i = 0; i < labels.length; i++) {
-                Rect r = menuItemRects[i];
-                TextDraw.centre(ctx, ctx.fontHeader,
-                        i == menuItemPressed ? UIVars.ACCENT : UIVars.TEXT_BODY,
-                        labels[i], r.cx(), r.cy() + 8f);
-            }
-        }
+        if (menu.open) menu.drawLabels(ctx);
 
         ctx.batch.end();
-    }
-
-    private void renderBurgerGlyph() {
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        ShapeRenderer s = ctx.shapes;
-        s.begin(ShapeRenderer.ShapeType.Filled);
-        ButtonChrome.burgerGlyph(ctx, burgerRect, burgerPressed || menuOpen);
-        s.end();
-        Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
     private Mob currentPlayer() {
@@ -812,21 +849,10 @@ public final class V2Hud {
 
                 // Burger menu items intercept first when the menu is open -
                 // so tapping a label fires it rather than the underlying HUD
-                // button below.
-                if (menuOpen) {
-                    for (int i = 0; i < menuItemRects.length; i++) {
-                        if (menuItemRects[i].contains(vx, vy)) {
-                            menuItemPressed = i;
-                            return true;
-                        }
-                    }
-                    // Tap outside the panel (and outside the burger button)
-                    // closes the menu without firing anything.
-                    if (!menuPanelRect.contains(vx, vy)
-                            && !burgerRect.contains(vx, vy)) {
-                        menuOpen = false;
-                        return true;
-                    }
+                // button below. A tap outside the panel (and outside the
+                // burger button) closes the menu without firing anything.
+                if (menu.open) {
+                    return menu.touchDown(vx, vy, burgerRect);
                 }
 
                 if (burgerRect.contains(vx, vy))   { burgerPressed = true; return true; }
@@ -860,26 +886,15 @@ public final class V2Hud {
                 float vx = ctx.unprojectX(sx, sy);
                 float vy = ctx.unprojectY(sx, sy);
 
-                if (menuItemPressed >= 0) {
-                    int idx = menuItemPressed;
-                    menuItemPressed = -1;
-                    if (menuItemRects[idx].contains(vx, vy)) {
-                        menuOpen = false;
-                        switch (idx) {
-                            case 0 -> { if (onOpenSettings     != null) onOpenSettings.run(); }
-                            case 1 -> { if (onOpenMap          != null) onOpenMap.run();
-                                        else if (onOpenLevelInfo != null) onOpenLevelInfo.run(); }
-                            case 2 -> { if (onOpenEncyclopedia != null) onOpenEncyclopedia.run(); }
-                            case 3 -> { if (onOpenLog          != null) onOpenLog.run(); }
-                            case 4 -> { if (onReturnToTitle    != null) onReturnToTitle.run(); }
-                        }
-                    }
+                if (menu.hasPress()) {
+                    // BurgerMenu fires the bound Destinations action itself.
+                    menu.release(vx, vy);
                     return true;
                 }
 
                 if (burgerPressed) {
                     burgerPressed = false;
-                    if (burgerRect.contains(vx, vy)) menuOpen = !menuOpen;
+                    if (burgerRect.contains(vx, vy)) menu.open = !menu.open;
                     return true;
                 }
                 if (lookPressed) {

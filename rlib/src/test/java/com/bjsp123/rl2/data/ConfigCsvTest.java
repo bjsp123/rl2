@@ -90,6 +90,69 @@ class ConfigCsvTest extends DataFixture {
         }
     }
 
+    /** Read one field of a {@link GameBalance.DifficultyTuning} by its config
+     *  field name, as a double (booleans map to 0/1). */
+    private static double tuningField(GameBalance.DifficultyTuning t, String field) {
+        return switch (field) {
+            case "PLAYER_HP_MULT"     -> t.playerHpMult();
+            case "ENEMY_HP_MULT"      -> t.enemyHpMult();
+            case "REGEN_FRAC"         -> t.regenFracPerTurn();
+            case "SPAWN_CADENCE_MULT" -> t.spawnCadenceMult();
+            case "SPEED_MULT"         -> t.playerSpeedMult();
+            case "REVIVE_CHARMS"      -> t.startingReviveCharms();
+            case "JADE_FREE_CHARGES"  -> t.jadeItemsFreeCharges() ? 1 : 0;
+            case "SCORE_MULT"         -> t.scoreMult();
+            default -> throw new IllegalArgumentException("unknown difficulty field: " + field);
+        };
+    }
+
+    @Test
+    void everyDifficultyRowResolvesAndApplies() throws IOException {
+        String text = configText();
+        GameBalance.load(text);
+        CsvTable table = CsvTable.parse(text);
+        int seen = 0;
+        for (Map<String, String> row : table.rows) {
+            if (!"difficulty".equals(CsvTable.str(row, "kind", ""))) continue;
+            String key = CsvTable.str(row, "key", "");
+            String value = CsvTable.str(row, "value", "");
+            if (key.isEmpty() || value.isEmpty()) continue;
+            seen++;
+            int dot = key.indexOf('.');
+            assertTrue(dot > 0, "difficulty key is not <TIER>.<FIELD>: " + key);
+            GameBalance.Difficulty tier;
+            try {
+                tier = GameBalance.Difficulty.valueOf(key.substring(0, dot));
+            } catch (IllegalArgumentException e) {
+                fail("config.csv difficulty key names an unknown tier: " + key);
+                continue;
+            }
+            String field = key.substring(dot + 1);
+            double expected = "true".equals(value) ? 1
+                    : "false".equals(value) ? 0
+                    : Double.parseDouble(value);
+            assertEquals(expected, tuningField(GameBalance.tuningFor(tier), field), 1e-9,
+                    "difficulty row did not land: " + key);
+        }
+        assertTrue(seen > 0, "config.csv has no difficulty rows");
+    }
+
+    @Test
+    void difficultyRowOverrideAppliesAndBadRowsAreSkipped() {
+        double before = GameBalance.tuningFor(GameBalance.Difficulty.NORMAL).scoreMult();
+        // Unknown tier, unknown field, and malformed value must all be swallowed
+        // (warn + keep baseline), while the valid override lands.
+        GameBalance.load("kind,key,value\n"
+                + "difficulty,NOT_A_TIER.SCORE_MULT,9.5\n"
+                + "difficulty,NORMAL.NOT_A_FIELD,9.5\n"
+                + "difficulty,NORMAL.SCORE_MULT,banana\n"
+                + "difficulty,NORMAL.SCORE_MULT,9.5\n");
+        assertEquals(9.5, GameBalance.scoreMultiplier(GameBalance.Difficulty.NORMAL), 1e-9);
+        // Restore the baseline so later tests see the shipped value.
+        GameBalance.load("kind,key,value\ndifficulty,NORMAL.SCORE_MULT," + before + "\n");
+        assertEquals(before, GameBalance.scoreMultiplier(GameBalance.Difficulty.NORMAL), 1e-9);
+    }
+
     @Test
     void loadIgnoresUnknownKeyWithoutThrowing() {
         int before = GameBalance.MAX_CHARACTER_LEVEL;

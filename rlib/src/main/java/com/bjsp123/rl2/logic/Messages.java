@@ -323,6 +323,16 @@ public final class Messages {
                             EventPriority.LOW, true);
     }
 
+    /** Named bleeding-DOT line so a bleed tick reads "The X bleeds for N damage"
+     *  rather than the generic environmental "takes N damage" (which gave the
+     *  player no idea the drain was a bleed they could heal / wait out). */
+    public static LogEvent bleedTick(String targetName, boolean targetIsPlayer, int dealt) {
+        String tgt = articled(targetName, targetIsPlayer, /*sentenceStart=*/true);
+        return new LogEvent(TextCatalog.format("eventlog.combat.bleed",
+                        TextCatalog.vars("target", tgt, "dealt", dealt)),
+                targetIsPlayer ? EventPriority.HIGH : EventPriority.LOW, targetIsPlayer);
+    }
+
     public static LogEvent surpriseAttack(String attacker, String target, boolean playerInvolved) {
         return new LogEvent(TextCatalog.format("eventlog.combat.surprise",
                                     TextCatalog.vars("attacker", attacker, "target", target)),
@@ -561,6 +571,13 @@ public final class Messages {
         return new LogEvent(TextCatalog.format("eventlog.item.unequipped",
                                     TextCatalog.vars("player", playerName, "item", itemName)),
                             EventPriority.LOW, true);
+    }
+
+    /** "You forge the flame scroll at the gem hearth; it lands at your feet." */
+    public static LogEvent itemForged(String itemName) {
+        return new LogEvent(TextCatalog.format("eventlog.item.forged",
+                                    TextCatalog.vars("item", itemName)),
+                            EventPriority.HIGH, true);
     }
 
     public static LogEvent itemDropped(String playerName, String itemName) {

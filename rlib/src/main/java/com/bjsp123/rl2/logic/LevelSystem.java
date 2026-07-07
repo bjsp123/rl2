@@ -160,6 +160,9 @@ public class LevelSystem {
 
         writeBack(level, level.lit, accum);
         propagateToWalls(level, level.lit);
+        // Tiles may have changed since the last relight (beacon lit, terrain
+        // edits) - force the mote-emitter cache to rebuild on its next use.
+        level.lightEmitterCache = null;
     }
 
     /**
@@ -175,8 +178,27 @@ public class LevelSystem {
         double pPerLamp = dtMs / (double) LIGHT_MOTE_INTERVAL_MS;
         double pPerSpiral = dtMs / (double) INWARD_SPIRAL_INTERVAL_MS;
         int w = level.width, h = level.height;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
+        // Emitter tiles are rare (a handful per floor) but this runs every render
+        // frame - iterate the cached emitter list instead of scanning the grid.
+        // The cache is invalidated by computeLighting after every player action;
+        // the tile is re-read here so a stale entry degrades to a skipped cell.
+        java.util.List<com.bjsp123.rl2.model.Point> emitters = level.lightEmitterCache;
+        if (emitters == null) {
+            emitters = new java.util.ArrayList<>();
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    Tile t = level.tiles[x][y];
+                    if (t == Tile.LAMP || t == Tile.GEM_HEARTH_L || t == Tile.BEACON_ACTIVE) {
+                        emitters.add(new com.bjsp123.rl2.model.Point(x, y));
+                    }
+                }
+            }
+            level.lightEmitterCache = emitters;
+        }
+        for (int i = 0; i < emitters.size(); i++) {
+            com.bjsp123.rl2.model.Point p = emitters.get(i);
+            int x = p.tileX(), y = p.tileY();
+            {
                 Tile t = level.tiles[x][y];
                 if (!level.visible[x][y]) continue;
                 if (t == Tile.LAMP) {
@@ -213,7 +235,10 @@ public class LevelSystem {
         // the eye as a pickup.
         if (level.items != null) {
             double pPerOrb = dtMs / (double) POWER_ORB_SPARKLE_INTERVAL_MS;
-            for (Item it : level.items) {
+            // Indexed loop: runs every render frame, for-each would allocate an
+            // iterator per frame on TeaVM.
+            for (int i = 0; i < level.items.size(); i++) {
+                Item it = level.items.get(i);
                 if (it == null || !it.glows) continue;
                 if (it.location == null) continue;
                 int x = it.location.tileX(), y = it.location.tileY();

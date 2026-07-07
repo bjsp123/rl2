@@ -23,7 +23,7 @@ import java.util.function.BiConsumer;
 
 /**
  * V2 inventory popup - primitive-drawn modal window covering the bulk of the
- * viewport. Replaces the scene2d-based {@link com.bjsp123.rl2.ui.popup.InventoryRenderer}
+ * viewport. Replaces the retired scene2d-based inventory renderer
  * for the in-game backpack experience.
  *
  * <p>Layout (top-down inside the outer window):
@@ -72,7 +72,8 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private final Rect window         = new Rect();
     private final Rect headerRect     = new Rect();
     private final Rect[] equipRects   = new Rect[5];
-    private final Rect[] tabRects     = new Rect[Tab.values().length];
+    /** Shared tab-strip widget - layout, chrome, and press state. */
+    private final TabStrip tabs       = new TabStrip(Tab.values().length);
     /** Bag grid cells - built each frame from the player's bag, filtered by tab. */
     private final List<BagCell> bagCells = new ArrayList<>();
 
@@ -104,7 +105,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private final Rect[] bindBtnRects = new Rect[ActionBar.SLOTS];
 
     // Pressed state.
-    private final boolean[] tabPressed = new boolean[Tab.values().length];
     /** Index into {@link #bagCells} of the cell currently being held, or -1. */
     private int bagPressed = -1;
     /** Index into {@link #equipRects} (0..4) of the equipment cell being
@@ -117,15 +117,21 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     /** Index of the bind-button (0..5) currently held, or -1. */
     private int bindPressed = -1;
 
-    /** Bag-grid scroller - used when the player's filtered bag has more
+    /** Bag-grid scroll band - used when the player's filtered bag has more
      *  items than fit in the visible grid area. Touch drag on the grid
-     *  scrolls; mouse wheel scrolls; tab switches reset to top. */
-    private final Scroller bagScroller = new Scroller();
+     *  scrolls; mouse wheel scrolls; tab switches reset to top. The band
+     *  scissor-clips the cell drawing so partial rows render at the edges. */
+    private final ScrollBand bagBand = new ScrollBand();
 
-    // Callbacks (mirror V1 InventoryRenderer surface).
+    // Callbacks (same surface the retired scene2d inventory renderer had).
     private BiConsumer<Mob, Item> onUse;
     private BiConsumer<Mob, Item> onThrow;
     private BiConsumer<Mob, Item> onDrop;
+    /** The item a Drop press has been armed for. Drop is a two-tap confirm (the
+     *  button shares the Throw slot, so throw muscle-memory would otherwise
+     *  discard gear on one stray tap): the first tap arms this, the second drops.
+     *  Keyed by the item so switching selection re-requires a fresh confirm. */
+    private Item dropArmedFor;
     /** Optional jump target - when set, the item-detail popup grows a "?"
      *  button that closes the inventory and opens the encyclopaedia
      *  pre-selected to the chosen item. */
@@ -145,11 +151,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     public V2Inventory(UiCtx ctx) {
         this.ctx = ctx;
         for (int i = 0; i < equipRects.length;  i++) equipRects[i]  = new Rect();
-        for (int i = 0; i < tabRects.length;    i++) tabRects[i]    = new Rect();
         for (int i = 0; i < bindBtnRects.length; i++) bindBtnRects[i] = new Rect();
     }
 
-    // -- Public API (mirrors V1 InventoryRenderer where applicable) -----------
+    // -- Public API ------------------------------------------------------------
     public void setPlayer(Mob p)                          { this.player = p; }
     public void setActionBar(ActionBar ab)                { this.actionBar = ab; }
     public void setOnUse(BiConsumer<Mob, Item> fn)        { this.onUse = fn; }
@@ -170,11 +175,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             endPicker();
             open = false;
             selectedItem = null;
+            dropArmedFor = null;
             if (cancel != null) cancel.run();
             return;
         }
         open = false;
         selectedItem = null;
+        dropArmedFor = null;
     }
     private void openInv() {
         open = true;
@@ -191,7 +198,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         this.onPickCancel = onCancel;
         this.selectedItem = null;
         this.currentTab = Tab.GEAR;   // enchant targets live in the gear bag
-        bagScroller.resetTop();
+        bagBand.scroller.resetTop();
         open = true;
         if (sounds != null) sounds.play("sfx.ui.popup.inventory");
     }
@@ -282,11 +289,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         // Tab strip - 4 tabs spanning the content width.
         float tabH = 32f * 1.2f;
         float tabGap = 4f;
-        float tabW = (contentW - (tabRects.length - 1) * tabGap) / tabRects.length;
         float tabRowY = equipRowY - 14f - tabH;
-        for (int i = 0; i < tabRects.length; i++) {
-            tabRects[i].set(contentX + i * (tabW + tabGap), tabRowY, tabW, tabH);
-        }
+        tabs.layout(window, pad, tabRowY, tabH, tabGap);
+        tabs.setActive(currentTab.ordinal());
 
         // Bag grid - N cols x M rows, fills the rest of the window down to
         // the bottom padding. Scrolls vertically when the filtered bag has
@@ -302,21 +307,21 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         float gridX = contentX + (contentW - gridW) * 0.5f;
         float gridTop = tabRowY - 8f;
         float gridBottom = winY + pad;
-        float visibleH = gridTop - gridBottom;
         List<Item> filtered = filteredBag();
         // Total cells = exactly the bag capacity for this tab - no more, no less.
         int tabCapacity = InventorySystem.bagLimitFor(tabCategory(currentTab));
-        int totalRows   = (tabCapacity + cols - 1) / cols;
-        float totalContentH = totalRows * (gridCellSz + gridGap) - gridGap;
-        bagScroller.setMaxScroll(totalContentH - visibleH);
+        // Band scissor-clips the cell drawing, so partially-visible rows
+        // render at the band edges instead of popping in/out whole rows.
+        bagBand.set(gridX, gridBottom, gridW, gridTop - gridBottom);
+        bagBand.update(bagContentH(gridCellSz, gridGap, cols, tabCapacity));
         for (int i = 0; i < tabCapacity; i++) {
             int r = i / cols;
             int c = i % cols;
             float cellTop = gridTop - r * (gridCellSz + gridGap)
-                    + bagScroller.scrollY();
+                    + bagBand.scroller.scrollY();
             float cellY   = cellTop - gridCellSz;
-            if (cellY > gridTop)        continue;     // entirely above
-            if (cellTop < gridBottom)   break;        // entirely below (rest are too)
+            if (cellY >= gridTop)       continue;     // entirely above
+            if (cellTop <= gridBottom)  break;        // entirely below (rest are too)
             BagCell cell = new BagCell();
             cell.item = i < filtered.size() ? filtered.get(i) : null;
             cell.rect.set(gridX + c * (gridCellSz + gridGap),
@@ -332,7 +337,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
             String name = com.bjsp123.rl2.logic.ItemNames.displayName(selectedItem, player);
             if (name.isEmpty()) name = selectedItem.type != null ? selectedItem.type : "";
-            detailNameBlock = TextDraw.block(ctx.fontHeader, name,
+            // Names are stored lowercase; the detail heading renders Title Case.
+            detailNameBlock = TextDraw.block(ctx.fontHeader,
+                    com.bjsp123.rl2.logic.TextCatalog.titleCase(name),
                     dW - 28f, 2, ctx.headerLineH());
 
             String flavor  = com.bjsp123.rl2.ui.ItemLore.describeFlavor(selectedItem);
@@ -479,6 +486,14 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         };
     }
 
+    /** Total stacked height of the bag grid's rows - drives the scroll
+     *  clamp and the scrollbar thumb size. */
+    private static float bagContentH(float cellSz, float gap, int cols,
+                                     int tabCapacity) {
+        int totalRows = (tabCapacity + cols - 1) / cols;
+        return totalRows * (cellSz + gap) - gap;
+    }
+
     /** A representative {@link Item.InventoryCategory} for each tab - used to
      *  look up the bag-capacity limit that applies to items on that tab. */
     private static Item.InventoryCategory tabCategory(Tab tab) {
@@ -514,29 +529,29 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         for (Rect r : equipRects) drawSlot(s, r);
 
         // Tab strip - active tab highlighted with the accent border.
-        for (int i = 0; i < tabRects.length; i++) {
-            boolean active  = Tab.values()[i] == currentTab;
-            boolean pressed = tabPressed[i];
-            drawTab(s, tabRects[i], active, pressed);
-        }
+        tabs.drawShapes(s);
 
-        // Bag grid cells.
-        for (int i = 0; i < bagCells.size(); i++) {
-            BagCell c = bagCells.get(i);
-            drawSlot(s, c.rect);
-            if (i == bagPressed) {
-                // Pressed highlight overlay.
-                s.setColor(UIVars.BTN_PRESSED_BG);
-                s.rect(c.rect.x + 2, c.rect.y + 2, c.rect.w - 4, c.rect.h - 4);
+        // Bag grid cells + charge bars, scissor-clipped to the visible band.
+        bagBand.clip(ctx, () -> {
+            for (int i = 0; i < bagCells.size(); i++) {
+                BagCell c = bagCells.get(i);
+                drawSlot(s, c.rect);
+                if (i == bagPressed) {
+                    // Pressed highlight overlay.
+                    s.setColor(UIVars.BTN_PRESSED_BG);
+                    s.rect(c.rect.x + 2, c.rect.y + 2, c.rect.w - 4, c.rect.h - 4);
+                }
             }
-        }
-
-        // Charge bars for any item that has charges (wands, frogs, hooks, blinkstones).
-        for (BagCell c : bagCells) {
-            if (c.item != null && c.item.baseChargeMax > 0) {
-                drawWandChargeBar(s, c.rect, c.item, player);
+            // Charge bars for any item that has charges (wands, frogs,
+            // hooks, blinkstones).
+            for (BagCell c : bagCells) {
+                if (c.item != null && c.item.baseChargeMax > 0) {
+                    drawWandChargeBar(s, c.rect, c.item, player);
+                }
             }
-        }
+        });
+        // Shared scrollbar affordance on the right edge of the grid.
+        bagBand.drawScrollbar(s, bagBand.scroller.maxScroll() + bagBand.height());
         if (player != null && player.inventory != null) {
             Item[] equip = {player.inventory.weapon, player.inventory.offhand};
             Rect[] rects = {equipRects[0], equipRects[1]};
@@ -564,7 +579,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
 
         // Extra dim layer on top of the inventory so the detail popup
         // reads as a true overlay, not a sibling.
-        s.setColor(0f, 0f, 0f, 0.35f);
+        s.setColor(0f, 0f, 0f, UIVars.SUBPOPUP_DIM_ALPHA);
         s.rect(0, 0, ctx.worldW(), ctx.worldH());
 
         Window.drawShape(ctx,
@@ -637,18 +652,6 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 (c, x, y, w, h) -> { s.setColor(c); s.rect(x, y, w, h); });
     }
 
-    private void drawTab(ShapeRenderer s, Rect r, boolean active, boolean pressed) {
-        if (active || pressed) {
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
-                    UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
-        } else {
-            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-        }
-        s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
-    }
-
     private void drawBtn(ShapeRenderer s, Rect r, boolean pressed, boolean enabled) {
         ButtonChrome.shapeEnabled(ctx, r, pressed, enabled);
     }
@@ -684,25 +687,21 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             drawCellIcon(equipRects[4], inv.amulets[1]);
         }
 
-        // Tab icons - same source sheet as the Settings tab strip. FOOD
-        // and GEMS lack dedicated icons; both fall back to OTHER for now.
-        for (int i = 0; i < tabRects.length; i++) {
-            boolean active = Tab.values()[i] == currentTab;
-            Rect r = tabRects[i];
-            var region = com.bjsp123.rl2.world.render.IconSprites
-                    .regionFor(tabIcon(Tab.values()[i]));
-            if (region == null) continue;
-            ctx.batch.setColor(active ? UIVars.ACCENT : UIVars.TEXT_BODY);
-            float sz = Math.min(r.w, r.h) * 0.65f;
-            ctx.batch.draw(region,
-                    r.cx() - sz * 0.5f, r.cy() - sz * 0.5f, sz, sz);
-            ctx.batch.setColor(1f, 1f, 1f, 1f);
+        // Tab icons - same source sheet as the Settings tab strip.
+        Tab[] tabVals = Tab.values();
+        var tabIcons = new TextureRegion[tabVals.length];
+        for (int i = 0; i < tabVals.length; i++) {
+            tabIcons[i] = com.bjsp123.rl2.world.render.IconSprites
+                    .regionFor(tabIcon(tabVals[i]));
         }
+        tabs.drawIcons(ctx, tabIcons);
 
-        // Bag grid icons + counts.
-        for (BagCell c : bagCells) {
-            drawCellIcon(c.rect, c.item);
-        }
+        // Bag grid icons + counts, clipped to the same band as the chrome.
+        bagBand.clip(ctx, () -> {
+            for (BagCell c : bagCells) {
+                drawCellIcon(c.rect, c.item);
+            }
+        });
 
         ctx.batch.end();
     }
@@ -720,7 +719,9 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         Inventory inv = player.inventory;
         Item[] equip = {inv.weapon, inv.offhand, inv.armor, inv.amulets[0], inv.amulets[1]};
         for (int i = 0; i < equipRects.length; i++) dimIfIneligible(s, equipRects[i], equip[i]);
-        for (BagCell c : bagCells)                  dimIfIneligible(s, c.rect, c.item);
+        bagBand.clip(ctx, () -> {
+            for (BagCell c : bagCells) dimIfIneligible(s, c.rect, c.item);
+        });
         s.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
@@ -729,7 +730,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     private void dimIfIneligible(ShapeRenderer s, Rect r, Item it) {
         if (it == null) return;                       // empty cell: leave as-is
         if (pickEligible != null && pickEligible.test(it)) return;  // eligible: bright
-        s.setColor(0f, 0f, 0f, 0.62f);
+        s.setColor(0f, 0f, 0f, UIVars.PICKER_DIM_ALPHA);
         s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
                 r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
     }
@@ -798,11 +799,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     detailEquipBtn.cx(), detailEquipBtn.cy() + 6f);
             boolean dropMode = dropModeSelected();
             boolean thirdEnabled = dropMode || canThrowSelected();
+            boolean dropArmed = dropMode && dropArmedFor == selectedItem;
+            String thirdLabel = dropMode
+                    ? TextCatalog.get(dropArmed ? "ui.inventory.dropConfirm" : "ui.inventory.drop")
+                    : TextCatalog.get("ui.inventory.throw");
             TextDraw.centre(ctx, ctx.fontRegular,
                     detailThrowPressed ? UIVars.ACCENT : (thirdEnabled ? UIVars.TEXT_BODY : UIVars.TEXT_DIM),
-                    TextDraw.ellipsize(ctx.fontRegular,
-                            TextCatalog.get(dropMode ? "ui.inventory.drop" : "ui.inventory.throw"),
-                            detailThrowBtn.w - 8f),
+                    TextDraw.ellipsize(ctx.fontRegular, thirdLabel, detailThrowBtn.w - 8f),
                     detailThrowBtn.cx(), detailThrowBtn.cy() + 6f);
             if (encyclopedia != null) {
                 // Standard info-icon button - same INFO glyph the
@@ -902,15 +905,10 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 // starting Y, preventing stale dragLastY=0 from making the
                 // first drag-check trip on a clean tap (Android always fires
                 // touchDragged even for stationary finger presses).
-                bagScroller.onTouchDown(vy);
+                bagBand.scroller.onTouchDown(vy);
 
                 // Tabs.
-                for (int i = 0; i < tabRects.length; i++) {
-                    if (tabRects[i].contains(vx, vy)) {
-                        tabPressed[i] = true;
-                        return true;
-                    }
-                }
+                if (tabs.touchDown(vx, vy) >= 0) return true;
                 // Equipment + gem cells - tappable iff currently equipped.
                 for (int i = 0; i < equipRects.length; i++) {
                     if (equipRects[i].contains(vx, vy)
@@ -923,7 +921,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 for (int i = 0; i < bagCells.size(); i++) {
                     if (bagCells.get(i).rect.contains(vx, vy)) {
                         bagPressed = i;
-                        bagScroller.onTouchDown(vy);
+                        bagBand.scroller.onTouchDown(vy);
                         return true;
                     }
                 }
@@ -933,9 +931,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     return true;
                 }
                 // Touch landed inside the window but missed every cell -
-                // still arm the scroller so a drag from this point scrolls
-                // the bag grid.
-                bagScroller.onTouchDown(vy);
+                // the scroller armed above still covers a drag from here.
                 return true;   // any tap inside the inventory frame is consumed
             }
 
@@ -943,12 +939,12 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             public boolean touchDragged(int sx, int sy, int pointer) {
                 if (!open || selectedItem != null) return false;
                 float vy = ctx.unprojectY(sx, sy);
-                if (bagScroller.onTouchDragged(vy)) {
+                if (bagBand.touchDragged(vy)) {
                     // Drag classified - cancel any pending tap so release
                     // doesn't fire a row click.
                     bagPressed = -1;
                     equipPressed = -1;
-                    for (int i = 0; i < tabPressed.length; i++) tabPressed[i] = false;
+                    tabs.clearPressed();
                     return true;
                 }
                 return false;
@@ -957,7 +953,7 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
             @Override
             public boolean scrolled(float amountX, float amountY) {
                 if (!open || selectedItem != null) return false;
-                bagScroller.onScrolled(amountY);
+                bagBand.scrolled(amountY);
                 return true;
             }
 
@@ -1054,6 +1050,14 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                     if (detailThrowBtn.contains(vx, vy)) {
                         Item it = selectedItem;
                         boolean drop = it != null && !it.isThrowable();
+                        if (drop && dropArmedFor != it) {
+                            // First tap on Drop: arm a confirm ("Drop?") instead of
+                            // discarding immediately, so a stray tap (throw muscle
+                            // memory) can't dump gear on the floor. Keep the popup open.
+                            dropArmedFor = it;
+                            return true;
+                        }
+                        dropArmedFor = null;
                         selectedItem = null;
                         close();
                         if (player != null && it != null) {
@@ -1068,16 +1072,13 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
                 }
 
                 // Tab switch.
-                for (int i = 0; i < tabRects.length; i++) {
-                    if (tabPressed[i]) {
-                        tabPressed[i] = false;
-                        if (tabRects[i].contains(vx, vy)
-                                && currentTab != Tab.values()[i]) {
-                            currentTab = Tab.values()[i];
-                            bagScroller.resetTop();
-                        }
-                        return true;
+                if (tabs.hasPressed()) {
+                    int i = tabs.touchUp(vx, vy);
+                    if (i >= 0 && currentTab != Tab.values()[i]) {
+                        currentTab = Tab.values()[i];
+                        bagBand.scroller.resetTop();
                     }
+                    return true;
                 }
                 // Equipment-cell tap -> pick (chooser) or open item-detail popup.
                 if (equipPressed >= 0) {

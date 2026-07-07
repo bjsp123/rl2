@@ -47,19 +47,42 @@ public final class TabStrip {
         return false;
     }
 
+    /** Cancel any armed press without firing - callers clear pending taps
+     *  when a drag gesture is classified mid-touch. */
+    public void clearPressed() {
+        java.util.Arrays.fill(pressed, false);
+    }
+
     public void drawShapes(ShapeRenderer s) {
         for (int i = 0; i < rects.length; i++) {
-            Rect r = rects[i];
-            boolean on = i == active;
-            if (on || pressed[i]) {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
-                        UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
-            } else {
-                Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
-            }
-            s.setColor(on ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
-            s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
-                    r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+            drawTabShape(s, rects[i], i == active, pressed[i]);
+        }
+    }
+
+    /** The single V2 tab / toggle-button chrome: tri-line border (accent
+     *  when active or held) + darker pressed-style fill when active. Also
+     *  used standalone for independent toggle buttons (e.g. the log's
+     *  filter toggles) so every tab-shaped control reads identically. */
+    public static void drawTabShape(ShapeRenderer s, Rect r,
+                                    boolean active, boolean pressed) {
+        if (active || pressed) {
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W,
+                    UIVars.ACCENT, UIVars.BORDER_MID, UIVars.BORDER_INNER);
+        } else {
+            Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
+        }
+        s.setColor(active ? UIVars.BTN_PRESSED_BG : UIVars.BTN_BG);
+        s.rect(r.x + UIVars.HUD_BORDER, r.y + UIVars.HUD_BORDER,
+                r.w - 2 * UIVars.HUD_BORDER, r.h - 2 * UIVars.HUD_BORDER);
+    }
+
+    /** Centred regular-font text labels - for tab strips that label with
+     *  words instead of sheet icons. Caller has an active batch. */
+    public void drawLabels(UiCtx ctx, String[] labels) {
+        for (int i = 0; i < rects.length && i < labels.length; i++) {
+            TextDraw.centre(ctx, ctx.fontRegular,
+                    i == active ? UIVars.ACCENT : UIVars.TEXT_BODY,
+                    labels[i], rects[i].cx(), rects[i].cy() + 6f);
         }
     }
 

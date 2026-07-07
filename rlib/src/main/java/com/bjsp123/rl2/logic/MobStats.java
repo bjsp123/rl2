@@ -16,12 +16,15 @@ public final class MobStats {
 
     private MobStats() {}
 
-    /** Probability that {@code attacker} lands a hit on {@code target}. */
+    /** Probability that {@code attacker} lands a hit on {@code target}, including
+     *  the global {@link GameBalance#RULES_HIT_CHANCE_FLOOR} so previews match the
+     *  actual roll in {@link MobSystem#rollToHit}. */
     public static double hitChance(Mob attacker, Mob target) {
         int acc = attacker.effectiveStats().accuracy;
         int eva = target.effectiveStats().evasion;
         int denom = acc + eva;
-        return denom <= 0 ? 0.0 : (double) acc / denom;
+        double base = denom <= 0 ? 0.0 : (double) acc / denom;
+        return Math.max(GameBalance.RULES_HIT_CHANCE_FLOOR, base);
     }
 
     /** Min and max damage the attacker outputs before resistance. */
@@ -94,8 +97,8 @@ public final class MobStats {
         // healRate scaling below inherits the boosted pool.
         long levelMaxHp = baseHp + (long) L * incHp;
         double hpMult = mob.isPlayer
-                ? GameBalance.PLAYER_HP_MULTIPLIER
-                : GameBalance.ENEMY_HP_MULTIPLIER;
+                ? GameBalance.tuning().playerHpMult()
+                : GameBalance.tuning().enemyHpMult();
         dst.maxHp          = Math.max(1, Math.round(levelMaxHp * hpMult));
         // Durable Body perk: +10% max HP per level. Folded in here (before the
         // proportional healRate scaling below) so regen tracks the larger pool.
@@ -113,8 +116,8 @@ public final class MobStats {
                 : mob.intrinsic.healRate;
         // Difficulty player regen: Easy heals a flat % of max HP per turn. healRate
         // is per-tick, so divide the per-turn fraction by the ticks/turn.
-        if (mob.isPlayer && GameBalance.PLAYER_REGEN_FRAC_PER_TURN > 0) {
-            dst.healRate += dst.maxHp * GameBalance.PLAYER_REGEN_FRAC_PER_TURN
+        if (mob.isPlayer && GameBalance.tuning().regenFracPerTurn() > 0) {
+            dst.healRate += dst.maxHp * GameBalance.tuning().regenFracPerTurn()
                     / TurnSystem.STANDARD_TURN_TICKS;
         }
 
@@ -140,10 +143,10 @@ public final class MobStats {
 
         // Difficulty player-speed: a faster player has a lower move cost. Applied
         // last so it stacks on top of the buff (haste) multipliers.
-        if (mob.isPlayer && GameBalance.PLAYER_SPEED_MULTIPLIER > 0
-                && GameBalance.PLAYER_SPEED_MULTIPLIER != 1.0) {
+        double speedMult = GameBalance.tuning().playerSpeedMult();
+        if (mob.isPlayer && speedMult > 0 && speedMult != 1.0) {
             dst.moveCost = (int) Math.max(1,
-                    Math.round(dst.moveCost / GameBalance.PLAYER_SPEED_MULTIPLIER));
+                    Math.round(dst.moveCost / speedMult));
         }
     }
 

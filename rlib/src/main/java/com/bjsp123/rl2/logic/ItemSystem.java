@@ -124,12 +124,17 @@ public final class ItemSystem {
      * </ul>
      * Caller (currently {@link MobSystem}'s tile-step hook) is responsible
      * for removing the item from the level - this method only applies the
-     * effect.
+     * effect. Returns {@code true} when the powerup actually did something
+     * (so the caller should consume it) and {@code false} when it was a no-op
+     * - a HP pill at full health or a charge pill with no wand to refill -
+     * so the pill stays on the floor for when it's useful.
      */
-    public static void applyPowerup(Level level, Mob picker, Item item) {
-        if (picker == null || item == null) return;
+    public static boolean applyPowerup(Level level, Mob picker, Item item) {
+        // Same predicate the AI / auto-explore planners consult, so "would it
+        // apply" and "did it apply" can never drift apart.
+        if (!powerupWouldApply(picker, item)) return false;
         Item.ItemEffect eff = item.wandEffect;
-        if (eff == null) return;
+        boolean consumed;
         switch (eff) {
             case LEVEL_UP -> {
                 if(item.effectPower >0){
@@ -146,21 +151,29 @@ public final class ItemSystem {
                 if (level != null && level.events != null && picker.position != null) {
                     level.events.add(new com.bjsp123.rl2.event.GameEvent.XPGainBurst(picker.position));
                 }
+                consumed = true;   // XP is always worth taking
             }
             case HP_UP -> {
                 double maxHp = picker.effectiveStats().maxHp;
                 double healed = Math.max(1.0, maxHp * item.effectPower);
                 double newHp = Math.min(maxHp, picker.hp + healed);
                 int delta = (int) Math.round(newHp - picker.hp);
-                picker.hp = newHp;
-                if (level != null && level.events != null && delta > 0) {
-                    level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(
-                            picker, delta));
+                // Already at (or within rounding of) full HP - leave the pill.
+                if (delta <= 0) {
+                    consumed = false;
+                } else {
+                    picker.hp = newHp;
+                    if (level != null && level.events != null) {
+                        level.events.add(new com.bjsp123.rl2.event.GameEvent.HealApplied(
+                                picker, delta));
+                    }
+                    consumed = true;
                 }
             }
-            case MANA_UP -> absorbManaPills(picker, manaPillStrength(item));
-            default -> { /* not a POWERUP effect - ignore */ }
+            case MANA_UP -> consumed = absorbManaPills(picker, manaPillStrength(item));
+            default -> consumed = true;   // unknown POWERUP effect: consume so it can't stick
         }
+        if (!consumed) return false;
         // Floating-text feedback so the player sees the absorption land.
         if (level != null && level.events != null && picker.position != null) {
             level.events.add(new com.bjsp123.rl2.event.GameEvent.WandImpactBurst(
@@ -173,6 +186,60 @@ public final class ItemSystem {
                                     "item", itemName(item, "eventlog.item.powerupFallback"))),
                     com.bjsp123.rl2.model.LogEvent.EventPriority.LOW, true));
         }
+        return true;
+    }
+
+    /**
+     * Pure predicate mirror of {@link #applyPowerup}: would the powerup have any
+     * effect on {@code picker} right now? {@code applyPowerup} gates on this, and
+     * the AI / auto-explore planners consult it before walking to a pill - a pill
+     * that would refuse to consume stays on the floor and would otherwise be
+     * re-targeted forever.
+     * <ul>
+     *   <li>{@code LEVEL_UP} - always (XP is always worth taking);</li>
+     *   <li>{@code HP_UP} - only when the rounded heal is at least 1 HP;</li>
+     *   <li>{@code MANA_UP} - only when some bag or equipped item would actually
+     *       gain charge (positive {@code chargeGain}, below its effective max).</li>
+     * </ul>
+     */
+    public static boolean powerupWouldApply(Mob picker, Item item) {
+        if (picker == null || item == null || item.wandEffect == null) return false;
+        switch (item.wandEffect) {
+            case HP_UP -> {
+                double maxHp = picker.effectiveStats().maxHp;
+                double healed = Math.max(1.0, maxHp * item.effectPower);
+                return (int) Math.round(Math.min(maxHp, picker.hp + healed) - picker.hp) > 0;
+            }
+            case MANA_UP -> {
+                return manaPillsWouldAdd(picker, manaPillStrength(item));
+            }
+            default -> {
+                return true;   // LEVEL_UP and unknown effects always apply
+            }
+        }
+    }
+
+    /** Charge-gain mirror of {@link #absorbManaPills}: true iff at least one bag
+     *  or equipped item would gain charge from {@code pills} manapills. Iteration
+     *  and clamp rules must stay in lockstep with absorbManaPills. */
+    private static boolean manaPillsWouldAdd(Mob picker, int pills) {
+        if (picker == null || picker.inventory == null || pills <= 0) return false;
+        int mult = GameBalance.MANA_PER_PILL * pills;
+        if (picker.inventory.bag != null) {
+            for (Item bagItem : picker.inventory.bag) {
+                if (itemWouldGainCharge(bagItem, picker, mult)) return true;
+            }
+        }
+        for (Item eq : picker.inventory.allEquipped()) {
+            if (itemWouldGainCharge(eq, picker, mult)) return true;
+        }
+        return false;
+    }
+
+    private static boolean itemWouldGainCharge(Item it, Mob holder, int mult) {
+        if (it == null || it.baseChargeMax <= 0 || it.chargeGain * mult <= 0) return false;
+        float max = ItemStats.effectiveMaxCharge(it, ItemStats.effectiveLevel(it, holder));
+        return it.charge < max;
     }
 
     /** How many manapills' worth of charge a consumable restores. A plain
@@ -191,23 +258,27 @@ public final class ItemSystem {
      * effective maximum. Shared by the MANA_UP powerup ({@link #applyPowerup})
      * and charge-restoring foods ({@link #eat}).
      */
-    private static void absorbManaPills(Mob picker, int pills) {
-        if (picker == null || picker.inventory == null || pills <= 0) return;
+    private static boolean absorbManaPills(Mob picker, int pills) {
+        if (picker == null || picker.inventory == null || pills <= 0) return false;
         int mult = GameBalance.MANA_PER_PILL * pills;
+        boolean added = false;
         if (picker.inventory.bag != null) {
             for (Item bagItem : picker.inventory.bag) {
                 if (bagItem == null || bagItem.baseChargeMax <= 0) continue;
-                bagItem.charge = Math.min(
-                        ItemStats.effectiveMaxCharge(bagItem, ItemStats.effectiveLevel(bagItem, picker)),
-                        bagItem.charge + (bagItem.chargeGain * mult));
+                float max = ItemStats.effectiveMaxCharge(bagItem, ItemStats.effectiveLevel(bagItem, picker));
+                float before = bagItem.charge;
+                bagItem.charge = Math.min(max, bagItem.charge + (bagItem.chargeGain * mult));
+                if (bagItem.charge > before) added = true;
             }
         }
         for (Item eq : picker.inventory.allEquipped()) {
             if (eq == null || eq.baseChargeMax <= 0) continue;
-            eq.charge = Math.min(
-                    ItemStats.effectiveMaxCharge(eq, ItemStats.effectiveLevel(eq, picker)),
-                    eq.charge + (eq.chargeGain * mult));
+            float max = ItemStats.effectiveMaxCharge(eq, ItemStats.effectiveLevel(eq, picker));
+            float before = eq.charge;
+            eq.charge = Math.min(max, eq.charge + (eq.chargeGain * mult));
+            if (eq.charge > before) added = true;
         }
+        return added;
     }
 
     /**
@@ -876,20 +947,18 @@ public final class ItemSystem {
      * {@code attackCost}, even if the summon spawn was gated out - keeps the move
      * cost identical between player and AI paths.
      *
-     * <p><b>DO NOT DEFER THE IMPACT.</b> This function MUST call
-     * {@link #applyWandImpact} synchronously before returning - same invariant
-     * as {@link com.bjsp123.rl2.logic.MobSystem#throwItem}. A ranged attack
-     * in this game must complete and deal damage BEFORE the defender gets a
-     * chance to move; if the rgame Animator's PendingImpact / arc-completion
-     * callback drives wand impact, the target steps out of the missile / ray
-     * during the visual flight and the wand silently misses. This regression
-     * has been introduced and re-fixed multiple times - if you see this
-     * function emit {@code WandMissileFired} / {@code WandRayFired} but NOT
-     * call {@code applyWandImpact}, you're looking at the regression.
-     *
-     * <p>The rgame Animator may delay damage popups / impact flashes / death
-     * fades to align with the missile / ray visual arrival - that's a
-     * renderer-side concern. World state is mutated synchronously here.
+     * <p>Trajectory is clipped to the first blocker at fire time (locking the
+     * impact tile), and the world-state mutation is deferred to
+     * {@link #applyWandImpact} via
+     * {@link com.bjsp123.rl2.logic.MobSystem#queuePendingImpact} - the
+     * ANIMATION-GATED LIFECYCLE, same as
+     * {@link com.bjsp123.rl2.logic.MobSystem#throwItem}. The invariant that a
+     * ranged attack must complete before the defender can move is enforced by
+     * the pending-impact freeze (no game tick runs while the queue is
+     * non-empty; headless drains it before the next mob brain), NOT by
+     * synchronous mutation - so the on-screen impact lands exactly when the
+     * missile / ray visual arrives. See the throwItem javadoc for the full
+     * model and the regression this guards against.
      */
     public static void fireWand(Level level, Mob caster, Item wand, Point target) {
         if (level == null || caster == null || wand == null) return;
@@ -1183,7 +1252,7 @@ public final class ItemSystem {
      *  truth for tool charge consumption (jade fish/crab/bull, blink, frog, ...). */
     private static void spendChargeIfAny(Item item) {
         if (item == null || item.baseChargeMax <= 0) return;
-        if (GameBalance.JADE_ITEMS_FREE_CHARGES && isJadeItem(item)) return;
+        if (GameBalance.tuning().jadeItemsFreeCharges() && isJadeItem(item)) return;
         item.charge = Math.max(0f, item.charge - 1f);
     }
 

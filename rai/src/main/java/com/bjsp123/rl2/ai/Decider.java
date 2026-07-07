@@ -34,10 +34,12 @@ import java.util.Map;
  *       else:                                         → planFight
  *   if levelFullyExplored:                            → planDescend
  *   if explorationStalled AND stairsReachable:        → planDescend
+ *   if carryingEquipUpgrade:                          → planEquip
  *   if hpBelowThreshold AND healingAvailable:         → planHeal
  *   if usefulPowerupAvailable:                        → planPickupPowerup
  *   if betterOrConsumableItemAvailable:               → planPickupItem
  *   if recentlySeenEnemy:                             → planSearchLastKnown
+ *   if stairsReachable AND floorMostlyExplored:       → planDescend
  *                                                       → planExplore
  * </pre>
  *
@@ -74,6 +76,16 @@ public final class Decider {
      *  far below the observed dwell (~700-2500), so productive exploration is
      *  unaffected. */
     public static final int EXPLORE_FATIGUE_LIMIT = 250;
+
+    /** Fraction of a floor's reachable FLOOR tiles that must be seen before the
+     *  agent will descend a known, reachable stair instead of continuing to
+     *  sweep the floor. Set so the agent grabs the bulk of a floor's gear and
+     *  XP (revealed while exploring up to this point) but stops short of the
+     *  exhaustive tail - chasing the last unrevealable pockets and every distant
+     *  low-value consumable - that made it dwell ~250 decisions/floor and time
+     *  out before the boss. Below this, exploration still outranks descent so a
+     *  barely-seen floor is not abandoned. */
+    public static final double DESCEND_EXPLORED_FRACTION = 0.65;
 
     /** Return the chosen {@link Action} for this tick. Never null.
      *
@@ -156,6 +168,12 @@ public final class Decider {
 
         // 3. No enemies in sight - try each leaf branch; fall through on Wait.
         Action a;
+        // Wield any upgrade we're carrying before anything else. Pickup walks the
+        // agent to floor upgrades and bags them; this actually equips them. Done
+        // while safe (no enemies in sight) since equipping costs a turn. Without
+        // this the agent hoarded better gear and fought on with its start weapon.
+        a = planEquip(s);
+        if (!isWait(a)) { LAST_BRANCH.set("equip"); return a; }
         if (s.hpFrac < HP_LOW_THRESHOLD) {
             a = planHeal(s);
             if (!isWait(a)) { LAST_BRANCH.set("heal"); return a; }
@@ -168,6 +186,20 @@ public final class Decider {
 
         a = planSearchLastKnown(s);
         if (!isWait(a)) { LAST_BRANCH.set("search"); return a; }
+
+        // Know the way down and have seen most of the floor? Descend rather than
+        // sweeping the exhaustive tail. The heal / powerup / item branches above
+        // already grabbed everything worth a detour, so what's left is the
+        // marginal loot + unrevealable pockets that made the agent dwell to the
+        // fatigue limit on every floor and time out short of the boss. Guarded by
+        // stairsReachable (a real BFS) so a floor whose stairs we haven't found
+        // yet still falls through to explore.
+        if (s.memory != null && s.stairsReachable()
+                && ExplorationEval.unexploredFraction(s.level, s.memory)
+                        <= 1.0 - DESCEND_EXPLORED_FRACTION) {
+            LAST_BRANCH.set("descend-explored");
+            return planDescend(s);
+        }
 
         LAST_BRANCH.set("explore");
         return planExplore(s);
@@ -301,6 +333,13 @@ public final class Decider {
                         true));
             }
         }
+        return pickBest(s, candidates);
+    }
+
+    /** Scored argmax over equipping bagged gear that beats what's worn. */
+    static Action planEquip(WorldState s) {
+        List<Action> candidates = new ArrayList<>();
+        ActionLibrary.addEquipUpgrades(s, candidates);
         return pickBest(s, candidates);
     }
 

@@ -43,6 +43,7 @@ final class AnimationEventDispatcher {
         else if (ev instanceof GameEvent.VegetationChanged m)     animator.onVegetationChanged(level, m);
         else if (ev instanceof GameEvent.SporeEmitted m)          animator.onSporeEmitted(level, m);
         else if (ev instanceof GameEvent.RainbowBurst m)          animator.onRainbowBurst(level, m);
+        else if (ev instanceof GameEvent.LevelUpGains m)          animator.onLevelUpGains(level, m);
         else if (ev instanceof GameEvent.XPGainBurst m)           animator.onXPGainBurst(level, m);
         else if (ev instanceof GameEvent.PeriodicBuffDamage m)    animator.onPeriodicBuffDamage(level, m);
         else if (ev instanceof GameEvent.LootDropped m)           animator.onLootDropped(level, m);

@@ -475,6 +475,19 @@ public class Mob {
      *  this list directly. Each {@link Buff} carries its type, level, duration, and the
      *  mob that applied it (for attribution / death messages). */
     public java.util.List<Buff> buffs = new java.util.ArrayList<>();
+
+    /** True while the GHOSTLY buff is active. Lives on the model (not
+     *  BuffSystem) because tile/occupancy queries in the model layer
+     *  ({@link TileQuery}, pathing) need it to let a ghost pass through
+     *  solid terrain and other mobs. */
+    public boolean isGhostly() {
+        if (buffs == null || buffs.isEmpty()) return false;
+        for (Buff b : buffs) {
+            if (b != null && b.type == Buff.BuffType.GHOSTLY) return true;
+        }
+        return false;
+    }
+
     /** The specific mob this one is loyal to ({@code null} = wild). An owned mob:
      *  <ul>
      *    <li>Follows the owner - paths toward them whenever no combat/flee target is

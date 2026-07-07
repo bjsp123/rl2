@@ -52,6 +52,7 @@ public sealed interface GameEvent permits
         GameEvent.VegetationChanged,
         GameEvent.SporeEmitted,
         GameEvent.RainbowBurst,
+        GameEvent.LevelUpGains,
         GameEvent.XPGainBurst,
         GameEvent.PeriodicBuffDamage,
         GameEvent.LootDropped,
@@ -212,6 +213,12 @@ public sealed interface GameEvent permits
      *  Animator parks the freeze gate for the burst's duration so the
      *  player notices the level-up before the next turn ticks. */
     record RainbowBurst(Point pos) implements GameEvent {}
+
+    /** Character-level gained - drives the staggered rising floaters that spell
+     *  out what was earned ("Level N", "+{hpGain} hp", "+{perkGain} perk").
+     *  Separate from {@link RainbowBurst} (the particle celebration); emitted
+     *  for the player only. */
+    record LevelUpGains(Mob mob, int newLevel, int hpGain, int perkGain) implements GameEvent {}
 
     record XPGainBurst(Point pos) implements GameEvent {}
 

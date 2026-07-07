@@ -22,6 +22,7 @@ public final class Settings {
     private static final String KEY_LOG_EXPANDED = "rl2-log-expanded";
     private static final String KEY_INSTANT_ACTIONS = "rl2-instant-actions";
     private static final String KEY_LOW_RES_RENDER  = "rl2-low-res-render";
+    private static final String KEY_FAST_GRAPHICS   = "rl2-fast-graphics";
     private static final String KEY_PERF_OVERLAY    = "rl2-perf-overlay";
     private static final String KEY_SFX_ENABLED     = "rl2-sfx-enabled";
     private static final String KEY_SFX_VOLUME      = "rl2-sfx-volume";
@@ -81,13 +82,14 @@ public final class Settings {
     private static volatile boolean logExpanded;
     private static boolean instantActions;
     private static boolean lowResRender;
+    private static boolean fastGraphics;
     private static boolean showPerfOverlay;
     private static boolean sfxEnabled    = true;
     private static float   sfxVolume     = SFX_VOLUME_DEFAULT;
     private static boolean musicEnabled  = true;
     private static float   musicVolume   = MUSIC_VOLUME_DEFAULT;
     private static boolean tipsEnabled   = true;
-    private static boolean meleePreview  = false;
+    private static boolean meleePreview  = true;
     private static ColorblindPreset colorblindPreset = ColorblindPreset.NONE;
 
     private Settings() {}
@@ -110,13 +112,14 @@ public final class Settings {
         logExpanded = loadBoolean(KEY_LOG_EXPANDED, false);
         instantActions = loadBoolean(KEY_INSTANT_ACTIONS, false);
         lowResRender   = loadBoolean(KEY_LOW_RES_RENDER, false);
+        fastGraphics   = loadBoolean(KEY_FAST_GRAPHICS, detectFastGraphicsDefault());
         showPerfOverlay = loadBoolean(KEY_PERF_OVERLAY, false);
         sfxEnabled    = loadBoolean(KEY_SFX_ENABLED, true);
         sfxVolume     = loadChoiceFloat(KEY_SFX_VOLUME, SFX_VOLUME_DEFAULT, VOLUME_CHOICES);
         musicEnabled  = loadBoolean(KEY_MUSIC_ENABLED, true);
         musicVolume   = loadChoiceFloat(KEY_MUSIC_VOLUME, MUSIC_VOLUME_DEFAULT, VOLUME_CHOICES);
         tipsEnabled   = loadBoolean(KEY_TIPS_ENABLED, true);
-        meleePreview  = loadBoolean(KEY_MELEE_PREVIEW, false);
+        meleePreview  = loadBoolean(KEY_MELEE_PREVIEW, true);
         colorblindPreset = loadColorblindPreset();
         UIVars.applyColorblindPalette(colorblindPreset);
     }
@@ -147,6 +150,12 @@ public final class Settings {
     public static boolean logExpanded() { return logExpanded; }
     public static boolean instantActions() { return instantActions; }
     public static boolean lowResRender()    { return lowResRender; }
+    /** Fast graphics: skip expensive optional visuals (sprite outlines, the
+     *  animated liquid shader, decorative glow/pulse overlays, ambient
+     *  particles). Nothing gameplay-informative is hidden - surfaces still
+     *  draw (flat), HP bars / buff icons / damage floaters / projectiles stay.
+     *  Defaults ON for the browser build, OFF elsewhere. */
+    public static boolean fastGraphics()    { return fastGraphics; }
     public static boolean showPerfOverlay() { return showPerfOverlay; }
     public static boolean sfxEnabled()     { return sfxEnabled; }
     public static float   sfxVolume()      { return sfxVolume; }
@@ -173,6 +182,7 @@ public final class Settings {
     public static void setLogExpanded(boolean v) { logExpanded = v; save(KEY_LOG_EXPANDED, v); }
     public static void setInstantActions(boolean v) { instantActions = v; save(KEY_INSTANT_ACTIONS, v); }
     public static void setLowResRender(boolean v)    { lowResRender = v;    save(KEY_LOW_RES_RENDER, v); }
+    public static void setFastGraphics(boolean v)    { fastGraphics = v;    save(KEY_FAST_GRAPHICS, v); }
     public static void setShowPerfOverlay(boolean v) { showPerfOverlay = v; save(KEY_PERF_OVERLAY, v); }
     public static void setSfxEnabled(boolean v)    { sfxEnabled = v;    save(KEY_SFX_ENABLED, v); }
     public static void setSfxVolume(float v)       { sfxVolume = v;     save(KEY_SFX_VOLUME, v); }
@@ -186,16 +196,33 @@ public final class Settings {
         UIVars.applyColorblindPalette(colorblindPreset);
     }
 
+    /** The browser build runs TeaVM-compiled JS several times slower than the
+     *  JVM, so the expensive-optional-visuals bundle defaults off there. */
+    private static boolean detectFastGraphicsDefault() {
+        return Gdx.app != null
+                && Gdx.app.getType() == com.badlogic.gdx.Application.ApplicationType.WebGL;
+    }
+
     private static float detectUiScaleDefault() {
         if (Gdx.graphics == null) return UI_SCALE_DEFAULT;
         int w = Gdx.graphics.getWidth();
         if (w <= 0) return UI_SCALE_DEFAULT;
         int narrow = Math.min(w, Gdx.graphics.getHeight());
-        if (narrow >= 1440) return 3.0f;
-        if (narrow >= 1080) return 2.5f;
-        if (narrow >= 720) return 2.0f;
-        if (narrow >= 480) return 1.5f;
-        return UI_SCALE_DEFAULT;
+        float detected;
+        if (narrow >= 1440)      detected = 3.0f;
+        else if (narrow >= 1080) detected = 2.5f;
+        else if (narrow >= 720)  detected = 2.0f;
+        else if (narrow >= 480)  detected = 1.5f;
+        else                     detected = UI_SCALE_DEFAULT;
+        // Browser: cap the DEFAULT at 2.0. A near-fullscreen canvas hits the
+        // big tiers tuned for whole monitors, which reads oversized next to
+        // the typical windowed desktop session; players can still pick any
+        // tier in Settings. Desktop/Android are untouched.
+        if (Gdx.app != null
+                && Gdx.app.getType() == com.badlogic.gdx.Application.ApplicationType.WebGL) {
+            return Math.min(detected, 2.0f);
+        }
+        return detected;
     }
 
     private static float loadChoiceFloat(String key, float fallback, float[] choices) {

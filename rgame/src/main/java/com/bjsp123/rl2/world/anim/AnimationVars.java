@@ -66,11 +66,13 @@ public final class AnimationVars {
                 int mods = f.getModifiers();
                 if (!Modifier.isStatic(mods) || Modifier.isFinal(mods)) continue;
                 Class<?> t = f.getType();
-                if (t == int.class) f.setInt(null, Integer.parseInt(value));
-                else if (t == float.class) f.setFloat(null, Float.parseFloat(value));
-                else if (t == double.class) f.setDouble(null, Double.parseDouble(value));
-                else if (t == long.class) f.setLong(null, Long.parseLong(value));
-                else if (t == boolean.class) f.setBoolean(null, Boolean.parseBoolean(value));
+                // Boxed Field.set: TeaVM's reflection emulation lacks the
+                // primitive setters; set() auto-unboxes on every runtime.
+                if (t == int.class) f.set(null, Integer.parseInt(value));
+                else if (t == float.class) f.set(null, Float.parseFloat(value));
+                else if (t == double.class) f.set(null, Double.parseDouble(value));
+                else if (t == long.class) f.set(null, Long.parseLong(value));
+                else if (t == boolean.class) f.set(null, Boolean.parseBoolean(value));
             } catch (NoSuchFieldException | IllegalAccessException | NumberFormatException ignored) {
                 // Unknown or malformed animation config keeps its baked-in default.
             }

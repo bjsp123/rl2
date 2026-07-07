@@ -48,10 +48,8 @@ public class GameInput extends InputAdapter {
         this.onBeaconActivate = onBeaconActivate;
     }
 
-    /** Wired by PlayScreen to {@link com.bjsp123.rl2.ui.popup.InventoryRenderer#toggle}. The
-     *  inventory's own scene2d listener handles {@code i} only after it has keyboard focus
-     *  (i.e. after the user has already opened it some other way) - this keeps the hotkey
-     *  responsive on the very first press, before any focus transfer has happened. */
+    /** Wired by PlayScreen to {@link com.bjsp123.rl2.ui.v2.V2Inventory#toggle} so the
+     *  {@code i} hotkey opens / closes the backpack. */
     public void setInventoryToggle(Runnable onInventoryToggle) {
         this.onInventoryToggle = onInventoryToggle;
     }

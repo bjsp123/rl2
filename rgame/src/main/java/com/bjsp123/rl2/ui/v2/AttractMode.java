@@ -135,7 +135,9 @@ final class AttractMode {
             if (animator.impactFiredThisTick) renderer.markDirty();
         }
         FireSystem.tickRealTime(level, Math.min(100, (int) (delta * 1000f)));
-        LevelSystem.tickLightMotesRealTime(level, Math.min(100, (int) (delta * 1000f)));
+        if (!com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) {
+            LevelSystem.tickLightMotesRealTime(level, Math.min(100, (int) (delta * 1000f)));
+        }
     }
 
     private void spawnPlayer() {

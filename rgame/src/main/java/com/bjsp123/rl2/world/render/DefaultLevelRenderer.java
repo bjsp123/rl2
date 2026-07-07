@@ -272,6 +272,18 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  very first render after creation. Fx are NOT cached - they get added / removed
      *  every frame via {@code advanceEffects}, so the fx index is rebuilt per frame. */
     private boolean indexesDirty = true;
+    /** Persistent fx bucket scratch, refilled in place every frame (effects ARE
+     *  per-frame volatile) - reusing the grid-sized backing array avoids a fresh
+     *  ~2300-slot allocation per frame. */
+    private LevelRenderIndexes.CellBuckets<Effect> fxBucketsScratch;
+    /** Cached stair-sign text + measured width, keyed by the stair's cell index.
+     *  exploredPercent() is a full-grid scan of the DESTINATION level, so it must
+     *  not run per frame. Cleared by {@link #markDirty()} and on level swap. */
+    private static final class StairSign { String l1, l2, l3; float wText; }
+    private final java.util.HashMap<Integer, StairSign> stairSignCache = new java.util.HashMap<>();
+    /** Reusable layout for stair-sign measuring/drawing - never allocate one per frame. */
+    private final com.badlogic.gdx.graphics.g2d.GlyphLayout stairSignLayout =
+            new com.badlogic.gdx.graphics.g2d.GlyphLayout();
     /** The {@link Level} drawn on the previous frame. When the level object changes
      *  (stairs, arena, new game) the per-level caches (index buckets, fog) must be
      *  rebuilt on the very first frame of the new level - otherwise a dirty flag
@@ -533,6 +545,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
     public void markDirty() {
         fog.markDirty();
         indexesDirty = true;
+        stairSignCache.clear();
     }
 
     @Override
@@ -557,6 +570,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
             lastRenderedLevel = level;
             indexesDirty = true;
             fog.markDirty();
+            stairSignCache.clear();
         }
         fog.createFor(level.width, level.height);
         fog.update(level);
@@ -597,7 +611,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
         LevelRenderIndexes.CellBuckets<Item>   itemsByCell = cachedItemsByCell;
         LevelRenderIndexes.CellBuckets<Mob>    mobsByCell  = cachedMobsByCell;
 
-        LevelRenderIndexes.CellBuckets<Effect> fxByCell    = LevelRenderIndexes.effectsByCell(level, animator.stage);
+        if (fxBucketsScratch == null || !fxBucketsScratch.sized(level.width, level.height)) {
+            fxBucketsScratch = new LevelRenderIndexes.CellBuckets<>(level.width, level.height);
+        }
+        LevelRenderIndexes.effectsByCellInto(fxBucketsScratch, animator.stage);
+        LevelRenderIndexes.CellBuckets<Effect> fxByCell    = fxBucketsScratch;
 
         gameFbo.beginWorldPass(batch, camera);
         batch.setColor(Color.WHITE);
@@ -721,7 +739,11 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // danger symbol shifts up by CELL to track with the visible door.
         TextureRegion dangerSym = SurfaceSprites.dangerSymbol();
         if (DRAW_WALLS && dangerSym != null) {
-            float alpha = 0.45f + 0.45f * (float) Math.sin(System.currentTimeMillis() * Math.PI / 900.0);
+            // The warning symbol is gameplay info and always draws; only the
+            // attention pulse is decorative, so fast graphics pins the alpha.
+            float alpha = com.bjsp123.rl2.ui.skin.Settings.fastGraphics()
+                    ? 0.75f
+                    : 0.45f + 0.45f * (float) Math.sin(System.currentTimeMillis() * Math.PI / 900.0);
             for (int y = view.maxY; y >= view.minY; y--) {
                 for (int x = view.minX; x <= view.maxX; x++) {
                     if (!level.explored[x][y]) continue;
@@ -773,6 +795,7 @@ public class DefaultLevelRenderer implements LevelRenderer {
         _stats.nsPass4      = _t4 - _t3; _stats.flushPass4    = _f4 - _f3;
         _stats.nsFog        = _t5 - _t4; _stats.flushFog      = batch.renderCalls - _f4;
         _stats.totalFlushes = batch.renderCalls;
+        if (RenderProfiler.ENABLED) RenderProfiler.frame(_stats);
     }
 
     /**
@@ -1245,6 +1268,16 @@ public class DefaultLevelRenderer implements LevelRenderer {
         }
         if (!any) return;
 
+        // Fast graphics: keep the mask shader (the shaped shorelines are part of
+        // how surfaces read - see drawSurfacesFast) but freeze the scroll and
+        // share one UV patch per surface kind, so the per-cell uniform update -
+        // and the batch flush it forces - disappears. Same-kind cells batch
+        // into a single draw instead of one GL call per liquid tile.
+        if (com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) {
+            drawSurfacesFast(level, view);
+            return;
+        }
+
         batch.setShader(surfaceMaskShader);
         surfaceMaskShader.setUniformi("u_surfaceTex", 1);
         Surface lastSurf = null;
@@ -1282,6 +1315,38 @@ public class DefaultLevelRenderer implements LevelRenderer {
         batch.flush();
         surfaceMaskShader.setUniformf("u_surfaceUv", u1, v1, u2, v2);
         batch.draw(surfaceMaskTex[variant], gx * (float) CELL, gy * (float) CELL, CELL, CELL);
+    }
+
+    /** Fast-graphics surface pass. Identical mask-shader look to the normal
+     *  pass EXCEPT: no scroll animation, and every cell of a surface kind
+     *  samples the same static liquid patch, so {@code u_surfaceUv} is set
+     *  once per kind instead of per cell. The per-cell uniform is what forced
+     *  a flush per liquid tile in the normal pass - here same-kind cells all
+     *  batch into one draw call. Shorelines (the mask shapes) are preserved:
+     *  they're how the player reads where water ends, not just polish. */
+    private void drawSurfacesFast(Level level, TileBounds view) {
+        batch.setShader(surfaceMaskShader);
+        surfaceMaskShader.setUniformi("u_surfaceTex", 1);
+        float patch = CELL / WATER_TEX_SIZE;
+        Surface lastSurf = null;
+        for (int y = view.minY; y <= view.maxY; y++) {
+            for (int x = view.minX; x <= view.maxX; x++) {
+                if (!level.explored[x][y]) continue;
+                Surface s = level.surface[x][y];
+                if (s == null) continue;
+                if (s != lastSurf) {
+                    batch.flush();
+                    textureFor(s).bind(1);
+                    Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
+                    surfaceMaskShader.setUniformf("u_surfaceUv", 0f, 0f, patch, patch);
+                    lastSurf = s;
+                }
+                int variant = stitchSurface(level, x, y, s) - TileSprites.WATER;
+                batch.draw(surfaceMaskTex[variant], x * (float) CELL, y * (float) CELL, CELL, CELL);
+            }
+        }
+        batch.setShader(null);
+        batch.setColor(Color.WHITE);
     }
 
     private Texture textureFor(Surface s) {
@@ -1677,9 +1742,26 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // zoom-based fade.
         float fadeAlpha = 1f;
 
-        String l1 = ascending ? "Stairs Up" : "Stairs Down";
-        String l2 = "Depth " + dst.depth + ", " + stairDestName(dst);
-        String l3 = exploredPercent(dst) + "% explored";
+        // Sign text + measured width are cached per stair cell and rebuilt only
+        // after markDirty() (per tick / level mutation): exploredPercent is a
+        // full-grid scan of the destination level and the strings/GlyphLayout
+        // churn allocations - none of which change between ticks.
+        StairSign sign = stairSignCache.get(y * level.width + x);
+        if (sign == null) {
+            sign = new StairSign();
+            sign.l1 = ascending ? "Stairs Up" : "Stairs Down";
+            sign.l2 = "Depth " + dst.depth + ", " + stairDestName(dst);
+            sign.l3 = exploredPercent(dst) + "% explored";
+            font.getData().setScale(STAIR_SIGN_FONT_SCALE);
+            stairSignLayout.setText(font, sign.l1); sign.wText = stairSignLayout.width;
+            stairSignLayout.setText(font, sign.l2); sign.wText = Math.max(sign.wText, stairSignLayout.width);
+            stairSignLayout.setText(font, sign.l3); sign.wText = Math.max(sign.wText, stairSignLayout.width);
+            font.getData().setScale(1f);
+            stairSignCache.put(y * level.width + x, sign);
+        }
+        String l1 = sign.l1;
+        String l2 = sign.l2;
+        String l3 = sign.l3;
 
         // The previous world-space implementation scaled the font to 0.30 in
         // WORLD units and drew through the world projection. With
@@ -1712,11 +1794,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // text rather than the text squeezed to fit a zoom-scaled panel.
         float fontScale = STAIR_SIGN_FONT_SCALE;
         font.getData().setScale(fontScale);
-        com.badlogic.gdx.graphics.g2d.GlyphLayout gl =
-                new com.badlogic.gdx.graphics.g2d.GlyphLayout();
-        gl.setText(font, l1); float wText = gl.width;
-        gl.setText(font, l2); wText = Math.max(wText, gl.width);
-        gl.setText(font, l3); wText = Math.max(wText, gl.width);
+        com.badlogic.gdx.graphics.g2d.GlyphLayout gl = stairSignLayout;
+        float wText = sign.wText;
 
         float lineH  = font.getLineHeight();
         float panelW = Math.round(wText + 2f * STAIR_SIGN_PAD_X);
@@ -2353,8 +2432,12 @@ public class DefaultLevelRenderer implements LevelRenderer {
         float dy = y * (float) CELL + ENTITY_Y_OFFSET;
         if (it.useBehavior == Item.UseBehavior.POWERUP) {
             float phase = x * 1.3f + y * 0.7f;
+            // The bob stays in fast graphics (it marks walk-over pickups); the
+            // additive halo costs two blend-func flushes per powerup - skip it.
             dy += (float) Math.sin(stairLabelTime * 2.0f + phase) * 1.5f;
-            drawPowerupGlow(it, dx, dy, phase);
+            if (!com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) {
+                drawPowerupGlow(it, dx, dy, phase);
+            }
         }
         // Prefer the shared ItemSprites lookup so the on-floor icon matches the
         // inventory + action-bar art. Falls back to the glyph if no sprite is registered.
@@ -2375,8 +2458,10 @@ public class DefaultLevelRenderer implements LevelRenderer {
                 } else {
                     outlines.drawRegion(batch, region, dx, dy, (float) CELL, (float) CELL);
                 }
-                BrandFx.drawWorldItemSparks(batch, whiteRegion,
-                        dx, dy, (float) CELL, (float) CELL, it, stairLabelTime);
+                if (!com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) {
+                    BrandFx.drawWorldItemSparks(batch, whiteRegion,
+                            dx, dy, (float) CELL, (float) CELL, it, stairLabelTime);
+                }
             } else {
                 // Same silhouette outline mobs/statues/lamps get - items on the floor
                 // were the lone holdout. Helps loot pop visually against busy terrain.
@@ -2500,7 +2585,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
             float pulse = (float)(0.5 + 0.5 * Math.sin(stairLabelTime * 1.5));
             alpha = 0.2f + 0.3f * pulse;
         }
-        // GHOSTLY: semi-transparent (paired with the desaturate overlay in drawMobSprite).
+        // GHOSTLY: 40% transparent (alpha 0.6, paired with the desaturate
+        // overlay in drawMobSprite) - the visual cue for the pass-through state.
         if (com.bjsp123.rl2.logic.BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.GHOSTLY)) {
             alpha *= 0.6f;
         }
@@ -2890,6 +2976,9 @@ public class DefaultLevelRenderer implements LevelRenderer {
      *  generalized for any GLOW-category buff). Pulses with {@code stairLabelTime}. */
     private void drawGlowShell(Sprite s, float drawX, float drawY, float dw, float dh,
                                float alpha, float r, float g, float b) {
+        // Decorative aura - the buff itself stays visible via the overhead buff
+        // icon pass, so fast graphics drops the two extra scaled sprite draws.
+        if (com.bjsp123.rl2.ui.skin.Settings.fastGraphics()) return;
         float pulse = (float) (0.5 + 0.5 * Math.sin(stairLabelTime * 5.0));
         batch.setColor(r, g, b, alpha * (0.18f + 0.12f * pulse));
         batch.draw(s.region, drawX - 8f, drawY - 8f, dw + 16f, dh + 16f);
