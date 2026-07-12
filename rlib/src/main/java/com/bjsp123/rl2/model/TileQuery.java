@@ -44,7 +44,7 @@ public final class TileQuery {
         if (t == Tile.CHASM) return mob == null || !mob.effectiveStats().flying;
         if (t.isClosedDoor()) {
             // Wooden door: anyone may walk through; the actual bump-to-open
-            // fires in MobSystem.onMobEnteredTile. Crystal / one-time: only the
+            // fires in MobMovement.onMobEnteredTile. Crystal / one-time: only the
             // player party - the avatar (Mob.isPlayer), its pets, and PLAYER-
             // faction allies (see DoorBehavior.PLAYER_ONLY).
             DoorBehavior db = t.doorBehavior();

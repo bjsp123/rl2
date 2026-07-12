@@ -2,6 +2,7 @@ package com.bjsp123.rl2.world.anim;
 import com.bjsp123.rl2.audio.SoundManager;
 import com.bjsp123.rl2.event.GameEvent;
 import com.bjsp123.rl2.logic.MobQueries;
+import com.bjsp123.rl2.logic.MobMovement;
 import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.logic.TextCatalog;
 import com.bjsp123.rl2.model.Item;
@@ -586,7 +587,7 @@ public final class Animator {
         MobAnimState s = stateOf(m.mob());
         s.teleportFromX = m.fromX();
         s.teleportFromY = m.fromY();
-        s.teleportFadeMs = MobSystem.TELEPORT_FADE_TOTAL_MS;
+        s.teleportFadeMs = MobMovement.TELEPORT_FADE_TOTAL_MS;
         Point from = new Point(m.fromX(), m.fromY());
         stage.add(Effect.teleportStreaks(from, /*up=*/true, RNG));
         if (sounds != null) sounds.playAt("sfx.mob.action.teleport", level, from);
@@ -1436,7 +1437,7 @@ public final class Animator {
             if (s == null || s.teleportFadeMs <= 0) continue;
             int before = s.teleportFadeMs;
             int after  = before - dtMs;
-            int half   = MobSystem.TELEPORT_FADE_HALF_MS;
+            int half   = MobMovement.TELEPORT_FADE_HALF_MS;
             if (before > half && after <= half && m.position != null) {
                 stage.add(Effect.teleportStreaks(m.position, /*up=*/false, RNG));
             }

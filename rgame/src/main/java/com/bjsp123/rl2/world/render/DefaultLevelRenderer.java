@@ -2535,8 +2535,8 @@ public class DefaultLevelRenderer implements LevelRenderer {
         // we want the fade-out to play even if the destination tile is dark.
         float teleportAlpha = 1f;
         if (as.teleportFadeMs > 0) {
-            int half = com.bjsp123.rl2.logic.MobSystem.TELEPORT_FADE_HALF_MS;
-            int total = com.bjsp123.rl2.logic.MobSystem.TELEPORT_FADE_TOTAL_MS;
+            int half = com.bjsp123.rl2.logic.MobMovement.TELEPORT_FADE_HALF_MS;
+            int total = com.bjsp123.rl2.logic.MobMovement.TELEPORT_FADE_TOTAL_MS;
             if (as.teleportFadeMs > half) {
                 // Departing: render at origin, alpha 1 -> 0 across the first half.
                 mx = as.teleportFromX;

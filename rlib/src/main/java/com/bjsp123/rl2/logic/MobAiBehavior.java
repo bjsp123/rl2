@@ -159,7 +159,7 @@ public final class MobAiBehavior {
                     // tryTeleportToTarget handles LOS, free-tile, and the
                     // visual event; if it bails the ability is wasted, but
                     // still costs the turn so the caster doesn't loop forever.
-                    MobSystem.tryTeleportToTarget(level, caster, target);
+                    MobMovement.tryTeleportToTarget(level, caster, target);
                 }
             }
             if (ab.cooldownTracker != null && ab.cooldownTurns > 0) {
@@ -945,7 +945,7 @@ public final class MobAiBehavior {
      */
     private static void stepOrIdle(Mob mob, Level level) {
         int before = mob.ticksTillMove;
-        MobSystem.stepTowardTarget(mob, level);
+        MobMovement.stepTowardTarget(mob, level);
         if (mob.ticksTillMove == before) {
             TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
         }

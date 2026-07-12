@@ -7,6 +7,7 @@ import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.Messages;
 import com.bjsp123.rl2.logic.MobQueries;
 import com.bjsp123.rl2.logic.MobCombat;
+import com.bjsp123.rl2.logic.MobMovement;
 import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.logic.MobThrowing;
 import com.bjsp123.rl2.logic.TurnSystem;
@@ -208,7 +209,7 @@ final class PlayController {
                     autoMoveLastHp = -1;
                     return false;
                 }
-                MobSystem.stepTowardTarget(player, level);
+                MobMovement.stepTowardTarget(player, level);
                 if (player.targetPosition == null && player.ticksTillMove == 0
                         && currentlyVisibleHostiles(level, player).isEmpty()) {
                     int bagBefore = player.inventory.bag.size();

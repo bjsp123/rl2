@@ -2,6 +2,7 @@ package com.bjsp123.rl2.ai.action;
 
 import com.bjsp123.rl2.ai.WorldState;
 import com.bjsp123.rl2.ai.eval.CombatEval;
+import com.bjsp123.rl2.logic.MobMovement;
 import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.logic.Pathfinder;
 import com.bjsp123.rl2.model.Level;
@@ -57,7 +58,7 @@ public final class ActionMoveToward implements Action {
             return;
         }
         mob.targetPosition = step;
-        MobSystem.stepTowardTarget(mob, level);
+        MobMovement.stepTowardTarget(mob, level);
     }
 
     @Override public String intentDetail() { return label; }

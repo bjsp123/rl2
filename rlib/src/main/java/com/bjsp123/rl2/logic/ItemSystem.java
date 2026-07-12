@@ -1078,7 +1078,7 @@ public final class ItemSystem {
                     if (user.isPlayer) EventLog.add(Messages.teleportSuppressed(item.name != null ? item.name : item.type));
                     return false;
                 }
-                acted = MobSystem.teleportRandomlyOnLevel(level, user, 10, 100);
+                acted = MobMovement.teleportRandomlyOnLevel(level, user, 10, 100);
                 if (acted) MobSystem.removeFromInventory(user, item);
             }
             case WAND, GRAPPLE, JUMP, CHARGE, NONE -> { return false; } // need a target or a specialized caller

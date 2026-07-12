@@ -430,7 +430,7 @@ public final class ActionLibrary {
 
     /** Enumerate moves to any known floor item that is consumable OR a true
      *  equipment upgrade. A non-PLAYER SMART mob auto-picks-up on tile entry via
-     *  {@code MobSystem.stepTowardTarget}, but the player's auto-explore (a
+     *  {@code MobMovement.stepTowardTarget}, but the player's auto-explore (a
      *  PLAYER-behaviour mob driven by this planner) does NOT - so when the agent
      *  is standing on the item we emit an explicit {@link ActionPickup}. */
     public static void addPickupConsumableOrUpgrade(WorldState s, List<Action> out) {
