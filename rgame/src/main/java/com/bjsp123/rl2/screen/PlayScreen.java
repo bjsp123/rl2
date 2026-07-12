@@ -439,6 +439,14 @@ public class PlayScreen implements Screen {
         if (!initialized) {
             initialize();
             initialized = true;
+        } else {
+            // Re-shown after a pushed screen (gem forge, settings, ...) popped.
+            // World state may have changed while we weren't rendering - e.g. the
+            // forge dropped a crafted item on the floor - and the renderer's
+            // item/mob cell indexes only rebuild on markDirty, which otherwise
+            // waits for the next game tick. Without this the forged item stays
+            // invisible until the player moves.
+            levelRenderer.markDirty();
         }
         // cameraController goes FIRST so mouse-wheel zoom and pinch-zoom are always
         // available regardless of UI focus state - opening the inventory or the

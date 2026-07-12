@@ -210,6 +210,19 @@ final class PlayController {
                     return false;
                 }
                 MobMovement.stepTowardTarget(player, level);
+                // Stepping onto stairs uses them immediately - no separate
+                // interact tap. Applies only to a human-driven step landing on
+                // the tile (auto-explore above never descends; arrival placement
+                // after a transfer doesn't route through here, so landing on the
+                // far side's staircase can't bounce the player straight back).
+                Tile under = level.tiles[player.position.tileX()][player.position.tileY()];
+                if (under == Tile.STAIRS_DOWN || under == Tile.STAIRS_UP) {
+                    player.targetPosition = null;   // the staircase ends any queued path
+                    tryStairs(under == Tile.STAIRS_DOWN ? +1 : -1);
+                    profiler.add("playerStep", playerTurnStart);
+                    profiler.add("controllerTick", tickStart);
+                    return true;
+                }
                 if (player.targetPosition == null && player.ticksTillMove == 0
                         && currentlyVisibleHostiles(level, player).isEmpty()) {
                     int bagBefore = player.inventory.bag.size();
