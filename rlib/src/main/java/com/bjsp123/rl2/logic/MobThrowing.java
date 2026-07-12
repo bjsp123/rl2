@@ -416,7 +416,7 @@ public final class MobThrowing {
                 for (Mob m : soaked) {
                     if (m.hp <= 0) continue;
                     if (bombBuffsIgnored(m, it)) continue;
-                    MobSystem.knockBack(level, m, kb, dst, 0, kbCause);
+                    MobLifecycle.knockBack(level, m, kb, dst, 0, kbCause);
                 }
             }
         } else if (te == ItemEffect.OIL && inBounds) {
@@ -466,7 +466,7 @@ public final class MobThrowing {
                 DamageCause kbCause = new DamageCause(thrower, it, "wall-slam");
                 for (Mob m : blastSurvivors) {
                     if (bombBuffsIgnored(m, it)) continue;
-                    MobSystem.knockBack(level, m, it.knockbackSquares, dst, 0, kbCause);
+                    MobLifecycle.knockBack(level, m, it.knockbackSquares, dst, 0, kbCause);
                 }
             }
         } else if (te == ItemEffect.APPLYBUFFS && inBounds
@@ -571,7 +571,7 @@ public final class MobThrowing {
                 if (m == null || m == thrower || m.hp <= 0) continue;
                 toScatter.add(m);
             }
-            for (Mob m : toScatter) MobSystem.scatterMobAcrossWorld(level, m);
+            for (Mob m : toScatter) MobLifecycle.scatterMobAcrossWorld(level, m);
         }
 
         // The item's fate after impact is now driven entirely by the

@@ -337,7 +337,7 @@ public final class MobCombat {
             DamageCause kbCause = new DamageCause(attacker,
                     attacker.inventory != null ? attacker.inventory.weapon : null,
                     "wall-slam");
-            MobSystem.knockBack(level, target, kb, attacker.position, wallSlam, kbCause);
+            MobLifecycle.knockBack(level, target, kb, attacker.position, wallSlam, kbCause);
         }
         boolean killed;
         if (target.hp <= 0) {
@@ -614,10 +614,10 @@ public final class MobCombat {
         // SHIELDED / WRAITH_DODGE early-returns), so even a fully-mitigated
         // 0-damage swing counts. Only fires while the boss survives.
         if (target.hp > 0) {
-            MobSystem.maybeShatterBeaconSpirit(level, attacker, target, type);
+            MobLifecycle.maybeShatterBeaconSpirit(level, attacker, target, type);
         }
         if (target.hp <= 0) {
-            MobSystem.killMob(level, target, attacker);
+            MobLifecycle.killMob(level, target, attacker);
             return true;
         }
         return false;

@@ -598,7 +598,7 @@ public class PlayScreen implements Screen {
             // stair-descent would (seal-on-entry stairs, final-boss spawn), so
             // the "start at level" debug option can drop the player straight onto
             // a special / boss floor and have it behave correctly.
-            com.bjsp123.rl2.logic.MobSystem.applyLevelEntryEffects(startLevel, player);
+            com.bjsp123.rl2.logic.MobLifecycle.applyLevelEntryEffects(startLevel, player);
             String playerName = player.name != null ? player.name
                     : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
             EventLog.add(Messages.beginGame(playerName));

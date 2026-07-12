@@ -321,7 +321,7 @@ public final class BuffSystem {
         if (changed) m.statsDirty = true;
         // A ghost that re-solidified may now be over a chasm (falls) or inside
         // a wall / statue / another mob (repositioned to the nearest free tile).
-        if (ghostlyEnded) MobSystem.resolveGhostlyEnd(level, m);
+        if (ghostlyEnded) MobLifecycle.resolveGhostlyEnd(level, m);
     }
 
     /** True when {@code type} is a buff whose source surface the mob is currently standing

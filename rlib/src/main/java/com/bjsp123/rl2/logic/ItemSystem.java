@@ -510,14 +510,14 @@ public final class ItemSystem {
                 if (kb > 0) {
                     MobSystem.DamageCause kbCause = new MobSystem.DamageCause(caster, wand, "wall-slam");
                     for (Mob m : survivors) {
-                        MobSystem.knockBack(level, m, kb, target, 0, kbCause);
+                        MobLifecycle.knockBack(level, m, kb, target, 0, kbCause);
                     }
                 }
             }
             case BANISHMENT -> {
                 Mob victim = MobQueries.mobAt(level, target);
                 if (victim != null && victim.banishable) {
-                    MobSystem.killMob(level, victim, caster);
+                    MobLifecycle.killMob(level, victim, caster);
                 }
             }
             case BLAST -> {
@@ -613,7 +613,7 @@ public final class ItemSystem {
                     // down. Non-flying mobs fall via the standard
                     // fall-to-next-level path; items relocate to the same
                     // destination. Flying mobs hover and are unaffected.
-                    MobSystem.applyChasmFallToTile(level, x, y);
+                    MobLifecycle.applyChasmFallToTile(level, x, y);
                 }
             }
         }
@@ -673,7 +673,7 @@ public final class ItemSystem {
         // Chasm landing follows the standard fall-to-next-level path.
         if (t == com.bjsp123.rl2.model.Tile.CHASM
                 && !mob.effectiveStats().flying) {
-            com.bjsp123.rl2.logic.MobSystem.fallToNextLevel(level, mob);
+            com.bjsp123.rl2.logic.MobLifecycle.fallToNextLevel(level, mob);
         }
     }
 
@@ -713,7 +713,7 @@ public final class ItemSystem {
                 // Floor became CHASM in the reroll - send anything on it
                 // down (or to depth 1 as the fallback).
                 if (next == com.bjsp123.rl2.model.Tile.CHASM) {
-                    MobSystem.applyChasmFallToTile(level, x, y);
+                    MobLifecycle.applyChasmFallToTile(level, x, y);
                 }
             }
         }
@@ -1616,7 +1616,7 @@ public final class ItemSystem {
             kb += Math.min(5, perkLvl);
             int wallSlam = Math.max(0, perkLvl - 5);
             if (kb > 0) {
-                MobSystem.knockBack(level, victim, kb, arrival, wallSlam,
+                MobLifecycle.knockBack(level, victim, kb, arrival, wallSlam,
                         new MobSystem.DamageCause(user, item, "wall-slam"));
             }
         }
@@ -1746,7 +1746,7 @@ public final class ItemSystem {
             // the grapple-pulled mob either lands on the next level
             // (taking half-max-HP fall damage) or dies in the chasm if
             // there's no next level / the fall would kill it.
-            MobSystem.fallToNextLevel(level, mob);
+            MobLifecycle.fallToNextLevel(level, mob);
         }
     }
 

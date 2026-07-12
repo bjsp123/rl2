@@ -224,7 +224,7 @@ public class TurnSystem {
         level.turnsOnLevel++;
         tickHazardAndRenew(level);              // RL-54: hazard climb + renewing spawns
         LevelSystem.openExitIfCleared(level);   // no-op unless exitUnlocksOnClear
-        MobSystem.runLevelSpawner(level);       // no-op unless level.spawner != null
+        MobLifecycle.runLevelSpawner(level);       // no-op unless level.spawner != null
     }
 
     /**

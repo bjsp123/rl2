@@ -544,7 +544,7 @@ public final class GemSystem {
                         if (mx < 0 || my < 0 || mx >= level.width || my >= level.height) continue;
                         if (level.tiles[mx][my] == com.bjsp123.rl2.model.Tile.CHASM
                                 && !m.effectiveStats().flying) {
-                            MobSystem.fallToNextLevel(level, m);
+                            MobLifecycle.fallToNextLevel(level, m);
                         }
                     }
                 }

@@ -236,7 +236,7 @@ public final class MobAiBehavior {
             for (int dx = -1; dx <= 1; dx++) {
                 if (dx == 0 && dy == 0) continue;
                 int nx = sx + dx, ny = sy + dy;
-                if (!MobSystem.isFreeFloor(level, nx, ny)) continue;
+                if (!MobLifecycle.isFreeFloor(level, nx, ny)) continue;
                 int d = Math.max(Math.abs(nx - ax), Math.abs(ny - ay));
                 if (d > bestDist) { bestDist = d; best = new Point(nx, ny); }
             }

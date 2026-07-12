@@ -321,7 +321,7 @@ public class LevelSystem {
                 com.bjsp123.rl2.model.WorldTopology.arrivalPointFrom(next, srcIdx, direction > 0);
         if (dest == null) return false;
 
-        MobSystem.transferMobToLevel(cur, mob, next, dest);
+        MobLifecycle.transferMobToLevel(cur, mob, next, dest);
 
         TurnSystem.applyMoveCost(mob, mob.effectiveStats().moveCost);
         for (Mob other : next.mobs) other.effectiveStats();
