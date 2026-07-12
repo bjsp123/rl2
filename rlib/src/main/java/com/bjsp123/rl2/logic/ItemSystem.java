@@ -416,14 +416,17 @@ public final class ItemSystem {
      * the wand's own per-item columns ({@link Item#effectSize},
      * {@link Item#damage}, plus their per-level increments).
      *
-     * <p><b>Must run synchronously from {@link #fireWand}, not from an
-     * Animator PendingImpact callback.</b> See the fireWand and
-     * {@link com.bjsp123.rl2.logic.MobSystem#throwItem} javadocs for the
-     * core invariant: a ranged attack must complete and deal damage before
-     * the defender gets to move. Letting the Animator drive impact gives
-     * the target ticks to escape the missile / ray's path - the wand-fizzle
-     * regression. Visual delay of damage popups / death fades is a
-     * renderer-side concern, decoupled from this mutation.
+     * <p><b>Step 4 of the animation-gated lifecycle:</b> queued by
+     * {@link #fireWand} via
+     * {@link com.bjsp123.rl2.logic.MobSystem#queuePendingImpact} with the
+     * impact tile locked at fire time. The core invariant - a ranged attack
+     * must complete and deal damage before the defender gets to move - is
+     * enforced by the pending-impact freeze (no game tick runs while the
+     * queue is non-empty; headless drains it before the next mob brain),
+     * not by synchronous mutation. If this method ever becomes reachable
+     * only from the rgame Animator without that freeze holding, that's the
+     * historical wand-fizzle regression - see the
+     * {@link com.bjsp123.rl2.logic.MobSystem#throwItem} javadoc.
      *
      * <p>{@code wand} may be {@code null} (defensive); elements that need
      * its damage / AOE columns then short-circuit.
