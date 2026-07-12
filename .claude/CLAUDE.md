@@ -223,6 +223,7 @@ only). CI (`.github/workflows/ci.yml`) runs rungs 1–2 on every push.
 - **Lists of "a few" items → vertical button list** (tabs of a popup, menu screens — column of full-width buttons).
 - **Lists of "many" items → grid** (inventory bag, encyclopedia entries — uniform cells laid out in a grid).
 - **Minimize window-tree depth.** A user shouldn't need three taps to do a one-tap action. Inline destructive controls where they read clearly — e.g. a delete glyph rendered on top of each row in the saved-game list (not "tap row → confirm dialog → delete"). The confirmation lives at the action site, not behind another screen.
+- **Long-press = help, everywhere.** Every interactive element should carry help: give a `Btn` a `helpKey` (strings `help.<key>.title` / `help.<key>.body`) and long-pressing it opens `V2HelpPopup`; HUD elements and inventory slots answer via `helpHitAt` hit-tests (a slot with an item shows that item's lore); a long-press on the world opens Look committed on that tile. A fired long-press always suppresses the normal tap on release.
 
 ### Visual style
 - **Chunky.** Big fonts, big tap targets, integer pixel positions, nearest-neighbour filtering. Adopt the proportions of the user-supplied screenshots in [assets/scratch/shots/](assets/scratch/shots/) — thin single-line gray slot cells, manila-folder tabs at the bottom of modal panels, flat HUD strip at the bottom of the screen.

@@ -64,7 +64,8 @@ public final class V2Title extends V2Screen {
         float y    = winY + WINDOW_PAD;
 
         // Bottom → top (libGDX y-up): Quit is lowest, Continue/New Game highest.
-        addBtn(TextCatalog.get("ui.title.quit"), btnX, y, btnW, Gdx.app::exit);
+        addBtn(TextCatalog.get("ui.title.quit"), btnX, y, btnW, Gdx.app::exit)
+                .help("title.quit");
         y += TITLE_BTN_H + BTN_GAP;
         if (hasAccount) {
             addBtn(TextCatalog.get("ui.title.account"), btnX, y, btnW,
@@ -72,16 +73,20 @@ public final class V2Title extends V2Screen {
             y += TITLE_BTN_H + BTN_GAP;
         }
         addBtn(TextCatalog.get("ui.title.settings"), btnX, y, btnW,
-                () -> game.pushScreen(new V2Settings(game, ctx)));
+                () -> game.pushScreen(new V2Settings(game, ctx)))
+                .help("title.settings");
         y += TITLE_BTN_H + BTN_GAP;
         addBtn(TextCatalog.get("ui.title.arena"), btnX, y, btnW,
-                () -> game.pushScreen(new V2ArenaSetup(game)));
+                () -> game.pushScreen(new V2ArenaSetup(game)))
+                .help("title.arena");
         y += TITLE_BTN_H + BTN_GAP;
         addBtn(TextCatalog.get("ui.title.hallOfFame"), btnX, y, btnW,
-                () -> game.pushScreen(new V2HallOfFame(game)));
+                () -> game.pushScreen(new V2HallOfFame(game)))
+                .help("title.hallOfFame");
         y += TITLE_BTN_H + BTN_GAP;
         addBtn(TextCatalog.get("ui.title.savedGames"), btnX, y, btnW,
-                () -> game.pushScreen(new V2Saves(game, ctx)));
+                () -> game.pushScreen(new V2Saves(game, ctx)))
+                .help("title.savedGames");
         y += TITLE_BTN_H + BTN_GAP;
         String topLabel = TextCatalog.get(hasSave ? "ui.title.continue" : "ui.title.newGame");
         Runnable topAction = hasSave
@@ -92,7 +97,8 @@ public final class V2Title extends V2Screen {
                     else game.pushScreen(new V2Saves(game, ctx));
                   }
                 : () -> game.pushScreen(new V2Saves(game, ctx));
-        addBtn(topLabel, btnX, y, btnW, topAction);
+        addBtn(topLabel, btnX, y, btnW, topAction)
+                .help(hasSave ? "title.continue" : "title.newGame");
 
         if (game.music != null) game.music.play(com.bjsp123.rl2.audio.MusicPlayer.Track.TITLE);
         // Burger at top-right; no back button (root screen). Standard items,
@@ -101,9 +107,10 @@ public final class V2Title extends V2Screen {
         addStandardBurgerItems(game, true);
     }
 
-    private void addBtn(String label, float x, float y, float w, Runnable onClick) {
+    private Btn addBtn(String label, float x, float y, float w, Runnable onClick) {
         Btn b = new Btn(label, x, y, w, TITLE_BTN_H, onClick).header();
         buttons.add(b);
+        return b;
     }
 
     @Override

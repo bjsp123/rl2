@@ -36,6 +36,11 @@ public final class Btn {
     public boolean header;
     /** {@code true} = red border + red label (destructive / danger action). */
     public boolean warn;
+    /** Optional help key - when non-null, long-pressing the button opens the
+     *  shared {@link V2HelpPopup} with strings {@code help.<helpKey>.title} /
+     *  {@code help.<helpKey>.body}. Set via {@link #help(String)}; buttons
+     *  without a key ignore long-presses (the tap fires normally). */
+    public String helpKey;
 
     public Btn(String label, float x, float y, float w, float h, Runnable onClick) {
         this.label = label;
@@ -44,6 +49,9 @@ public final class Btn {
     }
 
     public Btn header() { this.header = true; return this; }
+
+    /** Fluent setter for {@link #helpKey}. */
+    public Btn help(String helpKey) { this.helpKey = helpKey; return this; }
 
     /** Draw the button's chrome (tri-line border + fill). Caller is inside
      *  a {@link ShapeRenderer.ShapeType#Filled} block. Pressed buttons get

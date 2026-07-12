@@ -864,6 +864,41 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         f.getData().setScale(prev);
     }
 
+    // -- Long-press help -------------------------------------------------------
+    /** One long-pressed inventory slot: {@code item} is what's in it, or
+     *  {@code null} for an empty slot (the caller shows generic bag help). */
+    public static final class HelpHit {
+        public final Item item;
+        HelpHit(Item item) { this.item = item; }
+    }
+
+    /** Hit-test ({@code vx},{@code vy}) (virtual coords) against the
+     *  equipment row + bag grid for the long-press help gesture. Returns
+     *  {@code null} when the point misses every slot, or while the
+     *  item-detail sub-popup / picker mode is up (those surfaces already
+     *  show or gate item detail). */
+    public HelpHit helpHitAt(float vx, float vy) {
+        if (!open || selectedItem != null || pickMode()) return null;
+        for (int i = 0; i < equipRects.length; i++) {
+            if (equipRects[i].contains(vx, vy)) return new HelpHit(equippedItemAt(i));
+        }
+        for (BagCell c : bagCells) {
+            if (c.rect.contains(vx, vy)) return new HelpHit(c.item);
+        }
+        return null;
+    }
+
+    /** Reset every held-cell highlight. Called when a long-press fires -
+     *  the release is swallowed upstream, so without this the pressed
+     *  visual would stick until the next touch. */
+    public void clearPressed() {
+        bagPressed = -1;
+        equipPressed = -1;
+        bindPressed = -1;
+        tabs.clearPressed();
+        detailUsePressed = detailEquipPressed = detailThrowPressed = detailInfoPressed = false;
+    }
+
     // -- Input ---------------------------------------------------------------
     public InputProcessor input() {
         return new InputAdapter() {

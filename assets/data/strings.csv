@@ -438,6 +438,41 @@ help.012.para1,Hitting a foe that *can't see you* with a physical attack is a *s
 help.012.para2,"Stay out of sight, invisible, or hidden to set one up."
 help.012.para3,The *Stealth* perk shrinks how far enemies notice you.
 help.012.title,Surprise and stealth
+help.generic.body,No help is written for this yet.
+help.hud.actionslot.title,Quickslots
+help.hud.actionslot.body,"Shortcut buttons for your items. Open your bag, tap an item, and bind it to a numbered slot to use it with a single tap (or its number key). Long-press a filled slot to see that item's details."
+help.hud.autoexploreBtn.title,Auto-Explore
+help.hud.autoexploreBtn.body,"Walks you toward unexplored ground automatically, gathering loot on the way. It stops when danger comes into view. Tap again (or do anything) to stop early."
+help.hud.burger.title,Menu
+help.hud.burger.body,"Settings, the encyclopedia, level info, the world map, the message log, and the way back to the main menu."
+help.hud.clock.title,Turn Clock
+help.hud.clock.body,"One full sweep of the hand is one game turn. Everything you do costs time - fast characters fit more actions into a turn, slow ones fewer - and enemies act while the hand sweeps."
+help.hud.hpbar.title,Hit Points
+help.hud.hpbar.body,"Your health. When it runs out you die, and death is permanent. Retreat from bad fights, heal with potions and food, and rest somewhere safe to recover."
+help.hud.inventory.title,Bag Slot
+help.hud.inventory.body,"An empty slot in your bag. Each bag tab holds a limited number of items - equipment, food, items, and gems each have their own space. Walk over loot to pick it up."
+help.hud.inventoryBtn.title,Bag
+help.hud.inventoryBtn.body,"Opens your backpack: equipment, food, potions, bombs, and gems. Tap an item to inspect, use, equip, throw, or bind it to a quickslot."
+help.hud.lookBtn.title,Look
+help.hud.lookBtn.body,"Examine the world. Opens a cursor - tap any tile to see details about the creature, item, or terrain there. You can also long-press any tile at any time to look at it directly."
+help.hud.portrait.title,Your Character
+help.hud.portrait.body,"Your class portrait and character level. Tap it to open the character sheet with your stats, buffs, and perks. A pulsing gold frame means you have an unspent perk point waiting."
+help.hud.xpbar.title,Experience
+help.hud.xpbar.body,"Progress toward your next character level. Experience comes from exploring new ground, not from kills - keep moving to grow stronger. Levelling up restores you and earns perk points."
+help.title.arena.title,Arena
+help.title.arena.body,"A sandbox battle mode: pick sides, pit mobs against each other, and watch the fight play out."
+help.title.continue.title,Continue
+help.title.continue.body,Resume your most recent saved run right where you left off.
+help.title.hallOfFame.title,Hall of Fame
+help.title.hallOfFame.body,"The record of your past runs - scores, depth reached, and how each adventure ended."
+help.title.newGame.title,New Game
+help.title.newGame.body,"Start a fresh run. Pick a save slot and a character class, then descend into the dungeon."
+help.title.quit.title,Quit
+help.title.quit.body,Exit the game. Your progress is saved automatically.
+help.title.savedGames.title,Saved Games
+help.title.savedGames.body,"Your save slots. Resume a run in progress, start a new one, or delete old saves."
+help.title.settings.title,Settings
+help.title.settings.body,"Display, gameplay, log, and audio options - every toggle and preference lives here."
 item.AMULET_OF_DEFENCE.description,"A blue, shield shaped gem in a gold setting."
 item.AMULET_OF_DEFENCE.description2,Protects from physical blows.
 item.AMULET_OF_DEFENCE.name,protective amulet

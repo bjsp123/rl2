@@ -105,6 +105,21 @@ public class LookMode extends InputAdapter {
         return best;
     }
 
+    /** Activate Look with the cursor already committed on {@code tile} -
+     *  the panel shows immediately, no preview stage. Used by the world
+     *  long-press gesture ("help for a world object"): the pressed tile IS
+     *  the pick, so it mirrors the touchDown commit path (cursor + history
+     *  record + hasChosen). Out-of-bounds tiles are ignored. */
+    public void activateAt(Point tile) {
+        if (level == null || tile == null) return;
+        int tx = tile.tileX(), ty = tile.tileY();
+        if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
+        active = true;
+        cursor = new Point(tx, ty);
+        if (history != null) history.record(level, cursor);
+        hasChosen = true;
+    }
+
     public void deactivate() {
         active = false;
         hasChosen = false;

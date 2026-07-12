@@ -53,6 +53,20 @@ public abstract class V2Screen extends ScreenAdapter {
     private final com.bjsp123.rl2.ui.v2.stage.V2PopupActor burgerOverlayActor =
             new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(burgerOverlay);
 
+    // -- Long-press help (auto-driven by V2Screen) ----------------------------
+    /** Shared long-press tracker - fed by the base input adapter, polled in
+     *  {@link #render}. A press held on a {@link Btn} with a non-null
+     *  {@link Btn#helpKey} opens {@link #helpPopup}. */
+    private final LongPress longPress = new LongPress();
+    /** Screen-owned help popup - rendered on the stage's sub-popup layer so
+     *  it sits over the screen body; input is handled inline by the base
+     *  adapter (any tap / ESC dismisses). */
+    protected final V2HelpPopup helpPopup;
+    private final com.bjsp123.rl2.ui.v2.stage.V2PopupActor helpPopupActor;
+    /** Set when a touchDown was spent dismissing the help popup, so the
+     *  matching touchUp is swallowed instead of firing a button. */
+    private boolean helpDismissTouch;
+
     protected com.bjsp123.rl2.audio.SoundManager sounds;
     public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
 
@@ -65,6 +79,20 @@ public abstract class V2Screen extends ScreenAdapter {
         public boolean touchDown(int sx, int sy, int pointer, int button) {
             float vx = ctx.unprojectX(sx, sy);
             float vy = ctx.unprojectY(sx, sy);
+
+            // Help popup is fully modal - any tap dismisses it, and the
+            // matching touchUp is swallowed (helpDismissTouch).
+            if (helpPopup.isOpen()) {
+                helpPopup.close();
+                helpDismissTouch = true;
+                return true;
+            }
+
+            // Arm the long-press tracker for pointer 0 (a second finger
+            // means pinch/multitouch - cancel). Never consumes the event;
+            // the normal press handling below proceeds untouched.
+            if (pointer == 0 && !burgerMenu.open) longPress.onTouchDown(vx, vy);
+            else longPress.cancel();
 
             // Burger drop-down - when open, intercepts everything. Tap on
             // an item captures it; tap outside the panel + outside the
@@ -100,6 +128,20 @@ public abstract class V2Screen extends ScreenAdapter {
         public boolean touchUp(int sx, int sy, int pointer, int button) {
             float vx = ctx.unprojectX(sx, sy);
             float vy = ctx.unprojectY(sx, sy);
+
+            // Release after a help-popup-dismissing tap - swallow so the
+            // tap can't also fire whatever sits under the popup.
+            if (helpDismissTouch) {
+                helpDismissTouch = false;
+                return true;
+            }
+            // A long-press that opened help suppresses the normal tap:
+            // clear every pressed highlight and swallow the release.
+            if (longPress.consumeFired()) {
+                clearPressed();
+                return true;
+            }
+            longPress.cancel();
 
             // Burger menu item release - BurgerMenu closes itself and fires
             // the bound action (menu closes first so a navigation target
@@ -144,6 +186,7 @@ public abstract class V2Screen extends ScreenAdapter {
         @Override
         public boolean keyDown(int keycode) {
             if (keycode == Input.Keys.ESCAPE || keycode == Input.Keys.BACK) {
+                if (helpPopup.isOpen()) { helpPopup.close(); return true; }
                 if (burgerMenu.open) { burgerMenu.open = false; return true; }
                 onEscape();
                 return true;
@@ -153,6 +196,10 @@ public abstract class V2Screen extends ScreenAdapter {
 
         @Override
         public boolean touchDragged(int sx, int sy, int pointer) {
+            if (pointer == 0) {
+                longPress.onTouchDragged(ctx.unprojectX(sx, sy),
+                        ctx.unprojectY(sx, sy));
+            }
             if (burgerMenu.open) return false;
             return onTouchDragged(ctx.unprojectX(sx, sy),
                     ctx.unprojectY(sx, sy));
@@ -193,6 +240,8 @@ public abstract class V2Screen extends ScreenAdapter {
 
     protected V2Screen(UiCtx ctx) {
         this.ctx = ctx;
+        this.helpPopup = new V2HelpPopup(ctx);
+        this.helpPopupActor = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(helpPopup);
     }
 
     /** One-time layout - populate {@link #buttons}, build the burger / back
@@ -245,11 +294,16 @@ public abstract class V2Screen extends ScreenAdapter {
         // share ctx.v2Stage; remove() in hide() prevents stale actors
         // from accumulating across screen swaps.
         ctx.v2Stage.addToBurger(burgerOverlayActor);
+        // Help popup goes on the sub-popup layer - above the screen body,
+        // below the burger drop-down.
+        ctx.v2Stage.addToSubPopup(helpPopupActor);
     }
 
     @Override
     public void hide() {
         ctx.v2Stage.remove(burgerOverlayActor);
+        ctx.v2Stage.remove(helpPopupActor);
+        helpPopup.close();
     }
 
     /** Subclass-accessible handle on the V2Screen's base input adapter so a
@@ -332,8 +386,51 @@ public abstract class V2Screen extends ScreenAdapter {
         burgerMenu.layout(ctx);
     }
 
+    /** Clear every pressed-button highlight - used when a long-press fires
+     *  so the swallowed touchUp doesn't leave anything stuck lit. */
+    private void clearPressed() {
+        if (burger != null) burger.pressed = false;
+        if (back != null) back.pressed = false;
+        for (Btn b : buttons) b.pressed = false;
+    }
+
+    /** Long-press fired at ({@code vx},{@code vy}) - open help for the Btn
+     *  under the point (when it carries a {@link Btn#helpKey}), else offer
+     *  the press to {@link #onLongPressInBody}. Marks the press handled
+     *  (suppressing the tap) only when something actually opened. */
+    private void handleLongPress(float vx, float vy) {
+        if (helpPopup.isOpen() || burgerMenu.open) return;
+        for (Btn b : buttons) {
+            if (b.hit(vx, vy) && b.helpKey != null) {
+                longPress.markHandled();
+                clearPressed();
+                openHelp(b.helpKey, b.label);
+                return;
+            }
+        }
+        if (onLongPressInBody(vx, vy)) {
+            longPress.markHandled();
+            clearPressed();
+        }
+    }
+
+    /** Optional long-press hook for non-Btn regions (list rows, cells).
+     *  Return {@code true} after opening help (e.g. via {@link #openHelp})
+     *  to suppress the normal tap on release. Default: ignore. */
+    protected boolean onLongPressInBody(float vx, float vy) { return false; }
+
+    /** Open the screen's help popup for {@code helpKey} - strings
+     *  {@code help.<helpKey>.title} / {@code help.<helpKey>.body}, with
+     *  {@code fallbackTitle} + a generic body when the catalog lacks them. */
+    protected void openHelp(String helpKey, String fallbackTitle) {
+        helpPopup.openKey(helpKey, fallbackTitle);
+    }
+
     @Override
     public void render(float delta) {
+        // Long-press poll - wall-clock timer, so it lives on the render
+        // frame rather than any input event.
+        if (longPress.update()) handleLongPress(longPress.x(), longPress.y());
         ctx.clear();
         ctx.applyProjection();
         layoutBurgerOverlay();

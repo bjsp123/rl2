@@ -839,6 +839,63 @@ public final class V2Hud {
         return n;
     }
 
+    // -- Long-press help -------------------------------------------------------
+    /** One long-pressable HUD element. Exactly one of the three shapes:
+     *  a plain chrome element ({@code key} set, e.g. {@code "hud.lookBtn"}),
+     *  an action quickslot with a bound item ({@code key} + {@code item}),
+     *  or a buff icon ({@code buff} set, {@code key} null - the caller
+     *  reuses the buff-info popup instead of a help string). */
+    public static final class HelpHit {
+        public final String key;
+        public final Item item;
+        public final Buff buff;
+        HelpHit(String key, Item item, Buff buff) {
+            this.key = key;
+            this.item = item;
+            this.buff = buff;
+        }
+    }
+
+    /** Hit-test ({@code vx},{@code vy}) (virtual coords) against every HUD
+     *  element for the long-press help gesture. Returns {@code null} when
+     *  the point misses all HUD chrome (the press belongs to the world) or
+     *  while the burger drop-down is open. Rects are the same ones the
+     *  input processor uses - single source of truth. */
+    public HelpHit helpHitAt(float vx, float vy) {
+        if (menu.open) return null;
+        if (portraitRect.contains(vx, vy)) return new HelpHit("hud.portrait", null, null);
+        if (hpBarRect.contains(vx, vy))    return new HelpHit("hud.hpbar", null, null);
+        if (xpBarRect.contains(vx, vy))    return new HelpHit("hud.xpbar", null, null);
+        if (clockRect.contains(vx, vy))    return new HelpHit("hud.clock", null, null);
+        if (burgerRect.contains(vx, vy))   return new HelpHit("hud.burger", null, null);
+        if (lookRect.contains(vx, vy))     return new HelpHit("hud.lookBtn", null, null);
+        if (autoRect.contains(vx, vy))     return new HelpHit("hud.autoexploreBtn", null, null);
+        if (invRect.contains(vx, vy))      return new HelpHit("hud.inventoryBtn", null, null);
+        for (int i = 0; i < buffIconRects.size(); i++) {
+            if (buffIconRects.get(i).contains(vx, vy) && i < buffIconList.size()) {
+                return new HelpHit(null, null, buffIconList.get(i));
+            }
+        }
+        for (int i = 0; i < com.bjsp123.rl2.ui.skin.Settings.quickslotCount(); i++) {
+            if (actionRects[i].contains(vx, vy)) {
+                // A bound slot describes THAT item; an empty one describes
+                // what quickslots are.
+                Item bound = actionBar != null ? actionBar.get(i) : null;
+                return new HelpHit("hud.actionslot", bound, null);
+            }
+        }
+        return null;
+    }
+
+    /** Reset every held-button highlight. Called when a long-press fires -
+     *  the release is swallowed upstream, so without this the pressed
+     *  visual would stick until the next touch. */
+    public void clearPressed() {
+        burgerPressed = lookPressed = autoPressed = invPressed = false;
+        buffIconPressed = -1;
+        java.util.Arrays.fill(actionPressed, false);
+    }
+
     // -- Input ---------------------------------------------------------------
     public InputProcessor input() {
         return new InputAdapter() {

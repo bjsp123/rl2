@@ -102,6 +102,45 @@ public class PlayScreen implements Screen {
     private com.bjsp123.rl2.ui.v2.V2Log v2Log;
     private com.bjsp123.rl2.ui.v2.V2TipPopup v2TipPopup;
     private com.bjsp123.rl2.ui.v2.V2GameStartTipPopup v2GameStartTipPopup;
+    private com.bjsp123.rl2.ui.v2.V2HelpPopup v2HelpPopup;
+
+    /** Long-press-for-help tracker. Fed raw SCREEN coords by
+     *  {@link #longPressInput()} (the front of the multiplexer), polled once
+     *  per render frame; a fire routes to {@link #handleLongPress()} which
+     *  resolves the pressed point against the inventory slots, the HUD
+     *  chrome, and finally the world (Look on the pressed tile). */
+    private final com.bjsp123.rl2.ui.v2.LongPress longPress =
+            new com.bjsp123.rl2.ui.v2.LongPress();
+
+    /** Front-of-multiplexer adapter feeding {@link #longPress}. Never
+     *  consumes touchDown / touchDragged (records and falls through, so
+     *  every existing tap / drag path is untouched); consumes ONLY the
+     *  touchUp that follows a handled long-press, suppressing the normal
+     *  tap action per the long-press contract. */
+    private com.badlogic.gdx.InputAdapter longPressInput() {
+        return new com.badlogic.gdx.InputAdapter() {
+            @Override
+            public boolean touchDown(int sx, int sy, int pointer, int button) {
+                if (pointer == 0) longPress.onTouchDown(sx, sy);
+                else longPress.cancel();   // second finger = pinch, not a hold
+                return false;
+            }
+
+            @Override
+            public boolean touchDragged(int sx, int sy, int pointer) {
+                if (pointer == 0) longPress.onTouchDragged(sx, sy);
+                return false;
+            }
+
+            @Override
+            public boolean touchUp(int sx, int sy, int pointer, int button) {
+                if (pointer != 0) return false;
+                boolean fired = longPress.consumeFired();
+                longPress.cancel();
+                return fired;
+            }
+        };
+    }
 
     /** Input adapter slotted FIRST in the multiplexer (right after the
      *  camera controller). Consumes a tap when the tip popup is showing,
@@ -483,8 +522,10 @@ public class PlayScreen implements Screen {
         // handlers. V2 popups come BEFORE the HUD so an open popup eats taps
         // before a HUD button under it can fire.
         Gdx.input.setInputProcessor(new InputMultiplexer(
+                longPressInput(),
                 gameStartTipInput(),
                 introSkipInput(),
+                v2HelpPopup.input(),
                 confirmPopup.input(),
                 cameraController,
                 tipPopupDismissInput(),
@@ -503,7 +544,7 @@ public class PlayScreen implements Screen {
         // {@code subPopupLayer} so its scrim covers the inventory text
         // cleanly when up.
         if (popupActors == null) {
-            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[8];
+            popupActors = new com.badlogic.gdx.scenes.scene2d.Actor[9];
             popupActors[0] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Inventory);
             popupActors[1] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2CharacterStats);
             popupActors[2] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Look);
@@ -513,6 +554,7 @@ public class PlayScreen implements Screen {
             popupActors[5] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2BuffInfo);
             popupActors[6] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2Log);
             popupActors[7] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(confirmPopup);
+            popupActors[8] = new com.bjsp123.rl2.ui.v2.stage.V2PopupActor(v2HelpPopup);
         }
         game.ui.v2Stage.add(popupActors[0]);
         game.ui.v2Stage.add(popupActors[1]);
@@ -522,6 +564,7 @@ public class PlayScreen implements Screen {
         game.ui.v2Stage.addToSubPopup(popupActors[5]);
         game.ui.v2Stage.addToSubPopup(popupActors[6]);
         game.ui.v2Stage.addToSubPopup(popupActors[7]);
+        game.ui.v2Stage.addToSubPopup(popupActors[8]);
         game.currentPlay = this;
         if (game.music != null) game.music.play(com.bjsp123.rl2.audio.MusicPlayer.Track.GAMEPLAY);
     }
@@ -731,6 +774,9 @@ public class PlayScreen implements Screen {
         v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui, game.achievements);
         v2Hud.setOnOpenEncyclopedia(() -> v2Encyclopedia.toggle());
         v2BuffInfo = new com.bjsp123.rl2.ui.v2.V2BuffInfo(game.ui);
+        // Long-press help popup - one shared instance for HUD chrome help,
+        // inventory-slot item lore, and empty-slot explanations.
+        v2HelpPopup = new com.bjsp123.rl2.ui.v2.V2HelpPopup(game.ui);
         v2Hud.setOnBuffTap(buff -> { if (buff != null) v2BuffInfo.open(buff); });
         v2Log = new com.bjsp123.rl2.ui.v2.V2Log(game.ui);
         v2Log.setSounds(game.sounds);
@@ -1003,6 +1049,10 @@ public class PlayScreen implements Screen {
         }
         Level level  = world.currentLevel();
         frameProfiler.begin(delta, level, animator.queue.freezeFrames);
+
+        // Long-press-for-help poll - wall-clock timer, so it lives on the
+        // render frame rather than any input event.
+        if (longPress.update()) handleLongPress();
 
         long span = frameProfiler.start();
         Gdx.gl.glClearColor(0, 0, 0, 1);
@@ -1917,6 +1967,70 @@ public class PlayScreen implements Screen {
         com.badlogic.gdx.Gdx.gl.glDisable(B);
     }
 
+    /** Long-press fired at the recorded screen point. Resolution order:
+     *  <ol>
+     *    <li>Popup open: only the inventory answers - a slot with an item
+     *        opens that item's lore card, an empty slot explains the bag.
+     *        Every other popup ignores the gesture.</li>
+     *    <li>HUD chrome: each element opens its {@code help.hud.*} strings;
+     *        an action slot with a bound item shows THAT item's lore; a
+     *        buff icon reuses the existing buff-info popup.</li>
+     *    <li>Otherwise: the world - open Look with its cursor committed on
+     *        the pressed tile.</li>
+     *  </ol>
+     *  Marks the press handled (suppressing the tap on release) only when
+     *  something actually opened. */
+    private void handleLongPress() {
+        if (introActive || outroActive || deathTransitionPending
+                || victoryTransitionPending || reviveCinematicFrame >= 0) return;
+        if (v2HelpPopup == null || v2HelpPopup.isOpen() || v2Hud == null) return;
+        int sx = (int) longPress.x();
+        int sy = (int) longPress.y();
+        float vx = game.ui.unprojectX(sx, sy);
+        float vy = game.ui.unprojectY(sx, sy);
+
+        if (isAnyPopupOpen()) {
+            if (v2Inventory != null && v2Inventory.isOpen()) {
+                V2Inventory.HelpHit hit = v2Inventory.helpHitAt(vx, vy);
+                if (hit == null) return;
+                longPress.markHandled();
+                v2Inventory.clearPressed();
+                if (hit.item != null) {
+                    v2HelpPopup.open(hit.item, TurnSystem.findPlayer(world.currentLevel()));
+                } else {
+                    v2HelpPopup.openKey("hud.inventory", "");
+                }
+            }
+            return;   // other popups: gesture ignored
+        }
+
+        // HUD chrome.
+        com.bjsp123.rl2.ui.v2.V2Hud.HelpHit hudHit = v2Hud.helpHitAt(vx, vy);
+        if (hudHit != null) {
+            longPress.markHandled();
+            v2Hud.clearPressed();
+            if (hudHit.buff != null) {
+                v2BuffInfo.open(hudHit.buff);
+            } else if (hudHit.item != null) {
+                v2HelpPopup.open(hudHit.item, TurnSystem.findPlayer(world.currentLevel()));
+            } else {
+                v2HelpPopup.openKey(hudHit.key, "");
+            }
+            return;
+        }
+
+        // World tile - open Look committed on the pressed square.
+        Level level = world.currentLevel();
+        if (level == null || lookMode == null) return;
+        com.badlogic.gdx.math.Vector3 w =
+                camera.unproject(new com.badlogic.gdx.math.Vector3(sx, sy, 0));
+        int tx = (int) Math.floor(w.x / LevelRenderer.TILE_SIZE);
+        int ty = (int) Math.floor(w.y / LevelRenderer.TILE_SIZE);
+        if (tx < 0 || ty < 0 || tx >= level.width || ty >= level.height) return;
+        longPress.markHandled();
+        lookMode.activateAt(new Point(tx, ty));
+    }
+
     /** True iff any modal popup or input-claiming overlay is currently open.
      *  Used both as the game-tick gate (don't tick the world while a window
      *  is up) and as the camera input blocker (don't pan the map under a
@@ -1931,6 +2045,7 @@ public class PlayScreen implements Screen {
         if (v2BuffInfo != null && v2BuffInfo.isOpen()) return true;
         if (v2Log != null && v2Log.isOpen()) return true;
         if (confirmPopup != null && confirmPopup.isOpen()) return true;
+        if (v2HelpPopup != null && v2HelpPopup.isOpen()) return true;
         return false;
     }
 
@@ -2003,6 +2118,7 @@ public class PlayScreen implements Screen {
         levelRenderer = null;
         v2Hud = null;
         v2Inventory = null;
+        v2HelpPopup = null;
         v2Look = null;
         targetingOverlay = null;
         lookMode = null;
