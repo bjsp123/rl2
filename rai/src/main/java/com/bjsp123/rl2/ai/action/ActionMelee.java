@@ -2,7 +2,7 @@ package com.bjsp123.rl2.ai.action;
 
 import com.bjsp123.rl2.ai.WorldState;
 import com.bjsp123.rl2.ai.eval.CombatEval;
-import com.bjsp123.rl2.logic.MobSystem;
+import com.bjsp123.rl2.logic.MobCombat;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.Level;
 import com.bjsp123.rl2.model.Mob;
@@ -35,7 +35,7 @@ public final class ActionMelee implements Action {
     }
 
     @Override public void execute(Mob mob, Level level) {
-        MobSystem.attack(level, mob, target);
+        MobCombat.attack(level, mob, target);
         TurnSystem.applyActionCost(mob, mob.effectiveStats().attackCost);
     }
 

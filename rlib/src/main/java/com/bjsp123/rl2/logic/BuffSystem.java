@@ -189,7 +189,7 @@ public final class BuffSystem {
         // processAttack. Dealt BEFORE freezing so it doesn't shorten the fresh
         // FROZEN via shortenFrozenOnDamage. Burst base 5*stacks -> ~20*stacks felt.
         if (get(target, BuffType.FROZEN) == null && target.hp > 0) {
-            MobSystem.processAttack(level, src, target, 5 * Math.max(1, frozenStacks),
+            MobCombat.processAttack(level, src, target, 5 * Math.max(1, frozenStacks),
                     MobSystem.AttackType.MAGIC, MobSystem.DamageElement.COLD, null,
                     new MobSystem.DamageCause(src, null, "cold-shock"));
         }
@@ -356,7 +356,7 @@ public final class BuffSystem {
             case ON_FIRE -> {
                 int raw = takesDoubleFireDamage(m) ? GameBalance.FIRE_DAMAGE_PER_TURN * 2
                                                    : GameBalance.FIRE_DAMAGE_PER_TURN;
-                int magicResist = MobSystem.rollRange(MobSystem.magicResistRange(m));
+                int magicResist = MobSystem.rollRange(MobCombat.magicResistRange(m));
                 int dmg = Math.max(0, raw - magicResist);
                 if (dmg > 0) {
                     emitPeriodicDamage(level, m, BuffType.ON_FIRE, dmg);
@@ -365,7 +365,7 @@ public final class BuffSystem {
                                     .add("magicResist", Math.min(magicResist, raw));
                     MobSystem.DamageCause cause = new MobSystem.DamageCause(
                             b.source, b.sourceItem, "fire-dot");
-                    boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
+                    boolean killed = MobCombat.processAttack(level, b.source, m, dmg,
                             MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.FIRE, bk, cause);
                     if (killed) logDotDeath(m, TextCatalog.get("buff.dotdeath.ON_FIRE"));
                 }
@@ -376,7 +376,7 @@ public final class BuffSystem {
                 emitPeriodicDamage(level, m, BuffType.POISONED, dmg);
                 MobSystem.DamageCause cause = new MobSystem.DamageCause(
                         b.source, b.sourceItem, "poison-dot");
-                boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
+                boolean killed = MobCombat.processAttack(level, b.source, m, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON, null, cause);
                 if (killed) logDotDeath(m, TextCatalog.get("buff.dotdeath.POISONED"));
             }
@@ -392,7 +392,7 @@ public final class BuffSystem {
                 // bleed (and not an unseen attacker). Bleed stays PHYSICAL-typed so
                 // PROTECTION still blunts it; dealt is read back from the HP delta.
                 double hpBefore = m.hp;
-                boolean killed = MobSystem.processAttack(level, b.source, m, dmg,
+                boolean killed = MobCombat.processAttack(level, b.source, m, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.PHYSICAL,
                         null, cause, /*suppressLog=*/true);
                 int dealt = (int) Math.round(hpBefore - m.hp);

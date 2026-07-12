@@ -303,9 +303,9 @@ public final class MobThrowing {
                 // hit, matching melee. A miss emits a log line + yellow "miss"
                 // floater via the standard DamageDealt(MISS) animator path; the
                 // item still lands on the tile (handled outside this branch).
-                boolean throwSurprise = MobSystem.isSurpriseAttack(level, thrower, target,
+                boolean throwSurprise = MobCombat.isSurpriseAttack(level, thrower, target,
                         AttackType.THROWN, DamageElement.PHYSICAL);
-                if (!throwSurprise && !MobSystem.rollRangedHit(thrower, target, 0)) {
+                if (!throwSurprise && !MobCombat.rollRangedHit(thrower, target, 0)) {
                     String cn = thrower != null && thrower.name != null
                             ? thrower.name
                             : com.bjsp123.rl2.logic.TextCatalog.get("eventlog.fallback.adventurer");
@@ -330,9 +330,9 @@ public final class MobThrowing {
                     // damage actually lands. Damage range comes from ItemSystem so the
                     // weapon's level increment lands on thrown impact too.
                     int dmg = MobSystem.rollRange(ItemStats.effectiveDamageRange(it));
-                    dmg = MobSystem.applySurpriseIfNeeded(level, thrower, target, dmg,
+                    dmg = MobCombat.applySurpriseIfNeeded(level, thrower, target, dmg,
                             AttackType.THROWN, DamageElement.PHYSICAL);
-                    MobSystem.processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL,
+                    MobCombat.processAttack(level, thrower, target, dmg, AttackType.THROWN, DamageElement.PHYSICAL,
                             null, new DamageCause(thrower, it, "throw"));
                     BrandSystem.applyBrandOnHit(level, thrower, target, it);
                     // On-hit buffs for damage throwables (e.g. the ice dagger's CHILLED).
@@ -384,7 +384,7 @@ public final class MobThrowing {
             // Fire bomb: bomb damage at impact, ignite every disc tile.
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
-                MobSystem.processAttack(level, thrower, target,
+                MobCombat.processAttack(level, thrower, target,
                         scaledBombDamage(target, it, bombDamage),
                         AttackType.THROWN, DamageElement.PHYSICAL,
                         null, new DamageCause(thrower, it, "throw"));
@@ -454,7 +454,7 @@ public final class MobThrowing {
                 }
                 Mob m = MobQueries.mobAt(level, p);
                 if (m != null && m != thrower) {
-                    MobSystem.processAttack(level, thrower, m,
+                    MobCombat.processAttack(level, thrower, m,
                             scaledBombDamage(m, it, bombDamage),
                             AttackType.THROWN, DamageElement.PHYSICAL,
                             null, new DamageCause(thrower, it, "throw"));
@@ -515,7 +515,7 @@ public final class MobThrowing {
             // tile.
             Mob target = MobQueries.mobAt(level, dst);
             if (target != null) {
-                MobSystem.processAttack(level, thrower, target,
+                MobCombat.processAttack(level, thrower, target,
                         scaledBombDamage(target, it, bombDamage),
                         AttackType.THROWN, DamageElement.COLD,
                         null, new DamageCause(thrower, it, "throw"));
@@ -546,7 +546,7 @@ public final class MobThrowing {
             for (Point p : disc) {
                 Mob m = MobQueries.mobAt(level, p);
                 if (m == null || m == thrower || m.hp <= 0) continue;
-                MobSystem.processAttack(level, thrower, m,
+                MobCombat.processAttack(level, thrower, m,
                         scaledBombDamage(m, it, bombDamage),
                         AttackType.MAGIC, DamageElement.SHOCK,
                         null, new DamageCause(thrower, it, "lightning"));

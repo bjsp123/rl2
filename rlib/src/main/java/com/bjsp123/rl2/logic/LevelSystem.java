@@ -524,7 +524,7 @@ public class LevelSystem {
      * <p>Uses {@link Level#visibilityAccumScratch} (hasMob) and
      * {@link Level#visibilityTempScratch} (hasLargeMob) as scratch; the caller must
      * clear/reuse {@code visibilityTempScratch} for its FOV array before calling the
-     * shadow caster (which {@link MobSystem#snapshotVisibleMobsAtTurnStart} already does).
+     * shadow caster (which {@link MobCombat#snapshotVisibleMobsAtTurnStart} already does).
      */
     static boolean[] buildBlockingLocal(Level level, int vx, int vy, int radius) {
         int w = level.width, h = level.height;

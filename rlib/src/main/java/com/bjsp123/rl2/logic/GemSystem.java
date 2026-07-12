@@ -419,7 +419,7 @@ public final class GemSystem {
                 }
                 int dmg = 10 + 6 * blood;
                 for (Mob m : ItemSystem.visibleEnemies(level, user)) {
-                    MobSystem.processAttack(level, user, m, dmg,
+                    MobCombat.processAttack(level, user, m, dmg,
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.PHYSICAL);
                 }
                 ItemSystem.announceGemUse(user, gem);

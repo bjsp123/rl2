@@ -78,7 +78,7 @@ class RangedShotLifecycleTest extends DataFixture {
             Level level = arenaWith(shooter, victim);
             shooter.stateOfMind = Mob.StateOfMind.AWAKE;   // skip the sleep gate
             shooter.ticksTillMove = 0;
-            MobSystem.snapshotVisibleMobsAtTurnStart(level, shooter);
+            MobCombat.snapshotVisibleMobsAtTurnStart(level, shooter);
             MobAiBehavior.processAiTurn(shooter, level);
             if (level.pendingImpactCount > 0) {
                 queued = true;

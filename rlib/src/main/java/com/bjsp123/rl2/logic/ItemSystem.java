@@ -365,7 +365,7 @@ public final class ItemSystem {
         if (item.damage > 0) {
             int dmg = MobSystem.rollRange(ItemStats.effectiveDamageRange(item));
             if (dmg > 0) {
-                MobSystem.processAttack(level, source, mob, dmg,
+                MobCombat.processAttack(level, source, mob, dmg,
                         MobSystem.AttackType.ENVIRONMENTAL, MobSystem.DamageElement.POISON,
                         null, new MobSystem.DamageCause(source, item, "potion"));
             }
@@ -493,7 +493,7 @@ public final class ItemSystem {
                     for (Point p : disc) {
                         Mob m = MobQueries.mobAt(level, p);
                         if (m == null || m == caster) continue;
-                        MobSystem.processAttack(level, caster, m, dmg,
+                        MobCombat.processAttack(level, caster, m, dmg,
                                 MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC, null,
                                 new MobSystem.DamageCause(caster, wand, "magic"));
                         BrandSystem.applyBrandOnHit(level, caster, m, wand);
@@ -538,7 +538,7 @@ public final class ItemSystem {
                     if (dmg <= 0) continue;
                     Mob m = MobQueries.mobAt(level, p);
                     if (m == null || m == caster) continue;
-                    MobSystem.processAttack(level, caster, m, dmg,
+                    MobCombat.processAttack(level, caster, m, dmg,
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC, null,
                             new MobSystem.DamageCause(caster, wand, "blast"));
                     BrandSystem.applyBrandOnHit(level, caster, m, wand);
@@ -549,9 +549,9 @@ public final class ItemSystem {
                 Mob victim = MobQueries.mobAt(level, target);
                 if (victim != null) {
                     int dmg = MobSystem.rollRange(ItemStats.effectiveDamageRange(wand, effectiveLevel));
-                    dmg = MobSystem.applySurpriseIfNeeded(level, caster, victim, dmg,
+                    dmg = MobCombat.applySurpriseIfNeeded(level, caster, victim, dmg,
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC);
-                    MobSystem.processAttack(level, caster, victim, dmg,
+                    MobCombat.processAttack(level, caster, victim, dmg,
                             MobSystem.AttackType.MAGIC, MobSystem.DamageElement.MAGIC, null,
                             new MobSystem.DamageCause(caster, wand, "missile"));
                     BrandSystem.applyBrandOnHit(level, caster, victim, wand);
@@ -893,7 +893,7 @@ public final class ItemSystem {
             Mob v = frontier.poll();
             int dmg = MobSystem.rollRange(dmgRange);
             // Wet x2 is now applied centrally in MobSystem.processAttack (SHOCK + wet).
-            MobSystem.processAttack(level, caster, v, dmg,
+            MobCombat.processAttack(level, caster, v, dmg,
                     MobSystem.AttackType.MAGIC, MobSystem.DamageElement.SHOCK, null,
                     new MobSystem.DamageCause(caster, originItem, "lightning"));
             // Per-victim arc burst so the renderer marks every hit, not just
@@ -1597,12 +1597,12 @@ public final class ItemSystem {
         // but bypasses the to-hit roll (the dash strike auto-connects) and
         // skips the standard attack-time knockback so we can apply the
         // jade-bull's own knockback below.
-        int rawAtk = MobSystem.rollRange(MobSystem.rawDamageRange(user));
-        int armor  = MobSystem.rollRange(MobSystem.resistRange(victim));
+        int rawAtk = MobSystem.rollRange(MobCombat.rawDamageRange(user));
+        int armor  = MobSystem.rollRange(MobCombat.resistRange(victim));
         int physical = Math.max(0, rawAtk - armor);
-        int ap = MobSystem.rollRange(MobSystem.apDamageRange(user));
+        int ap = MobSystem.rollRange(MobCombat.apDamageRange(user));
         int total = physical + ap;
-        MobSystem.processAttack(level, user, victim, total,
+        MobCombat.processAttack(level, user, victim, total,
                 MobSystem.AttackType.MELEE, MobSystem.DamageElement.PHYSICAL);
 
         // Knockback - jade bull's intrinsic knockbackSquares scaled by Rule A

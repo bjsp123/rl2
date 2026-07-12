@@ -376,7 +376,7 @@ public class Mob {
      *  use {@link #effectiveStats()} instead. */
     public StatBlock intrinsic = new StatBlock();
     /** Cached fully-rolled-up effective stats - refreshed lazily by
-     *  {@link com.bjsp123.rl2.logic.MobSystem#writeEffectiveStats} when {@link #statsDirty}
+     *  {@link com.bjsp123.rl2.logic.MobCombat#writeEffectiveStats} when {@link #statsDirty}
      *  is set. Direct field access on this block is safe; callers should still go through
      *  {@link #effectiveStats()} so the cache stays warm across reads. */
     public transient StatBlock effective = new StatBlock();
@@ -388,7 +388,7 @@ public class Mob {
      *  is set. The returned block is the same object every call — callers must not mutate. */
     public StatBlock effectiveStats() {
         if (statsDirty) {
-            com.bjsp123.rl2.logic.MobSystem.writeEffectiveStats(this, effective);
+            com.bjsp123.rl2.logic.MobCombat.writeEffectiveStats(this, effective);
             statsDirty = false;
         }
         return effective;
@@ -451,7 +451,7 @@ public class Mob {
     // -- Vital signs ---------------------------------------------------------
     public double hp;
     /** Pre-game-options "god mode" - when {@code true}, damage routed
-     *  through {@link com.bjsp123.rl2.logic.MobSystem#processAttack} is
+     *  through {@link com.bjsp123.rl2.logic.MobCombat#processAttack} is
      *  applied normally but the mob's hp is clamped to a minimum of 1 so
      *  it never dies. Off by default; set on the player Mob from the
      *  character-select pre-game options popup. */

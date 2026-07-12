@@ -445,14 +445,14 @@ public final class MobAiBehavior {
         AttackType shotType = shotPhysical ? AttackType.RANGED : AttackType.MAGIC;
         // Surprised targets are always hit - same rule as melee - so the hit
         // roll only runs on an aware defender.
-        boolean shotSurprise = MobSystem.isSurpriseAttack(level, caster, victim, shotType, shotElement);
+        boolean shotSurprise = MobCombat.isSurpriseAttack(level, caster, victim, shotType, shotElement);
         // Hit-roll for ranged attacks. Adjacent shots suffer the point-blank
         // accuracy penalty; normal range uses the straight accuracy-vs-evasion
         // roll, same denominator as melee.
         if (!shotSurprise && caster != null && caster.position != null) {
             int cheb = LevelFactoryUtils.chebyshev(caster.position, target);
             int accuracyMod = (cheb == 1) ? GameBalance.POINT_BLANK_ACCURACY_MOD : 0;
-            if (!MobSystem.rollRangedHit(caster, victim, accuracyMod)) {
+            if (!MobCombat.rollRangedHit(caster, victim, accuracyMod)) {
                 String cn = caster.name != null ? caster.name
                         : TextCatalog.get("eventlog.fallback.adventurer");
                 String vn = MobSystem.nameForLog(level, victim);
@@ -476,21 +476,21 @@ public final class MobAiBehavior {
             }
         }
         int resist = shotPhysical
-                ? MobSystem.rollRange(MobSystem.resistRange(victim))
-                : MobSystem.rollRange(MobSystem.magicResistRange(victim));
+                ? MobSystem.rollRange(MobCombat.resistRange(victim))
+                : MobSystem.rollRange(MobCombat.magicResistRange(victim));
         int afterResist = Math.max(0, damage - resist);
         String resistKey = shotPhysical ? "armor" : "magicResist";
         DamageBreakdown bk = new DamageBreakdown(shotElement, damage)
                 .add(resistKey, Math.min(resist, damage));
         Mob speaker = caster != null ? caster : TurnSystem.findPlayer(level);
-        afterResist = MobSystem.applySurpriseIfNeeded(level, speaker, victim,
+        afterResist = MobCombat.applySurpriseIfNeeded(level, speaker, victim,
                 afterResist, shotType, shotElement);
         String casterName = speaker != null && speaker.name != null
                 ? speaker.name
                 : TextCatalog.get("eventlog.fallback.adventurer");
         String victimName = MobSystem.nameForLog(level, victim);
         double hpBefore = victim.hp;
-        MobSystem.processAttack(level, speaker, victim, afterResist, shotType, shotElement, bk);
+        MobCombat.processAttack(level, speaker, victim, afterResist, shotType, shotElement, bk);
         int dealt = Math.max(0, (int) Math.round(hpBefore - victim.hp));
         EventLog.add(Messages.playerHit(casterName, victimName, dealt));
     }

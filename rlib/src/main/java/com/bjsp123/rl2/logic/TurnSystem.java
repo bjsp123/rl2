@@ -57,7 +57,7 @@ public class TurnSystem {
             int before = mob.ticksTillMove;
             if (mob.ticksTillMove > 0) mob.ticksTillMove--;
             if (before > 0 && mob.ticksTillMove == 0) {
-                MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
+                MobCombat.snapshotVisibleMobsAtTurnStart(level, mob);
             }
         }
 
@@ -114,7 +114,7 @@ public class TurnSystem {
             int before = mob.ticksTillMove;
             if (mob.ticksTillMove > 0) mob.ticksTillMove = Math.max(0, mob.ticksTillMove - delta);
             if (before > 0 && mob.ticksTillMove == 0) {
-                MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
+                MobCombat.snapshotVisibleMobsAtTurnStart(level, mob);
             }
         }
 
@@ -133,7 +133,7 @@ public class TurnSystem {
         for (Mob mob : level.mobs) {
             if (mob.behavior == Behavior.INANIMATE || mob.ticksTillMove != 0) continue;
             if (!BuffSystem.hasBuff(mob, com.bjsp123.rl2.model.Buff.BuffType.FROZEN)) continue;
-            MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
+            MobCombat.snapshotVisibleMobsAtTurnStart(level, mob);
             applyMoveCost(mob, mob.effectiveStats().moveCost);
         }
     }

@@ -6,6 +6,7 @@ import com.bjsp123.rl2.logic.ItemSystem;
 import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.Messages;
 import com.bjsp123.rl2.logic.MobQueries;
+import com.bjsp123.rl2.logic.MobCombat;
 import com.bjsp123.rl2.logic.MobSystem;
 import com.bjsp123.rl2.logic.MobThrowing;
 import com.bjsp123.rl2.logic.TurnSystem;
@@ -176,7 +177,7 @@ final class PlayController {
                 // every mob so the imminent afterMove/computeLighting/buildBlocking pass
                 // doesn't pay N recomputes for sleeping mobs that skipped the AI path.
                 for (Mob mob : level.mobs) mob.effectiveStats();
-                MobSystem.snapshotVisibleMobsAtTurnStart(level, player);
+                MobCombat.snapshotVisibleMobsAtTurnStart(level, player);
             }
             if (autoExplore) {
                 // RL-53: drive one SMART explore/pickup step. Stops the instant

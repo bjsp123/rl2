@@ -194,7 +194,7 @@ public final class CombatEval {
         double rawDmgAvg;
         if (kind == AttackKind.MELEE || kind == AttackKind.CHARGE) {
             com.bjsp123.rl2.model.MinMax mm =
-                    com.bjsp123.rl2.logic.MobSystem.rawDamageRange(attacker);
+                    com.bjsp123.rl2.logic.MobCombat.rawDamageRange(attacker);
             rawDmgAvg = mm == null ? 0.0 : mm.average();
         } else {
             if (item == null) return 0.0;

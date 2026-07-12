@@ -98,8 +98,8 @@ public final class GameBalance {
         int aMax = (int) Math.round(as.maxHp), bMax = (int) Math.round(bs.maxHp);
         int aAcc = as.accuracy, aEva = as.evasion, aArm = as.armor.min(), aCost = Math.max(1, as.attackCost);
         int bAcc = bs.accuracy, bEva = bs.evasion, bArm = bs.armor.min(), bCost = Math.max(1, bs.attackCost);
-        com.bjsp123.rl2.model.MinMax aDmg = MobSystem.rawDamageRange(a);
-        com.bjsp123.rl2.model.MinMax bDmg = MobSystem.rawDamageRange(b);
+        com.bjsp123.rl2.model.MinMax aDmg = MobCombat.rawDamageRange(a);
+        com.bjsp123.rl2.model.MinMax bDmg = MobCombat.rawDamageRange(b);
         // Armor range bypasses the equipment lookup - mob-only base armor + nothing else,
         // matching the input snapshot.
         int aResLo = aArm, aResHi = aArm;

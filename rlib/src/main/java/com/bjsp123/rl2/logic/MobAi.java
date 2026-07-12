@@ -34,7 +34,7 @@ public final class MobAi {
             if (mob.behavior == Mob.Behavior.PLAYER
                     || mob.behavior == Mob.Behavior.INANIMATE) continue;
             if (mob.visibleMobsAtTurnStart == null) {
-                MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
+                MobCombat.snapshotVisibleMobsAtTurnStart(level, mob);
             }
             int before = mob.ticksTillMove;
             MobAiBehavior.processAiTurn(mob, level);

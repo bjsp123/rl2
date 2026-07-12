@@ -14,7 +14,7 @@ import java.util.Random;
  *
  * <p>Call {@link #applyRandomBrand(Item, Random)} after generating a new item;
  * call {@link #applyBrandOnHit(Level, Mob, Mob, BrandDefinition)} from
- * {@code MobSystem.attack()} after a melee hit lands.
+ * {@code MobCombat.attack()} after a melee hit lands.
  */
 public final class BrandSystem {
 
@@ -118,7 +118,7 @@ public final class BrandSystem {
                 // Cold bite (RL-31): the brand now deals COLD damage (x4 vs wet
                 // targets, like the freeze bomb), then applies CHILLED. Fired as
                 // MAGIC, not MELEE, so it can't re-trigger this brand and recurse.
-                MobSystem.processAttack(level, attacker, target,
+                MobCombat.processAttack(level, attacker, target,
                         MobSystem.rollRange(new MinMax(1, Math.max(1, power))),
                         MobSystem.AttackType.MAGIC, MobSystem.DamageElement.COLD, null,
                         new MobSystem.DamageCause(attacker, weapon, "freeze"));
