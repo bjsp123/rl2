@@ -2,11 +2,11 @@
 
 **rl2** (working title) is a chunky, tap-friendly roguelike about descending into a vast, failing tomb. Explore procedurally generated floors, light the ancient beacon network, craft strange magics at gem hearths, and — if you make it deep enough — face the Great Wraith at the bottom of the tomb.
 
-It plays differently from most roguelikes in one important way: **you don't get XP for killing things.** Experience comes from exploring new ground, so every fight is a choice, not a chore. You should be able to find numerous ways to avoid combat; the Beacon Guardians and uniques should all be optional fights (though defeating them does ahve rewards).
+It plays differently from most roguelikes in one important way: **you don't get XP for killing things.** Experience comes from exploring new ground, so every fight is a choice, not a chore. You should be able to find numerous ways to avoid combat; the Beacon Guardians and uniques should all be optional fights (though defeating them does have rewards).
 
 This is playable but it's very much alpha.
 
-Suggestions for names gratefully recieved.
+Suggestions for names gratefully received.
 
 ## Download — playtest candidate
 
@@ -23,11 +23,11 @@ If you're reading this because you agreed to playtest: **thank you.**  If someth
 
 (*) By the standards of a traditional roguelike.  Things like being one-shotted from off the screen **should** be avoidable, but there are definitely fights you need to avoid until you're stronger.
 
-### Four tips before you dive in
+### Five tips before you dive in
 
 1. **Don't fight everything.** Kills give no XP — you level up by exploring and finding stuff.  Except for some special rooms and uniques, there's no reward for combat.
-2. **Wands and  items don't recharge on their own.** Charges come from pickups on the ground.
+2. **Wands and items don't recharge on their own.** Charges come from pickups on the ground.
 3. **Beacons.** Each one you light becomes a fast-travel point, is worth a lot of score, and brings you closer to a perfect run — but also makes the endgame harder and has nasty guardians.
 4. **Finite resources**.  There's no hunger mechanic, but the amount of healing, xp, and recharging in the game world is finite.
-4. **Branching dungeon**.  The tomb is a network of levels; if you come to a dangersou or impassable one you can try another route.
+5. **Branching dungeon**.  The tomb is a network of levels; if you come to a dangerous or impassable one you can try another route.
 

@@ -10,6 +10,74 @@ rgame renders the game on the screen and operates the UI and presentation.
 
 Name variables consistenty and systematically even if it means sometimes refactoring and renaming.
 
+Classify items and mobs by their stats / buffs / behavior fields, never by
+name or type string (`isHealingItem` reads `useBehavior`/`appliesBuff`, not
+`"HEALING_POTION".equals(type)`). This is a project-wide rule.
+
+"Is this the player?" is `Mob.isPlayer`, never `behavior == PLAYER`.
+`behavior` encodes control only (human input vs AI turn driver); autoplay
+flips the player to `SMART`, so behavior-based identity checks are bugs.
+
+Three time domains, encoded in names — never mix them:
+| Domain | Method suffix | Param | Constant suffix |
+|---|---|---|---|
+| Game ticks (in-game time; same currency as `Mob.moveCost`) | `*GameTicks(level, gameTicks)` | `gameTicks` | `_TICKS` |
+| Game turns (once per game-time advancement) | `*PerTurn(level)` | — | — |
+| Real time (per render frame, runs while paused) | `*RealTime(level, dtMs)` | `dtMs` | `_MS` |
+Javadoc for any such method leads with its cadence.
+
+CSV parsers must be defensive: the data files in `assets/data/` are
+hand-edited, so a bad enum/number cell degrades gracefully (skip / default +
+`[csv]` stderr warning), never throws and aborts the load. Quote any CSV
+value containing a comma (RFC-4180) — `CsvTable` truncates unquoted commas;
+never hack the parser to tolerate them.
+
+## Workflow rules
+
+- Commit directly to `main`. No feature branches — solo project, explicit
+  owner preference.
+- Never add a `Co-Authored-By: Claude ...` trailer to commits.
+- Do not build `:android:*` or web targets as implicit verification; the
+  owner opts in explicitly. Desktop compile + tests are the default check.
+- The runnable app task is `:desktop:run` (rgame is just the core library;
+  the launcher lives in `desktop`).
+
+## Invariants & recurring regressions
+
+**Ranged attacks resolve before the defender can act.** Thrown items, wand
+missiles/rays, and innate mob shots lock their impact tile at fire time
+(`firstMobBlocking`), bill the action cost, and queue the mutation via
+`MobSystem.queuePendingImpact`; the `pendingImpactCount` gate plus the
+drain at the top of `MobAi.processAllAiTurns` guarantee it resolves before
+any other mob's brain runs — gameplay-equivalent to synchronous. The rgame
+`Animator` arc-completion callbacks are visual-only; routing the *gameplay*
+mutation through the Animator "reads clean" and has been reintroduced and
+re-fixed multiple times. If an `apply*Impact` is reachable only from
+`Animator`, that's the regression. Invariant: "the attacker must complete
+the attack and deal damage before the defender gets to move." Locked by
+`rlib` tests `RangedShotLifecycleTest` / `ThrowAndWandLifecycleTest`.
+
+**SmartAi's top level is a hardcoded priority tree, not a goal-score race.**
+Branch order is fixed (explored→descend / fight-or-escape / heal / pickup /
+seek / explore); only *within* a branch do utility scores pick the concrete
+action. Never add top-level scores, branch-boost overrides, or short-circuit
+reroutes — the owner rejected goal-score selection repeatedly. If a branch's
+action can't execute, fall through to `ActionWait` and let the wait-streak
+escape break the deadlock.
+
+**Effects layering (rgame):** `Effect.java` = game-named factories,
+`EffectBuilder.java` = parameterised primitives. Never two `Effect.*`
+methods differing only in defaults over the same primitive — merge them.
+Composing several primitives into one game-named factory is fine.
+
+**Door visuals:** `CRYSTAL_DOOR_OPEN` renders as a wood open door (the
+crystal "shatters into" wood — deliberate, corrected twice).
+`ONETIME_DOOR` = crystal body + pink danger overlay; blocks non-player mobs
+only and becomes `FLOOR` when the player crosses.
+
+**Tile atlas comment:** the TILE ATLAS LAYOUT REFERENCE lives in
+`TileSprites`' class javadoc — update it whenever terrain sprites move.
+
 
 
 ## Backlog
@@ -23,24 +91,24 @@ propose, never auto-apply.
 
 Do **not** create new files in `.claude/plans/` for routine work. The
 plans directory is reserved for genuinely multi-session design
-investigations. Routine work is tracked in Notion only.
-
-The master release-readiness plan lives at
-[`.claude/plans/what-if-we-wanted-toasty-duckling.md`](plans/what-if-we-wanted-toasty-duckling.md);
-Notion tickets seed from it.
+investigations (it may not exist at all — that's normal). Routine work is
+tracked in Notion only.
 
 ## Architecture map
 
 ### Modules
-- `rlib` — pure model & logic, no rendering.
+- `rlib` — pure model & logic, no rendering, no libGDX graphics.
 - `rgame` — rendering, UI, screen flow. Imports `rlib.model`; talks to `rlib.logic` only via `PlayController`.
-- `desktop` — libGDX launcher. Runnable task is `:desktop:run`.
+- `desktop` — libGDX desktop launcher. Runnable task is `:desktop:run`; also owns the shipping fat `jar` task.
+- `rai` — headless automated-play module: the SMART player agent (`SmartAi`, `Decider`, `WorldState`, `action/Action*` library, `eval/*` scorers) plus autoplay/regression harness mains (`game/AutoplayGame`, `AutoplayRunMain`, `util/RegressionRunMain`, `SmartAgentRunMain`, `SmartArenaRankMain`). Tests here (`SmartAiSmokeTest`) also guard seed determinism.
+- `android` — Android launcher/packaging (signing via `RL2_*` env vars).
+- `web` — TeaVM browser build (`:web:buildWeb`); uses the `backend/supabase` cloud-save backend (see `backend/supabase/README.md`).
 
 ### rlib packages
-- `model/` — `Tile`, `Point`, `Mob`, `Item`, `Level`, `World`, `Inventory`, `Buff`, `Perk`, `Surface`, `LogEvent`, `HallOfFameEntry`.
-- `logic/` — `TurnSystem`, `MobSystem`, `LevelFactory`, `LevelSystem`, `ItemSystem`, `InventorySystem`, `LootSystem`, `BuffSystem`, `FireSystem`, `MobProgression`, `GameBalance`, `MobRegistry`, `ItemRegistry`, `ThemedRoomRegistry`, `Messages`, `EventLog`.
+- `model/` — `Tile`, `Point`, `Mob`, `Item`, `Level`, `World`, `WorldTopology`, `Inventory`, `Buff`, `Perk`, `StatBlock`, `MinMax`, `LogEvent`, `HallOfFameEntry`, `RunStats`, `DoorBehavior`, `GemSpecies`, `TileQuery`.
+- `logic/` — the systems. Highlights: `TurnSystem` (game clock), `MobSystem` (actions/combat; largest file) with satellites `MobAi`, `MobBrains`, `MobQueries`, `MobStats`, `MobVisibility`, `MobHooks`, `MobFactory`, `MobDefinition`, `MobProgression`; `LevelFactory` + `LevelFactoryPopulate`/`Special`/`ThemedRooms`/`Utils` and `ThemedRoomDefinition`/`Painter`/`Populator`; `ItemSystem`, `ItemFactory`, `ItemGenerator`, `ItemStats`, `ItemNames`, `ItemDefinition`; `InventorySystem`, `LootSystem`, `BuffSystem`, `FireSystem`, `CloudSystem`, `SurfaceSystem`, `VegetationSystem`; `BrandSystem`/`BrandDefinition`, `GemSystem`/`GemDefinition`/`GemRecipe`/`RecipeSystem`; `GameBalance`, `Registries` (CSV-backed definition registries), `TextCatalog`, `Messages`, `EventLog`, `Pathfinder`, `ShadowCaster`, `AutoExplore`, `CombatArena` (headless arena used by tests/tools).
 - `event/` — `GameEvent` sealed interface; one-way notifications from logic to renderer.
-- `util/` — CSV parsing (`CsvTable`, `CsvRegistryStore`), `SeedCode`, `WorldDumpMain`.
+- `util/` — CSV parsing (`CsvTable`, `CsvRegistryStore`), `SeedCode`, `SimRng`, `Fmt`, `ArenaHarness` (headless data-loading bootstrap used by tests and all diagnostic mains), and the diagnostic `*Main` entry points (see docs/diagnostics.md).
 
 ### rgame packages
 - `screen/` — `Rl2Game`, `PlayScreen` (main loop), `PlayController` (input→action). All navigable screens are V2-prefixed and live in `ui/v2/`.
@@ -106,10 +174,38 @@ The popup's `input()` returns false when closed, so events fall through to the s
 - Input: `GameInput` → `PlayController.<action>()` mutates `Level`, appends events.
 
 ### Data files (`assets/data/`)
-- `config.csv` — combat, progression, level dims, mob caps, hunger (gamebalance rows), plus animation/ui/other config rows.
-- `mobs.csv` — mob species: stats, AI behavior, abilities, sprite coords. Consumed by both `MobRegistry` (rlib) and `MobSprites` (rgame).
+- `config.csv` — combat, progression, level dims, mob caps (gamebalance rows), plus animation/ui/other config rows.
+- `mobs.csv` — mob species: stats, AI behavior, abilities, sprite coords. Consumed by both `Registries` (rlib) and `MobSprites` (rgame).
 - `items.csv` — item defs: slot, material, stats, special behaviors, scaling.
 - `themedrooms.csv` — procedural room templates for `LevelFactory`.
+- `brands.csv`, `gems.csv`, `recipes.csv` — weapon brands, gem species, gem-hearth crafting recipes.
+- `strings.csv`, `help.csv`, `tip.csv` — UI text, encyclopedia/help copy, loading-screen tips (`TextCatalog`).
+- `sounds.csv` — sound-effect table.
+- `uivars.properties` — runtime overrides for `UIVars` colours/geometry.
+
+All CSVs are hand-edited; see the defensive-parsing rule at the top of this file. Data validity is guarded by `rlib` tests (`RegistryDataTest`, `ConfigCsvTest`, `StringsCatalogTest`) — run `:rlib:test` after any data edit.
+
+## Verification ladder
+
+Run these in order after a change; stop at the rung that matches the blast
+radius (see also `docs/diagnostics.md`):
+
+1. **Compile** — `./gradlew :rlib:compileJava :rgame:compileJava :rai:compileJava`.
+2. **Tests** — `./gradlew test` (runs rlib + rai + rgame test suites; JUnit 5,
+   data-driven tests load the real `assets/data` CSVs headlessly via
+   `ArenaHarness`). Required after any rlib/rai change or CSV data edit.
+3. **AI regression sweep** (balance/AI/combat changes) —
+   `./gradlew :rai:regression [--args=N]`: SMART agent × classes ×
+   difficulty levels. **Interpretation matters:** wins are RARE (~0–1 per
+   45-run sweep); zero wins is NOT by itself a regression. Compare average
+   depth and the HP-lost-by-mechanism/attacker tables against a baseline
+   run of `main`. `:rai:autoplay` always starts at character level 1 and
+   is ~0% wins by design.
+4. **Run the game** — `./gradlew :desktop:run` and exercise the changed flow
+   by playing. The only rung that covers rendering/UI/input.
+
+Never build `:android:*` / `:web:*` as implicit verification (owner opt-in
+only). CI (`.github/workflows/ci.yml`) runs rungs 1–2 on every push.
 
 ### Module boundary
 - rlib → rgame: `Level.events` (List<GameEvent>) appended during tick, drained once by `Animator` before next frame. No listeners/callbacks.
@@ -131,7 +227,7 @@ The popup's `input()` returns false when closed, so events fall through to the s
 ### Visual style
 - **Chunky.** Big fonts, big tap targets, integer pixel positions, nearest-neighbour filtering. Adopt the proportions of the user-supplied screenshots in [assets/scratch/shots/](assets/scratch/shots/) — thin single-line gray slot cells, manila-folder tabs at the bottom of modal panels, flat HUD strip at the bottom of the screen.
 - **Few nested or multi-part visuals.** A button is a button — not a Button containing a Container containing a Frame containing a Label inside a Stack. When tempted to layer chrome, ask: "could this be one drawable instead?". Replace 9-patch frames with flat fills + 1-px outline where reasonable.
-- **Where the screenshot reference doesn't have an analog**, deviate consciously. We have much more information to surface for mobs and items than SPD does — when an info window's content overflows, wrap the body in a scrolling panel (`ScrollHinted`) rather than splitting it into yet another window.
+- **Where the screenshot reference doesn't have an analog**, deviate consciously. We have much more information to surface for mobs and items than SPD does — when an info window's content overflows, wrap the body in a scrolling panel (`ScrollBand` + `Scroller`) rather than splitting it into yet another window.
 
 ### Settings as the granular-options bucket
 - **Settings holds every granular toggle and preference.** If a control is "do this less often" / "show this kind of thing" / "tweak this number", it lives in Settings, not on the HUD. Examples: the log filter buttons (log on/off, low-priority, non-player, expand) currently in the HUD all belong under Settings.

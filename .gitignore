@@ -23,3 +23,5 @@ world_dump.yaml
 *.log
 
 
+
+local.properties

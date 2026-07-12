@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew :rlib:compileJava*)",
+      "Bash(./gradlew :rgame:compileJava*)",
+      "Bash(./gradlew :rai:compileJava*)",
+      "Bash(./gradlew :desktop:compileJava*)",
+      "Bash(./gradlew :rlib:compileJava :rgame:compileJava*)",
+      "Bash(./gradlew test*)",
+      "Bash(./gradlew :rlib:test*)",
+      "Bash(./gradlew :rai:test*)",
+      "Bash(./gradlew :rgame:test*)",
+      "Bash(./gradlew :rlib:objectTable*)",
+      "Bash(./gradlew :rlib:dumpWorld*)",
+      "Bash(./gradlew :rlib:lootStats*)",
+      "Bash(./gradlew :rlib:dumpRecipes*)",
+      "Bash(./gradlew :rai:regression*)",
+      "Bash(./gradlew :rai:autoplay*)"
+    ]
+  }
+}
