@@ -84,6 +84,14 @@ public final class AchievementSystem {
                     AchievementsStore.save(persistence, achievements);
                     checkBestiaryUnlocks();
                 }
+                // A killed species was surely seen - keep the encyclopedia
+                // reveal-set in step even if the FOV scan missed it.
+                recordMobSeen(type);
+            }
+        } else if (ev instanceof GameEvent.ItemPickedUp m) {
+            // Encyclopedia reveal: picking an item up counts as seeing it.
+            if (m.picker() != null && m.picker().isPlayer && m.item() != null) {
+                recordItemSeen(m.item().type);
             }
         } else if (ev instanceof GameEvent.WandMissileFired m) {
             if (player != null && m.caster() == player) {
@@ -151,6 +159,80 @@ public final class AchievementSystem {
             case "VERY_HARD" -> unlock(Achievement.WIN_VERY_HARD);
             default -> { /* EASY / GENTLE / SUPEREASY wins don't unlock anything here */ }
         }
+    }
+
+    // -- Encyclopedia seen-sets -------------------------------------------
+
+    /** Record that the player has seen mob species {@code mobType}. Adds to
+     *  {@link Achievements#seenMobTypes}; persists + re-checks
+     *  {@link Achievement#SEEN_ALL_MOBS} only when the set actually grew, so
+     *  the per-frame FOV scan stays cheap. */
+    public void recordMobSeen(String mobType) {
+        if (mobType == null || mobType.isEmpty() || achievements == null) return;
+        if (!achievements.seenMobTypes.add(mobType)) return;
+        AchievementsStore.save(persistence, achievements);
+        if (seenAllMobs()) unlock(Achievement.SEEN_ALL_MOBS);
+    }
+
+    /** Record that the player has seen item type {@code itemType}. Same
+     *  grow-then-persist contract as {@link #recordMobSeen}. */
+    public void recordItemSeen(String itemType) {
+        if (itemType == null || itemType.isEmpty() || achievements == null) return;
+        if (!achievements.seenItemTypes.add(itemType)) return;
+        AchievementsStore.save(persistence, achievements);
+        if (seenAllItems()) unlock(Achievement.SEEN_ALL_ITEMS);
+    }
+
+    /** Sweep the player's own species + everything carried / equipped into
+     *  the seen-sets. Called per tick from PlayScreen so starting kit,
+     *  purchases, and forge outputs all reveal without bespoke hooks; the
+     *  {@code record*} dedupe makes repeat sweeps near-free. */
+    public void observePlayerLoadout(Mob player) {
+        if (player == null) return;
+        recordMobSeen(player.mobType);
+        if (player.inventory == null) return;
+        for (com.bjsp123.rl2.model.Item it : player.inventory.bag) {
+            if (it != null) recordItemSeen(it.type);
+        }
+        player.inventory.forEachEquipped(it -> {
+            if (it != null) recordItemSeen(it.type);
+        });
+    }
+
+    /** Forget every seen mob / item so the encyclopedia hides its entries
+     *  again (Settings > "Reset encyclopaedia"). Already-unlocked
+     *  achievements stay unlocked - this only re-masks the book. */
+    public void resetEncyclopedia() {
+        if (achievements == null) return;
+        if (achievements.seenMobTypes.isEmpty()
+                && achievements.seenItemTypes.isEmpty()) return;
+        achievements.seenMobTypes.clear();
+        achievements.seenItemTypes.clear();
+        AchievementsStore.save(persistence, achievements);
+    }
+
+    /** True when {@link Achievements#seenMobTypes} covers every creature the
+     *  encyclopedia lists. Mirrors V2Encyclopedia.buildCreatureEntries's
+     *  filter (every registry type MobFactory can spawn) so the achievement
+     *  is exactly "reveal the whole Creatures tab". */
+    private boolean seenAllMobs() {
+        if (achievements == null) return false;
+        Point dummy = new Point(0, 0);
+        for (String type : Registries.mobTypes()) {
+            if (com.bjsp123.rl2.logic.MobFactory.spawn(type, dummy) == null) continue;
+            if (!achievements.seenMobTypes.contains(type)) return false;
+        }
+        return true;
+    }
+
+    /** True when {@link Achievements#seenItemTypes} covers every item type -
+     *  the encyclopedia's Items tab lists the whole registry, so no filter. */
+    private boolean seenAllItems() {
+        if (achievements == null) return false;
+        for (String type : Registries.itemTypes()) {
+            if (!achievements.seenItemTypes.contains(type)) return false;
+        }
+        return true;
     }
 
     /** Player-class kit rows in mobs.csv that the player never actually

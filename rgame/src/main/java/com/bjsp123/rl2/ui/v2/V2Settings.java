@@ -146,6 +146,12 @@ public final class V2Settings extends V2Screen {
                 // one-shot action".
                 yCursor = addButtonRow(rowX, yCursor, TextCatalog.get("ui.settings.eraseTips"),
                         com.bjsp123.rl2.ui.v2.TipSystem::reset, /*warn=*/false);
+                yCursor = addButtonRow(rowX, yCursor, TextCatalog.get("ui.settings.resetEncyclopedia"),
+                        () -> {
+                            if (game.achievementSystem != null) {
+                                game.achievementSystem.resetEncyclopedia();
+                            }
+                        }, /*warn=*/false);
                 yCursor = addButtonRow(rowX, yCursor, TextCatalog.get("ui.settings.clearHall"));
             }
             case LOG -> {

@@ -36,7 +36,7 @@ public final class V2EncyclopediaScreen extends V2Screen {
     public V2EncyclopediaScreen(Rl2Game game, Object initialId) {
         super(game.ui);
         this.game  = game;
-        this.enc   = new V2Encyclopedia(game.ui);
+        this.enc   = new V2Encyclopedia(game.ui, game.achievements);
         this.actor = new V2PopupActor(enc);
         this.initialId = initialId;
     }

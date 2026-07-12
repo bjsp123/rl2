@@ -121,6 +121,12 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     public void setLevel(Level lvl)                 { this.level = lvl; }
     public void setEncyclopedia(V2Encyclopedia enc) { this.encyclopedia = enc; }
     public void setBuffInfo(V2BuffInfo bi)          { this.buffInfo = bi; }
+    public void setOnItemShown(java.util.function.Consumer<Item> fn) { this.onItemShown = fn; }
+
+    /** Fired whenever the popup displays a floor item - PlayScreen wires
+     *  this to the encyclopedia seen-recorder so inspecting an item on the
+     *  ground reveals its encyclopedia entry. */
+    private java.util.function.Consumer<Item> onItemShown;
 
     public boolean isOpen() {
         return lookMode != null && lookMode.isPanelVisible();
@@ -130,6 +136,7 @@ public final class V2Look implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
     public void renderSelf() {
         if (!isOpen()) return;
         captureLookedAt();
+        if (lookedItem != null && onItemShown != null) onItemShown.accept(lookedItem);
         buildSections();
         if (terrainMode) {
             layoutTerrain();

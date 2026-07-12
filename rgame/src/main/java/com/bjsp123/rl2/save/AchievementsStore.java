@@ -51,17 +51,25 @@ public final class AchievementsStore {
                     } catch (IllegalArgumentException ignored) { }
                 }
             }
-            JsonValue killed = root.get("killedMobTypes");
-            if (killed != null) {
-                for (JsonValue v = killed.child; v != null; v = v.next) {
-                    String t = v.asString();
-                    if (t != null && !t.isEmpty()) a.killedMobTypes.add(t);
-                }
-            }
+            readStrings(root.get("killedMobTypes"), a.killedMobTypes);
+            // Encyclopedia seen-sets - absent in pre-encyclopedia-gating
+            // saves; default to empty (nothing revealed yet).
+            readStrings(root.get("seenMobTypes"),  a.seenMobTypes);
+            readStrings(root.get("seenItemTypes"), a.seenItemTypes);
         } catch (Exception ignored) {
             // Corrupt blob: discard and start fresh.
         }
         return a;
+    }
+
+    /** Copy every non-empty string child of {@code array} into {@code out}.
+     *  {@code null} array (field absent from an older save) is a no-op. */
+    private static void readStrings(JsonValue array, java.util.Set<String> out) {
+        if (array == null) return;
+        for (JsonValue v = array.child; v != null; v = v.next) {
+            String t = v.asString();
+            if (t != null && !t.isEmpty()) out.add(t);
+        }
     }
 
     public static void save(Persistence persistence, Achievements a) {
@@ -72,14 +80,24 @@ public final class AchievementsStore {
             sb.append('"').append(ach.name()).append('"');
             first = false;
         }
-        sb.append("],\"killedMobTypes\":[");
-        first = true;
-        for (String t : a.killedMobTypes) {
+        sb.append("]");
+        appendStrings(sb, "killedMobTypes", a.killedMobTypes);
+        appendStrings(sb, "seenMobTypes",   a.seenMobTypes);
+        appendStrings(sb, "seenItemTypes",  a.seenItemTypes);
+        sb.append('}');
+        persistence.save(KEY, sb.toString());
+    }
+
+    /** Append {@code ,"name":["a","b",...]} to {@code sb}. */
+    private static void appendStrings(StringBuilder sb, String name,
+                                      java.util.Set<String> values) {
+        sb.append(",\"").append(name).append("\":[");
+        boolean first = true;
+        for (String t : values) {
             if (!first) sb.append(',');
             sb.append('"').append(t).append('"');
             first = false;
         }
-        sb.append("]}");
-        persistence.save(KEY, sb.toString());
+        sb.append(']');
     }
 }

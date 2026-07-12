@@ -148,6 +148,12 @@ public class PlayScreen implements Screen {
         com.bjsp123.rl2.model.Mob player = com.bjsp123.rl2.logic.TurnSystem.findPlayer(level);
         if (player == null || player.position == null) return;
         int px = player.position.tileX(), py = player.position.tileY();
+        // Encyclopedia reveal: sweep the player's own species + carried /
+        // equipped items into the career seen-sets. Dedupe inside the
+        // AchievementSystem keeps repeat sweeps near-free.
+        if (game.achievementSystem != null) {
+            game.achievementSystem.observePlayerLoadout(player);
+        }
         // Only fire mob tips when the mob is adjacent to the player. Earlier
         // we triggered on simple visibility, but a distant new species
         // spotted across the room would fire the tip without the player
@@ -157,6 +163,13 @@ public class PlayScreen implements Screen {
             if (mob == null || mob.position == null || mob.mobType == null) continue;
             if (mob.isPlayer) continue;
             int mx = mob.position.tileX(), my = mob.position.tileY();
+            // Encyclopedia reveal: any species inside the player's FOV counts
+            // as seen (tips stay adjacency-gated below - different bar).
+            if (game.achievementSystem != null && level.visible != null
+                    && mx >= 0 && my >= 0 && mx < level.width && my < level.height
+                    && level.visible[mx][my]) {
+                game.achievementSystem.recordMobSeen(mob.mobType);
+            }
             int cheb = Math.max(Math.abs(mx - px), Math.abs(my - py));
             if (cheb != 1) continue;
             com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
@@ -715,7 +728,7 @@ public class PlayScreen implements Screen {
                     "concept:perks", "concept.perks.tip", "concept.perks.name", null);
         });
 
-        v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui);
+        v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui, game.achievements);
         v2Hud.setOnOpenEncyclopedia(() -> v2Encyclopedia.toggle());
         v2BuffInfo = new com.bjsp123.rl2.ui.v2.V2BuffInfo(game.ui);
         v2Hud.setOnBuffTap(buff -> { if (buff != null) v2BuffInfo.open(buff); });
@@ -745,6 +758,13 @@ public class PlayScreen implements Screen {
         // Look popup's per-section info buttons route through the same
         // shared encyclopaedia.
         v2Look.setEncyclopedia(v2Encyclopedia);
+        // Inspecting a floor item in the look popup reveals its
+        // encyclopaedia entry.
+        v2Look.setOnItemShown(it -> {
+            if (game.achievementSystem != null && it != null) {
+                game.achievementSystem.recordItemSeen(it.type);
+            }
+        });
         // Character-stats popup's per-perk info buttons jump to the
         // encyclopaedia's perk page.
         v2CharacterStats.setEncyclopedia(v2Encyclopedia);

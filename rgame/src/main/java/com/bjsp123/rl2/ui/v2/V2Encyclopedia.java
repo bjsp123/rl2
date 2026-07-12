@@ -114,8 +114,40 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
      *  view. */
     private Entry detailScrollerFor;
 
-    public V2Encyclopedia(UiCtx ctx) {
+    /** Career seen-sets driving the reveal-gating of the ITEMS / CREATURES
+     *  tabs. {@code null} (headless / legacy callers) reveals everything. */
+    private final com.bjsp123.rl2.save.Achievements achievements;
+
+    public V2Encyclopedia(UiCtx ctx, com.bjsp123.rl2.save.Achievements achievements) {
         this.ctx = ctx;
+        this.achievements = achievements;
+    }
+
+    /** {@code true} when {@code e}'s page may be shown in the clear. Only
+     *  the ITEMS and CREATURES tabs are gated on the career seen-sets;
+     *  buffs, perks, gems, terrain, and the guide are always revealed.
+     *  Evaluated at render time (never baked into the cached entries) so
+     *  entries un-mask the moment the player sees the thing mid-run. */
+    private boolean revealed(Entry e) {
+        if (achievements == null) return true;
+        return switch (currentTab) {
+            case ITEMS     -> achievements.seenItemTypes.contains(String.valueOf(e.id));
+            case CREATURES -> achievements.seenMobTypes.contains(String.valueOf(e.id));
+            default        -> true;
+        };
+    }
+
+    /** Mask every non-whitespace char of {@code s} with {@code '?'} -
+     *  unseen entries keep their text shape (word lengths, line breaks)
+     *  but leak nothing. */
+    public static String maskUnseen(String s) {
+        if (s == null || s.isEmpty()) return s;
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            sb.append(Character.isWhitespace(c) ? c : '?');
+        }
+        return sb.toString();
     }
 
     /** Theme the TERRAIN entries' tile icons were last built with. */
@@ -263,10 +295,15 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                 srcMax = Math.max(selected.icon.getRegionWidth(),
                                   selected.icon.getRegionHeight());
             }
+            // Unseen (encyclopedia-gated) entries mask every glyph with '?'
+            // - name, flavor, and details - keeping whitespace so the page
+            // silhouette matches the real content's shape.
+            boolean revealedSel = revealed(selected);
             // Names are stored lowercase; the detail-page heading renders
             // Title Case (house style).
             detailNameBlock = TextDraw.block(ctx.fontHeader,
-                    TextCatalog.titleCase(selected.name),
+                    revealedSel ? TextCatalog.titleCase(selected.name)
+                                : maskUnseen(selected.name),
                     window.w - 28f, 2, ctx.headerLineH());
             float titleTop = window.top() - ctx.headerLineH();
             float frameSz = Math.max(64f, srcMax * 2f);
@@ -288,10 +325,12 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             float bodyW = window.w - 28f;
             detailFlavorLines.clear();
             detailDetailsLines.clear();
-            TextDraw.wrap(ctx.fontRegular, selected.flavor, bodyW,
-                    Integer.MAX_VALUE, detailFlavorLines);
-            TextDraw.wrap(ctx.fontRegular, selected.details, bodyW,
-                    Integer.MAX_VALUE, detailDetailsLines);
+            TextDraw.wrap(ctx.fontRegular,
+                    revealedSel ? selected.flavor : maskUnseen(selected.flavor),
+                    bodyW, Integer.MAX_VALUE, detailFlavorLines);
+            TextDraw.wrap(ctx.fontRegular,
+                    revealedSel ? selected.details : maskUnseen(selected.details),
+                    bodyW, Integer.MAX_VALUE, detailDetailsLines);
             // A divider rule is drawn whenever both halves have content;
             // otherwise the details just continue from the flavor's last
             // line. The "2 line-slots" gap sits in content space so the
@@ -455,11 +494,13 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
                     float fSz = 80f;
                     float fx  = r.x + 2f;
                     float fy  = r.y + (r.h - fSz) * 0.5f;
+                    boolean rev = revealed(e);
                     if (e.icon != null) {
-                        drawAspectFit(e.icon, fx, fy, fSz, fSz);
+                        drawAspectFit(e.icon, fx, fy, fSz, fSz, !rev);
                     }
                     TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
-                            e.name, fx + fSz + 8f, r.y + r.h - 9f,
+                            rev ? e.name : maskUnseen(e.name),
+                            fx + fSz + 8f, r.y + r.h - 9f,
                             r.right() - (fx + fSz + 12f));
                 }
             });
@@ -474,7 +515,8 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             if (selected.icon != null) {
                 drawAspectFit(selected.icon,
                         detailIconFrame.x, detailIconFrame.y,
-                        detailIconFrame.w, detailIconFrame.h);
+                        detailIconFrame.w, detailIconFrame.h,
+                        !revealed(selected));
             }
 
             // Body - flavor (bright) on top, optional horizontal rule, then
@@ -511,9 +553,12 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     /** Draw {@code region} centred inside the {@code (x, y, w, h)} box,
      *  preserving its native aspect ratio. Outline uses the shared
      *  {@link com.bjsp123.rl2.world.render.OutlineRenderer#drawTaps} so width,
-     *  darkness, and tap-alpha correction match the world renderer exactly. */
+     *  darkness, and tap-alpha correction match the world renderer exactly.
+     *  {@code silhouette} tints the sprite solid black (alpha preserved) -
+     *  the unseen-entry treatment. */
     private void drawAspectFit(TextureRegion region,
-                               float x, float y, float w, float h) {
+                               float x, float y, float w, float h,
+                               boolean silhouette) {
         int srcW = region.getRegionWidth();
         int srcH = region.getRegionHeight();
         if (srcW <= 0 || srcH <= 0) return;
@@ -523,7 +568,9 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
         float drawX = x + (w - drawW) * 0.5f;
         float drawY = y + (h - drawH) * 0.5f;
         com.bjsp123.rl2.world.render.OutlineRenderer.drawTaps(ctx.batch, region, drawX, drawY, drawW, drawH);
+        if (silhouette) ctx.batch.setColor(0f, 0f, 0f, 1f);
         ctx.batch.draw(region, drawX, drawY, drawW, drawH);
+        if (silhouette) ctx.batch.setColor(com.badlogic.gdx.graphics.Color.WHITE);
     }
 
     public InputProcessor input() {

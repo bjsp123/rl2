@@ -59,6 +59,10 @@ achievement.THROWN_AWAY.description,Throw an item for the first time.
 achievement.THROWN_AWAY.name,Thrown Away
 achievement.WAND_NEWBIE.description,Fire a wand for the first time.
 achievement.WAND_NEWBIE.name,Magical Education
+achievement.SEEN_ALL_MOBS.description,Lay eyes on every creature in the encyclopedia.
+achievement.SEEN_ALL_MOBS.name,Field Naturalist
+achievement.SEEN_ALL_ITEMS.description,Discover every item in the encyclopedia.
+achievement.SEEN_ALL_ITEMS.name,Compleat Collector
 brand.ACCURACY.description,This device magically increases the wielder's accuracy.
 brand.ACCURACY.name,accuracy
 brand.ANTIFIRE.description,You can't be hurt by fire while wearing this.
@@ -1491,6 +1495,7 @@ ui.settings.colorblind.none,Off
 ui.settings.colorblind.protan,Protan
 ui.settings.colorblind.tritan,Tritan
 ui.settings.eraseTips,Erase tip history (show all tips again)
+ui.settings.resetEncyclopedia,Reset encyclopaedia (hide all entries again)
 ui.settings.expandedLog,Expanded log
 ui.settings.instantActions,Instant actions
 ui.settings.fastGraphics,Fast graphics

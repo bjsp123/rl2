@@ -21,6 +21,19 @@ public final class Achievements {
      *  - a long-term collection goal. Persisted alongside {@link #unlocked}. */
     public final Set<String> killedMobTypes = new HashSet<>();
 
+    /** Mob types the player has SEEN (in FOV, killed, or looked at) across
+     *  every run. Drives encyclopedia reveal-gating (unseen creatures render
+     *  as silhouettes with masked text) and
+     *  {@link Achievement#SEEN_ALL_MOBS}. Persisted alongside
+     *  {@link #unlocked}. */
+    public final Set<String> seenMobTypes = new HashSet<>();
+
+    /** Item types the player has seen (picked up, carried, or inspected on
+     *  the floor) across every run. Drives encyclopedia reveal-gating and
+     *  {@link Achievement#SEEN_ALL_ITEMS}. Persisted alongside
+     *  {@link #unlocked}. */
+    public final Set<String> seenItemTypes = new HashSet<>();
+
     /** {@code true} when the player has earned {@code a}. */
     public boolean isUnlocked(Achievement a) {
         return a != null && unlocked.contains(a);
@@ -48,6 +61,8 @@ public final class Achievements {
         BEGUN_THE_ADVENTURE(Category.DEPTH, false),
         DUG_DEEPER         (Category.DEPTH, false),
         INTO_THE_DEPTHS    (Category.EXPLORATION, false),
+        SEEN_ALL_MOBS      (Category.EXPLORATION, false),
+        SEEN_ALL_ITEMS     (Category.ITEMS, false),
         FIRST_BLOOD        (Category.COMBAT, false),
         GIANT_SLAYER       (Category.COMBAT, true),
         KILLED_ONE_OF_EACH (Category.COMBAT, true),
