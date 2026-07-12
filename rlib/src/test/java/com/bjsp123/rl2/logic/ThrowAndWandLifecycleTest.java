@@ -85,7 +85,7 @@ class ThrowAndWandLifecycleTest extends DataFixture {
         thrower.inventory.bag.add(bomb);
         thrower.ticksTillMove = 0;
 
-        MobSystem.throwItem(level, thrower, bomb, VICTIM_AT);
+        MobThrowing.throwItem(level, thrower, bomb, VICTIM_AT);
 
         // Everything except the world mutation happens synchronously at fire
         // time: item consumed, action cost billed, impact queued behind the gate.
@@ -109,7 +109,7 @@ class ThrowAndWandLifecycleTest extends DataFixture {
         victim.hp = 1000;
         double before = victim.hp;
 
-        MobSystem.throwItem(level, thrower, bomb, VICTIM_AT);
+        MobThrowing.throwItem(level, thrower, bomb, VICTIM_AT);
         MobSystem.drainPendingImpactsImmediate(level);
 
         // Bombs are AoE with no to-hit roll, so a single drain must land.
@@ -131,7 +131,7 @@ class ThrowAndWandLifecycleTest extends DataFixture {
         victim.hp = 1000;
         double before = victim.hp;
 
-        MobSystem.throwItem(level, thrower, bomb, VICTIM_AT);
+        MobThrowing.throwItem(level, thrower, bomb, VICTIM_AT);
         // Illegally move the victim far off the locked tile before the drain.
         // In real play the pending-impact freeze forbids exactly this - the
         // test asserts the impact resolves on the fire-time tile regardless.

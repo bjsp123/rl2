@@ -1,7 +1,7 @@
 package com.bjsp123.rl2.ai.action;
 
 import com.bjsp123.rl2.ai.WorldState;
-import com.bjsp123.rl2.logic.MobSystem;
+import com.bjsp123.rl2.logic.MobThrowing;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.Item;
 import com.bjsp123.rl2.model.Level;
@@ -64,7 +64,7 @@ public final class ActionThrowAt implements Action {
         return Math.max(0.2, Math.min(1.0, base + dmg / 30.0 - stalemateDamp));
     }
     @Override public void execute(Mob mob, Level level) {
-        MobSystem.throwItem(level, mob, item, dest);
+        MobThrowing.throwItem(level, mob, item, dest);
         TurnSystem.applyActionCost(mob, mob.effectiveStats().attackCost);
     }
     @Override public String intentDetail() {

@@ -366,7 +366,7 @@ public final class MobAiItems {
         if (item.inventoryCategory == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
             Mob target = MobSystem.nearestAttackTarget(mob, level);
             if (target != null) {
-                MobSystem.throwItem(level, mob, item, target.position);
+                MobThrowing.throwItem(level, mob, item, target.position);
             }
             return mob.ticksTillMove != before;
         }

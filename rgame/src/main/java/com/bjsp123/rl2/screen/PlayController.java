@@ -7,6 +7,7 @@ import com.bjsp123.rl2.logic.LevelSystem;
 import com.bjsp123.rl2.logic.Messages;
 import com.bjsp123.rl2.logic.MobQueries;
 import com.bjsp123.rl2.logic.MobSystem;
+import com.bjsp123.rl2.logic.MobThrowing;
 import com.bjsp123.rl2.logic.TurnSystem;
 import com.bjsp123.rl2.model.HallOfFameEntry;
 import com.bjsp123.rl2.model.Item;
@@ -626,7 +627,7 @@ final class PlayController {
         targetingOverlay.setValidTiles(throwGrid(level, thrower), level.width, level.height);
         targetingOverlay.activate(target -> {
             Level cur = world.currentLevel();
-            MobSystem.throwItem(cur, thrower, item, target);
+            MobThrowing.throwItem(cur, thrower, item, target);
             animator.consume(cur);
             afterMove(cur);
         }, item);
@@ -666,7 +667,7 @@ final class PlayController {
     private static boolean[][] throwGrid(Level level, Mob thrower) {
         boolean[][] grid = new boolean[level.width][level.height];
         if (thrower.position == null) return grid;
-        int range = com.bjsp123.rl2.logic.MobSystem.throwRangeFor(thrower);
+        int range = com.bjsp123.rl2.logic.MobThrowing.throwRangeFor(thrower);
         int px = thrower.position.tileX(), py = thrower.position.tileY();
         for (int x = Math.max(0, px - range); x <= Math.min(level.width - 1, px + range); x++) {
             for (int y = Math.max(0, py - range); y <= Math.min(level.height - 1, py + range); y++) {

@@ -1824,7 +1824,7 @@ public final class ItemSystem {
 
     /**
      * Tiles a thrown {@code item} will affect when it lands on {@code impact}.
-     * Mirrors the per-category branches in {@link MobSystem#applyThrowImpact}
+     * Mirrors the per-category branches in {@link MobThrowing#applyThrowImpact}
      * so AI prediction and any UI preview agree with the actual resolution.
      *
      * <ul>
