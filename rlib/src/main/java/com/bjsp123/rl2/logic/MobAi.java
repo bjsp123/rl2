@@ -37,7 +37,7 @@ public final class MobAi {
                 MobSystem.snapshotVisibleMobsAtTurnStart(level, mob);
             }
             int before = mob.ticksTillMove;
-            MobSystem.processAiTurn(mob, level);
+            MobAiBehavior.processAiTurn(mob, level);
             if (mob.ticksTillMove == before) {
                 mob.intent = Mob.Intent.CONSIDERING;
                 int guardrailCost = Math.max(TurnSystem.STANDARD_TURN_TICKS + 1,

@@ -87,7 +87,7 @@ public final class MobAiItems {
     private static boolean isChargeUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
         if (mob == null || mob.position == null) return false;
         if (item.baseChargeMax > 0 && item.charge < 1f) return false;
-        Mob target = MobSystem.nearestAttackTarget(mob, level);
+        Mob target = MobAiBehavior.nearestAttackTarget(mob, level);
         if (target == null || target.position == null || target.hp <= 0) return false;
         int dx = Math.abs(target.position.tileX() - mob.position.tileX());
         int dy = Math.abs(target.position.tileY() - mob.position.tileY());
@@ -152,7 +152,7 @@ public final class MobAiItems {
 
     private static boolean isGrappleUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
         if (mob.position == null) return false;
-        Mob target = MobSystem.nearestAttackTarget(mob, level);
+        Mob target = MobAiBehavior.nearestAttackTarget(mob, level);
         if (target == null || target.position == null) return false;
         // No point grappling when already adjacent
         if (LevelFactoryUtils.chebyshev(mob.position, target.position) <= 1) return false;
@@ -162,7 +162,7 @@ public final class MobAiItems {
 
     private static boolean isJumpUsableByAi(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
         if (mob.position == null) return false;
-        Mob threat = MobSystem.nearestAttackTarget(mob, level);
+        Mob threat = MobAiBehavior.nearestAttackTarget(mob, level);
         if (threat == null || threat.position == null) return false;
         return pickBestJumpTile(mob, item, level, threat) != null;
     }
@@ -186,14 +186,14 @@ public final class MobAiItems {
         // wasting the AI's per-item roll.
         if (wand.baseChargeMax > 0 && wand.charge < 1f) return false;
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
-            Mob target = MobSystem.nearestAttackTarget(mob, level);
+            Mob target = MobAiBehavior.nearestAttackTarget(mob, level);
             if (target == null) return false;
             if (!hasLineOfFire(mob, target, level)) return false;
             if (expectedWandDamage(wand, mob, target) <= 0) return false;
             return wandBeatsMelee(mob, wand, target);
         }
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.TELEPORT) {
-            return MobSystem.nearestAttackTarget(mob, level) != null
+            return MobAiBehavior.nearestAttackTarget(mob, level) != null
                     && pickTeleportDestination(mob, level) != null;
         }
         if (wand.summonsWhenUsed != null) {
@@ -203,7 +203,7 @@ public final class MobAiItems {
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.BLAST
                 || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.DETONATION
                 || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.FIRE) {
-            Mob target = MobSystem.nearestAttackTarget(mob, level);
+            Mob target = MobAiBehavior.nearestAttackTarget(mob, level);
             if (target == null || target.position == null) return false;
             if (!hasLineOfFire(mob, target, level)) return false;
             int effLvl = ItemStats.effectiveLevel(wand, mob);
@@ -333,7 +333,7 @@ public final class MobAiItems {
     /** True iff the mob has at least one hostile in throw range, a clear line of
      *  fire to it, and no ally inside the bomb's AOE around that target. */
     private static boolean canThrowBombAtSomeone(Mob thrower, com.bjsp123.rl2.model.Item bomb, Level level) {
-        Mob target = MobSystem.nearestAttackTarget(thrower, level);
+        Mob target = MobAiBehavior.nearestAttackTarget(thrower, level);
         if (target == null || target.position == null) return false;
         int d = Math.max(Math.abs(target.position.tileX() - thrower.position.tileX()),
                          Math.abs(target.position.tileY() - thrower.position.tileY()));
@@ -364,7 +364,7 @@ public final class MobAiItems {
     private static boolean applyAiItemUse(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
         int before = mob.ticksTillMove;
         if (item.inventoryCategory == com.bjsp123.rl2.model.Item.InventoryCategory.BOMB) {
-            Mob target = MobSystem.nearestAttackTarget(mob, level);
+            Mob target = MobAiBehavior.nearestAttackTarget(mob, level);
             if (target != null) {
                 MobThrowing.throwItem(level, mob, item, target.position);
             }
@@ -402,7 +402,7 @@ public final class MobAiItems {
             return caster.ticksTillMove != before;
         }
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.MISSILE) {
-            Mob target = MobSystem.nearestAttackTarget(caster, level);
+            Mob target = MobAiBehavior.nearestAttackTarget(caster, level);
             if (target == null) return false;
             ItemSystem.fireWand(level, caster, wand, target.position);
             return caster.ticksTillMove != before;
@@ -417,7 +417,7 @@ public final class MobAiItems {
         if (wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.BLAST
                 || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.DETONATION
                 || wand.wandEffect == com.bjsp123.rl2.model.Item.ItemEffect.FIRE) {
-            Mob target = MobSystem.nearestAttackTarget(caster, level);
+            Mob target = MobAiBehavior.nearestAttackTarget(caster, level);
             if (target == null || target.position == null) return false;
             ItemSystem.fireWand(level, caster, wand, target.position);
             return caster.ticksTillMove != before;
@@ -427,7 +427,7 @@ public final class MobAiItems {
 
     private static boolean aiCastGrapple(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
         int before = mob.ticksTillMove;
-        Mob target = MobSystem.nearestAttackTarget(mob, level);
+        Mob target = MobAiBehavior.nearestAttackTarget(mob, level);
         if (target == null || target.position == null) return false;
         // Grapple is only useful against the player or targets with a ranged attack.
         if (target.behavior != Mob.Behavior.PLAYER
@@ -438,7 +438,7 @@ public final class MobAiItems {
 
     private static boolean aiCastJump(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
         int before = mob.ticksTillMove;
-        Mob threat = MobSystem.nearestAttackTarget(mob, level);
+        Mob threat = MobAiBehavior.nearestAttackTarget(mob, level);
         if (threat == null) return false;
         com.bjsp123.rl2.model.Point dest = pickBestJumpTile(mob, item, level, threat);
         if (dest != null) ItemSystem.castJump(level, mob, item, dest);
@@ -452,7 +452,7 @@ public final class MobAiItems {
      *  LoS + free arrival tile. */
     private static boolean aiCastCharge(Mob mob, com.bjsp123.rl2.model.Item item, Level level) {
         int before = mob.ticksTillMove;
-        Mob target = MobSystem.nearestAttackTarget(mob, level);
+        Mob target = MobAiBehavior.nearestAttackTarget(mob, level);
         if (target == null || target.position == null) return false;
         ItemSystem.castCharge(level, mob, item, target.position);
         return mob.ticksTillMove != before;
@@ -489,7 +489,7 @@ public final class MobAiItems {
      *  current position. Returns null when no improvement is possible. */
     private static com.bjsp123.rl2.model.Point pickTeleportDestination(Mob mob, Level level) {
         if (mob.position == null) return null;
-        Mob threat = MobSystem.nearestAttackTarget(mob, level);
+        Mob threat = MobAiBehavior.nearestAttackTarget(mob, level);
         int currentDist = threat != null
                 ? LevelFactoryUtils.chebyshev(mob.position, threat.position) : 0;
         java.util.List<com.bjsp123.rl2.model.Point> candidates = new java.util.ArrayList<>();
