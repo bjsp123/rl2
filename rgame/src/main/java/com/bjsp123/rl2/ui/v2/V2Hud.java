@@ -137,9 +137,12 @@ public final class V2Hud {
     // strings only change on discrete game events; TextCatalog.format allocates
     // a map + varargs + several intermediate strings per call, which is real GC
     // pressure on TeaVM. Each cache re-formats only when its key changes.
-    private String statusTextCache;   private int statusDepthKey = Integer.MIN_VALUE;
     private String revivesTextCache;  private int revivesKey = Integer.MIN_VALUE;
-    private String hazardTextCache;   private int hazardKey = Integer.MIN_VALUE;
+    /** Compact depth+hazard summary shown beside the burger (top-right). */
+    private String levelInfoCache;
+    private int levelInfoDepthKey = Integer.MIN_VALUE;
+    private int levelInfoHazardKey = Integer.MIN_VALUE;
+    private final Rect levelInfoRect = new Rect();
     private String portraitLabelCache; private int portraitLabelLevelKey = Integer.MIN_VALUE;
     private boolean portraitLabelStarKey; private Mob.CharacterClass portraitLabelClassKey;
     private com.badlogic.gdx.graphics.g2d.TextureRegion portraitHeadCache;
@@ -365,6 +368,8 @@ public final class V2Hud {
         // glyph) so it reads the same in-play and out (RL-27).
         burgerRect.set(w - MARGIN - UIVars.BURGER_SIZE, h - MARGIN - UIVars.BURGER_SIZE,
                 UIVars.BURGER_SIZE, UIVars.BURGER_SIZE);
+        // Compact depth+hazard summary immediately left of the burger.
+        levelInfoRect.set(burgerRect.x - 8f - 80f, burgerRect.y, 80f, UIVars.BURGER_SIZE);
 
         // Look at bottom-left; auto-explore stacked directly above it.
         lookRect.set(MARGIN, MARGIN, ACTION_BTN, ACTION_BTN);
@@ -487,22 +492,22 @@ public final class V2Hud {
         if (barPlayer != null && barPlayer.buffs != null && !barPlayer.buffs.isEmpty()) {
             float iconSz  = 16f * HUD_SCALE;
             float iconGap = BUFF_ICON_GAP * HUD_SCALE;
-            float barW    = UIVars.BUFF_BAR_W * HUD_SCALE;
             float bx = MARGIN;
             float by = buffRowY;
-            boolean blinkOn = (com.badlogic.gdx.utils.TimeUtils.millis() / 250L & 1L) == 0L;
             int max = Math.min(barPlayer.buffs.size(), 8);
             for (int i = 0; i < max; i++) {
                 Buff b = barPlayer.buffs.get(i);
                 if (b == null || b.type == null || b.stacks <= 0) continue;
                 if (BuffIcons.regionFor(b.type) == null) continue;
-                boolean warn = b.stacks <= UIVars.BUFF_BAR_WARN_TURNS;
-                if (warn && !blinkOn) continue;
                 float frac = Math.min(b.stacks, UIVars.BUFF_BAR_FULL_TURNS)
                         / (float) UIVars.BUFF_BAR_FULL_TURNS;
-                float barX = bx + i * (iconSz + iconGap) + iconSz + 1f;
-                s.setColor(warn ? UIVars.TEXT_WARN : UIVars.TEXT_DIM);
-                s.rect(barX, by, barW, iconSz * frac);
+                // Duration drain as an underline attached to the icon itself.
+                // Deliberately neutral (no low-duration flash or warn colour):
+                // buffs may be good, bad, or neutral, so "about to expire" is
+                // not inherently a warning.
+                float ix = bx + i * (iconSz + iconGap);
+                s.setColor(UIVars.TEXT_DIM);
+                s.rect(ix, by - 5f, iconSz * frac, 3f);
             }
         }
 
@@ -607,17 +612,10 @@ public final class V2Hud {
             // pointless allocation.
             if (portraitHeadCache == null
                     || portraitHeadClassKey != playerForPortrait.characterClass) {
-                TextureRegion full = com.bjsp123.rl2.world.render.MobSprites.regionFor(
+                // The dedicated portrait band (head + shoulders, pre-framed) -
+                // same source V2HallOfFame uses, so avatars match everywhere.
+                portraitHeadCache = com.bjsp123.rl2.world.render.PortraitSprites.regionFor(
                         playerForPortrait.characterClass);
-                // Tight head-and-shoulders crop: the sprite cell is mostly
-                // transparent padding, so a full-cell draw leaves the figure
-                // tiny in the frame. Middle 60% horizontally, top 45%
-                // vertically fills the portrait with the face.
-                portraitHeadCache = full == null ? null : new TextureRegion(full.getTexture(),
-                        full.getRegionX() + Math.round(full.getRegionWidth() * 0.20f),
-                        full.getRegionY(),
-                        Math.round(full.getRegionWidth() * 0.60f),
-                        Math.round(full.getRegionHeight() * 0.45f));
                 portraitHeadClassKey = playerForPortrait.characterClass;
             }
             if (portraitHeadCache != null) {
@@ -756,19 +754,9 @@ public final class V2Hud {
             if (autoActive) ctx.batch.setColor(1f, 1f, 1f, 1f);
         }
 
-        // Status line + turn clock - under the XP bar. Formatted strings are
-        // cached against their inputs (see field block) - TextCatalog.format
-        // per frame is measurable GC pressure on the web build.
-        if (statusDepthKey != depth) {
-            statusTextCache = TextCatalog.format("ui.hud.status", TextCatalog.vars("depth", depth));
-            statusDepthKey = depth;
-        }
-        TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.TEXT_DIM,
-                statusTextCache,
-                clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f + 5f,
-                Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
-
         // Revive charms (Jade Peaches) - shown only when the player carries some.
+        // Formatted strings are cached against their inputs (see field block) -
+        // TextCatalog.format per frame is measurable GC pressure on the web build.
         int charms = reviveCharmCount(currentPlayer());
         if (charms > 0) {
             if (revivesKey != charms) {
@@ -777,19 +765,22 @@ public final class V2Hud {
             }
             TextDraw.leftFit(ctx, ctx.fontRegular, UIVars.ACCENT,
                     revivesTextCache,
-                    clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f - 10f,
+                    clockRect.right() + 5f, clockRect.y + clockRect.h * 0.5f + 5f,
                     Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
         }
 
-        // Hazard level - top-centre of the HUD (RL-54). Brighter as it climbs.
-        if (hazardKey != hazard) {
-            hazardTextCache = TextCatalog.format("ui.hud.hazard", TextCatalog.vars("n", hazard));
-            hazardKey = hazard;
+        // Compact level summary - depth + hazard beside the burger, small and
+        // out of everything's way. Long-press explains it (help.hud.levelinfo).
+        if (levelInfoDepthKey != depth || levelInfoHazardKey != hazard) {
+            levelInfoCache = TextCatalog.format("ui.hud.levelinfo",
+                    TextCatalog.vars("depth", depth, "hazard", hazard));
+            levelInfoDepthKey = depth;
+            levelInfoHazardKey = hazard;
         }
-        TextDraw.centre(ctx, ctx.fontRegular,
+        TextDraw.right(ctx, ctx.fontRegular,
                 hazard >= 3 ? UIVars.ACCENT : UIVars.TEXT_DIM,
-                hazardTextCache,
-                ctx.worldW() * 0.5f, ctx.worldH() - 8f);
+                levelInfoCache,
+                levelInfoRect.right(), levelInfoRect.cy() + 6f);
 
         // Player buff icons row - under the status line, anchored at the
         // top-left edge so it shares the bars cluster's anchor. Caps at
@@ -911,6 +902,7 @@ public final class V2Hud {
         if (hpBarRect.contains(vx, vy))    return new HelpHit("hud.hpbar", null, null);
         if (xpBarRect.contains(vx, vy))    return new HelpHit("hud.xpbar", null, null);
         if (clockRect.contains(vx, vy))    return new HelpHit("hud.clock", null, null);
+        if (levelInfoRect.contains(vx, vy)) return new HelpHit("hud.levelinfo", null, null);
         if (burgerRect.contains(vx, vy))   return new HelpHit("hud.burger", null, null);
         if (lookRect.contains(vx, vy))     return new HelpHit("hud.lookBtn", null, null);
         if (autoRect.contains(vx, vy))     return new HelpHit("hud.autoexploreBtn", null, null);

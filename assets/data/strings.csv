@@ -1334,9 +1334,10 @@ ui.hall.title,Hall of Fame
 ui.hall.turns,T:{turns}
 ui.hall.unknownDeath,Died of unknown causes.
 ui.hud.bag,Bag
-ui.hud.status,Lvl {depth}
 ui.hud.revives,Revives: {n}
-ui.hud.hazard,Hazard {n}
+ui.hud.levelinfo,"L{depth}  H{hazard}"
+help.hud.levelinfo.title,Depth & Hazard
+help.hud.levelinfo.body,"L is the current dungeon depth - how many levels below the surface you are. H is the floor's hazard level: it climbs the longer you linger here (and jumps when you light the beacon), making fresh enemies arrive more often and in greater numbers. Descend or move on to keep it low."
 ui.inventory.drop,Drop
 ui.inventory.dropConfirm,Drop?
 ui.inventory.equip,Equip

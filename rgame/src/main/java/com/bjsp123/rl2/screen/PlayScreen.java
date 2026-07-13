@@ -121,6 +121,13 @@ public class PlayScreen implements Screen {
         return new com.badlogic.gdx.InputAdapter() {
             @Override
             public boolean touchDown(int sx, int sy, int pointer, int button) {
+                // Desktop: right-click IS a long-press - fire the help/Look
+                // resolution immediately and consume the click outright.
+                if (button == com.badlogic.gdx.Input.Buttons.RIGHT) {
+                    longPress.onTouchDown(sx, sy);
+                    handleLongPress();
+                    return true;
+                }
                 if (pointer == 0) longPress.onTouchDown(sx, sy);
                 else longPress.cancel();   // second finger = pinch, not a hold
                 return false;

@@ -88,6 +88,14 @@ public abstract class V2Screen extends ScreenAdapter {
                 return true;
             }
 
+            // Desktop: right-click IS a long-press - resolve help for the
+            // point immediately and consume the click.
+            if (button == com.badlogic.gdx.Input.Buttons.RIGHT) {
+                longPress.onTouchDown(vx, vy);
+                handleLongPress(vx, vy);
+                return true;
+            }
+
             // Arm the long-press tracker for pointer 0 (a second finger
             // means pinch/multitouch - cancel). Never consumes the event;
             // the normal press handling below proceeds untouched.
