@@ -230,6 +230,21 @@ public final class V2Hud {
 
     /** Wall-clock accumulator driving the portrait's unspent-perk-point pulse. */
     private float perkFlashT;
+    /** Thickness of the pulsing perk frame around the portrait; the layout
+     *  reserves this envelope so the frame never overlaps its neighbours. */
+    private static final float FRAME_T = 3f;
+    /** Height reserved under the portrait for the "lvN Class" label. */
+    private static final float LABEL_H = 14f;
+    /** Y of the buff-icon row, computed in layoutRects (below the clock). */
+    private float buffRowY;
+    /** Scratch colour for the perk-pulse XP bar tint (no per-frame alloc). */
+    private final Color perkPulseColor = new Color();
+
+    /** 0..1 oscillation shared by the portrait frame, portrait art, and XP
+     *  bar while perk points are unspent. */
+    private float perkPulse() {
+        return 0.5f + 0.5f * (float) Math.sin(perkFlashT * 6f);
+    }
 
     public void render() {
         layoutRects();
@@ -325,18 +340,25 @@ public final class V2Hud {
         float w = ctx.worldW();
         float h = ctx.worldH();
 
-        // Top-left cluster: portrait on the left, three status bars stacked
-        // to its right. Portrait is square; bars take the rest of the row.
+        // Top-left cluster, stacked strictly downward so nothing collides:
+        // portrait (with its pulse-frame envelope reserved), then the
+        // "lvN Class" label, then the turn clock, then the buff-icon row.
+        // Status bars sit to the portrait's right.
         float portraitSz = 40f * HUD_SCALE;
-        portraitRect.set(MARGIN, h - MARGIN - portraitSz, portraitSz, portraitSz);
+        portraitRect.set(MARGIN + FRAME_T, h - MARGIN - FRAME_T - portraitSz,
+                portraitSz, portraitSz);
 
-        float barX = portraitRect.right() + 4f;
+        float barX = portraitRect.right() + FRAME_T + 6f;
         float by = h - MARGIN - BAR_H;
         hpBarRect.set(barX, by, BAR_W, BAR_H);
         by -= BAR_H + BAR_GAP;
         xpBarRect.set(barX, by, BAR_W, BAR_H);
-        // Clock anchors directly under the XP bar (HP / XP are the only status bars).
-        clockRect.set(MARGIN, xpBarRect.y - CLOCK_SIZE - 8f, CLOCK_SIZE, CLOCK_SIZE);
+        // Label baseline sits just under the pulse frame; the clock goes
+        // below the label, and the buff row below the clock - all outside
+        // the portrait frame's envelope.
+        float labelBottom = portraitRect.y - FRAME_T - LABEL_H;
+        clockRect.set(MARGIN, labelBottom - CLOCK_SIZE - 6f, CLOCK_SIZE, CLOCK_SIZE);
+        buffRowY = clockRect.y - 8f - 16f * HUD_SCALE;
 
         // Burger at top-right.
         // Identical to the menu-screen burger (same size, inset, chrome, and
@@ -405,7 +427,18 @@ public final class V2Hud {
             int xpBase = com.bjsp123.rl2.logic.MobProgression.xpToReach(player.characterLevel);
             int xpStep = com.bjsp123.rl2.logic.MobProgression.xpToAdvanceFrom(player.characterLevel);
             float xpFrac = xpStep > 0 ? (float)(player.xp - xpBase) / xpStep : 1f;
-            drawBar(s, xpBarRect, Math.max(0f, Math.min(1f, xpFrac)), UIVars.ACCENT);
+            // Unspent perk points: the XP bar pulses toward white in step with
+            // the portrait so the "spend a point" nudge reads in both places.
+            Color xpColor = UIVars.ACCENT;
+            if (player.perkPoints > 0) {
+                float k = perkPulse() * 0.45f;
+                perkPulseColor.set(
+                        UIVars.ACCENT.r + (1f - UIVars.ACCENT.r) * k,
+                        UIVars.ACCENT.g + (1f - UIVars.ACCENT.g) * k,
+                        UIVars.ACCENT.b + (1f - UIVars.ACCENT.b) * k, 1f);
+                xpColor = perkPulseColor;
+            }
+            drawBar(s, xpBarRect, Math.max(0f, Math.min(1f, xpFrac)), xpColor);
         } else {
             drawBar(s, hpBarRect, 0f, UIVars.TEXT_WARN);
             drawBar(s, xpBarRect, 0f, UIVars.ACCENT);
@@ -416,11 +449,11 @@ public final class V2Hud {
         // the player notices there's a point to spend. Drawn in the shapes
         // pass so the portrait sprite (text pass) sits inside the frame.
         if (player != null && player.perkPoints > 0) {
-            float pulse = 0.35f + 0.65f * (0.5f + 0.5f * (float) Math.sin(perkFlashT * 6f));
+            float pulse = 0.35f + 0.65f * perkPulse();
             Color a = UIVars.ACCENT;
             s.setColor(a.r, a.g, a.b, pulse);
             Rect r = portraitRect;
-            float t = 3f;   // frame thickness
+            float t = FRAME_T;
             s.rect(r.x - t,      r.y - t,      r.w + 2 * t, t);           // bottom
             s.rect(r.x - t,      r.top(),      r.w + 2 * t, t);           // top
             s.rect(r.x - t,      r.y - t,      t,           r.h + 2 * t); // left
@@ -456,7 +489,7 @@ public final class V2Hud {
             float iconGap = BUFF_ICON_GAP * HUD_SCALE;
             float barW    = UIVars.BUFF_BAR_W * HUD_SCALE;
             float bx = MARGIN;
-            float by = xpBarRect.y - 30f * HUD_SCALE;
+            float by = buffRowY;
             boolean blinkOn = (com.badlogic.gdx.utils.TimeUtils.millis() / 250L & 1L) == 0L;
             int max = Math.min(barPlayer.buffs.size(), 8);
             for (int i = 0; i < max; i++) {
@@ -576,15 +609,24 @@ public final class V2Hud {
                     || portraitHeadClassKey != playerForPortrait.characterClass) {
                 TextureRegion full = com.bjsp123.rl2.world.render.MobSprites.regionFor(
                         playerForPortrait.characterClass);
+                // Tight head-and-shoulders crop: the sprite cell is mostly
+                // transparent padding, so a full-cell draw leaves the figure
+                // tiny in the frame. Middle 60% horizontally, top 45%
+                // vertically fills the portrait with the face.
                 portraitHeadCache = full == null ? null : new TextureRegion(full.getTexture(),
-                        full.getRegionX(), full.getRegionY(),
-                        full.getRegionWidth(), full.getRegionHeight() / 2);
+                        full.getRegionX() + Math.round(full.getRegionWidth() * 0.20f),
+                        full.getRegionY(),
+                        Math.round(full.getRegionWidth() * 0.60f),
+                        Math.round(full.getRegionHeight() * 0.45f));
                 portraitHeadClassKey = playerForPortrait.characterClass;
             }
             if (portraitHeadCache != null) {
+                // Unspent perk points: the portrait breathes in step with the
+                // frame + XP bar pulse.
+                float grow = playerForPortrait.perkPoints > 0 ? perkPulse() * 2.5f : 0f;
                 ctx.batch.draw(portraitHeadCache,
-                        portraitRect.x + 4f, portraitRect.y + 4f,
-                        portraitRect.w - 8f, portraitRect.h - 8f);
+                        portraitRect.x + 2f - grow, portraitRect.y + 2f - grow,
+                        portraitRect.w - 4f + 2f * grow, portraitRect.h - 4f + 2f * grow);
             }
         }
 
@@ -610,7 +652,9 @@ public final class V2Hud {
             com.badlogic.gdx.graphics.g2d.BitmapFont f = ctx.fontRegular;
             float prevScale = f.getScaleX();
             f.getData().setScale(prevScale * 0.7f);
-            TextDraw.centre(ctx, f, c, lbl, portraitRect.cx(), portraitRect.y - 1f);
+            // Below the pulse-frame envelope so the frame never covers it.
+            TextDraw.centre(ctx, f, c, lbl, portraitRect.cx(),
+                    portraitRect.y - FRAME_T - 2f);
             f.getData().setScale(prevScale);
             f.setColor(com.badlogic.gdx.graphics.Color.WHITE);
         }
@@ -758,7 +802,7 @@ public final class V2Hud {
             float iconSz = 16f * HUD_SCALE;
             float iconGap = BUFF_ICON_GAP * HUD_SCALE;
             float bx = MARGIN;
-            float by = xpBarRect.y - 30f * HUD_SCALE;
+            float by = buffRowY;
             int max = Math.min(p.buffs.size(), 8);
             for (int i = 0; i < max; i++) {
                 Buff b = p.buffs.get(i);
