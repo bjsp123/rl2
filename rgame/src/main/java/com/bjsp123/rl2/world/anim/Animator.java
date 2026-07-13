@@ -800,6 +800,7 @@ public final class Animator {
     void onItemPickedUp(Level level, GameEvent.ItemPickedUp m) {
         if (m.item() == null || m.from() == null) return;
         stage.add(Effect.pickupToss(m.from(), m.item()));
+        if (m.picker() != null && m.picker().isPlayer) playerPickedUpSignal = true;
         if (sounds != null && m.picker() != null) {
             if (m.picker().isPlayer) {
                 Item it = m.item();
@@ -986,6 +987,10 @@ public final class Animator {
     /** Latched true for one consume() when the player survives a chasm fall to
      *  the next level, so PlayScreen can play the level-transition cinematic. */
     public boolean playerFellSignal = false;
+
+    /** Latched true for one consume() when the player picks up an item, so
+     *  PlayScreen can flash the HUD portrait's happy expression. */
+    public boolean playerPickedUpSignal = false;
 
     /** Item fell into a chasm - revolve-shrink-fade at its tile. Non-blocking. */
     void onItemFallingIntoChasm(Level level, GameEvent.ItemFallingIntoChasm m) {

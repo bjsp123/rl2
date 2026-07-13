@@ -1186,6 +1186,11 @@ public class PlayScreen implements Screen {
             reviveCinematicFrame += com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs);
             if (reviveCinematicFrame >= REVIVE_TOTAL) reviveCinematicFrame = -1;
         }
+        // Player picked something up - flash the HUD portrait's happy face.
+        if (animator.playerPickedUpSignal) {
+            animator.playerPickedUpSignal = false;
+            if (v2Hud != null) v2Hud.flashHappy();
+        }
         // Chasm fall: the engine already moved the player down a level; play
         // the cloud transition from its covered midpoint (there's no old level
         // left to fade out) and sound the arrival.

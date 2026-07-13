@@ -8,49 +8,65 @@ import java.util.Map;
 
 /**
  * Lazy-loaded sprite source for character portraits (HUD avatar, hall of fame,
- * game-over / victory screens). Crops the head + shoulders band out of each
- * class's real {@code sprites/player.png} pose, borrowed via
- * {@link MobSprites#regionFor(CharacterClass)} so the portrait always tracks
- * wherever the player art actually lives.
+ * game-over / victory screens). {@code sprites/player.png} carries dedicated
+ * large portrait heads per class alongside the pose columns:
+ * col 3 = angry, col 4 = happy (sparkles), col 5 = neutral. Each is cropped to
+ * the head band and served per (class, expression).
  */
 public final class PortraitSprites {
 
-    private static Map<CharacterClass, TextureRegion> regions;
+    /** Portrait expression. NEUTRAL is the resting face; ANGRY flashes when
+     *  the player takes damage, HAPPY when they pick up an item. */
+    public enum Expression { NEUTRAL, ANGRY, HAPPY }
+
+    private static final int COL_ANGRY   = 3;
+    private static final int COL_HAPPY   = 4;
+    private static final int COL_NEUTRAL = 5;
+
+    private static Map<CharacterClass, Map<Expression, TextureRegion>> regions;
 
     private PortraitSprites() {}
 
-    /** Region for the given class, or {@code null} if the underlying atlas didn't
-     *  load (missing asset, headless boot, etc.). */
+    /** Neutral portrait for the given class, or {@code null} if the underlying
+     *  atlas didn't load (missing asset, headless boot, etc.). */
     public static TextureRegion regionFor(CharacterClass cls) {
-        if (cls == null) return null;
-        if (regions == null) load();
-        return regions == null ? null : regions.get(cls);
+        return regionFor(cls, Expression.NEUTRAL);
     }
 
-    /** Crop each class's portrait band out of its {@code player.png} pose via
-     *  {@link MobSprites#regionFor(CharacterClass)} - the single source of
-     *  truth for where player art lives. (This used to point at legacy cells
-     *  on the mobs sheet, which went blank when player art moved to
-     *  player.png - portraits silently vanished.) */
+    /** Portrait for (class, expression), or {@code null} if the atlas didn't load. */
+    public static TextureRegion regionFor(CharacterClass cls, Expression expr) {
+        if (cls == null) return null;
+        if (regions == null) load();
+        if (regions == null) return null;
+        Map<Expression, TextureRegion> byExpr = regions.get(cls);
+        if (byExpr == null) return null;
+        TextureRegion r = byExpr.get(expr == null ? Expression.NEUTRAL : expr);
+        return r != null ? r : byExpr.get(Expression.NEUTRAL);
+    }
+
     private static void load() {
-        Map<CharacterClass, TextureRegion> built = new EnumMap<>(CharacterClass.class);
+        Map<CharacterClass, Map<Expression, TextureRegion>> built =
+                new EnumMap<>(CharacterClass.class);
         for (CharacterClass cls : CharacterClass.values()) {
-            TextureRegion full = MobSprites.regionFor(cls);
-            if (full == null) return;   // atlas not loaded yet - retry next call
-            built.put(cls, head(full));
+            TextureRegion neutral = MobSprites.playerCell(cls, COL_NEUTRAL);
+            if (neutral == null) return;   // atlas not loaded yet - retry next call
+            Map<Expression, TextureRegion> byExpr = new EnumMap<>(Expression.class);
+            byExpr.put(Expression.NEUTRAL, head(neutral));
+            byExpr.put(Expression.ANGRY,   head(MobSprites.playerCell(cls, COL_ANGRY)));
+            byExpr.put(Expression.HAPPY,   head(MobSprites.playerCell(cls, COL_HAPPY)));
+            built.put(cls, byExpr);
         }
         regions = built;
     }
 
-    /** Crop the portrait window from the class pose. We pull pixel rows 10-42
-     *  (a 32-row band) rather than the top of the 32x64 cell because the
-     *  sprite's silhouette starts a few pixels down inside its cell - the top
-     *  rows are blank padding above the head, and rows 10-42 frame the head +
-     *  chest cleanly for an avatar. */
-    private static final int PORTRAIT_Y0     = 10;
-    private static final int PORTRAIT_HEIGHT = 32;
+    /** Crop the head band out of a portrait cell: the drawn head spans roughly
+     *  pixel rows 28-62 of the 32x64 cell (the top rows are blank padding plus
+     *  the happy column's sparkles), so this band frames the face cleanly. */
+    private static final int PORTRAIT_Y0     = 28;
+    private static final int PORTRAIT_HEIGHT = 34;
 
     private static TextureRegion head(TextureRegion full) {
+        if (full == null) return null;
         int h = Math.min(PORTRAIT_HEIGHT, full.getRegionHeight() - PORTRAIT_Y0);
         return new TextureRegion(full.getTexture(),
                 full.getRegionX(), full.getRegionY() + PORTRAIT_Y0,

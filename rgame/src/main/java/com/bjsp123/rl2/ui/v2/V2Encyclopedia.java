@@ -131,10 +131,21 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
     private boolean revealed(Entry e) {
         if (achievements == null) return true;
         return switch (currentTab) {
-            case ITEMS     -> achievements.seenItemTypes.contains(String.valueOf(e.id));
+            case ITEMS     -> alwaysRevealed(String.valueOf(e.id))
+                    || achievements.seenItemTypes.contains(String.valueOf(e.id));
             case CREATURES -> achievements.seenMobTypes.contains(String.valueOf(e.id));
             default        -> true;
         };
+    }
+
+    /** Crafted scrolls (GEM-category item types) start revealed: the forge
+     *  lists every recipe from the outset, so their entries are already
+     *  public knowledge - hiding them would just mask the recipe browser. */
+    private static boolean alwaysRevealed(String itemType) {
+        com.bjsp123.rl2.logic.ItemDefinition def =
+                com.bjsp123.rl2.logic.Registries.item(itemType);
+        return def != null
+                && def.inventoryCategory == com.bjsp123.rl2.model.Item.InventoryCategory.GEM;
     }
 
     /** Mask every non-whitespace char of {@code s} with {@code '?'} -

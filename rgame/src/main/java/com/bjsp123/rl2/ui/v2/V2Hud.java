@@ -18,6 +18,7 @@ import com.bjsp123.rl2.model.LogEvent;
 import com.bjsp123.rl2.ui.skin.Settings;
 import com.bjsp123.rl2.world.render.BuffIcons;
 import com.bjsp123.rl2.world.render.IconSprites;
+import com.bjsp123.rl2.world.render.PortraitSprites;
 
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
@@ -138,8 +139,30 @@ public final class V2Hud {
     private String revivesTextCache;  private int revivesKey = Integer.MIN_VALUE;
     private String portraitLabelCache; private int portraitLabelLevelKey = Integer.MIN_VALUE;
     private boolean portraitLabelStarKey; private Mob.CharacterClass portraitLabelClassKey;
-    private com.badlogic.gdx.graphics.g2d.TextureRegion portraitHeadCache;
-    private Mob.CharacterClass portraitHeadClassKey;
+
+    // -- Portrait expression flash (real-time) --------------------------------
+    /** Flash duration for an ANGRY / HAPPY portrait reaction. */
+    private static final float EXPRESSION_MS = 350f;
+    private com.bjsp123.rl2.world.render.PortraitSprites.Expression expression =
+            com.bjsp123.rl2.world.render.PortraitSprites.Expression.NEUTRAL;
+    private float expressionMs;
+
+    /** Player took damage: flash the angry portrait with a brief shudder. */
+    public void flashAngry() {
+        expression = com.bjsp123.rl2.world.render.PortraitSprites.Expression.ANGRY;
+        expressionMs = EXPRESSION_MS;
+    }
+
+    /** Player picked something up: flash the happy portrait with a little hop. */
+    public void flashHappy() {
+        // Damage trumps delight - don't overwrite an active angry flash.
+        if (expressionMs > 0f
+                && expression == com.bjsp123.rl2.world.render.PortraitSprites.Expression.ANGRY) {
+            return;
+        }
+        expression = com.bjsp123.rl2.world.render.PortraitSprites.Expression.HAPPY;
+        expressionMs = EXPRESSION_MS;
+    }
 
     // -- Pressed state for visual feedback -----------------------------------
     private final boolean[] actionPressed = new boolean[ActionBar.SLOTS];
@@ -599,22 +622,28 @@ public final class V2Hud {
         // HALF (head + torso) of the player's in-world sprite as a stand-in.
         Mob playerForPortrait = currentPlayer();
         if (playerForPortrait != null && playerForPortrait.characterClass != null) {
-            // Head crop is cached per class - a fresh TextureRegion per frame is
-            // pointless allocation.
-            if (portraitHeadCache == null
-                    || portraitHeadClassKey != playerForPortrait.characterClass) {
-                // The dedicated portrait band (head + shoulders, pre-framed) -
-                // same source V2HallOfFame uses, so avatars match everywhere.
-                portraitHeadCache = com.bjsp123.rl2.world.render.PortraitSprites.regionFor(
-                        playerForPortrait.characterClass);
-                portraitHeadClassKey = playerForPortrait.characterClass;
-            }
-            if (portraitHeadCache != null) {
+            // Expression timer counts down in real time; NEUTRAL when idle.
+            expressionMs = Math.max(0f, expressionMs - Gdx.graphics.getDeltaTime() * 1000f);
+            PortraitSprites.Expression expr = expressionMs > 0f
+                    ? expression : PortraitSprites.Expression.NEUTRAL;
+            TextureRegion face = PortraitSprites.regionFor(
+                    playerForPortrait.characterClass, expr);
+            if (face != null) {
                 // Unspent perk points: the portrait breathes in step with the
                 // frame + XP bar pulse.
                 float grow = playerForPortrait.perkPoints > 0 ? perkPulse() * 2.5f : 0f;
-                ctx.batch.draw(portraitHeadCache,
-                        portraitRect.x + 2f - grow, portraitRect.y + 2f - grow,
+                // ANGRY shudders side to side (decaying jitter); HAPPY hops up
+                // (one quick parabolic bounce). Both real-time, ~a third of a
+                // second, purely visual.
+                float dx = 0f, dy = 0f;
+                float t = expressionMs / EXPRESSION_MS;   // 1 -> 0 over the flash
+                if (expressionMs > 0f && expression == PortraitSprites.Expression.ANGRY) {
+                    dx = (float) Math.sin(expressionMs * 0.09f) * 2.5f * t;
+                } else if (expressionMs > 0f && expression == PortraitSprites.Expression.HAPPY) {
+                    dy = 4f * (float) Math.sin(Math.PI * Math.min(1f, 1f - t));
+                }
+                ctx.batch.draw(face,
+                        portraitRect.x + 2f - grow + dx, portraitRect.y + 2f - grow + dy,
                         portraitRect.w - 4f + 2f * grow, portraitRect.h - 4f + 2f * grow);
             }
         }
@@ -708,6 +737,9 @@ public final class V2Hud {
         Mob barP = currentPlayer();
         if (barP != null) {
             if (prevHp >= 0 && barP.hp > prevHp + 0.01) hpFlash = BAR_FLASH_FRAMES;
+            // Any hp LOSS flashes the angry portrait + shudder - one detection
+            // point covers melee, projectiles, DOTs, and environment alike.
+            if (prevHp >= 0 && barP.hp < prevHp - 0.01) flashAngry();
             prevHp = barP.hp;
             if (prevXp >= 0 && barP.xp > prevXp + 0.01) xpFlash = BAR_FLASH_FRAMES;
             prevXp = barP.xp;

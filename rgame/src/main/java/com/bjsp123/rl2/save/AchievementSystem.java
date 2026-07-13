@@ -225,11 +225,18 @@ public final class AchievementSystem {
         return true;
     }
 
-    /** True when {@link Achievements#seenItemTypes} covers every item type -
-     *  the encyclopedia's Items tab lists the whole registry, so no filter. */
+    /** True when {@link Achievements#seenItemTypes} covers every item type the
+     *  encyclopedia actually gates. Crafted scrolls (GEM category) start
+     *  revealed - the forge lists every recipe from the outset - so they're
+     *  excluded from the requirement. */
     private boolean seenAllItems() {
         if (achievements == null) return false;
         for (String type : Registries.itemTypes()) {
+            com.bjsp123.rl2.logic.ItemDefinition def = Registries.item(type);
+            if (def != null && def.inventoryCategory
+                    == com.bjsp123.rl2.model.Item.InventoryCategory.GEM) {
+                continue;
+            }
             if (!achievements.seenItemTypes.contains(type)) return false;
         }
         return true;

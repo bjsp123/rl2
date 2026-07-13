@@ -182,13 +182,30 @@ public final class MobSprites {
 
     /** Build a region pointing at one cell of {@code sprites/player.png}.
      *  {@code classRow} 0..2 = ROGUE / WARRIOR / MAGE; {@code variantCol}
-     *  0..2 = regular / enemy / ghost. Cell pitch is
+     *  0..2 = regular / enemy / ghost (cols 3..5 = angry / happy / neutral
+     *  portrait heads, served via {@link PortraitSprites}). Cell pitch is
      *  {@value #PLAYER_CELL_W} x {@value #PLAYER_CELL_H} px. */
     private static TextureRegion playerRegion(int classRow, int variantCol) {
         return new TextureRegion(mobsTex,
                 variantCol * PLAYER_CELL_W,
                 SpriteAtlas.playerY() + classRow * PLAYER_CELL_H,
                 PLAYER_CELL_W, PLAYER_CELL_H);
+    }
+
+    /** Arbitrary {@code player.png} cell for {@code cls} - lets
+     *  {@link PortraitSprites} reach the portrait columns while this class
+     *  stays the single owner of the class-row mapping. Null when the atlas
+     *  hasn't loaded. */
+    static TextureRegion playerCell(CharacterClass cls, int variantCol) {
+        if (cls == null) return null;
+        ensureLoaded();
+        if (mobsTex == null) return null;
+        int classRow = switch (cls) {
+            case ROGUE   -> 0;
+            case WARRIOR -> 1;
+            case MAGE    -> 2;
+        };
+        return playerRegion(classRow, variantCol);
     }
 
     /** Release cached regions. Texture is owned by {@link SpriteAtlas}; call
