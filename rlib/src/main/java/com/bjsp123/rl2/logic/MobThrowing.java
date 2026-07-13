@@ -27,9 +27,11 @@ public final class MobThrowing {
 
     private MobThrowing() {}
 
-    /** Max Chebyshev tiles a mob can throw: the base range plus its Hurler perk
-     *  bonus. Single source of truth shared by the targeting overlay (which
-     *  tiles to highlight) and {@link #throwItem} (clamping the actual flight). */
+    /** Max EUCLIDEAN tile distance a mob can throw: the base range plus its
+     *  Hurler perk bonus. Single source of truth shared by the targeting
+     *  overlay (which tiles to highlight) and {@link #throwItem} (clamping the
+     *  actual flight) - a throw reaches the same true distance in every
+     *  direction, so diagonals aren't ~40% longer than straight throws. */
     public static int throwRangeFor(Mob thrower) {
         int range = GameBalance.DEFAULT_THROW_RANGE;
         if (thrower != null && thrower.perks != null) {
@@ -39,17 +41,18 @@ public final class MobThrowing {
         return range;
     }
 
-    /** Clamp {@code dst} to within Chebyshev {@code range} of {@code origin},
+    /** Clamp {@code dst} to within Euclidean {@code range} of {@code origin},
      *  sliding it back along the aim line when it's too far. Returns {@code dst}
      *  unchanged when already in range (or inputs are degenerate). */
     private static Point clampToRange(Point origin, Point dst, int range) {
         if (origin == null || dst == null || range <= 0) return dst;
         int dx = dst.tileX() - origin.tileX();
         int dy = dst.tileY() - origin.tileY();
-        int dist = Math.max(Math.abs(dx), Math.abs(dy));
+        double dist = Math.sqrt((double) dx * dx + (double) dy * dy);
         if (dist <= range) return dst;
-        return new Point(origin.tileX() + dx * range / dist,
-                         origin.tileY() + dy * range / dist);
+        double k = range / dist;
+        return new Point(origin.tileX() + (int) Math.round(dx * k),
+                         origin.tileY() + (int) Math.round(dy * k));
     }
 
     /**

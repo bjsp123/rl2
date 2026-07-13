@@ -684,8 +684,9 @@ final class PlayController {
 
     /** Grid of valid throw targets: any tile the thrown item could actually land
      *  on - a clear line-of-FIRE (no wall/mob clips the flight first), capped at
-     *  the thrower's Chebyshev throw range (base + Hurler). NOT gated on FOV: a
-     *  tile down an unlit but open corridor is hittable even if currently dark. */
+     *  the thrower's EUCLIDEAN throw range (base + Hurler), matching the
+     *  fire-time clamp in {@code MobThrowing}. NOT gated on FOV: a tile down an
+     *  unlit but open corridor is hittable even if currently dark. */
     private static boolean[][] throwGrid(Level level, Mob thrower) {
         boolean[][] grid = new boolean[level.width][level.height];
         if (thrower.position == null) return grid;
@@ -693,7 +694,8 @@ final class PlayController {
         int px = thrower.position.tileX(), py = thrower.position.tileY();
         for (int x = Math.max(0, px - range); x <= Math.min(level.width - 1, px + range); x++) {
             for (int y = Math.max(0, py - range); y <= Math.min(level.height - 1, py + range); y++) {
-                if (Math.max(Math.abs(x - px), Math.abs(y - py)) > range) continue;
+                int dx = x - px, dy = y - py;
+                if (dx * dx + dy * dy > range * range) continue;
                 grid[x][y] = hasClearShot(level, thrower, x, y);
             }
         }
