@@ -317,6 +317,24 @@ public class PlayScreen implements Screen {
     private static final int REVIVE_FADE_IN   = 60;  // black starts ramping out
     private static final int REVIVE_TOTAL     = 84;  // cinematic ends
 
+    /** Level-transition cinematic (>=0 while playing): the level fades out,
+     *  rapidly-scrolling clouds cover the screen (up or down by travel
+     *  direction), then the new level fades back in. ~1s total; the game is
+     *  frozen for the duration. Stairs defer the actual level transfer to the
+     *  covered midpoint; chasm falls (already transferred) start at the cloud
+     *  phase. -1 = inactive. */
+    private float levelTransitionFrame = -1f;
+    /** +1 = travelling down (descend / fall), -1 = travelling up (ascend). */
+    private int levelTransitionDir;
+    /** Deferred stairs transfer, run once when the clouds fully cover. */
+    private Runnable levelTransitionMidpoint;
+    private boolean levelTransitionMidpointDone;
+    /** Wall-clock seconds accumulator for the cloud layer's churn. */
+    private float levelTransitionCloudTime;
+    private static final int TRANSITION_FADE_OUT   = 18;  // level -> clouds
+    private static final int TRANSITION_CLOUDS_END = 42;  // clouds -> level
+    private static final int TRANSITION_TOTAL      = 60;  // 1s at BASE_FPS
+
     /** Camera zoom the death outro pulls back to as the screen fades (RL-56).
      *  Larger = more zoomed out; the pull-back mirrors the intro zoom-in. */
     private static final float DEATH_ZOOM_OUT = 1.4f;
@@ -770,6 +788,17 @@ public class PlayScreen implements Screen {
             com.bjsp123.rl2.ui.v2.TipSystem.maybeShow(
                     "concept:perks", "concept.perks.tip", "concept.perks.name", null);
         });
+        // Looking at your own square IS the character inspection - Look closes
+        // itself and the character screen opens instead of the look panel.
+        lookMode.setOnPlayerCommit(() -> {
+            Mob cur = TurnSystem.findPlayer(world.currentLevel());
+            if (cur == null) return;
+            v2CharacterStats.setPlayer(cur);
+            v2CharacterStats.open();
+        });
+        // Stairs play the cloud level-transition cinematic; the actual level
+        // transfer runs at the covered midpoint.
+        controller.setStairsCinematic(this::startLevelTransition);
 
         v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui, game.achievements);
         v2Hud.setOnOpenEncyclopedia(() -> v2Encyclopedia.toggle());
@@ -1109,6 +1138,7 @@ public class PlayScreen implements Screen {
         boolean ticked = !overlayOpen
                 && !deathTransitionPending
                 && reviveCinematicFrame < 0
+                && levelTransitionFrame < 0
                 && !introActive
                 && (com.bjsp123.rl2.ui.skin.Settings.instantActions()
                         || (animator.queue.freezeFrames == 0 && !animator.hasPendingImpacts()))
@@ -1146,6 +1176,30 @@ public class PlayScreen implements Screen {
         if (reviveCinematicFrame >= 0) {
             reviveCinematicFrame += com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs);
             if (reviveCinematicFrame >= REVIVE_TOTAL) reviveCinematicFrame = -1;
+        }
+        // Chasm fall: the engine already moved the player down a level; play
+        // the cloud transition from its covered midpoint (there's no old level
+        // left to fade out) and sound the arrival.
+        if (animator.playerFellSignal) {
+            animator.playerFellSignal = false;
+            if (levelTransitionFrame < 0) {
+                startLevelTransition(+1, null);
+                if (game.sounds != null) game.sounds.play("sfx.world.action.enter_level");
+            }
+        }
+        if (levelTransitionFrame >= 0) {
+            levelTransitionFrame += com.bjsp123.rl2.world.anim.Animator.frameDelta(dtMs);
+            levelTransitionCloudTime += dtMs / 1000f;
+            // Run the deferred stairs transfer the moment the clouds fully
+            // cover the screen - the swap is invisible, and the arrive sound
+            // (played inside the transfer) lands mid-effect.
+            if (!levelTransitionMidpointDone && levelTransitionFrame >= TRANSITION_FADE_OUT) {
+                levelTransitionMidpointDone = true;
+                Runnable transfer = levelTransitionMidpoint;
+                levelTransitionMidpoint = null;
+                if (transfer != null) transfer.run();
+            }
+            if (levelTransitionFrame >= TRANSITION_TOTAL) levelTransitionFrame = -1;
         }
         span = frameProfiler.start();
         animator.tick(level, dtMs);
@@ -1403,6 +1457,12 @@ public class PlayScreen implements Screen {
         if (reviveCinematicFrame >= 0) {
             drawReviveCinematic((int) reviveCinematicFrame);
         }
+        // Level-transition cinematic - level fades out under rushing clouds,
+        // then the new level fades back in. Covers HUD + popups like the
+        // revive fade.
+        if (levelTransitionFrame >= 0) {
+            drawLevelTransition(levelTransitionFrame);
+        }
 
         // Intro arrival message - a bottom banner naming the goal, shown over
         // the world while the camera eases in. Drawn last so it sits on top.
@@ -1490,6 +1550,49 @@ public class PlayScreen implements Screen {
                 if (k >= 1f) endGraphPhase();
             }
         }
+    }
+
+    /** Start the ~1s level-transition cinematic. {@code dir} +1 = travelling
+     *  down (descend / fall), -1 = up (ascend). {@code midpoint} performs the
+     *  actual level transfer once the clouds cover the screen; pass null when
+     *  the transfer has already happened (chasm fall) - the effect then starts
+     *  at its covered midpoint. Ignored (midpoint dropped) if a transition is
+     *  already playing - ticks are frozen during one, so that only happens on
+     *  a stray tap. */
+    public void startLevelTransition(int dir, Runnable midpoint) {
+        if (levelTransitionFrame >= 0) return;
+        levelTransitionDir = dir;
+        levelTransitionMidpoint = midpoint;
+        levelTransitionMidpointDone = midpoint == null;
+        levelTransitionCloudTime = 0f;
+        levelTransitionFrame = midpoint == null ? TRANSITION_FADE_OUT : 0f;
+    }
+
+    /** Level-transition overlay: black ramps over the old level, the swirl
+     *  cloud layer rushes past vertically (direction = travel direction), then
+     *  both ramp out over the new level. */
+    private void drawLevelTransition(float f) {
+        float alpha;
+        if (f < TRANSITION_FADE_OUT) {
+            alpha = f / TRANSITION_FADE_OUT;
+        } else if (f < TRANSITION_CLOUDS_END) {
+            alpha = 1f;
+        } else {
+            alpha = 1f - (f - TRANSITION_CLOUDS_END)
+                    / (float) (TRANSITION_TOTAL - TRANSITION_CLOUDS_END);
+        }
+        alpha = Math.max(0f, Math.min(1f, alpha));
+        drawBlackOverlay(alpha);
+        // Clouds rush opposite to travel: descending, the world streams upward
+        // past the player. ~2.5 texture repeats per second reads as "rapid".
+        float vScroll = -levelTransitionDir * (f / 60f) * 2.5f;
+        com.badlogic.gdx.graphics.g2d.SpriteBatch batch = game.ui.batch;
+        batch.setProjectionMatrix(game.ui.camera.combined);
+        batch.begin();
+        com.bjsp123.rl2.ui.v2.SwirlBackground.render(batch, 0f, 0f,
+                game.ui.worldW(), game.ui.worldH(),
+                levelTransitionCloudTime, vScroll, alpha);
+        batch.end();
     }
 
     /** Full-screen black overlay at {@code alpha} (0=clear, 1=opaque). Used for
@@ -1982,7 +2085,8 @@ public class PlayScreen implements Screen {
      *  something actually opened. */
     private void handleLongPress() {
         if (introActive || outroActive || deathTransitionPending
-                || victoryTransitionPending || reviveCinematicFrame >= 0) return;
+                || victoryTransitionPending || reviveCinematicFrame >= 0
+                || levelTransitionFrame >= 0) return;
         if (v2HelpPopup == null || v2HelpPopup.isOpen() || v2Hud == null) return;
         int sx = (int) longPress.x();
         int sy = (int) longPress.y();

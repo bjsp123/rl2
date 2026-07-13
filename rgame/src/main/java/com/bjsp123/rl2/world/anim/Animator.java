@@ -978,7 +978,14 @@ public final class Animator {
         if (m.mob() == null || m.fromTile() == null) return;
         stage.add(Effect.fallingMob(m.fromTile(), m.mob()));
         if (sounds != null) sounds.playAt("sfx.world.chasm.fall", level, m.fromTile(), 0.7f);
+        // A surviving player has already been relocated a level down - signal
+        // PlayScreen to play the cloud level-transition cinematic.
+        if (m.mob().isPlayer && m.mob().hp > 0) playerFellSignal = true;
     }
+
+    /** Latched true for one consume() when the player survives a chasm fall to
+     *  the next level, so PlayScreen can play the level-transition cinematic. */
+    public boolean playerFellSignal = false;
 
     /** Item fell into a chasm - revolve-shrink-fade at its tile. Non-blocking. */
     void onItemFallingIntoChasm(Level level, GameEvent.ItemFallingIntoChasm m) {

@@ -118,12 +118,31 @@ public class LookMode extends InputAdapter {
         cursor = new Point(tx, ty);
         if (history != null) history.record(level, cursor);
         hasChosen = true;
+        redirectPlayerCommit();
     }
 
     public void deactivate() {
         active = false;
         hasChosen = false;
         cursor = null;
+    }
+
+    /** Fired instead of showing the look panel when a commit lands on the
+     *  player's own tile - PlayScreen wires this to open the character
+     *  screen (looking at yourself IS the character inspection). */
+    private Runnable onPlayerCommit;
+
+    public void setOnPlayerCommit(Runnable r) { this.onPlayerCommit = r; }
+
+    /** If the just-committed cursor sits on the player, close Look and fire
+     *  {@link #onPlayerCommit} instead of showing the panel. Returns true
+     *  when redirected. */
+    private boolean redirectPlayerCommit() {
+        Mob m = mobAtCursor();
+        if (m == null || !m.isPlayer || onPlayerCommit == null) return false;
+        deactivate();
+        onPlayerCommit.run();
+        return true;
     }
 
     /** Yellow box reticle drawn in world space, just like the targeting overlay. If a mob
@@ -188,6 +207,7 @@ public class LookMode extends InputAdapter {
                 // the reticle without revealing the panel, so the player can
                 // line up a square before committing.
                 hasChosen = true;
+                redirectPlayerCommit();
                 return true;
             }
             default -> { return true; }
@@ -227,6 +247,7 @@ public class LookMode extends InputAdapter {
         cursor = new Point(tx, ty);
         if (history != null) history.record(level, cursor);
         hasChosen = true;
+        redirectPlayerCommit();
         return true;
     }
 

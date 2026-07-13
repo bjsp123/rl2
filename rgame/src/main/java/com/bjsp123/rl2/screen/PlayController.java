@@ -1096,7 +1096,34 @@ final class PlayController {
         return true;
     }
 
+    /** PlayScreen's level-transition cinematic hook: called with (direction,
+     *  transfer). The hook covers the screen with clouds and runs the transfer
+     *  Runnable at the covered midpoint. Null (headless / arena) = transfer
+     *  runs synchronously. */
+    private java.util.function.BiConsumer<Integer, Runnable> stairsCinematic;
+
+    void setStairsCinematic(java.util.function.BiConsumer<Integer, Runnable> hook) {
+        this.stairsCinematic = hook;
+    }
+
     private void tryStairs(int direction) {
+        Level cur = world.currentLevel();
+        Mob player = TurnSystem.findPlayer(cur);
+        if (player == null) return;
+        // Pre-validate cheaply so a failed use (wrong tile) doesn't play a
+        // one-second cinematic over nothing; useStairs re-validates anyway.
+        Tile here = cur.tiles[player.position.tileX()][player.position.tileY()];
+        if (here != (direction > 0 ? Tile.STAIRS_DOWN : Tile.STAIRS_UP)) return;
+        if (stairsCinematic != null) {
+            stairsCinematic.accept(direction, () -> performStairs(direction));
+        } else {
+            performStairs(direction);
+        }
+    }
+
+    /** The actual stairs transfer + arrival bookkeeping. Run behind the cloud
+     *  cover when the cinematic hook is installed. */
+    private void performStairs(int direction) {
         Level cur = world.currentLevel();
         Mob player = TurnSystem.findPlayer(cur);
         if (player == null) return;

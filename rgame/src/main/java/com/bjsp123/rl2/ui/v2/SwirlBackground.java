@@ -45,20 +45,32 @@ public final class SwirlBackground {
      */
     public static void render(SpriteBatch batch, float x, float y,
                               float w, float h, float t) {
+        render(batch, x, y, w, h, t, 0f, 1f);
+    }
+
+    /**
+     * As {@link #render(SpriteBatch, float, float, float, float, float)}, plus
+     * a shared vertical scroll offset {@code vScroll} (in texture repeats;
+     * layers move at parallax multiples of it, positive = clouds drift down)
+     * and an overall {@code alpha} multiplier (0..1) so the whole cloud stack
+     * can fade in/out - used by the level-transition cinematic.
+     */
+    public static void render(SpriteBatch batch, float x, float y,
+                              float w, float h, float t, float vScroll, float alpha) {
         ensure();
         float aspect = h / Math.max(1f, w);
         // Layer 1 - broad, slow drift, alpha-blended deep violet base haze.
         drawLayer(batch, x, y, w, h, /*span*/ 2.2f, aspect,
-                t * 0.010f, t * 0.006f,
-                0.18f, 0.09f, 0.28f, 0.55f, /*additive*/ false);
+                t * 0.010f, t * 0.006f + vScroll,
+                0.18f, 0.09f, 0.28f, 0.55f * alpha, /*additive*/ false);
         // Layer 2 - faster, opposite drift, additive cool-blue wisps.
         drawLayer(batch, x, y, w, h, 3.3f, aspect,
-                -t * 0.013f + 0.4f, t * 0.009f,
-                0.10f, 0.12f, 0.30f, 0.45f, true);
+                -t * 0.013f + 0.4f, t * 0.009f + vScroll * 1.6f,
+                0.10f, 0.12f, 0.30f, 0.45f * alpha, true);
         // Layer 3 - large, very slow, additive magenta glow for depth.
         drawLayer(batch, x, y, w, h, 1.5f, aspect,
-                t * 0.005f + 0.7f, -t * 0.004f,
-                0.22f, 0.06f, 0.20f, 0.35f, true);
+                t * 0.005f + 0.7f, -t * 0.004f + vScroll * 0.7f,
+                0.22f, 0.06f, 0.20f, 0.35f * alpha, true);
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         batch.setColor(Color.WHITE);
     }
