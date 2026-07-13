@@ -78,7 +78,7 @@ public final class V2Hud {
      *  doesn't leave the HUD bound to a stale Mob reference. */
     private Supplier<Mob> playerSupplier;
     private ActionBar actionBar;
-    private int depth, tick;
+    private int tick;
 
     /** Smoothed turn-clock hand position, in continuous turns (integer part =
      *  turns elapsed, fractional part = position within the current turn). Eased
@@ -91,8 +91,6 @@ public final class V2Hud {
     /** Never let the hand fall more than this far behind the real position, so a
      *  multi-turn jump (a long rest) catches up promptly instead of spinning. */
     private static final float CLOCK_MAX_LAG_TURNS = 1f;
-    /** RL-54 hazard level of the current floor, shown at the top of the HUD. */
-    private int hazard;
 
     // Callbacks - PlayScreen wires each HUD affordance to a game action.
     private IntConsumer onActionUse;
@@ -138,11 +136,6 @@ public final class V2Hud {
     // a map + varargs + several intermediate strings per call, which is real GC
     // pressure on TeaVM. Each cache re-formats only when its key changes.
     private String revivesTextCache;  private int revivesKey = Integer.MIN_VALUE;
-    /** Compact depth+hazard summary shown beside the burger (top-right). */
-    private String levelInfoCache;
-    private int levelInfoDepthKey = Integer.MIN_VALUE;
-    private int levelInfoHazardKey = Integer.MIN_VALUE;
-    private final Rect levelInfoRect = new Rect();
     private String portraitLabelCache; private int portraitLabelLevelKey = Integer.MIN_VALUE;
     private boolean portraitLabelStarKey; private Mob.CharacterClass portraitLabelClassKey;
     private com.badlogic.gdx.graphics.g2d.TextureRegion portraitHeadCache;
@@ -206,7 +199,6 @@ public final class V2Hud {
     public void setOnOpenInventory(Runnable fn)     { this.onOpenInventory = fn; }
     public void setOnLook(Runnable fn)              { this.onLook = fn; }
     public void setOnAutoExplore(Runnable fn)       { this.onAutoExplore = fn; }
-    public void setHazard(int h)                    { this.hazard = h; }
     /** Reflect auto-explore on/off so the button reads as toggled. */
     public void setAutoExploreActive(boolean on)    { this.autoActive = on; }
     public void setOnPortraitTap(Runnable fn)       { this.onPortraitTap = fn; }
@@ -219,11 +211,12 @@ public final class V2Hud {
     public void setSounds(com.bjsp123.rl2.audio.SoundManager s) { this.sounds = s; }
     private com.bjsp123.rl2.audio.SoundManager sounds;
 
-    /** Frame state - depth and game tick for the status line / turn clock;
-     *  player read via {@link #playerSupplier}. */
+    /** Frame state - game tick for the turn clock; player read via
+     *  {@link #playerSupplier}. ({@code depth} is accepted for call-site
+     *  stability but no longer displayed - the depth/hazard HUD text was
+     *  removed by request.) */
     public void update(int depth, int tick) {
-        this.depth = depth;
-        this.tick  = tick;
+        this.tick = tick;
     }
 
     /** True when the burger dropdown is showing - PlayScreen folds this
@@ -368,8 +361,6 @@ public final class V2Hud {
         // glyph) so it reads the same in-play and out (RL-27).
         burgerRect.set(w - MARGIN - UIVars.BURGER_SIZE, h - MARGIN - UIVars.BURGER_SIZE,
                 UIVars.BURGER_SIZE, UIVars.BURGER_SIZE);
-        // Compact depth+hazard summary immediately left of the burger.
-        levelInfoRect.set(burgerRect.x - 8f - 80f, burgerRect.y, 80f, UIVars.BURGER_SIZE);
 
         // Look at bottom-left; auto-explore stacked directly above it.
         lookRect.set(MARGIN, MARGIN, ACTION_BTN, ACTION_BTN);
@@ -769,19 +760,6 @@ public final class V2Hud {
                     Math.max(40f, ctx.worldW() - clockRect.right() - 2f * MARGIN));
         }
 
-        // Compact level summary - depth + hazard beside the burger, small and
-        // out of everything's way. Long-press explains it (help.hud.levelinfo).
-        if (levelInfoDepthKey != depth || levelInfoHazardKey != hazard) {
-            levelInfoCache = TextCatalog.format("ui.hud.levelinfo",
-                    TextCatalog.vars("depth", depth, "hazard", hazard));
-            levelInfoDepthKey = depth;
-            levelInfoHazardKey = hazard;
-        }
-        TextDraw.right(ctx, ctx.fontRegular,
-                hazard >= 3 ? UIVars.ACCENT : UIVars.TEXT_DIM,
-                levelInfoCache,
-                levelInfoRect.right(), levelInfoRect.cy() + 6f);
-
         // Player buff icons row - under the status line, anchored at the
         // top-left edge so it shares the bars cluster's anchor. Caps at
         // 8 visible buffs to avoid the row bleeding under the right-side
@@ -902,7 +880,6 @@ public final class V2Hud {
         if (hpBarRect.contains(vx, vy))    return new HelpHit("hud.hpbar", null, null);
         if (xpBarRect.contains(vx, vy))    return new HelpHit("hud.xpbar", null, null);
         if (clockRect.contains(vx, vy))    return new HelpHit("hud.clock", null, null);
-        if (levelInfoRect.contains(vx, vy)) return new HelpHit("hud.levelinfo", null, null);
         if (burgerRect.contains(vx, vy))   return new HelpHit("hud.burger", null, null);
         if (lookRect.contains(vx, vy))     return new HelpHit("hud.lookBtn", null, null);
         if (autoRect.contains(vx, vy))     return new HelpHit("hud.autoexploreBtn", null, null);

@@ -1412,7 +1412,6 @@ public class PlayScreen implements Screen {
         // projection to V2's camera internally.
         span = frameProfiler.start();
         v2Hud.update(level.depth, animator.visualClockTick(level, world.tick));
-        v2Hud.setHazard(level.hazardLevel);
         v2Hud.setAutoExploreActive(controller.isAutoExploring());
         frameProfiler.add("hudUpdate", span);
         span = frameProfiler.start();
