@@ -1122,6 +1122,12 @@ perk.dodge.tip,"Lifesaving against hard hitters - but it needs a free square to 
 perk.durableBody.name,durable body
 perk.durableBody.description,Increases your maximum HP by 10% per perk level (up to +100% at level 10).  Heals scale with the larger pool.
 perk.durableBody.tip,Raw survivability - more max HP means bigger heals and a wider margin against burst damage.
+perk.agile.name,agile
+perk.agile.description,Reduces your move cost on a smooth scale: 90 at the first point easing to 70 at the eighth. Lower cost means more moves per enemy turn.
+perk.agile.tip,"Speed is life - outpace what you cannot outfight, and kite what you cannot outrun."
+perk.dextrous.name,dextrous
+perk.dextrous.description,"Reduces your action cost (attacks, throws, zaps) on a smooth scale: 90 at the first point easing to 70 at the eighth."
+perk.dextrous.tip,Faster hands land more blows before the enemy answers - it compounds with every weapon.
 perk.keenSight.description,See further through clouds or plants per level.  Distant smoke and trees will still hide what's behind them.
 perk.keenSight.name,keen sight
 perk.keenSight.tip,"A good way of getting surprise attacks, or of making smoke bombs and vegetation count."

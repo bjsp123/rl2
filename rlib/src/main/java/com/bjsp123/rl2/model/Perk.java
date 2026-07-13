@@ -74,7 +74,15 @@ public enum Perk {
     /** Open. Raises maximum HP by 10% per perk level (L10 = +100%). Applied in
      *  {@link com.bjsp123.rl2.logic.MobStats#writeEffectiveStats} before the
      *  proportional healRate scaling, so regeneration tracks the larger pool. */
-    DURABLE_BODY("durableBody");
+    DURABLE_BODY("durableBody"),
+    /** Open. Multiplies MOVE cost on a smooth geometric scale: L1 = x0.90 of
+     *  base (cost 100 -> 90), L8 = x0.70 (-> 70); each level past the first
+     *  multiplies by (7/9)^(1/7). Applied in
+     *  {@link com.bjsp123.rl2.logic.MobStats#writeEffectiveStats}. */
+    AGILE("agile"),
+    /** Open. As {@link #AGILE} but for the ACTION (attack / throw / zap)
+     *  cost: L1 = x0.90 of base, L8 = x0.70, same smooth geometric curve. */
+    DEXTROUS("dextrous");
 
     public String displayName() {
         return com.bjsp123.rl2.logic.TextCatalog.get("perk." + key + ".name");

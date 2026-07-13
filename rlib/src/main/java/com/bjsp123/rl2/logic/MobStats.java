@@ -141,6 +141,22 @@ public final class MobStats {
         for (Item eq : mob.inventory.gems)    ItemStats.contributeInto(dst, eq, mob);
         BuffSystem.contributeInto(dst, mob);
 
+        // Agile / Dextrous perks: smooth geometric reduction of the move /
+        // action cost. Level 1 = x0.90 of base (100 -> 90), level 8 = x0.70
+        // (-> 70); each level past the first multiplies by (7/9)^(1/7).
+        if (mob.perks != null) {
+            int agile = mob.perks.getOrDefault(Perk.AGILE, 0);
+            if (agile > 0) {
+                dst.moveCost = (int) Math.max(1,
+                        Math.round(dst.moveCost * perkCostMult(agile)));
+            }
+            int dextrous = mob.perks.getOrDefault(Perk.DEXTROUS, 0);
+            if (dextrous > 0) {
+                dst.attackCost = (int) Math.max(1,
+                        Math.round(dst.attackCost * perkCostMult(dextrous)));
+            }
+        }
+
         // Difficulty player-speed: a faster player has a lower move cost. Applied
         // last so it stacks on top of the buff (haste) multipliers.
         double speedMult = GameBalance.tuning().playerSpeedMult();
@@ -148,6 +164,13 @@ public final class MobStats {
             dst.moveCost = (int) Math.max(1,
                     Math.round(dst.moveCost / speedMult));
         }
+    }
+
+    /** Agile / Dextrous cost multiplier: 0.90 at level 1 easing to 0.70 at
+     *  level 8 on a geometric curve (x(7/9)^(1/7) per level past the first);
+     *  levels beyond 8 keep following the same curve. */
+    private static double perkCostMult(int lvl) {
+        return 0.9 * Math.pow(7.0 / 9.0, (lvl - 1) / 7.0);
     }
 
     /** Derive a combat range [N/2, N] from a single-int base, scaled by
