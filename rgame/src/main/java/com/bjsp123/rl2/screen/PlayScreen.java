@@ -2098,7 +2098,9 @@ public class PlayScreen implements Screen {
                 longPress.markHandled();
                 v2Inventory.clearPressed();
                 if (hit.item != null) {
-                    v2HelpPopup.open(hit.item, TurnSystem.findPlayer(world.currentLevel()));
+                    // Jump straight to the item's action dialog (use / throw /
+                    // drop) rather than passive lore.
+                    v2Inventory.openDetail(hit.item);
                 } else {
                     v2HelpPopup.openKey("hud.inventory", "");
                 }
@@ -2114,7 +2116,9 @@ public class PlayScreen implements Screen {
             if (hudHit.buff != null) {
                 v2BuffInfo.open(hudHit.buff);
             } else if (hudHit.item != null) {
-                v2HelpPopup.open(hudHit.item, TurnSystem.findPlayer(world.currentLevel()));
+                // Quickslot item: open the inventory's item-detail dialog so
+                // the long-press offers the full use / throw / drop actions.
+                v2Inventory.openDetail(hudHit.item);
             } else {
                 v2HelpPopup.openKey(hudHit.key, "");
             }

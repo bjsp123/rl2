@@ -188,6 +188,16 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (sounds != null) sounds.play("sfx.ui.popup.inventory");
     }
 
+    /** Open the inventory with the item-detail popup (use / throw / drop)
+     *  already showing {@code it} - the long-press gesture on a quickslot or
+     *  bag cell jumps straight to the item's actions. No-op during a picker
+     *  session (the chooser owns the popup then). */
+    public void openDetail(Item it) {
+        if (it == null || pickMode()) return;
+        if (!open) openInv();
+        selectedItem = it;
+    }
+
     /** Open the inventory as a target chooser. {@code eligible} lights the
      *  tappable items (the rest grey out); {@code onPick} fires with the chosen
      *  item, {@code onCancel} fires if the chooser is dismissed without a pick. */
