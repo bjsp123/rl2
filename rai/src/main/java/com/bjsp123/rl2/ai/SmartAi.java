@@ -293,15 +293,16 @@ public final class SmartAi implements MobBrains.Brain {
         com.bjsp123.rl2.model.Perk[] all = com.bjsp123.rl2.model.Perk.values();
         java.util.List<com.bjsp123.rl2.model.Perk> candidates = new java.util.ArrayList<>();
         java.util.Random rng = PERK_RNG;
-        int cap = com.bjsp123.rl2.logic.GameBalance.PERK_LEVEL_CAP;
         while (mob.perkPoints > 0) {
             candidates.clear();
             for (var p : signatures) {
-                if (mob.perks.getOrDefault(p, 0) < cap) candidates.add(p);
+                if (mob.perks.getOrDefault(p, 0)
+                        < com.bjsp123.rl2.logic.MobProgression.perkCap(mob, p)) candidates.add(p);
             }
             if (candidates.isEmpty()) {
                 for (var p : all) {
-                    if (mob.perks.getOrDefault(p, 0) < cap) candidates.add(p);
+                    if (mob.perks.getOrDefault(p, 0)
+                            < com.bjsp123.rl2.logic.MobProgression.perkCap(mob, p)) candidates.add(p);
                 }
             }
             if (candidates.isEmpty()) break;

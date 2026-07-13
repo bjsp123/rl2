@@ -8,10 +8,12 @@ package com.bjsp123.rl2.model;
  * dedicated handler - same pattern as the {@code Buff.BuffType} enum.
  *
  * <p>Each player carries a {@code Map<Perk, Integer>} of perk levels in
- * {@link Mob#perks}; level 0 / absence means the perk isn't taken. All perks scale
- * with level out to L10; the perk-picker is universal (no class lockouts), but a
- * player's class-row in {@code mobs.csv} starts its signature perks at level 2 via
- * the {@code startingPerks=PERK*N} syntax.
+ * {@link Mob#perks}; level 0 / absence means the perk isn't taken. The
+ * perk-picker is universal (no class lockouts), but a player's class-row in
+ * {@code mobs.csv} starts its signature perks at level 2 via the
+ * {@code startingPerks=PERK*N} syntax. Caps: signature perks raise to
+ * {@code GameBalance.PERK_CAP_SIGNATURE} (8), every other perk to
+ * {@code PERK_CAP_OPEN} (5) - resolved by {@code MobProgression.perkCap}.
  */
 public enum Perk {
     /** Warrior signature. Killing a foe stacks the {@link Buff.BuffType#KILLER}

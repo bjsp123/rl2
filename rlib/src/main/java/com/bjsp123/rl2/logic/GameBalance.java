@@ -349,10 +349,15 @@ public final class GameBalance {
     /** Perk points granted on each level-up. (Per-stat level deltas are now
      *  per-mob - see the {@code *PerLevel} columns of {@code mobs.csv}.) */
     public static int PERK_POINTS_PER_LEVEL = 1;
-    /** Hard cap on any single perk's level. {@link MobProgression#autoLevelUpPerks}
-     *  stops spending into a perk once it hits this value; the V2 perk-spend
-     *  UI greys out further taps the same way. Tunable from {@code config.csv}. */
-    public static int PERK_LEVEL_CAP = 8;
+    /** Level cap for a perk the class did NOT start with points in. Resolved
+     *  per (mob, perk) by {@link MobProgression#perkCap}; the perk-spend UI
+     *  and the autoplay spender both stop at the resolved cap. Tunable from
+     *  {@code config.csv}. */
+    public static int PERK_CAP_OPEN = 5;
+    /** Level cap for a class-signature perk (one the class starts with points
+     *  in, via {@code startingPerks} in mobs.csv). Tunable from
+     *  {@code config.csv}. */
+    public static int PERK_CAP_SIGNATURE = 8;
 
     public static int XP_PER_POWER_ORB = 10;
 

@@ -71,6 +71,8 @@ gamebalance,RECYCLE_MAX_GEMS,4
 gamebalance,MAX_CHARACTER_LEVEL,32
 gamebalance,XP_PER_LEVEL_STEP,7
 gamebalance,PERK_POINTS_PER_LEVEL,1
+gamebalance,PERK_CAP_OPEN,5
+gamebalance,PERK_CAP_SIGNATURE,8
 gamebalance,XP_PER_POWER_ORB,10
 gamebalance,MANA_PER_PILL,2
 gamebalance,AMOUNT_LEVEL_SCALE_FACTOR,5

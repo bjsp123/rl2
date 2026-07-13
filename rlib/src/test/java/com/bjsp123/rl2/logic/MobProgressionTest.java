@@ -119,9 +119,11 @@ class MobProgressionTest extends DataFixture {
         MobProgression.autoLevelUpPerks(m, new Random(42));
         // Every point spent, none left over.
         assertEquals(0, m.perkPoints);
-        // No single perk pushed past the cap.
-        for (Integer lvl : m.perks.values()) {
-            assertTrue(lvl <= GameBalance.PERK_LEVEL_CAP, "perk over cap: " + lvl);
+        // No single perk pushed past its cap (signature perks cap higher
+        // than open perks - check each against its own resolved cap).
+        for (var e : m.perks.entrySet()) {
+            assertTrue(e.getValue() <= MobProgression.perkCap(m, e.getKey()),
+                    "perk over cap: " + e.getKey() + "=" + e.getValue());
         }
         // Some investment actually happened at level 6.
         int total = m.perks.values().stream().mapToInt(Integer::intValue).sum();

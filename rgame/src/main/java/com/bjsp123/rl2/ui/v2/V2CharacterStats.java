@@ -197,7 +197,8 @@ public final class V2CharacterStats extends BasePopup {
             Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
             int cur = (player != null && player.perks != null && p != null)
                     ? player.perks.getOrDefault(p, 0) : 0;
-            boolean canSpend = hasPoints && cur < GameBalance.PERK_LEVEL_CAP;
+            boolean canSpend = hasPoints && p != null
+                    && cur < com.bjsp123.rl2.logic.MobProgression.perkCap(player, p);
             Edges.drawTriLine(s, r.x, r.y, r.w, r.h, UIVars.HUD_LINE_W);
             if (!canSpend) {
                 s.setColor(UIVars.WIN_BG);
@@ -258,7 +259,8 @@ public final class V2CharacterStats extends BasePopup {
             Perk p = i < perksOrdered.size() ? perksOrdered.get(i) : null;
             int cur = (player != null && player.perks != null && p != null)
                     ? player.perks.getOrDefault(p, 0) : 0;
-            boolean canSpend = hasPoints && cur < GameBalance.PERK_LEVEL_CAP;
+            boolean canSpend = hasPoints && p != null
+                    && cur < com.bjsp123.rl2.logic.MobProgression.perkCap(player, p);
             com.badlogic.gdx.graphics.Color c = !canSpend
                     ? UIVars.TEXT_DIM
                     : (i == perkPlusPressed ? UIVars.ACCENT : UIVars.TEXT_BODY);
@@ -508,7 +510,9 @@ public final class V2CharacterStats extends BasePopup {
                             player.perks = new java.util.EnumMap<>(Perk.class);
                         }
                         int cur = player.perks.getOrDefault(perk, 0);
-                        if (cur >= GameBalance.PERK_LEVEL_CAP) return true;
+                        if (cur >= com.bjsp123.rl2.logic.MobProgression.perkCap(player, perk)) {
+                            return true;
+                        }
                         player.perks.put(perk, cur + 1);
                         player.perkPoints--;
                         // First-encounter tip: fires the first time the

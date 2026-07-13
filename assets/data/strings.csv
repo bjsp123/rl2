@@ -235,11 +235,11 @@ buff.recharging.effect,recharging
 buff.dotdeath.ON_FIRE,burns to a cinder
 buff.dotdeath.POISONED,succumbs to poison
 buff.dotdeath.BLEEDING,bleeds out
-characterClass.mage.blurb,Expert wand user who fights at a distance using wands and his magical *Shield*.
+characterClass.mage.blurb,"Expert wand user who fights at a distance using wands and his magical *Shield*.  Starts with points in wandmaster, mana fount and blink."
 characterClass.mage.name,Mage
-characterClass.rogue.blurb,Bomb specialist who can see through smoke and vegetation and escape with her *Phase* power.
+characterClass.rogue.blurb,"Bomb specialist who can see through smoke and vegetation and escape with her *Phase* power.  Starts with points in bomb jack, bomb dodger and agile."
 characterClass.rogue.name,Rogue
-characterClass.warrior.blurb,Close combat specialist who closes with enemies and hits hard using his *Charge* ability.
+characterClass.warrior.blurb,"Close combat specialist who closes with enemies and hits hard using his *Charge* ability.  Starts with points in knockback, killer and dextrous."
 characterClass.warrior.name,Warrior
 concept.beacon.name,Beacon
 concept.beacon.tip,Stand beside a beacon to light it.  Lit beacons can be used for orb-powered travel between activated beacons.
@@ -258,7 +258,7 @@ concept.map.tip,The map shows where you've explored and how levels are linked.  
 concept.onetime.name,One-Time Door
 concept.onetime.tip,"You broke a *one-time door* - it shatters under you and disappears, letting creatures through."
 concept.perks.name,Perks
-concept.perks.tip,Perks customize your build.  Spend points on level-up via the *+ button*.
+concept.perks.tip,"Perks customize your build.  Spend points on level-up via the *+ button*.  Your class's starting perks can be raised to 8; every other perk to 5."
 concept.pointBlank.name,Point-Blank Shot
 concept.pointBlank.tip,"Firing at an *adjacent* target takes a *-50 accuracy penalty*.  Get some distance, or use melee weapons."
 concept.stairs.name,Stairs
@@ -1120,7 +1120,7 @@ perk.dodge.description,"Grants a phase-dodge: when about to be hit, you blink to
 perk.dodge.name,dodge
 perk.dodge.tip,"Lifesaving against hard hitters - but it needs a free square to blink to, and it recharges between dodges."
 perk.durableBody.name,durable body
-perk.durableBody.description,Increases your maximum HP by 10% per perk level (up to +100% at level 10).  Heals scale with the larger pool.
+perk.durableBody.description,Increases your maximum HP by 10% per perk level.  Heals scale with the larger pool.
 perk.durableBody.tip,Raw survivability - more max HP means bigger heals and a wider margin against burst damage.
 perk.agile.name,agile
 perk.agile.description,Reduces your move cost on a smooth scale: 90 at the first point easing to 70 at the eighth. Lower cost means more moves per enemy turn.

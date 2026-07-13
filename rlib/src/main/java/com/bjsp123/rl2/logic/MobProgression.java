@@ -154,12 +154,29 @@ public final class MobProgression {
         }
     }
 
+    /** Level cap for raising {@code perk} on {@code mob}: class-signature
+     *  perks (the class starts with points in them, per {@code startingPerks}
+     *  in mobs.csv) raise to {@link GameBalance#PERK_CAP_SIGNATURE}; every
+     *  other perk to {@link GameBalance#PERK_CAP_OPEN}. Derived from the mob's
+     *  definition each call, so saves carry nothing extra. */
+    public static int perkCap(Mob mob, Perk perk) {
+        if (mob != null && mob.mobType != null) {
+            MobDefinition def = Registries.mob(mob.mobType);
+            if (def != null) {
+                for (MobDefinition.StartPerk sp : def.startingPerks) {
+                    if (sp.perk == perk) return GameBalance.PERK_CAP_SIGNATURE;
+                }
+            }
+        }
+        return GameBalance.PERK_CAP_OPEN;
+    }
+
     /** Auto-spend perk points appropriate to {@code mob.characterLevel} for
      *  AI-controlled players (arena, attract). Computes target
      *  {@code perkPoints = (charLvl - 1) * PERK_POINTS_PER_LEVEL}, then spends
      *  them: first across the mob's signature perks (those already at level
-     *  >= 1 from {@code MobDefinition.apply}) until each hits the
-     *  {@link GameBalance#PERK_LEVEL_CAP}, then across any remaining perks at random.
+     *  >= 1 from {@code MobDefinition.apply}) until each hits its
+     *  {@link #perkCap}, then across any remaining perks at random.
      *  No-op on null mobs or those with a null {@code perks} map. */
     public static void autoLevelUpPerks(Mob mob, Random rng) {
         if (mob == null || mob.perks == null) return;
@@ -178,14 +195,14 @@ public final class MobProgression {
 
         while (mob.perkPoints > 0) {
             candidates.clear();
-            // Phase 1: signature perks below cap.
+            // Phase 1: signature perks below their cap.
             for (Perk p : signatures) {
-                if (mob.perks.getOrDefault(p, 0) < GameBalance.PERK_LEVEL_CAP) candidates.add(p);
+                if (mob.perks.getOrDefault(p, 0) < perkCap(mob, p)) candidates.add(p);
             }
-            // Phase 2: any perk below cap.
+            // Phase 2: any perk below its cap.
             if (candidates.isEmpty()) {
                 for (Perk p : all) {
-                    if (mob.perks.getOrDefault(p, 0) < GameBalance.PERK_LEVEL_CAP) candidates.add(p);
+                    if (mob.perks.getOrDefault(p, 0) < perkCap(mob, p)) candidates.add(p);
                 }
             }
             if (candidates.isEmpty()) break;
