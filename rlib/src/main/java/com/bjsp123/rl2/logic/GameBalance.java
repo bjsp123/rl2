@@ -761,6 +761,10 @@ public final class GameBalance {
     public static double GEMS_BASIC_AVG  = 2.0;
     public static double GEMS_METAL_AVG  = 0.75;
     public static double GEMS_EXOTIC_AVG = 0.3;
+    /** Percentage of SPECIAL_GEM rewards (unique mobs, special rooms) that
+     *  roll a plain hamethyst instead of a metal/exotic - the main knob for
+     *  the per-world rare-gem budget. */
+    public static double SPECIAL_GEM_BASIC_PCT = 60;
 
     /** Relative class weights for a generic (class-agnostic) gem roll - the
      *  {@code LootCategory.GEM} reference used by ANY scatter and themed-room GEM cells.

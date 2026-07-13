@@ -34,13 +34,17 @@ public final class RecipeDumpMain {
 
     private RecipeDumpMain() {}
 
-    // Per-game gem supply, measured via `:rlib:objectTable --args=10` after the
-    // hamethyst merge (2026-07-13): hamethyst ~21, metals ~16, exotics ~13.
-    // Note metals/exotics are theme-locked, so the per-SPECIES supply is a
-    // fraction of the class total (e.g. BLACKGLASS ~1.8/world).
-    private static final double SUPPLY_BASIC  = 21;
-    private static final double SUPPLY_METAL  = 16;
-    private static final double SUPPLY_EXOTIC = 13;
+    // Per-game gem supply, measured via `:rlib:objectTable --args=16` after the
+    // 2026-07-13 frequency retune (GEMS_BASIC/METAL/EXOTIC_AVG = 1.1/0.3/0.1,
+    // SPECIAL_GEM_BASIC_PCT = 55): hamethyst ~23, metals ~8.4, exotics ~3.7 -
+    // sized to the owner's target of ~24 hamethysts and ~12 rares per world,
+    // funding ~6 upgrade scrolls + ~8 advanced (rare-gated) scrolls with
+    // exotic recipes as occasional capstones. Metals/exotics are theme-locked,
+    // so per-SPECIES supply is a fraction of the class total (BLACKGLASS
+    // ~0.3/world is the deliberate ultra-rare).
+    private static final double SUPPLY_BASIC  = 23;
+    private static final double SUPPLY_METAL  = 8;
+    private static final double SUPPLY_EXOTIC = 4;
 
     public static void main(String[] args) throws IOException {
         Path assets = ArenaHarness.locateAssetsDir();

@@ -355,13 +355,21 @@ public final class ItemGenerator {
         return species == null ? null : GemSystem.createGem(species);
     }
 
-    /** Special-room / unique-mob reward gem: 40% an exotic gem, otherwise a
-     *  metal gem (60%), themed to the level. Returns {@code null} if no valid
-     *  species exists for the rolled class + theme. */
+    /** Special-room / unique-mob reward gem. A configurable share
+     *  ({@link GameBalance#SPECIAL_GEM_BASIC_PCT}) is a plain hamethyst -
+     *  special gems are the biggest rare-gem source, so this share is the
+     *  main knob holding the per-world rare total near its budget. The rest
+     *  splits 40% exotic / 60% metal, themed to the level. Returns
+     *  {@code null} if no valid species exists for the rolled class + theme. */
     private static Item rollSpecialGem(VisualTheme theme, Random rng) {
-        GemSpecies.GemClass cls = rng.nextDouble() < 0.40
-                ? GemSpecies.GemClass.EXOTIC
-                : GemSpecies.GemClass.METAL;
+        GemSpecies.GemClass cls;
+        if (rng.nextDouble() * 100 < GameBalance.SPECIAL_GEM_BASIC_PCT) {
+            cls = GemSpecies.GemClass.BASIC;
+        } else {
+            cls = rng.nextDouble() < 0.40
+                    ? GemSpecies.GemClass.EXOTIC
+                    : GemSpecies.GemClass.METAL;
+        }
         GemSpecies species = GemSystem.rollSpeciesOfClass(cls, theme, rng);
         return species == null ? null : GemSystem.createGem(species);
     }
