@@ -30,10 +30,19 @@ public final class GemSystem {
      *  generic theme - whether as the level theme or the gem's own affinity it
      *  carries no theme restriction - and a null affinity is unthemed. Mirrors
      *  the item hard gate ({@link ItemDefinition#allowsTheme}). */
+    /** Affinity HARD gate: a gem with an affinity theme ONLY appears on levels
+     *  of that theme; a null affinity (hamethyst) spawns everywhere. No SHINY
+     *  bypass - SHINY-affinity gems are locked to SHINY levels like any other. */
     private static double affinityWeight(VisualTheme gemAffinity, VisualTheme levelTheme) {
-        if (gemAffinity == null || levelTheme == null
-                || gemAffinity == VisualTheme.SHINY || levelTheme == VisualTheme.SHINY) return 1.0;
+        if (gemAffinity == null || levelTheme == null) return 1.0;
         return gemAffinity == levelTheme ? 1.0 : 0.0;
+    }
+
+    /** Spawn gate from gems.csv: retired species (the pre-merge basics) never
+     *  generate. Missing definition rows default to spawnable. */
+    private static boolean spawnable(GemSpecies species) {
+        GemDefinition d = Registries.gem(species);
+        return d == null || d.spawns;
     }
 
     private static int classWeight(GemClass cls) {
@@ -140,10 +149,20 @@ public final class GemSystem {
         return sb.toString();
     }
 
-    /** Pick a gem species of rarity {@code cls}, affinity-weighted toward {@code levelTheme}.
-     *  Returns {@code null} only if the class has no members (never, for the fixed roster). */
+    /** Pick a spawnable gem species of rarity {@code cls} whose affinity admits
+     *  {@code levelTheme}. Returns {@code null} when no species of the class may
+     *  appear on this theme (e.g. METAL on a SHINY level) - callers skip the
+     *  spawn. */
     public static GemSpecies rollSpeciesOfClass(GemClass cls, VisualTheme levelTheme, Random rng) {
-        return weightedPick(g -> g.gemClass == cls ? affinityWeight(themeOf(g), levelTheme) : 0.0, rng);
+        return weightedPick(g -> spawnable(g) && g.gemClass == cls
+                ? affinityWeight(themeOf(g), levelTheme) : 0.0, rng);
+    }
+
+    /** Pick a spawnable gem species of rarity {@code cls} ignoring level
+     *  affinity - for player-driven conversion (hearth recycling), which must
+     *  work on every level and still never yield a retired gem. */
+    public static GemSpecies rollSpeciesOfClassAnywhere(GemClass cls, Random rng) {
+        return weightedPick(g -> spawnable(g) && g.gemClass == cls ? 1.0 : 0.0, rng);
     }
 
     /** Affinity theme for {@code species} from gems.csv, or {@code null} (no
@@ -156,7 +175,8 @@ public final class GemSystem {
     /** Pick any gem species, weighted by rarity class x affinity. Backs the generic
      *  {@code LootCategory.GEM} reference (ANY scatter, themed-room {@code GEM} cells). */
     public static GemSpecies rollSpeciesWeighted(VisualTheme levelTheme, Random rng) {
-        return weightedPick(g -> classWeight(g.gemClass) * affinityWeight(themeOf(g), levelTheme), rng);
+        return weightedPick(g -> spawnable(g)
+                ? classWeight(g.gemClass) * affinityWeight(themeOf(g), levelTheme) : 0.0, rng);
     }
 
     private interface Weigher { double weight(GemSpecies g); }
@@ -190,7 +210,8 @@ public final class GemSystem {
         it.inventoryCategory = InventoryCategory.GEM;
         it.gemSpecies = species;
         it.name = ItemNames.gemDisplayName(it);
-        it.description = TextCatalog.gemDescription(species.name(), "");
+        GemDefinition def = Registries.gem(species);
+        it.description = def != null && def.description != null ? def.description : "";
         return it;
     }
 

@@ -4,51 +4,50 @@
 # ingredient SLOTS. Combining gems that satisfy every slot at a gem hearth
 # produces one of the output item.
 #
-# A slot cell is one of:
-#   <GEMSPECIES>  a specific named gem (e.g. BLOODHIVE)   -- the keystone
-#   exotic        any EXOTIC-class gem
-#   metal_exotic  any METAL- or EXOTIC-class gem
-#   any           any gem at all
+# Every slot cell names a SPECIFIC GemSpecies - there are no wildcard
+# ("any" / "exotic" / "metal_exotic") slots. Duplicates mean "N of that gem".
 # Empty slot cells mean the recipe has fewer than 4 ingredients.
 #
 # Cost curve by rarity (gates output power against the gem economy:
-# ~22 basic / ~8 metal / ~5 exotic per game -> ~12 low-rarity OR ~5 high):
-#   r2  any,any                                 (2 basic)
-#   r3  any,any,NAMED(basic)                    (3 basic)
-#   r4  any,NAMED(basic),metal_exotic           (2 basic + 1 rare)
-#   r5  NAMED(rare),metal_exotic,any            (~2 rare + 1 basic)
-#   r6  NAMED(rare),metal_exotic,any,any        (named-rare + rare + 2 basic)
-#   r7  NAMED(exotic),exotic,metal_exotic,any   (2 exotic + 1 rare + 1 basic)
-# NAMED keystones follow gem theme affinity (gothic/blood, shiny/ice,
-# crystal/arcane, concrete/earth).
+# ~23 hamethyst / ~8 metal / ~5 exotic per game). HAMETHYST spawns on every
+# level; metals and exotics ONLY on their affinity theme, so named rares are
+# a real travel cost:
+#   r2  HAMETHYST x2
+#   r3  HAMETHYST x3
+#   r4  named metal + HAMETHYST x2
+#   r5  named exotic + named metal + HAMETHYST
+#   r6  named rare pair + HAMETHYST x2
+#   r7  two exotics + a metal + HAMETHYST
+# Rare pairs are same-theme where possible (CONCRETE: SILVER+MALACHOR,
+# CRYSTAL: COPPER+FLUORON, GOTHIC: GOLD+BLOODHIVE, SHINY: BLACKGLASS).
 output,rarity,slot1,slot2,slot3,slot4
-# --- Low rarity (basic-fed) -------------------------------------------------
-SC_BRAND_WEAPON,2,any,any,,
-SC_UPGRADE_WEAPON,2,any,any,,
-SC_CONJURE_POTIONS,2,any,any,,
-SC_SMOKE_LEVEL_AND_ESP,3,any,any,HAMETHYST,
-SC_RANDOM_TELEPORT,3,any,any,LETTUSTONE,
-SC_GREAT_WARD,3,any,any,SALAMITE,
-SC_FULL_RESTORE,3,any,any,ICELANDSPAR,
-SC_CONJURE_BOMBS,3,any,any,SALAMITE,
-SC_FREEZE_ALL_ENEMIES,4,any,ICELANDSPAR,metal_exotic,
-SC_HARVEST_PLANTS,4,any,LETTUSTONE,metal_exotic,
-SC_SEAL_DOORS_ONETIME,4,any,HAMETHYST,metal_exotic,
-SC_POLYMORPH_ENEMIES,4,any,HAMETHYST,metal_exotic,
-SC_CONJURE_WAND,4,any,HAMETHYST,metal_exotic,
-SC_CONJURE_TOOLS,4,any,LETTUSTONE,metal_exotic,
-# --- Mid / high rarity (rare-gated) -----------------------------------------
-SC_BLOOD_NOVA,5,BLOODHIVE,metal_exotic,any,
-SC_BLAST_THROUGH_WALLS,6,FLUORON,metal_exotic,any,any
-SC_IGNITE_NEAR_STATUES,6,MALACHOR,metal_exotic,any,any
-SC_SUMMON_CLONES,6,BLACKGLASS,metal_exotic,any,any
-SC_SEAL_DOORS_CRYSTAL,6,GOLD,metal_exotic,any,any
-SC_MADDEN_ENEMIES,6,BLOODHIVE,metal_exotic,any,any
-SC_CONJURE_ITEMS,6,SILVER,metal_exotic,any,any
-SC_CONJURE_ARMOR,6,MALACHOR,metal_exotic,any,any
-SC_CONJURE_BRANDED_SWORD,6,GOLD,metal_exotic,any,any
-SC_VOID_NEARBY_FLOOR,7,BLACKGLASS,exotic,metal_exotic,any
-SC_SHIELD_SELF,7,FLUORON,exotic,metal_exotic,any
+# --- Low rarity (hamethyst-fed) ----------------------------------------------
+SC_BRAND_WEAPON,2,HAMETHYST,HAMETHYST,,
+SC_UPGRADE_WEAPON,2,HAMETHYST,HAMETHYST,,
+SC_CONJURE_POTIONS,2,HAMETHYST,HAMETHYST,,
+SC_SMOKE_LEVEL_AND_ESP,3,HAMETHYST,HAMETHYST,HAMETHYST,
+SC_RANDOM_TELEPORT,3,HAMETHYST,HAMETHYST,HAMETHYST,
+SC_GREAT_WARD,3,HAMETHYST,HAMETHYST,HAMETHYST,
+SC_FULL_RESTORE,3,HAMETHYST,HAMETHYST,HAMETHYST,
+SC_CONJURE_BOMBS,3,HAMETHYST,HAMETHYST,HAMETHYST,
+SC_FREEZE_ALL_ENEMIES,4,SILVER,HAMETHYST,HAMETHYST,
+SC_HARVEST_PLANTS,4,COPPER,HAMETHYST,HAMETHYST,
+SC_SEAL_DOORS_ONETIME,4,GOLD,HAMETHYST,HAMETHYST,
+SC_POLYMORPH_ENEMIES,4,COPPER,HAMETHYST,HAMETHYST,
+SC_CONJURE_WAND,4,SILVER,HAMETHYST,HAMETHYST,
+SC_CONJURE_TOOLS,4,GOLD,HAMETHYST,HAMETHYST,
+# --- Mid / high rarity (rare-gated) ------------------------------------------
+SC_BLOOD_NOVA,5,BLOODHIVE,GOLD,HAMETHYST,
+SC_BLAST_THROUGH_WALLS,6,FLUORON,COPPER,HAMETHYST,HAMETHYST
+SC_IGNITE_NEAR_STATUES,6,MALACHOR,SILVER,HAMETHYST,HAMETHYST
+SC_SUMMON_CLONES,6,BLACKGLASS,SILVER,HAMETHYST,HAMETHYST
+SC_SEAL_DOORS_CRYSTAL,6,GOLD,COPPER,HAMETHYST,HAMETHYST
+SC_MADDEN_ENEMIES,6,BLOODHIVE,GOLD,HAMETHYST,HAMETHYST
+SC_CONJURE_ITEMS,6,SILVER,GOLD,HAMETHYST,HAMETHYST
+SC_CONJURE_ARMOR,6,MALACHOR,GOLD,HAMETHYST,HAMETHYST
+SC_CONJURE_BRANDED_SWORD,6,GOLD,GOLD,HAMETHYST,HAMETHYST
+SC_VOID_NEARBY_FLOOR,7,BLACKGLASS,MALACHOR,SILVER,HAMETHYST
+SC_SHIELD_SELF,7,FLUORON,BLOODHIVE,GOLD,HAMETHYST
 # --- Jade Peach: a revive charm crafted from an exotic gem (output is an
 # --- ITEM, not a GEM-scroll - the forge drops it like any other recipe output).
-JADE_PEACH,6,exotic,metal_exotic,any,
+JADE_PEACH,6,FLUORON,GOLD,HAMETHYST,

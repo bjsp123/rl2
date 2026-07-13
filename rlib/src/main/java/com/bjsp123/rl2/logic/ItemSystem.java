@@ -1216,13 +1216,14 @@ public final class ItemSystem {
         if (user == null || user.inventory == null || item == null) return false;
         double power = GemSystem.recyclePower(item);
         int count = GemSystem.recycleGemCount(power, RANDOM);
-        var theme = level != null ? level.theme : null;
         MobSystem.removeFromInventory(user, item);
         java.util.List<Item> gems = new java.util.ArrayList<>();
         for (int i = 0; i < count; i++) {
             com.bjsp123.rl2.model.GemSpecies.GemClass cls = GemSystem.rollRecycleClass(power, RANDOM);
-            com.bjsp123.rl2.model.GemSpecies sp = GemSystem.rollSpeciesOfClass(cls, theme, RANDOM);
-            if (sp == null) sp = GemSystem.rollSpeciesWeighted(theme, RANDOM);
+            // Recycling is player-driven conversion, not a world spawn: pick
+            // within the rolled class ignoring level affinity, so recycling
+            // works on every theme and the rolled rarity is honoured.
+            com.bjsp123.rl2.model.GemSpecies sp = GemSystem.rollSpeciesOfClassAnywhere(cls, RANDOM);
             if (sp != null) gems.add(GemSystem.createGem(sp));
         }
         // Gems land on the floor beside the hearth, not in the bag.

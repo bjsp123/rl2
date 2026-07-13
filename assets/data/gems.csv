@@ -1,12 +1,12 @@
-species,theme,spriteCol,spriteRow
-LETTUSTONE,CONCRETE,0,0
-HAMETHYST,CRYSTAL,1,0
-SALAMITE,GOTHIC,2,0
-ICELANDSPAR,SHINY,3,0
-SILVER,CONCRETE,0,1
-COPPER,CRYSTAL,1,1
-GOLD,GOTHIC,2,1
-BLOODHIVE,GOTHIC,0,4
-BLACKGLASS,SHINY,1,4
-MALACHOR,CONCRETE,2,4
-FLUORON,CRYSTAL,3,4
+species,theme,spriteCol,spriteRow,spawns,name,description
+LETTUSTONE,CONCRETE,0,0,false,Lettustone,A common green keystone attuned to stone. No longer found in the tomb.
+HAMETHYST,,1,0,true,Hamethyst,"The common violet keystone of the hearth, found throughout the tomb."
+SALAMITE,GOTHIC,2,0,false,Salamite,A common ember-red keystone attuned to the gothic depths. No longer found in the tomb.
+ICELANDSPAR,SHINY,3,0,false,Iceland Spar,A common clear keystone attuned to the shining halls. No longer found in the tomb.
+SILVER,CONCRETE,0,1,true,Silver,"A rare metal gem, cool and bright, found only among plain stone."
+COPPER,CRYSTAL,1,1,true,Copper,"A rare metal gem, warm and ruddy, found only in the crystal caves."
+GOLD,GOTHIC,2,1,true,Gold,"The most prized of the forge's ingots, found only in the gothic depths."
+BLOODHIVE,GOTHIC,0,4,true,Bloodhive,"A very rare exotic gem that pulses with crimson life, found only in the gothic depths."
+BLACKGLASS,SHINY,1,4,true,Blackglass,"A very rare exotic gem of polished void-glass, found only in the shining halls."
+MALACHOR,CONCRETE,2,4,true,Malachor,"A very rare exotic gem veined with green fire, found only among plain stone."
+FLUORON,CRYSTAL,3,4,true,Fluoron,"A very rare exotic gem glowing electric cyan, found only in the crystal caves."

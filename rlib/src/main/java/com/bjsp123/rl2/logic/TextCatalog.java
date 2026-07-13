@@ -86,13 +86,7 @@ public final class TextCatalog {
         return getOrDefault("item." + type + ".description2", fallback);
     }
 
-    public static String gemName(String species, String fallback) {
-        return getOrDefault("gem." + species + ".name", fallback);
-    }
-
-    public static String gemDescription(String species, String fallback) {
-        return getOrDefault("gem." + species + ".description", fallback);
-    }
+    // Gem names/descriptions moved to gems.csv (GemDefinition.name/description).
 
     public static String mobName(String type, String fallback) {
         return getOrDefault("mob." + type + ".name", fallback);

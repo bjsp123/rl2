@@ -774,11 +774,12 @@ public final class V2Encyclopedia implements com.bjsp123.rl2.ui.v2.stage.V2Popup
             com.bjsp123.rl2.logic.GemDefinition gdef =
                     com.bjsp123.rl2.logic.Registries.gem(sp);
             Object affinity = (gdef != null && gdef.theme != null) ? gdef.theme : "-";
-            String flavor = TextCatalog.getOrDefault(
-                    "gem." + sp.name() + ".description", "");
+            String flavor = gdef != null && gdef.description != null ? gdef.description : "";
+            String name = gdef != null && gdef.name != null && !gdef.name.isEmpty()
+                    ? gdef.name : sp.pretty();
             String details = TextCatalog.format("ui.encyclopedia.gemDetails",
                     TextCatalog.vars("affinity", affinity, "rarity", sp.gemClass));
-            out.add(new Entry(sp, GemSprites.regionFor(sp), sp.pretty(),
+            out.add(new Entry(sp, GemSprites.regionFor(sp), name,
                     flavor, details));
         }
         return out;

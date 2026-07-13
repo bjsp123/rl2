@@ -25,7 +25,8 @@ public final class ItemNames {
 
     public static String gemDisplayName(Item item) {
         if (item == null || item.gemSpecies == null) return "gem";
-        String key = item.gemSpecies.name();
-        return TextCatalog.gemName(key, key.toLowerCase());
+        GemDefinition def = Registries.gem(item.gemSpecies);
+        if (def != null && def.name != null && !def.name.isEmpty()) return def.name;
+        return item.gemSpecies.pretty();
     }
 }

@@ -20,12 +20,12 @@ import java.util.List;
  * <p>Loads the same data files {@code Rl2Game.create} reads (without libGDX) and:
  * <ol>
  *   <li>structurally validates every {@code recipes.csv} row (unique output that
- *       resolves to a GEM-category item, rarity 2-7, 2-4 slots, named species
- *       valid);</li>
+ *       resolves to a GEM-category item, rarity 2-7, 2-4 ingredients, all
+ *       ingredients spawnable species);</li>
  *   <li>prints a per-rarity count + a gem-demand-vs-supply report against the
- *       per-game economy, confirming the ~5-high / ~12-low envelope;</li>
- *   <li>round-trips sample gem sets through {@link RecipeSystem#match} (exact set
- *       matches; wrong set is null; shuffled order still matches).</li>
+ *       per-game economy;</li>
+ *   <li>round-trips each recipe's own sample gem fill through
+ *       {@code canAfford}/{@code consume} (order-insensitive; one-fewer fails).</li>
  * </ol>
  *
  * Run: {@code ./gradlew :rlib:dumpRecipes} (see rlib/build.gradle).
@@ -34,10 +34,13 @@ public final class RecipeDumpMain {
 
     private RecipeDumpMain() {}
 
-    // Approx per-game gem supply (RL-47 GEMS_*_AVG x ~12 levels + special rooms).
-    private static final double SUPPLY_BASIC  = 23;
-    private static final double SUPPLY_METAL  = 8;
-    private static final double SUPPLY_EXOTIC = 5;
+    // Per-game gem supply, measured via `:rlib:objectTable --args=10` after the
+    // hamethyst merge (2026-07-13): hamethyst ~21, metals ~16, exotics ~13.
+    // Note metals/exotics are theme-locked, so the per-SPECIES supply is a
+    // fraction of the class total (e.g. BLACKGLASS ~1.8/world).
+    private static final double SUPPLY_BASIC  = 21;
+    private static final double SUPPLY_METAL  = 16;
+    private static final double SUPPLY_EXOTIC = 13;
 
     public static void main(String[] args) throws IOException {
         Path assets = ArenaHarness.locateAssetsDir();
@@ -77,8 +80,16 @@ public final class RecipeDumpMain {
             if (r.rarity < 2 || r.rarity > 7) {
                 System.out.println("ERROR: " + tag + " rarity " + r.rarity + " out of 2..7"); errors++;
             }
-            if (r.slots.size() < 2 || r.slots.size() > 4) {
-                System.out.println("ERROR: " + tag + " has " + r.slots.size() + " slots (need 2..4)"); errors++;
+            if (r.ingredients.size() < 2 || r.ingredients.size() > 4) {
+                System.out.println("ERROR: " + tag + " has " + r.ingredients.size()
+                        + " ingredients (need 2..4)"); errors++;
+            }
+            for (GemSpecies sp : r.ingredients) {
+                com.bjsp123.rl2.logic.GemDefinition def = Registries.gem(sp);
+                if (def != null && !def.spawns) {
+                    System.out.println("ERROR: " + tag + " requires retired species "
+                            + sp + " (spawns=false - unobtainable)"); errors++;
+                }
             }
         }
         System.out.println("[rl2] structural validation: " + (errors == 0 ? "clean" : errors + " error(s)"));
@@ -119,39 +130,27 @@ public final class RecipeDumpMain {
                 maxLow, maxHigh);
     }
 
-    /** Add a recipe's *minimum* gem demand to the [basic,metal,exotic] tally:
-     *  NAMED/EXOTIC -> exotic if the keystone is exotic else metal; METAL_OR_EXOTIC
-     *  -> metal; ANY -> basic. A lower bound the player can actually pay. */
+    /** Add a recipe's gem demand to the [basic,metal,exotic] tally by each
+     *  ingredient's rarity class. */
     private static void addDemand(GemRecipe r, double[] out) {
-        for (GemRecipe.Slot s : r.slots) {
-            switch (s.kind) {
-                case NAMED -> {
-                    if (s.species.gemClass == GemSpecies.GemClass.EXOTIC) out[2]++;
-                    else if (s.species.gemClass == GemSpecies.GemClass.METAL) out[1]++;
-                    else out[0]++;
-                }
+        for (GemSpecies sp : r.ingredients) {
+            switch (sp.gemClass) {
+                case BASIC  -> out[0]++;
+                case METAL  -> out[1]++;
                 case EXOTIC -> out[2]++;
-                case METAL_OR_EXOTIC -> out[1]++;
-                case ANY -> out[0]++;
             }
         }
     }
 
     /** Verify each recipe is buildable from its own sample gem fill. We test the
      *  real forge flow (the player picks a recipe row, then {@code canAfford} /
-     *  {@code consume} run for that chosen recipe) rather than gem->recipe
-     *  {@code match}: recipes deliberately share ingredient shapes (e.g. two
-     *  {@code any,any} recipes), so a gem set can satisfy several recipes and
-     *  uniqueness is not an invariant. */
+     *  {@code consume} run for that chosen recipe): recipes may deliberately
+     *  share ingredient multisets, so gem-set uniqueness is not an invariant. */
     private static int roundTrip(List<GemRecipe> recipes) {
         System.out.println("\n---- build round-trip ----");
         int errors = 0;
         for (GemRecipe r : recipes) {
             List<Item> gems = sampleGems(r);
-            if (gems == null) {
-                System.out.println("SKIP " + r.output + " (no concrete gem fill found)");
-                continue;
-            }
             // The exact fill must be affordable for THIS recipe.
             if (!RecipeSystem.canAfford(r, bagOf(gems))) {
                 System.out.println("ERROR: " + r.output + " not affordable from its own sample fill");
@@ -190,25 +189,11 @@ public final class RecipeDumpMain {
         return inv;
     }
 
-    /** Build a concrete gem list that satisfies every slot of {@code r}, choosing
-     *  the strictest gem each slot allows. */
+    /** The exact gem list a recipe requires - every ingredient is a named
+     *  species now, so the sample fill is just one gem per ingredient. */
     private static List<Item> sampleGems(GemRecipe r) {
         List<Item> out = new ArrayList<>();
-        for (GemRecipe.Slot s : r.slots) {
-            GemSpecies pick = switch (s.kind) {
-                case NAMED           -> s.species;
-                case EXOTIC          -> firstOfClass(GemSpecies.GemClass.EXOTIC);
-                case METAL_OR_EXOTIC -> firstOfClass(GemSpecies.GemClass.METAL);
-                case ANY             -> firstOfClass(GemSpecies.GemClass.BASIC);
-            };
-            if (pick == null) return null;
-            out.add(GemSystem.createGem(pick));
-        }
+        for (GemSpecies sp : r.ingredients) out.add(GemSystem.createGem(sp));
         return out;
-    }
-
-    private static GemSpecies firstOfClass(GemSpecies.GemClass cls) {
-        for (GemSpecies g : GemSpecies.values()) if (g.gemClass == cls) return g;
-        return null;
     }
 }

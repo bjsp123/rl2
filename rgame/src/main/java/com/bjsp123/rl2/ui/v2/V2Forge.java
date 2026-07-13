@@ -340,7 +340,7 @@ public final class V2Forge extends V2Screen {
         float x = r.x + 8f;
         float cy = r.cy();
 
-        List<GemRecipe.Slot> slots = row.recipe.slots;
+        List<GemSpecies> slots = row.recipe.ingredients;
         for (int i = 0; i < slots.size(); i++) {
             drawSlotIcon(ctx, slots.get(i), x, cy - icon * 0.5f, icon, alpha);
             x += icon;
@@ -371,37 +371,16 @@ public final class V2Forge extends V2Screen {
                 x, cy + 6f);
     }
 
-    /** Draw an ingredient slot: a named gem's sprite, or a tinted silhouette
-     *  for the {@code any} / {@code metal-or-exotic} / {@code exotic} kinds. */
-    private void drawSlotIcon(UiCtx ctx, GemRecipe.Slot slot, float x, float y,
+    /** Draw an ingredient slot: every ingredient is a specific named gem, so
+     *  this is just that gem's sprite. */
+    private void drawSlotIcon(UiCtx ctx, GemSpecies species, float x, float y,
                               float sz, float alpha) {
-        if (slot.kind == GemRecipe.SlotKind.NAMED) {
-            TextureRegion reg = GemSprites.regionFor(slot.species);
-            if (reg != null) {
-                ctx.batch.setColor(1f, 1f, 1f, alpha);
-                ctx.batch.draw(reg, x, y, sz, sz);
-            }
-            return;
+        TextureRegion reg = GemSprites.regionFor(species);
+        if (reg != null) {
+            ctx.batch.setColor(1f, 1f, 1f, alpha);
+            ctx.batch.draw(reg, x, y, sz, sz);
+            ctx.batch.setColor(1f, 1f, 1f, 1f);
         }
-        // Silhouette - a dimmed representative gem sprite with the constraint
-        // word ("any" / "metal" / "exotic") overlaid, so the player reads
-        // "any gem of this kind" rather than mistaking it for a specific gem.
-        GemSpecies rep;
-        Color tintC;
-        String label;
-        switch (slot.kind) {
-            case EXOTIC          -> { rep = GemSpecies.BLOODHIVE;  tintC = UIVars.ACCENT;   label = TextCatalog.get("ui.forge.slot.exotic"); }
-            case METAL_OR_EXOTIC -> { rep = GemSpecies.GOLD;       tintC = UIVars.GOLD;     label = TextCatalog.get("ui.forge.slot.metal"); }
-            default              -> { rep = GemSpecies.LETTUSTONE; tintC = UIVars.TEXT_DIM; label = TextCatalog.get("ui.forge.slot.any"); }
-        }
-        TextureRegion reg = GemSprites.regionFor(rep);
-        if (reg == null) return;
-        ctx.batch.setColor(tintC.r, tintC.g, tintC.b, alpha * 0.55f);   // dimmed
-        ctx.batch.draw(reg, x, y, sz, sz);
-        ctx.batch.setColor(1f, 1f, 1f, 1f);
-        // Word centred over the dimmed gem.
-        TextDraw.centre(ctx, ctx.fontRegular, tint(UIVars.TEXT_BODY, alpha),
-                label, x + sz * 0.5f, y + sz * 0.5f + 4f);
     }
 
     private static Color tint(Color base, float alpha) {
