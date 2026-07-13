@@ -796,9 +796,6 @@ public class PlayScreen implements Screen {
             v2CharacterStats.setPlayer(cur);
             v2CharacterStats.open();
         });
-        // Stairs play the cloud level-transition cinematic; the actual level
-        // transfer runs at the covered midpoint.
-        controller.setStairsCinematic(this::startLevelTransition);
 
         v2Encyclopedia = new com.bjsp123.rl2.ui.v2.V2Encyclopedia(game.ui, game.achievements);
         v2Hud.setOnOpenEncyclopedia(() -> v2Encyclopedia.toggle());
@@ -867,6 +864,9 @@ public class PlayScreen implements Screen {
         controller = new PlayController(world, animator, actionBar, targetingOverlay,
                 levelRenderer, this::recenterCameraOnPlayer, frameProfiler, game.sounds);
         if (newRun) controller.seedDefaultActionBar(player, charClass);
+        // Stairs play the cloud level-transition cinematic; the actual level
+        // transfer runs at the covered midpoint.
+        controller.setStairsCinematic(this::startLevelTransition);
         v2Inventory.setOnThrow((thrower, item) -> controller.beginThrow(thrower, item));
         v2Inventory.setOnDrop((user, item) -> controller.dropItem(user, item));
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
