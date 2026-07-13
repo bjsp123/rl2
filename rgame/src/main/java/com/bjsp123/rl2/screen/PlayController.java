@@ -209,14 +209,21 @@ final class PlayController {
                     autoMoveLastHp = -1;
                     return false;
                 }
+                Point moveDest = player.targetPosition;
                 MobMovement.stepTowardTarget(player, level);
-                // Stepping onto stairs uses them immediately - no separate
-                // interact tap. Applies only to a human-driven step landing on
-                // the tile (auto-explore above never descends; arrival placement
-                // after a transfer doesn't route through here, so landing on the
-                // far side's staircase can't bounce the player straight back).
+                // Stepping onto stairs uses them immediately - but ONLY when
+                // the staircase was the move's explicit destination (tapped
+                // tile / movement-key step). A longer move-to path that merely
+                // crosses the stairs, and auto-explore (separate branch above,
+                // never descends), must not hijack the journey. Arrival
+                // placement after a transfer doesn't route through here, so
+                // landing on the far side's staircase can't bounce the player
+                // straight back.
+                boolean arrivedAtDest = moveDest != null
+                        && player.position.tileX() == moveDest.tileX()
+                        && player.position.tileY() == moveDest.tileY();
                 Tile under = level.tiles[player.position.tileX()][player.position.tileY()];
-                if (under == Tile.STAIRS_DOWN || under == Tile.STAIRS_UP) {
+                if (arrivedAtDest && (under == Tile.STAIRS_DOWN || under == Tile.STAIRS_UP)) {
                     player.targetPosition = null;   // the staircase ends any queued path
                     tryStairs(under == Tile.STAIRS_DOWN ? +1 : -1);
                     profiler.add("playerStep", playerTurnStart);

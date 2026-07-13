@@ -331,9 +331,11 @@ public class PlayScreen implements Screen {
     private boolean levelTransitionMidpointDone;
     /** Wall-clock seconds accumulator for the cloud layer's churn. */
     private float levelTransitionCloudTime;
-    private static final int TRANSITION_FADE_OUT   = 18;  // level -> clouds
-    private static final int TRANSITION_CLOUDS_END = 42;  // clouds -> level
-    private static final int TRANSITION_TOTAL      = 60;  // 1s at BASE_FPS
+    /** Triangular alpha envelope: ramps 0->1 over the first half, 1->0 over
+     *  the second, so the clouds fully cover for exactly one frame at the
+     *  midpoint - where the deferred transfer runs. */
+    private static final int TRANSITION_MIDPOINT = 20;  // full cover, transfer
+    private static final int TRANSITION_TOTAL    = 40;  // ~0.67s at BASE_FPS
 
     /** Camera zoom the death outro pulls back to as the screen fades (RL-56).
      *  Larger = more zoomed out; the pull-back mirrors the intro zoom-in. */
@@ -1193,7 +1195,7 @@ public class PlayScreen implements Screen {
             // Run the deferred stairs transfer the moment the clouds fully
             // cover the screen - the swap is invisible, and the arrive sound
             // (played inside the transfer) lands mid-effect.
-            if (!levelTransitionMidpointDone && levelTransitionFrame >= TRANSITION_FADE_OUT) {
+            if (!levelTransitionMidpointDone && levelTransitionFrame >= TRANSITION_MIDPOINT) {
                 levelTransitionMidpointDone = true;
                 Runnable transfer = levelTransitionMidpoint;
                 levelTransitionMidpoint = null;
@@ -1565,27 +1567,23 @@ public class PlayScreen implements Screen {
         levelTransitionMidpoint = midpoint;
         levelTransitionMidpointDone = midpoint == null;
         levelTransitionCloudTime = 0f;
-        levelTransitionFrame = midpoint == null ? TRANSITION_FADE_OUT : 0f;
+        levelTransitionFrame = midpoint == null ? TRANSITION_MIDPOINT : 0f;
     }
 
     /** Level-transition overlay: black ramps over the old level, the swirl
      *  cloud layer rushes past vertically (direction = travel direction), then
      *  both ramp out over the new level. */
     private void drawLevelTransition(float f) {
-        float alpha;
-        if (f < TRANSITION_FADE_OUT) {
-            alpha = f / TRANSITION_FADE_OUT;
-        } else if (f < TRANSITION_CLOUDS_END) {
-            alpha = 1f;
-        } else {
-            alpha = 1f - (f - TRANSITION_CLOUDS_END)
-                    / (float) (TRANSITION_TOTAL - TRANSITION_CLOUDS_END);
-        }
+        // Triangle envelope - full opacity only at the midpoint frame.
+        float alpha = f < TRANSITION_MIDPOINT
+                ? f / TRANSITION_MIDPOINT
+                : 1f - (f - TRANSITION_MIDPOINT)
+                        / (float) (TRANSITION_TOTAL - TRANSITION_MIDPOINT);
         alpha = Math.max(0f, Math.min(1f, alpha));
         drawBlackOverlay(alpha);
-        // Clouds rush opposite to travel: descending, the world streams upward
-        // past the player. ~2.5 texture repeats per second reads as "rapid".
-        float vScroll = -levelTransitionDir * (f / 60f) * 2.5f;
+        // Clouds rush past in the direction of travel: descending, the clouds
+        // stream upward. ~2.5 texture repeats per second reads as "rapid".
+        float vScroll = levelTransitionDir * (f / 60f) * 2.5f;
         com.badlogic.gdx.graphics.g2d.SpriteBatch batch = game.ui.batch;
         batch.setProjectionMatrix(game.ui.camera.combined);
         batch.begin();
