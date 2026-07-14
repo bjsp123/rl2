@@ -41,6 +41,9 @@ public final class Btn {
      *  {@code help.<helpKey>.body}. Set via {@link #help(String)}; buttons
      *  without a key ignore long-presses (the tap fires normally). */
     public String helpKey;
+    /** {@code true} = inert: dimmed chrome + label, and {@link #hit} reports
+     *  a miss so the base dispatch never presses or fires it. */
+    public boolean disabled;
 
     public Btn(String label, float x, float y, float w, float h, Runnable onClick) {
         this.label = label;
@@ -58,7 +61,8 @@ public final class Btn {
      *  a brighter fill; checked-not-pressed buttons get an accent-yellow
      *  outer line so the active state pops. */
     public void drawShape(UiCtx ctx) {
-        ButtonChrome.shape(ctx, rect, pressed, checked, warn, UIVars.BTN_BG);
+        ButtonChrome.shape(ctx, rect, pressed, checked, warn,
+                disabled ? UIVars.WIN_BG : UIVars.BTN_BG);
     }
 
     /** Draw the centred label or icon. Caller is inside a SpriteBatch
@@ -72,7 +76,8 @@ public final class Btn {
             return;
         }
         BitmapFont font = header ? ctx.fontHeader : ctx.fontRegular;
-        font.setColor(warn ? (hot ? UIVars.WARN_HL : UIVars.TEXT_WARN)
+        font.setColor(disabled ? UIVars.TEXT_DIM
+                    : warn ? (hot ? UIVars.WARN_HL : UIVars.TEXT_WARN)
                            : (hot ? UIVars.ACCENT : UIVars.TEXT_BODY));
         String shown = TextDraw.ellipsize(font, label,
                 rect.w - 2f * (UIVars.HUD_BORDER + 4f));
@@ -85,5 +90,5 @@ public final class Btn {
         font.draw(ctx.batch, shown, tx, ty);
     }
 
-    public boolean hit(float px, float py) { return rect.contains(px, py); }
+    public boolean hit(float px, float py) { return !disabled && rect.contains(px, py); }
 }

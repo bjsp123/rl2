@@ -1323,6 +1323,9 @@ ui.encyclopedia.title,Encyclopedia
 ui.forge.confirmBody,Forge this item at the gem hearth?
 ui.forge.make,Make
 ui.forge.recycle,Recycle an item
+ui.forge.convert,Convert a gem
+help.forge.convert.title,Convert a gem
+help.forge.convert.body,"Break a rare gem down into the hearth's common currency: a metal gem yields 1 hamethyst, an exotic gem yields 2. The hamethysts scatter beside the hearth."
 ui.forge.subtitle,"Sacrifice found gems for valuable single-use scrolls, and recycle gear into gems."
 ui.forge.title,Gem Hearth
 ui.gameOver.mainMenu,Main Menu

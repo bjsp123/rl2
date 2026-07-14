@@ -99,13 +99,18 @@ public final class ConfirmPopup extends BasePopup {
     @Override
     protected void renderTextPass() {
         ctx.batch.begin();
-        TextDraw.centreFit(ctx, ctx.fontHeader, UIVars.TEXT_WARN, title,
-                window.cx(), window.top() - ctx.headerLineH(), window.w - 28f);
+        // Title in the regular (smaller) font, wrapped to two lines - item
+        // names ("Recycle the Cloth Tunic +1?") routinely outgrow a single
+        // header-font line on narrow viewports.
+        TextDraw.TextBlock titleBlock = TextDraw.block(ctx.fontRegular, title,
+                window.w - 28f, 2, ctx.lineH());
+        TextDraw.wrappedCentre(ctx, ctx.fontRegular, UIVars.TEXT_WARN,
+                titleBlock, window.cx(), window.top() - ctx.lineH());
         TextDraw.TextBlock body = TextDraw.block(ctx.fontRegular, message,
                 window.w - 28f, 3, ctx.lineH());
         TextDraw.wrappedCentre(ctx, ctx.fontRegular, UIVars.TEXT_BODY,
                 body, window.cx(),
-                window.top() - ctx.headerLineH() - ctx.lineH() - 8f);
+                window.top() - titleBlock.height() - ctx.lineH() - 8f);
         TextDraw.centreFit(ctx, ctx.fontHeader,
                 confirmPressed ? UIVars.ACCENT : UIVars.TEXT_WARN,
                 confirmLabel, confirmBtn.cx(), confirmBtn.cy() + 8f,

@@ -424,7 +424,12 @@ public final class LevelFactoryPopulate {
 
         // -- Regular weighted scatter --------------------------------------
         if (!pool.isEmpty()) {
-            int hostileTarget = GameBalance.STARTING_MOBS_PER_LEVEL + rng.nextInt(4);
+            // Deep floors open crowded: the base target gains up to
+            // MOBS_PER_LEVEL_DEPTH_BONUS extra hostiles at full depth.
+            int depthBonus = (int) Math.round(
+                    depthFraction(level) * GameBalance.MOBS_PER_LEVEL_DEPTH_BONUS);
+            int hostileTarget = GameBalance.STARTING_MOBS_PER_LEVEL
+                    + rng.nextInt(4) + depthBonus;
             int hostileCount  = 0;
             // Bound the loop in case the eligible pool is all non-hostile flavor
             // species (deep mouse-only levels, etc.) - without the cap a level whose

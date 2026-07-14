@@ -149,6 +149,11 @@ final class PlayController {
     /** Wire the inventory item-picker callback. */
     public void setItemPicker(ItemPicker p) { this.itemPicker = p; }
 
+    /** Picker that opens on the Gems bag tab - used by the hearth's
+     *  gem-conversion flow. Falls back to {@link #itemPicker} when unset. */
+    private ItemPicker gemPicker;
+    public void setGemPicker(ItemPicker p) { this.gemPicker = p; }
+
     PlayController(World world,
                    Animator animator,
                    ActionBar actionBar,
@@ -462,7 +467,7 @@ final class PlayController {
                         String forecast = com.bjsp123.rl2.logic.GemSystem.recycleForecast(chosen);
                         String msg = forecast.isEmpty() ? "Break it down for gems?"
                                 : Character.toUpperCase(forecast.charAt(0)) + forecast.substring(1) + ".";
-                        confirmRequest.show("Recycle the " + name + "?", msg, doRecycle);
+                        confirmRequest.show("Recycle the " + name + "?", msg, "Recycle", doRecycle);
                     } else {
                         doRecycle.run();
                     }
@@ -470,9 +475,44 @@ final class PlayController {
                 () -> { /* cancelled */ });
     }
 
+    /** Gem-hearth "convert": open the inventory picker filtered to raw metal /
+     *  exotic gems, then break the chosen gem into hamethysts (metal -> 1,
+     *  exotic -> 2). Invoked from the forge screen (which pops itself first
+     *  so the inventory picker is the front-most modal). */
+    void openGemConvertPicker() {
+        Mob user = TurnSystem.findPlayer(world.currentLevel());
+        ItemPicker picker = gemPicker != null ? gemPicker : itemPicker;
+        if (user == null || picker == null) return;
+        java.util.function.Predicate<Item> eligible = it -> it != null && it.isGem()
+                && it.gemSpecies.gemClass != com.bjsp123.rl2.model.GemSpecies.GemClass.BASIC;
+        if (!hasEligibleItem(user, eligible)) { playInvocationFail(); return; }
+        picker.open(eligible,
+                (u, chosen) -> {
+                    Level cur = world.currentLevel();
+                    Runnable doConvert = () -> {
+                        ItemSystem.convertGemToHamethysts(cur, u, chosen);
+                        afterMove(cur);
+                    };
+                    if (confirmRequest != null && chosen != null && chosen.gemSpecies != null) {
+                        int yield = chosen.gemSpecies.gemClass
+                                == com.bjsp123.rl2.model.GemSpecies.GemClass.EXOTIC ? 2 : 1;
+                        String name = chosen.name != null ? chosen.name : chosen.gemSpecies.pretty();
+                        confirmRequest.show("Convert the " + name + "?",
+                                "You will get " + (yield == 1 ? "1 hamethyst." : yield + " hamethysts."),
+                                "Convert", doConvert);
+                    } else {
+                        doConvert.run();
+                    }
+                },
+                () -> { /* cancelled */ });
+    }
+
     /** Confirm-dialog hook, set by {@link PlayScreen}. Shows a modal with a
-     *  title + message and runs {@code onConfirm} only if the player accepts. */
-    public interface ConfirmRequest { void show(String title, String message, Runnable onConfirm); }
+     *  title + message + named primary action and runs {@code onConfirm} only
+     *  if the player accepts. */
+    public interface ConfirmRequest {
+        void show(String title, String message, String confirmLabel, Runnable onConfirm);
+    }
     private ConfirmRequest confirmRequest;
     public void setConfirmRequest(ConfirmRequest c) { this.confirmRequest = c; }
 

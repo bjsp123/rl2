@@ -244,8 +244,29 @@ public final class GemSystem {
                 // unseen, straight through walls. Applying the impact at the
                 // target tile (rather than firing a blockable bolt via fireWand)
                 // is what lets it reach a point behind cover.
-                ItemSystem.applyWandImpact(level, user, target, gem.wandEffect, gem,
-                        ItemStats.effectiveLevel(gem, user));
+                //
+                // First, BREAK the walls in the blast disc - the scroll's
+                // namesake. Only plain WALL converts (doors, statues, beacons
+                // and other props survive the blast), and the level's outer
+                // boundary ring stays intact so the map remains sealed.
+                int effLvl = ItemStats.effectiveLevel(gem, user);
+                int radius = ItemSystem.radiusForTileCount(
+                        ItemStats.effectiveSize(gem, effLvl));
+                int tx = target.tileX(), ty = target.tileY();
+                for (int x = Math.max(1, tx - radius);
+                        x <= Math.min(level.width - 2, tx + radius); x++) {
+                    for (int y = Math.max(1, ty - radius);
+                            y <= Math.min(level.height - 2, ty + radius); y++) {
+                        int dx = x - tx, dy = y - ty;
+                        if (dx * dx + dy * dy > radius * radius) continue;
+                        if (level.tiles[x][y] == com.bjsp123.rl2.model.Tile.WALL) {
+                            level.tiles[x][y] = com.bjsp123.rl2.model.Tile.FLOOR;
+                        }
+                    }
+                }
+                // Then the detonation lands on the newly-opened ground -
+                // damage, ignition, and knockback per the wand columns.
+                ItemSystem.applyWandImpact(level, user, target, gem.wandEffect, gem, effLvl);
                 ItemSystem.announceGemUse(user, gem);
                 return true;
             }

@@ -1208,6 +1208,30 @@ public final class ItemSystem {
         return best;
     }
 
+    /** Gem-hearth "convert": break one raw metal or exotic gem into
+     *  hamethysts (metal -> 1, exotic -> 2), scattered by the hearth like
+     *  recycle output. Returns false on anything that isn't a rare raw gem. */
+    public static boolean convertGemToHamethysts(Level level, Mob user, Item gem) {
+        if (user == null || user.inventory == null || gem == null || !gem.isGem()) return false;
+        com.bjsp123.rl2.model.GemSpecies.GemClass cls = gem.gemSpecies.gemClass;
+        if (cls == com.bjsp123.rl2.model.GemSpecies.GemClass.BASIC) return false;
+        int made = cls == com.bjsp123.rl2.model.GemSpecies.GemClass.EXOTIC ? 2 : 1;
+        InventorySystem.removeOneFromBag(user.inventory, gem);
+        java.util.List<Item> out = new java.util.ArrayList<>();
+        for (int i = 0; i < made; i++) {
+            out.add(GemSystem.createGem(com.bjsp123.rl2.model.GemSpecies.HAMETHYST));
+        }
+        dropItemsNearForge(level, user, out);
+        if (user.isPlayer) {
+            String name = gem.name != null ? gem.name : gem.gemSpecies.pretty();
+            EventLog.add(new com.bjsp123.rl2.model.LogEvent(
+                    "You break the " + name + " into "
+                            + (made == 1 ? "a hamethyst." : made + " hamethysts."),
+                    com.bjsp123.rl2.model.LogEvent.EventPriority.HIGH, true));
+        }
+        return true;
+    }
+
     /** Gemforge "recycle": destroy {@code item} and return a handful of gems
      *  scaled by the item's power level (tier + enchant). Higher-power items
      *  yield more gems and a better chance of metal / exotic species. Gems land

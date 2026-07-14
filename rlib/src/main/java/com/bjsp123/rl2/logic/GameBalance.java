@@ -483,6 +483,10 @@ public final class GameBalance {
      *  {@code STARTING_MOBS_PER_LEVEL + rng(4)}, so each level starts with
      *  this many to {@code this + 3} hostiles. */
     public static int STARTING_MOBS_PER_LEVEL = 7;
+    /** Extra starting hostiles at full depth: the initial population target
+     *  gains {@code round(depthFraction * MOBS_PER_LEVEL_DEPTH_BONUS)} mobs,
+     *  so deep floors open crowded while the surface stays gentle. */
+    public static int MOBS_PER_LEVEL_DEPTH_BONUS = 4;
     /** Minimum random item clusters placed per level (on top of
      *  {@code guaranteedPerLevel} CSV drops). Actual clusters =
      *  {@code RANDOM_ITEMS_PER_LEVEL + rng(3)}, so each level gets this many

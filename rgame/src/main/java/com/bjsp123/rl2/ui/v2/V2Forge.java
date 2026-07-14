@@ -83,23 +83,30 @@ public final class V2Forge extends V2Screen {
     private TextDraw.TextBlock subtitle = TextDraw.block(null, "", 1f, 0, 0f);
 
     /** "Recycle an item" action button - opens the inventory item-picker (wired
-     *  via {@link #onRecycle}) to choose an item to break down into gems. Built
+     *  via {@link #onRecycle}) to choose an item to break down into gems.
+     *  Sits beside the "Convert a gem" button (metal -> 1 hamethyst,
+     *  exotic -> 2, wired via {@link #onConvert}). Built
      *  in {@link #buildLayout()} and owned by {@link V2Screen#buttons}, so its
      *  press / click plumbing is handled by the base class. */
     private Btn recycleBtn;
+    private Btn convertBtn;
     /** Opens the inventory item-picker for recycling; set by the caller. */
     private final Runnable onRecycle;
+    /** Opens the inventory item-picker for gem conversion; set by the caller. */
+    private final Runnable onConvert;
 
     /** Preview/confirm popup shown before a recipe is actually forged, so the
      *  player can read what the scroll does first. */
     private final ConfirmPopup preview;
     private final V2PopupActor previewActor;
 
-    public V2Forge(Rl2Game game, UiCtx ctx, Runnable onBack, Runnable onRecycle) {
+    public V2Forge(Rl2Game game, UiCtx ctx, Runnable onBack, Runnable onRecycle,
+                   Runnable onConvert) {
         super(ctx);
         this.game = game;
         this.onBack = onBack;
         this.onRecycle = onRecycle;
+        this.onConvert = onConvert;
         this.preview = new ConfirmPopup(ctx);
         this.previewActor = new V2PopupActor(preview);
     }
@@ -148,16 +155,22 @@ public final class V2Forge extends V2Screen {
                 TextCatalog.get("ui.forge.subtitle"),
                 winW - 2 * PAD, 3, ctx.lineH());
 
-        // The "Recycle an item" button sits below the chip strip, full content
-        // width. Its position is bag-independent, so build it here; the base
-        // class draws + dispatches it as a normal screen button.
+        // The "Recycle an item" / "Convert a gem" buttons stack below the chip
+        // strip, each full content width with the regular (smaller) font so
+        // the labels never truncate. Positions are bag-independent, so build
+        // them here; the base class draws + dispatches them as normal screen
+        // buttons.
         float contentX = window.x + PAD;
         float contentW = window.w - 2 * PAD;
-        float btnH = 44f;
+        float btnH = 40f;
         float btnY = chipStripY() - 12f - btnH;
         recycleBtn = new Btn(TextCatalog.get("ui.forge.recycle"),
-                contentX, btnY, contentW, btnH, onRecycle).header();
+                contentX, btnY, contentW, btnH, onRecycle);
         buttons.add(recycleBtn);
+        convertBtn = new Btn(TextCatalog.get("ui.forge.convert"),
+                contentX, btnY - 8f - btnH, contentW, btnH, onConvert)
+                .help("forge.convert");
+        buttons.add(convertBtn);
 
         // Build one sample output Item per recipe (icon + name source). Skip
         // recipes whose output has no items.csv row yet.
@@ -194,10 +207,25 @@ public final class V2Forge extends V2Screen {
         return out;
     }
 
+    /** True when the bag holds any raw metal / exotic gem - the only inputs
+     *  the "Convert a gem" flow accepts. */
+    private static boolean hasConvertibleGem(Mob p) {
+        if (p == null || p.inventory == null) return false;
+        for (Item it : p.inventory.bag) {
+            if (it != null && it.isGem()
+                    && it.gemSpecies.gemClass != GemSpecies.GemClass.BASIC) return true;
+        }
+        return false;
+    }
+
     /** Recompute the chip strip + visible row rects each frame. */
     private void layout(Mob p) {
         float contentX = window.x + PAD;
         float contentW = window.w - 2 * PAD;
+
+        // Convert is inert (greyed) with nothing to convert; recheck each
+        // frame so crafting/recycling that consumes the last rare updates it.
+        if (convertBtn != null) convertBtn.disabled = !hasConvertibleGem(p);
 
         // Chip strip just under the header band.
         chips.clear();
@@ -223,10 +251,11 @@ public final class V2Forge extends V2Screen {
             if (candidates.contains(row.recipe)) visible.add(row);
         }
 
-        // Scrollable list band: from just below the recycle button down to the
-        // window's bottom padding. The band scissor-clips its rows, so partial
-        // rows render at the edges instead of popping a whole row at a time.
-        float listTop = recycleBtn.rect.y - 10f;
+        // Scrollable list band: from just below the convert button (the lower
+        // of the two action buttons) down to the window's bottom padding. The
+        // band scissor-clips its rows, so partial rows render at the edges
+        // instead of popping a whole row at a time.
+        float listTop = convertBtn.rect.y - 10f;
         float listBottom = window.y + PAD;
         band.set(contentX, listBottom, contentW, Math.max(0f, listTop - listBottom));
         band.update(listContentH());

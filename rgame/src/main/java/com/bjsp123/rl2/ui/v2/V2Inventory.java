@@ -213,6 +213,14 @@ public final class V2Inventory implements com.bjsp123.rl2.ui.v2.stage.V2Popup {
         if (sounds != null) sounds.play("sfx.ui.popup.inventory");
     }
 
+    /** As {@link #openPicker} but landing on the Gems tab - the hearth's
+     *  gem-conversion picker chooses among raw gems, not gear. */
+    public void openGemPicker(java.util.function.Predicate<Item> eligible,
+                              BiConsumer<Mob, Item> onPick, Runnable onCancel) {
+        openPicker(eligible, onPick, onCancel);
+        this.currentTab = Tab.GEMS;
+    }
+
     private boolean pickMode() { return pickEligible != null; }
 
     private void endPicker() {

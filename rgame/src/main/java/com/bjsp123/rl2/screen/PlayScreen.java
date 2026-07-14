@@ -881,8 +881,10 @@ public class PlayScreen implements Screen {
         v2Inventory.setOnUse((user, item) -> controller.useItemFromInventory(user, item));
         controller.setItemPicker((eligible, onPick, onCancel) ->
                 v2Inventory.openPicker(eligible, onPick, onCancel));
-        controller.setConfirmRequest((title, message, onConfirm) -> {
-            confirmPopup.configure(title, message, "Recycle", "Cancel", onConfirm);
+        controller.setGemPicker((eligible, onPick, onCancel) ->
+                v2Inventory.openGemPicker(eligible, onPick, onCancel));
+        controller.setConfirmRequest((title, message, confirmLabel, onConfirm) -> {
+            confirmPopup.configure(title, message, confirmLabel, "Cancel", onConfirm);
             confirmPopup.open();
         });
         // Beacon-triggered map: teleport enabled (walked into / waited beside a beacon).
@@ -892,7 +894,10 @@ public class PlayScreen implements Screen {
                 game, game.ui, game::popScreen,
                 // Recycle: leave the forge and open the inventory picker to choose
                 // an item to break down into gems.
-                () -> { game.popScreen(); controller.openRecyclePicker(); })));
+                () -> { game.popScreen(); controller.openRecyclePicker(); },
+                // Convert: leave the forge and pick a rare gem to break into
+                // hamethysts (metal -> 1, exotic -> 2).
+                () -> { game.popScreen(); controller.openGemConvertPicker(); })));
         v2Hud.setOnActionUse(controller::triggerActionSlot);
         v2Hud.setOnAutoExplore(controller::toggleAutoExplore);
 
